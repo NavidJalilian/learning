@@ -2,7 +2,7 @@
 
 Every chapter of *System Design Interview* Vol. 1 as a world of quests. Ticked = done. Regenerate: `python3 plan/tools/status.py`.
 
-**70 of 83 quests built** · 54 live on the map · 16 built, awaiting world review · 4 being built (draft on disk, not verified) · 9 not started.
+**71 of 83 quests built** · 54 live on the map · 17 built, awaiting world review · 4 being built (draft on disk, not verified) · 8 not started.
 
 Legend: `[x]` done · `[ ]` not done. A world is **done** when every quest is built, the world review has run, its cheat sheet
 exists, and its quests are `ready: true` on the map.
@@ -106,7 +106,7 @@ exists, and its quests are `ready: true` on the map.
 - [x] `1101` 11.1 · [Two Rivers](../lessons/1101-news-feed-scope-and-flows.html) — built · needs world review
 - [x] `1102` 11.2 · [Push, Pull, or Both](../lessons/1102-news-feed-fanout-push-vs-pull.html) — built · needs world review
 - [x] `1103` 11.3 · [The Fanout Factory](../lessons/1103-news-feed-publishing-pipeline.html) — built · needs world review
-- [ ] `1104` 11.4 · [Hydrate the Feed](../lessons/1104-news-feed-retrieval-and-caches.html) — being built (unverified draft)
+- [x] `1104` 11.4 · [Hydrate the Feed](../lessons/1104-news-feed-retrieval-and-caches.html) — built · needs world review
 - [ ] `1105` BOSS · [Design It Live: News Feed](../lessons/1105-news-feed-boss-design-it-live.html) — not started
 - [ ] World review + cheat sheet
 
@@ -124,7 +124,7 @@ exists, and its quests are `ready: true` on the map.
 
 - [x] `1301` 13.1 · [Every Keystroke Counts](../lessons/1301-autocomplete-scope-and-estimation.html) — built · needs world review
 - [ ] `1302` 13.2 · [Grow the Trie](../lessons/1302-trie-top-k.html) — being built (unverified draft)
-- [ ] `1303` 13.3 · [The Weekly Harvest](../lessons/1303-data-gathering-service.html) — not started
+- [ ] `1303` 13.3 · [The Weekly Harvest](../lessons/1303-data-gathering-service.html) — being built (unverified draft)
 - [ ] `1304` 13.4 · [Faster Than a Keystroke](../lessons/1304-query-service.html) — being built (unverified draft)
 - [ ] `1305` 13.5 · [Split the Alphabet](../lessons/1305-scaling-autocomplete.html) — not started
 - [ ] `1306` BOSS · [Autocomplete Live](../lessons/1306-boss-autocomplete-live.html) — not started
