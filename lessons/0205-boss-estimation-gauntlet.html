@@ -337,8 +337,9 @@ const practice = n => Q.review || Q.isCleared(n);
 
 /* ================= interview record: clock (seconds) + signals =================
    Stored apart from engine progress under its own key, like 0008. Each stage keeps
-   { sec, sig: { cat: [got, max] } }. A stage's record is wiped the first time you act in it
-   during a page load (or on replay), so replays overwrite rather than pile up. */
+   { sec, miss, sig: { cat: [got, max] } }. `miss` counts heart-worthy mistakes (counted even in
+   practice replays, where no real heart is at stake). A stage's record is wiped the first time
+   you act in it during a page load (or on replay), so replays overwrite rather than pile up. */
 const IKEY = 'sdq:v1:0205-interview';
 const BUDGET = { 1: 120, 2: 60, 3: 240, 4: 120, 5: 60 };            // seconds; sums to the 10:00 budget
 const PAR = { 1: 100, 2: 50, 3: 210, 4: 105, 5: 60 };               // perfect-play seconds per stage
@@ -348,10 +349,11 @@ function isave(d) { try { localStorage.setItem(IKEY, JSON.stringify(d)); } catch
 if (!Q.review && !Q.cleared().length) { try { localStorage.removeItem(IKEY); } catch (_) {} }
 const begun = new Set();
 let lastActive = 0;
-function tick(n, sec, cat, got, max) {
+function tick(n, sec, cat, got, max, miss = 0) {
   const d = iload();
   if (!begun.has(n) || !d[n]) { begun.add(n); d[n] = { sec: 0, sig: {} }; }
   d[n].sec += sec;
+  if (miss) d[n].miss = (d[n].miss || 0) + miss;
   if (cat) { const s = d[n].sig[cat] || [0, 0]; s[0] += got; s[1] += max; d[n].sig[cat] = s; }
   isave(d); lastActive = n; renderBar();
 }
@@ -484,7 +486,7 @@ function lockQuiz1() {
     good: 'Every later number is only as good as its inputs. Stating them lets the interviewer correct you early, and lets you both check the result later. That\'s the book\'s tip "write down your assumptions".' + CITE(1, BOOK),
     bad: 'The book\'s tip is <b>write down your assumptions</b>. Precision is the opposite of the point (round freely), and the database choice comes <i>after</i> the numbers.' + CITE(1, BOOK),
     onDone: ok => {
-      tick(1, 10, 'ask', ok ? 1 : 0, 1);
+      tick(1, 10, 'ask', ok ? 1 : 0, 1, ok ? 0 : 1);
       $('#s1caveat').style.display = 'block'; $('#s1replay').style.display = 'flex';
       setTimeout(() => done(1), 900);
     },
@@ -569,7 +571,7 @@ function quiz2() {
     good: 'Servers must survive the <b>busiest</b> moment, so you size them from peak QPS, not the average. Storage piles up from the daily total, and DAU is a starting input.',
     bad: 'It\'s the <b>server count</b>: machines must survive the busiest moment, so you size them from peak QPS. Storage grows with the daily total, peak or not.',
     onDone: ok => {
-      tick(2, 10, 'plan', ok ? 1 : 0, 1);
+      tick(2, 10, 'plan', ok ? 1 : 0, 1, ok ? 0 : 1);
       $('#s2replay').style.display = 'flex';
       setTimeout(() => done(2), 900);
     },
@@ -709,7 +711,7 @@ function finish3() {
       correct: 0,
       good: '3,500 × 86,400 ≈ 3,500 × 100,000 = 350 million, close to the 300 million (150 million DAU × 2) we started from. Running a number backwards is the fastest way to catch a dropped zero.',
       bad: '3,500 × 86,400 ≈ 3,500 × 100,000 = 350 million, so <b>about 300 million</b>, matching 150 million DAU × 2. Run numbers backwards to catch a dropped or extra zero.',
-      onDone: ok => { tick(3, 10, 'num', ok ? 1 : 0, 1); $('#s3replay').style.display = 'flex'; setTimeout(() => done(3), 900); },
+      onDone: ok => { tick(3, 10, 'num', ok ? 1 : 0, 1, ok ? 0 : 1); $('#s3replay').style.display = 'flex'; setTimeout(() => done(3), 900); },
     });
   });
 }
@@ -759,7 +761,7 @@ function setup4() {
 $('#barrage').addEventListener('click', e => {
   const b = e.target.closest('.choice .opt'); if (!b) return;
   if (b.classList.contains('right')) tick(4, 15, 'fu', 1, 1);
-  else if (b.classList.contains('wrong')) { tick(4, 35, 'fu', 0, 1); }
+  else if (b.classList.contains('wrong')) { tick(4, 35, 'fu', 0, 1, 1); }
 });
 $('#s4replay .btn').onclick = () => { setup4(); $('#s4').scrollIntoView({ behavior: Q.reduced ? 'auto' : 'smooth', block: 'start' }); };
 Q.onStage(4, setup4);
@@ -861,7 +863,7 @@ function showClosing() {
     if (!o.good) {
       const g = $$('.opt', slot).find(x => s.o[+x.dataset.j].good);
       g.classList.add('right'); g.insertAdjacentHTML('beforeend', `<span class="verdict">${s.o.find(x => x.good).v}</span>`);
-      Q.loseHeart(b); tick(5, 15, 'tie', 0, 1);
+      Q.loseHeart(b); tick(5, 15, 'tie', 0, 1, 1);
     } else { Q.addXP(5, b); tick(5, 5, 'tie', 1, 1); }
     s5slot++;
     if (s5slot === SLOTS.length) deliver5();
@@ -881,7 +883,7 @@ async function deliver5() {
     good: 'That answer uses the numbers to <b>decide</b> something: the biggest pile (media) gets its own storage tier, and the small hot set lives in memory. Approximate numbers are still good enough to pick a direction.',
     bad: 'Approximate numbers still decide things: ~55 PB of media rules out a database and calls for object storage + CDN, and a ~60 GB hot set fits in memory. And "exactly 42" treats an estimate like a measurement.',
     onDone: ok => {
-      tick(5, 10, 'tie', ok ? 1 : 0, 1);
+      tick(5, 10, 'tie', ok ? 1 : 0, 1, ok ? 0 : 1);
       const t = totalSec(iload());
       chat5.iv(`⏱️ Clock stopped at <b>${fmt(t)}</b> of the 10:00 budget. ${t <= 600 ? 'On time. 🤝' : 'A bit over: the misses cost time. Replay any stage to tighten it.'}`);
       $('#s5caveat').style.display = 'block'; $('#s5replay').style.display = 'flex';
