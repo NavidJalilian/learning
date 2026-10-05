@@ -2,7 +2,7 @@
 
 Every chapter of *System Design Interview* Vol. 1 as a world of quests. Ticked = done. Regenerate: `python3 plan/tools/status.py`.
 
-**70 of 83 quests built** · 51 live on the map · 19 built, awaiting world review · 1 being built (draft on disk, not verified) · 12 not started.
+**70 of 83 quests built** · 54 live on the map · 16 built, awaiting world review · 4 being built (draft on disk, not verified) · 9 not started.
 
 Legend: `[x]` done · `[ ]` not done. A world is **done** when every quest is built, the world review has run, its cheat sheet
 exists, and its quests are `ready: true` on the map.
@@ -45,12 +45,12 @@ exists, and its quests are `ready: true` on the map.
 - [x] `0406` BOSS · [Throttle It Live](../lessons/0406-boss-throttle-it-live.html) — live
 - [x] World review + cheat sheet — [ch04-rate-limiter-cheatsheet.html](../reference/ch04-rate-limiter-cheatsheet.html)
 
-## ⬜ World 5 · Design Consistent Hashing — *The Ring Road*
+## ✅ World 5 · Design Consistent Hashing — *The Ring Road*
 
-- [x] `0501` 5.1 · [Ring Math](../lessons/0501-consistent-hashing-ring-math.html) — built · needs world review
-- [x] `0502` 5.2 · [Cracks in the Ring](../lessons/0502-consistent-hashing-cracks-and-riders.html) — built · needs world review
-- [x] `0503` BOSS · [Hash It Live](../lessons/0503-consistent-hashing-boss-hash-it-live.html) — built · needs world review
-- [ ] World review + cheat sheet
+- [x] `0501` 5.1 · [Ring Math](../lessons/0501-consistent-hashing-ring-math.html) — live
+- [x] `0502` 5.2 · [Cracks in the Ring](../lessons/0502-consistent-hashing-cracks-and-riders.html) — live
+- [x] `0503` BOSS · [Hash It Live](../lessons/0503-consistent-hashing-boss-hash-it-live.html) — live
+- [x] World review + cheat sheet — [ch05-consistent-hashing-cheatsheet.html](../reference/ch05-consistent-hashing-cheatsheet.html)
 
 ## ✅ World 6 · Design a Key-Value Store — *The Key-Value Vault*
 
@@ -123,16 +123,16 @@ exists, and its quests are `ready: true` on the map.
 ## ⬜ World 13 · Design a Search Autocomplete System — *Typeahead Tower*
 
 - [x] `1301` 13.1 · [Every Keystroke Counts](../lessons/1301-autocomplete-scope-and-estimation.html) — built · needs world review
-- [ ] `1302` 13.2 · [Grow the Trie](../lessons/1302-trie-top-k.html) — not started
+- [ ] `1302` 13.2 · [Grow the Trie](../lessons/1302-trie-top-k.html) — being built (unverified draft)
 - [ ] `1303` 13.3 · [The Weekly Harvest](../lessons/1303-data-gathering-service.html) — not started
-- [ ] `1304` 13.4 · [Faster Than a Keystroke](../lessons/1304-query-service.html) — not started
+- [ ] `1304` 13.4 · [Faster Than a Keystroke](../lessons/1304-query-service.html) — being built (unverified draft)
 - [ ] `1305` 13.5 · [Split the Alphabet](../lessons/1305-scaling-autocomplete.html) — not started
 - [ ] `1306` BOSS · [Autocomplete Live](../lessons/1306-boss-autocomplete-live.html) — not started
 - [ ] World review + cheat sheet
 
 ## ⬜ World 14 · Design YouTube — *The Stream Machine*
 
-- [ ] `1401` 14.1 · [Size Up the Tube](../lessons/1401-youtube-scope-and-estimate.html) — not started
+- [ ] `1401` 14.1 · [Size Up the Tube](../lessons/1401-youtube-scope-and-estimate.html) — being built (unverified draft)
 - [ ] `1402` 14.2 · [Upload Lane, Watch Lane](../lessons/1402-youtube-upload-and-stream-flows.html) — not started
 - [ ] `1403` 14.3 · [The Format Forge](../lessons/1403-youtube-transcoding-and-dag.html) — not started
 - [ ] `1404` 14.4 · [The Transcoding Factory](../lessons/1404-youtube-transcoding-architecture.html) — not started
