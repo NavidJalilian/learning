@@ -1,0 +1,20 @@
+const { chromium } = require('playwright');
+const FILE = 'file:///home/user/learning/lessons/0403-window-algorithms.html';
+(async () => {
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+  const c = await b.newContext({ viewport: { width: 375, height: 800 }, colorScheme: 'dark' });
+  const p = await c.newPage(); await p.goto(FILE); await p.waitForTimeout(300);
+  await p.click('#t1show'); await p.waitForSelector('#s1quiz .quiz', { timeout: 15000 });
+  await p.evaluate(() => document.querySelector('.hud').style.display = 'none');
+  await p.locator('#s1 .sim').screenshot({ path: 'z0403-sim1.png' });
+  await p.click('#l2box .decide .opt[data-k="acc"]'); await p.waitForSelector('#l2box .explain.show');
+  await p.click('#l2box .row:last-child .btn'); await p.click('#l2box .decide .opt[data-k="acc"]'); await p.waitForSelector('#l2box .explain.show');
+  await p.locator('#s2 .sim').screenshot({ path: 'z0403-sim2.png' });
+  await p.$eval('#r3', el => { el.value = 30; el.dispatchEvent(new Event('input', { bubbles: true })); });
+  await p.click('#distSeg button[data-d="end"]');
+  await p.locator('#s3 .sim').screenshot({ path: 'z0403-sim3.png' });
+  const cs = await p.$$('#pool .tcard'); await cs[0].click(); await p.click('#cols .col[data-a="sc"]');
+  await (await p.$('#pool .tcard')).click();
+  await p.locator('#s4 .stage-b').screenshot({ path: 'z0403-board.png' });
+  await b.close();
+})();

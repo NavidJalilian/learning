@@ -1,0 +1,1 @@
+f=$1; s=$(grep -n '<main>' $f | cut -d: -f1); e=$(grep -n '<script src="quest-engine.js">' $f | cut -d: -f1); sed -n "${s},${e}p" $f | perl -0pe 's/<svg.*?<\/svg>/[svg]/gs; s/<[^>]+>//g' | grep -v '^\s*$'
