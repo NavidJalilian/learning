@@ -22,6 +22,7 @@
   // `w` is the world (= book chapter). `ready: true` once the lesson file exists and has been checked.
   // WORLDS lists every chapter; `cheatsheet` is relative to reference/.
   const WORLDS = [
+    { w: 1, t: 'Scale From Zero to Millions of Users', name: 'The Launchpad', slug: 'scale-from-zero-to-millions-of-users' },
     { w: 2, t: 'Back-of-the-Envelope Estimation', name: 'The Napkin Forge', slug: 'back-of-the-envelope-estimation' },
     { w: 3, t: 'A Framework for System Design Interviews', name: 'The Interview Arena', slug: 'a-framework-for-system-design-interviews' },
     { w: 4, t: 'Design a Rate Limiter', name: 'The Throttle Gate', slug: 'design-a-rate-limiter' },
@@ -38,6 +39,12 @@
     { w: 15, t: 'Design Google Drive', name: 'The Cloud Locker', slug: 'design-google-drive' },
   ];
   const CATALOG = [
+    { id: '0101', w: 1, n: '1.1', t: 'One Box Wonder', d: 'A single server, splitting off the database, SQL vs NoSQL, scaling up vs out, and the load balancer', file: '0101-scale-one-box-to-load-balancer.html', ready: false },
+    { id: '0102', w: 1, n: '1.2', t: 'Copy the Ledger', d: 'Master/slave database replication: who takes writes, who takes reads, and what happens when one dies', file: '0102-scale-database-replication.html', ready: false },
+    { id: '0103', w: 1, n: '1.3', t: 'Hot Memory, Near Edge', d: 'A cache tier for hot data and a CDN for static files: how they work and what can go wrong', file: '0103-scale-cache-and-cdn.html', ready: false },
+    { id: '0104', w: 1, n: '1.4', t: 'Forget Me, Find Me Anywhere', d: 'Make the web tier stateless, autoscale it, then spread the system across data centers with GeoDNS', file: '0104-scale-stateless-and-data-centers.html', ready: false },
+    { id: '0105', w: 1, n: '1.5', t: 'Queues, Gauges & Shards', d: 'Message queues to decouple work, logging/metrics/automation, and sharding the database', file: '0105-scale-queues-observability-sharding.html', ready: false },
+    { id: '0106', w: 1, n: 'BOSS', t: 'Zero to Millions, Live', d: 'Mock interview: scale a startup\'s app from one server to millions of users as the traffic climbs', file: '0106-scale-boss-millions-live.html', boss: true, ready: false },
     { id: '0201', w: 2, n: '2.1', t: 'The Byte Ladder', d: 'Powers of two, data units, and doing big multiplications in your head', file: '0201-powers-of-two.html', ready: false },
     { id: '0202', w: 2, n: '2.2', t: 'Nanoseconds to Netherlands', d: 'Latency numbers every programmer should know, and the five lessons in them', file: '0202-latency-numbers.html', ready: false },
     { id: '0203', w: 2, n: '2.3', t: 'Count the Nines', d: 'Availability percentages, SLAs, and how much downtime each nine allows', file: '0203-availability-nines.html', ready: false },
