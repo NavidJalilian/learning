@@ -16,18 +16,23 @@
 (function () {
   'use strict';
   const STORE_KEY = 'sdq:v1';
-  const RANKS = [[0, 'Intern'], [300, 'Junior'], [800, 'Mid-level'], [1500, 'Senior'], [2400, 'Staff'], [3200, 'Principal']];
-  // One catalog for the quest map and the prev/next links. `file` is relative to lessons/.
-  // `ready: true` once the lesson file exists and has been checked.
+  const RANKS = [[0, 'Intern'], [300, 'Junior'], [800, 'Mid-level'], [1500, 'Senior'], [2400, 'Staff'], [3200, 'Principal'],
+    [5000, 'Senior Principal'], [8000, 'Distinguished'], [12000, 'Fellow'], [17000, 'Chief Architect'], [23000, 'Legend']];
+  // One catalog for the quest map and the prev/next links, in book order. `file` is relative to lessons/.
+  // `w` is the world (= book chapter). `ready: true` once the lesson file exists and has been checked.
+  // WORLDS lists every chapter; `cheatsheet` is relative to reference/.
+  const WORLDS = [
+    { w: 6, t: 'Design a Key-Value Store', name: 'The Key-Value Vault', slug: 'design-a-key-value-store', cheatsheet: 'kv-store-cap-cheatsheet.html' },
+  ];
   const CATALOG = [
-    { id: '0001', n: '6.1', t: 'The Key-Value Vault', d: 'put/get, single-server limits, CAP, CP vs AP', file: '0001-key-value-store-and-cap.html', ready: true },
-    { id: '0002', n: '6.2', t: 'Slice the Keyspace', d: 'Data partition with consistent hashing', file: '0002-consistent-hashing.html', ready: true },
-    { id: '0003', n: '6.3', t: 'Copies Everywhere', d: 'Data replication across nodes', file: '0003-replication.html', ready: true },
-    { id: '0004', n: '6.4', t: 'Majority Rules', d: 'Quorum consensus (N, W, R) and tunable consistency', file: '0004-quorum-consensus.html', ready: true },
-    { id: '0005', n: '6.5', t: 'Who Wrote Last?', d: 'Inconsistency resolution with versioning & vector clocks', file: '0005-vector-clocks.html', ready: true },
-    { id: '0006', n: '6.6', t: 'When Nodes Die', d: 'Gossip, sloppy quorum, hinted handoff, Merkle trees', file: '0006-handling-failures.html', ready: true },
-    { id: '0007', n: '6.7', t: 'The Write & Read Path', d: 'Commit log, memtable, SSTables, Bloom filters', file: '0007-write-and-read-path.html', ready: true },
-    { id: '0008', n: 'BOSS', t: 'Design It Live', d: 'Full mock interview: design a key-value store', file: '0008-boss-design-it-live.html', boss: true, ready: true },
+    { id: '0001', w: 6, n: '6.1', t: 'The Key-Value Vault', d: 'put/get, single-server limits, CAP, CP vs AP', file: '0001-key-value-store-and-cap.html', ready: true },
+    { id: '0002', w: 6, n: '6.2', t: 'Slice the Keyspace', d: 'Data partition with consistent hashing', file: '0002-consistent-hashing.html', ready: true },
+    { id: '0003', w: 6, n: '6.3', t: 'Copies Everywhere', d: 'Data replication across nodes', file: '0003-replication.html', ready: true },
+    { id: '0004', w: 6, n: '6.4', t: 'Majority Rules', d: 'Quorum consensus (N, W, R) and tunable consistency', file: '0004-quorum-consensus.html', ready: true },
+    { id: '0005', w: 6, n: '6.5', t: 'Who Wrote Last?', d: 'Inconsistency resolution with versioning & vector clocks', file: '0005-vector-clocks.html', ready: true },
+    { id: '0006', w: 6, n: '6.6', t: 'When Nodes Die', d: 'Gossip, sloppy quorum, hinted handoff, Merkle trees', file: '0006-handling-failures.html', ready: true },
+    { id: '0007', w: 6, n: '6.7', t: 'The Write & Read Path', d: 'Commit log, memtable, SSTables, Bloom filters', file: '0007-write-and-read-path.html', ready: true },
+    { id: '0008', w: 6, n: 'BOSS', t: 'Design It Live', d: 'Full mock interview: design a key-value store', file: '0008-boss-design-it-live.html', boss: true, ready: true },
   ];
 
   const REDUCED = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -349,5 +354,5 @@
     return Q;
   }
 
-  window.Quest = { init, load, save, rankOf, totalXP, isUnlocked, RANKS, CATALOG, STORE_KEY, REDUCED };
+  window.Quest = { init, load, save, rankOf, totalXP, isUnlocked, RANKS, CATALOG, WORLDS, STORE_KEY, REDUCED };
 })();
