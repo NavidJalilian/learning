@@ -1,0 +1,31 @@
+const { chromium } = require('playwright');
+(async () => {
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+  const ctx = await b.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' });
+  const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
+  await p.goto('file:///home/user/learning/lessons/0805-url-shortener-boss-design-it-live.html');
+  await p.waitForSelector('#qdeck .opt');
+  for (const t of ['programming', 'logo', 'MySQL', 'MD5', 'How short', 'Which characters', 'edited']) await p.locator('#qdeck .opt', { hasText: t }).click();
+  await p.waitForSelector('#ests .est');
+  console.log('told slots:', await p.locator('#reqs .req.told').count(), 'got:', await p.locator('#reqs .req.got').count());
+  console.log('last iv:', (await p.locator('#chat1 .msg.iv').nth(-2).innerText()).slice(0, 160));
+  await p.waitForSelector('#pSchema .cols .opt');
+  for (const c of ['id', 'shortURL', 'createdAt']) await p.locator(`#pSchema .cols .opt[data-c="${c}"]`).click();
+  await p.locator('#schemaGo').click();
+  console.log('schema wrong msg:', (await p.locator('#pSchema .explain').innerText()).slice(0, 80));
+  await p.locator('#pSchema .cols .opt[data-c="createdAt"]').click(); await p.locator('#pSchema .cols .opt[data-c="longURL"]').click(); await p.locator('#schemaGo').click();
+  await p.locator('#lenR').fill('7'); await p.locator('#lenGo').click();
+  await p.locator('#pGen .gen .opt[data-g="hash"]').click();
+  await p.locator('#genPush .opt', { hasText: 'Bloom' }).click();
+  await p.waitForSelector('#genCmp table');
+  console.log('hash path ok; flows visible:', await p.locator('.order[data-f="0"]').count());
+  // wrap-up failure path
+  await p.locator('#wrapGo').click(); await p.waitForSelector('#wrapcards .opt');
+  for (const t of ['Rust', 'blockchain', 'GraphQL', 'stateless', 'Shard']) await p.locator('#wrapcards .opt', { hasText: t }).click();
+  await p.locator('#deliver').click();
+  await p.waitForSelector('text=Try the close again');
+  await p.locator('text=Try the close again').click();
+  console.log('wrap retry reset, go button visible:', await p.locator('#wrapGo').isVisible(), 's5 cleared:', await p.locator('#s5.cleared').count());
+  console.log(errs.length ? errs : 'no errors');
+  await b.close();
+})();
