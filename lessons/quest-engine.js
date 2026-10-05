@@ -36,7 +36,7 @@
     { w: 12, t: 'Design a Chat System', name: 'Chatterbox Citadel', slug: 'design-a-chat-system' },
     { w: 13, t: 'Design a Search Autocomplete System', name: 'Typeahead Tower', slug: 'design-a-search-autocomplete-system' },
     { w: 14, t: 'Design YouTube', name: 'The Stream Machine', slug: 'design-youtube' },
-    { w: 15, t: 'Design Google Drive', name: 'The Cloud Locker', slug: 'design-google-drive' },
+    { w: 15, t: 'Design Google Drive', name: 'The Cloud Locker', slug: 'design-google-drive', cheatsheet: 'ch15-google-drive-cheatsheet.html' },
   ];
   const CATALOG = [
     { id: '0101', w: 1, n: '1.1', t: 'One Box Wonder', d: 'A single server, splitting off the database, SQL vs NoSQL, scaling up vs out, and the load balancer', file: '0101-scale-one-box-to-load-balancer.html', ready: false },
@@ -116,12 +116,12 @@
     { id: '1404', w: 14, n: '14.4', t: 'The Transcoding Factory', d: 'Preprocessor, DAG scheduler, resource manager, task workers, temporary storage', file: '1404-youtube-transcoding-architecture.html', ready: false },
     { id: '1405', w: 14, n: '14.5', t: 'Faster, Safer, Cheaper', d: 'Speed, safety and cost optimisations, plus the book\'s error-handling playbook', file: '1405-youtube-optimizations-and-errors.html', ready: false },
     { id: '1406', w: 14, n: 'BOSS', t: 'Design YouTube Live', d: 'Full mock interview: design a video upload and streaming service', file: '1406-youtube-boss-design-it-live.html', boss: true, ready: false },
-    { id: '1501', w: 15, n: '15.1', t: 'Claim Your Locker', d: 'Scope Google Drive, run the numbers, design the upload/download/revision APIs, outgrow one server', file: '1501-drive-scope-and-apis.html', ready: false },
-    { id: '1502', w: 15, n: '15.2', t: 'Chop It Into Blocks', d: 'The high-level design, block servers, 4 MB blocks, delta sync, compress-then-encrypt', file: '1502-drive-blocks-and-delta-sync.html', ready: false },
-    { id: '1503', w: 15, n: '15.3', t: 'The Metadata Ledger', d: 'Strong consistency, cache invalidation, the metadata schema, and sync conflicts', file: '1503-drive-metadata-and-conflicts.html', ready: false },
-    { id: '1504', w: 15, n: '15.4', t: 'Ping When It Changes', d: 'The upload flow, the download flow, long-polling notifications and the offline backup queue', file: '1504-drive-upload-download-notify.html', ready: false },
-    { id: '1505', w: 15, n: '15.5', t: 'Thrift & Chaos', d: 'Save storage space with dedup, version limits and cold storage, then survive every component failing', file: '1505-drive-storage-and-failures.html', ready: false },
-    { id: '1506', w: 15, n: 'BOSS', t: 'Design Drive Live', d: 'Full mock interview: design Google Drive with the 4-step framework', file: '1506-drive-boss-design-it-live.html', boss: true, ready: false },
+    { id: '1501', w: 15, n: '15.1', t: 'Claim Your Locker', d: 'Scope Google Drive, run the numbers, design the upload/download/revision APIs, outgrow one server', file: '1501-drive-scope-and-apis.html', ready: true },
+    { id: '1502', w: 15, n: '15.2', t: 'Chop It Into Blocks', d: 'The high-level design, block servers, 4 MB blocks, delta sync, compress-then-encrypt', file: '1502-drive-blocks-and-delta-sync.html', ready: true },
+    { id: '1503', w: 15, n: '15.3', t: 'The Metadata Ledger', d: 'Strong consistency, cache invalidation, the metadata schema, and sync conflicts', file: '1503-drive-metadata-and-conflicts.html', ready: true },
+    { id: '1504', w: 15, n: '15.4', t: 'Ping When It Changes', d: 'The upload flow, the download flow, long-polling notifications and the offline backup queue', file: '1504-drive-upload-download-notify.html', ready: true },
+    { id: '1505', w: 15, n: '15.5', t: 'Thrift & Chaos', d: 'Save storage space with dedup, version limits and cold storage, then survive every component failing', file: '1505-drive-storage-and-failures.html', ready: true },
+    { id: '1506', w: 15, n: 'BOSS', t: 'Design Drive Live', d: 'Full mock interview: design Google Drive with the 4-step framework', file: '1506-drive-boss-design-it-live.html', boss: true, ready: true },
   ];
 
   const REDUCED = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;

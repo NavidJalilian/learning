@@ -179,6 +179,7 @@ details.more summary { cursor: pointer; font-weight: 600; min-height: 28px; }
       </ol>
       <p>A <b>race condition</b> is a bug where the result depends on the exact timing of two tasks running at once. Below, the counter is at <b>3</b> and the limit is <b>4</b>. So exactly <b>one</b> of requests A and B should get in. You control the timing.</p>
 
+      <div class="challenge boxed" id="racePredict"></div>
       <div class="sim" id="raceSim">
         <div class="sim-bar"><span class="seg" id="raceMode" role="group" aria-label="How the limiter runs"><button data-m="plain" class="on">Plain</button><button data-m="lua">Lua script</button><button data-m="lock">Lock</button></span><span class="small muted" id="raceModeNote">3 separate Redis commands</span></div>
         <div class="racegrid">
@@ -190,7 +191,6 @@ details.more summary { cursor: pointer; font-weight: 600; min-height: 28px; }
         <div class="sim-bar"><span>Let in: <b class="bignum" id="rIn">0</b> · Rejected: <b class="bignum" id="rRej">0</b></span><button class="btn" id="raceReset" style="padding:7px 12px;font-size:14px">↻ Reset</button></div>
         <div class="simlog" id="raceLog"><div>Counter = 3, limit = 4. Predict first, then run the steps.</div></div>
       </div>
-      <div class="challenge boxed" id="racePredict"></div>
       <ul class="checklist" id="s1goals">
         <li data-g="bug"><span class="box">✓</span><span><b>Plain:</b> break it. Get <i>both</i> A and B through.</span></li>
         <li data-g="lua"><span class="box">✓</span><span><b>Lua script:</b> run A and B as scripts and watch the count stay right</span></li>
@@ -228,6 +228,7 @@ EXPIRE key window
     <div class="stage-b">
       <p>Millions of users means one rate limiter server isn’t enough, so you run several behind a <b>load balancer</b> (LB: the box that spreads requests across servers). The web tier is <b>stateless</b>: any server can handle any request, so one client’s calls can land on different limiters.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener">[1]</a></p>
       <p>If each limiter keeps its own counts, limiter 1 knows nothing about what the client did through limiter 2. Getting them to agree is the <b>synchronization</b> problem. Try the three setups. One client sends 10 requests. The limit is <b>5 per minute</b>.</p>
+      <div class="challenge boxed" id="topoPredict"></div>
       <div class="sim topo">
         <div class="sim-bar"><span class="seg" id="topoMode" role="group" aria-label="Limiter setup"><button data-m="local" class="on">Local</button><button data-m="sticky">Sticky</button><button data-m="central">Central Redis</button></span><span class="small muted" id="topoNote"></span></div>
         <svg id="topoSvg" viewBox="0 0 360 224" role="img" aria-label="Client, load balancer, two rate limiters, Redis and API servers"></svg>
@@ -237,7 +238,6 @@ EXPIRE key window
         </div>
         <div class="simlog" id="topoLog"></div>
       </div>
-      <div class="challenge boxed" id="topoPredict"></div>
       <ul class="checklist" id="s2goals">
         <li data-g="local"><span class="box">✓</span><span><b>Local:</b> each limiter counts on its own</span></li>
         <li data-g="sticky"><span class="box">✓</span><span><b>Sticky:</b> pin the client to limiter 1, then kill limiter 1</span></li>
@@ -256,7 +256,7 @@ EXPIRE key window
       <p>A central Redis is correct, but it lives in one place. The book’s first performance tip: a <b>multi-data-center</b> setup matters, because users far from the data center see high latency. Cloud providers run many <b>edge servers</b> (small data centers close to users). The book notes Cloudflare had <b>194</b> of them in 2020. Traffic goes to the closest one.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener">[1]</a><a class="cite" href="https://www.cloudflare.com/learning/serverless/glossary/what-is-edge-computing/" target="_blank" rel="noopener">[5]</a></p>
       <p>Its second tip: keep the edges’ counters in sync with <b>eventual consistency</b>. Each edge updates its own copy right away and shares changes with the others a little later. Copies may disagree for a moment, but they catch up. (You met this idea in World 6, in <a href="0004-quorum-consensus.html">Majority Rules</a>.)</p>
       <div class="sim mapsim">
-        <div class="sim-bar"><span class="seg" id="mapMode" role="group" aria-label="Where counters live"><button data-m="central" class="on">One Redis (Virginia)</button><button data-m="edge">Edge counters</button></span><button class="btn" id="mapSend" style="padding:7px 12px;font-size:14px">Send a request</button></div>
+        <div class="sim-bar"><span class="seg" id="mapMode" role="group" aria-label="Where counters live"><button data-m="central" class="on">One Redis</button><button data-m="edge">Edge counters</button></span><button class="btn" id="mapSend" style="padding:7px 12px;font-size:14px">Send a request</button></div>
         <svg id="mapSvg" viewBox="0 8 360 136" role="img" aria-label="World map: a user in Sydney, Redis in Virginia, and edge locations"></svg>
         <div class="readouts">
           <div class="ro" id="roLat"><small>Added latency per call</small><b id="latVal">—</b></div>
@@ -842,7 +842,7 @@ Q.onStage(3, () => {
   const routePath = `M${SYD[0]} ${SYD[1]} Q ${(SYD[0] + VA[0]) / 2} ${-30} ${VA[0]} ${VA[1]}`;
   const route = S('path', { d: routePath, class: 'route' }, routeG);
   const edgePts = EDGES.map(([lo, la]) => P(lo, la));
-  [[0, 3], [3, 4], [4, 5], [5, 2], [2, 9], [9, 1], [1, 7], [7, 3], [2, 6], [1, 8], [5, 10]].forEach(([a, b]) => S('line', { x1: edgePts[a][0], y1: edgePts[a][1], x2: edgePts[b][0], y2: edgePts[b][1], class: 'sync' }, syncG));
+  [[0, 3], [3, 4], [5, 10], [10, 2], [5, 2], [2, 9], [9, 1], [1, 7], [7, 3], [2, 6], [1, 8], [5, 10]].forEach(([a, b]) => S('line', { x1: edgePts[a][0], y1: edgePts[a][1], x2: edgePts[b][0], y2: edgePts[b][1], class: 'sync' }, syncG));
   let mode = 'central', busy = false, q1 = false, q2 = false;
   function setMode(m) {
     if (busy) return;
@@ -984,7 +984,7 @@ Q.onStage(4, () => {
     S('line', { x1: 0, y1: H - bot, x2: W, y2: H - bot, class: 'axl' }, svgEl);
     data.forEach((d, i) => {
       const x = i * (bw + gap), hT = (H - top - bot) * d.t / max, hR = (H - top - bot) * d.r / max;
-      S('rect', { x, y: H - bot - hT, width: bw, height: hT - hR, class: 'ok', rx: 1.5 }, svgEl);
+      S('rect', { x, y: H - bot - (hT - hR), width: bw, height: hT - hR, class: 'ok', rx: 1.5 }, svgEl);
       S('rect', { x, y: H - bot - hT, width: bw, height: hR, class: 'rej', rx: 1.5 }, svgEl);
     });
     labels.forEach((l, i) => { const t = S('text', { x: i === 0 ? 0 : i === labels.length - 1 ? W : W / 2, y: H - 6, class: 'ax', 'text-anchor': i === 0 ? 'start' : i === labels.length - 1 ? 'end' : 'middle' }, svgEl); t.textContent = l; });
