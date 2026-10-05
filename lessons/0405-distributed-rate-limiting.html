@@ -472,7 +472,8 @@ Q.onStage(1, () => {
       body = names.map((n, i) => {
         const done = l.step > i || (l.verdict === 'rej' && i === 2);
         const dis = !ready || busy || done || l.step !== i || (l.verdict === 'rej');
-        return `<button class="btn stp${done ? ' done' : ''}${!dis ? ' now' : ''}" data-l="${L}" data-s="${i}" ${dis ? 'disabled' : ''} aria-label="Request ${L}: ${n}">${done ? '✓ ' : ''}${n} ${L}</button>`;
+        const skipped = l.verdict === 'rej' && i === 2;
+        return `<button class="btn stp${done ? ' done' : ''}${!dis ? ' now' : ''}" data-l="${L}" data-s="${i}" ${dis ? 'disabled' : ''} aria-label="Request ${L}: ${n}">${skipped ? '— skip ' : done ? '✓ ' : ''}${n} ${L}</button>`;
       }).join('');
     } else {
       body = chips(L, l);
@@ -591,21 +592,18 @@ Q.onStage(1, () => {
     lua: { step: 'Lua script · predict first', title: 'Now each request runs as <b>one</b> Lua script. Fire A and B one after the other. How does it end?', options: ['One in, counter at 4', 'Both in, counter at 5', 'Both in, counter at 4'], correct: 0 },
     lock: { step: 'Lock · predict first', title: 'Plain steps again, but each request must grab a <b>lock</b> first. A and B arrive together. How does it end?', options: ['Right count, but B waits', 'Wrong count, but no waiting', 'Right count, and no waiting'], correct: 0 },
   };
+  // one prediction box per mode, created on first visit and kept (hidden) when you switch away
   function showPredict() {
-    const box = $('#racePredict');
-    if (preds[mode] && preds[mode].box === box && preds[mode].mode === mode && box.dataset.m === mode) return;
-    if (preds[mode]) { box.replaceChildren(...preds[mode].nodes); box.dataset.m = mode; return; }
-    box.dataset.m = mode;
-    const p = ask(box, { ...PRED[mode], onPick: () => render() });
-    p.nodes = [...box.childNodes]; p.box = box; p.mode = mode;
-    preds[mode] = p;
+    const wrap = $('#racePredict');
+    $$(':scope > div[data-m]', wrap).forEach(d => d.hidden = d.dataset.m !== mode);
+    if (preds[mode]) return;
+    const box = document.createElement('div'); box.dataset.m = mode; wrap.appendChild(box);
+    preds[mode] = ask(box, { ...PRED[mode], onPick: () => render() });
   }
   function setMode(m) {
     mode = m;
     $$('#raceMode button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
     $('#raceModeNote').textContent = NOTE[m];
-    const box = $('#racePredict');
-    if (box.dataset.m && preds[box.dataset.m]) preds[box.dataset.m].nodes = [...box.childNodes];
     showPredict();
     reset(false);
     logTo('raceLog', `— Mode: ${$(`#raceMode [data-m="${m}"]`).textContent}. Counter = ${START}, limit = ${LIMIT}.`);
@@ -748,16 +746,9 @@ Q.onStage(2, () => {
       logTo('topoLog', `Limiter 2 started from zero and let 5 more in. ${st.in} requests this minute against a limit of ${LIMIT}.`, 'e');
       $('#stickyNote').style.display = 'block';
       checkGoal('#s2goals', 'sticky', goals); maybeQuiz();
-    } else if (mode === 'central') {
-      await burst(i => i < 4 ? (i % 2 ? 'l2' : 'l1') : 'l2', true);
-      st.phase = 1; draw();
-      logTo('topoLog', `Exactly 5 let in. Routing changed and a limiter died, but the count lived in Redis the whole time.`, 'g');
-      preds.central.grade('Both limiters read and write <b>one</b> counter in Redis, so it doesn’t matter where a request lands or which limiter dies. <b>5 in, 5 rejected.</b>');
-      checkGoal('#s2goals', 'central', goals); maybeQuiz();
     }
   }
   // central mode kills limiter 1 after the 4th request
-  const origBurst = burst;
   async function centralBurst() {
     st.busy = true; draw();
     const jobs = [];
@@ -797,13 +788,12 @@ Q.onStage(2, () => {
   };
   function setMode(m) {
     if (st && st.busy) return;
-    const box = $('#topoPredict');
-    if (preds[mode]) preds[mode].nodes = [...box.childNodes];
     mode = m; st = fresh(); fx.innerHTML = '';
     $$('#topoMode button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
     $('#topoNote').textContent = NOTE[m];
-    if (preds[m]) box.replaceChildren(...preds[m].nodes);
-    else { const p = ask(box, { ...PRED[m], onPick: () => draw() }); preds[m] = p; }
+    const wrap = $('#topoPredict');
+    $$(':scope > div[data-m]', wrap).forEach(d => d.hidden = d.dataset.m !== m);
+    if (!preds[m]) { const box = document.createElement('div'); box.dataset.m = m; wrap.appendChild(box); preds[m] = ask(box, { ...PRED[m], onPick: () => draw() }); }
     $('#topoLog').innerHTML = `<div>${$(`#topoMode [data-m="${m}"]`).textContent}: limit ${LIMIT} per minute, one client, 10 requests.</div>`;
     draw();
   }
