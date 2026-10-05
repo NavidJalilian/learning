@@ -327,7 +327,7 @@
         $('.q-fresh', b).onclick = startFresh;
       } else {
         b.className = 'banner resume';
-        b.innerHTML = `<span>👋</span><span class="grow"><b>Welcome back.</b> Stages ${[...run.cleared].sort((a, b) => a - b).join(', ')} are cleared — picking up at stage ${current()}.</span><button class="btn q-jump">Jump to stage ${current()} ↓</button>`;
+        b.innerHTML = `<span>👋</span><span class="grow"><b>Welcome back.</b> ${run.cleared.size === 1 ? 'Stage' : 'Stages'} ${[...run.cleared].sort((a, b) => a - b).join(', ')} ${run.cleared.size === 1 ? 'is' : 'are'} cleared — picking up at stage ${current()}.</span><button class="btn q-jump">Jump to stage ${current()} ↓</button>`;
         $('.q-jump', b).onclick = () => $('#s' + current()).scrollIntoView({ behavior: REDUCED ? 'auto' : 'smooth', block: 'start' });
       }
       hero.appendChild(b);
