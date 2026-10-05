@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Windows of Time</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: time windows, the ruler, the timestamp log, the blend calculator, the matching board */
+:root { --win-a: #ebe8ff; --win-b: #dcf5f3; --ruler: rgba(90,72,240,.16); --overlap: rgba(217,130,0,.22); --dot-off: #bdb8c9; --on-acc: #ffffff; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --win-a: #221f48; --win-b: #11302f; --ruler: rgba(143,130,255,.22); --overlap: rgba(255,181,71,.22); --dot-off: #4b4968; --on-acc: #0e0f1d; }
+}
+:root[data-theme="dark"] { --win-a: #221f48; --win-b: #11302f; --ruler: rgba(143,130,255,.22); --overlap: rgba(255,181,71,.22); --dot-off: #4b4968; --on-acc: #0e0f1d; }
+
+.tl svg { max-width: 680px; margin: 0 auto; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+.tl .wa { fill: var(--win-a); }
+.tl .wb { fill: var(--win-b); }
+.tl .axis line { stroke: var(--muted); stroke-width: 1; }
+.tl .axis text { fill: var(--muted); font: 600 9.5px var(--mono); text-anchor: middle; }
+.tl .wl { fill: var(--ink); font: 700 11px var(--font); text-anchor: middle; }
+.tl .wc { font: 700 11px var(--mono); text-anchor: middle; fill: var(--muted); }
+.tl .wc.full { fill: var(--bad); }
+.tl .div { stroke: var(--ink); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.tl .track { fill: transparent; cursor: crosshair; }
+.tl .track:focus { outline: none; }
+.tl .track:focus-visible { stroke: var(--accent); stroke-width: 2; }
+.tl .rq { stroke: var(--bg); stroke-width: 1.5; transform-box: fill-box; transform-origin: center; animation: popin .35s cubic-bezier(.3,1.6,.5,1); }
+.tl .rq.ok { fill: var(--good); }
+.tl .rq.no { fill: var(--bad); }
+.tl .rq.off { fill: var(--dot-off); }
+.tl .rq.in { fill: var(--accent); }
+.tl .rq.pend { fill: var(--panel); stroke: var(--accent); stroke-width: 2; stroke-dasharray: 2 2; }
+.tl .rq.gone { opacity: 0; transition: opacity .5s; }
+@keyframes popin { from { transform: scale(0); } }
+.tl .ruler { fill: var(--ruler); stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 5 3; pointer-events: none; }
+.tl .ruler.win { stroke: var(--good); stroke-width: 2.5; stroke-dasharray: none; }
+.tl .ovl { fill: var(--overlap); pointer-events: none; }
+.tl .handle { cursor: grab; }
+.tl .handle rect { fill: var(--accent); }
+.tl .handle text { fill: var(--on-acc); font: 700 11px var(--font); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.tl .handle:focus { outline: none; }
+.tl .handle:focus rect, .tl .handle:hover rect { stroke: var(--ink); stroke-width: 2; }
+.tl .handle.drag { cursor: grabbing; }
+.tl .cur line { stroke: var(--ink); stroke-width: 1; stroke-dasharray: 2 3; }
+.tl .cur text { fill: var(--ink); font: 700 10px var(--mono); text-anchor: middle; }
+.tl .now line { stroke: var(--accent); stroke-width: 2; }
+.tl .now text { fill: var(--accent); font: 700 10px var(--mono); text-anchor: middle; }
+.tl .blab { fill: var(--accent); font: 700 10px var(--font); text-anchor: middle; }
+.tl .olab { fill: var(--warn); font: 700 10px var(--font); text-anchor: middle; }
+
+.bignum { font-family: var(--mono); font-weight: 700; }
+.bignum.bad { color: var(--bad); }
+.bignum.good { color: var(--good); }
+.rng { padding: 10px 14px 0; display: grid; gap: 2px; }
+.rng label { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 14px; font-weight: 600; }
+.rng input { width: 100%; height: 30px; accent-color: var(--accent); }
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.sim-bar .btn { padding: 7px 12px; font-size: 14px; }
+
+/* stage 2: the log */
+.clock { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 12px 14px 0; }
+.clock .t { font: 700 26px var(--mono); }
+.clock .w { font: 600 13px var(--mono); color: var(--muted); }
+.logbox { margin: 10px 14px 0; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); padding: 10px 12px; }
+.lhead { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 8px; }
+.lhead b { color: var(--ink); font-family: var(--mono); }
+.lhead b.over { color: var(--bad); }
+.lchips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 42px; align-items: center; }
+.lchips .empty { font-size: 13px; color: var(--muted); font-style: italic; }
+.lchip { font: 600 13px var(--mono); padding: 8px 10px; min-height: 40px; border-radius: 9px; border: 2px solid var(--line); background: var(--bg-2); color: var(--ink); transition: opacity .4s, transform .2s; }
+.lchip.ok { border-color: var(--good); background: var(--good-soft); }
+.lchip.rej { border-color: var(--bad); background: var(--bad-soft); }
+.lchip.new { border-color: var(--accent); border-style: dashed; }
+.lchip.old { opacity: .45; text-decoration: line-through; }
+.lchip.pick { outline: 3px solid var(--warn); outline-offset: 1px; }
+.lchip.picking { cursor: pointer; }
+.lchip.picking:hover { transform: translateY(-2px); }
+.lchip[disabled] { cursor: default; }
+.steps { list-style: none; margin: 10px 14px 12px; padding: 0; display: grid; gap: 4px; font-size: 14px; }
+.steps li { padding: 6px 10px; border-radius: 10px; border: 1px solid transparent; color: var(--muted); }
+.steps li code { font-size: 11.5px; }
+.steps li.on { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
+.verdict { font-weight: 700; }
+.verdict.ok { color: var(--good); }
+.verdict.no { color: var(--bad); }
+.calc { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+.calc input { width: 110px; min-height: 42px; border-radius: 10px; border: 2px solid var(--line); background: var(--bg); color: var(--ink); font: 600 16px var(--mono); padding: 6px 10px; }
+.calc .lab { font-weight: 600; font-size: 15px; }
+
+/* stage 3: blend */
+.formula { font: 700 15px var(--mono); background: var(--bg-2); border-radius: 12px; padding: 10px 14px; margin: 12px 0; text-align: center; overflow-wrap: anywhere; }
+.readout { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; padding: 10px 14px 12px; }
+.readout div { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; font-size: 13px; color: var(--muted); }
+.readout b { display: block; font: 700 18px var(--mono); color: var(--ink); overflow-wrap: anywhere; }
+.readout b.bad { color: var(--bad); }
+.distrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px 14px 0; font-size: 14px; }
+.seg button { min-height: 40px; }
+.seg button.on { background: var(--accent); color: #fff; }
+.rcard { background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+.rcard .facts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.rcard .facts span { font: 600 13px var(--mono); background: var(--bg-2); border-radius: 8px; padding: 4px 8px; }
+.decide { display: flex; gap: 8px; flex-wrap: wrap; }
+.decide .opt { padding: 9px 14px; min-height: 42px; }
+
+/* stage 4: board */
+.pool { display: flex; flex-wrap: wrap; gap: 8px; min-height: 46px; }
+.tcard { border: 2px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 12px; padding: 8px 12px; font-size: 14px; min-height: 44px; text-align: left; max-width: 100%; transition: border-color .2s, background .2s, transform .1s; }
+.tcard .pc { font-weight: 700; margin-right: 4px; }
+.tcard .pc.pro { color: var(--good); }
+.tcard .pc.con { color: var(--bad); }
+.tcard:hover { border-color: var(--accent); }
+.tcard.sel { border-color: var(--accent); background: var(--accent-soft); transform: translateY(-2px); }
+.tcard.nope { border-color: var(--bad); animation: shake .4s; }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-top: 14px; }
+.col { text-align: left; border: 2px dashed var(--line); border-radius: 14px; padding: 10px; background: var(--bg); min-height: 104px; display: flex; flex-direction: column; gap: 6px; align-items: stretch; color: var(--ink); }
+.col.armed { border-color: var(--accent); }
+.col.armed:hover { background: var(--accent-soft); }
+.col .ch { font-weight: 700; font-size: 14px; display: block; }
+.col .placed { display: block; font-size: 12.5px; line-height: 1.35; padding: 6px 8px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); animation: rise .3s; }
+.col .placed.miss { border-color: var(--warn); }
+.reftab { display: grid; gap: 8px; margin-top: 14px; }
+.refrow { display: grid; grid-template-columns: 170px 1fr 1fr; gap: 10px; align-items: start; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 14px; }
+.refrow .nm { font-weight: 700; }
+.refrow .nm small { display: block; color: var(--muted); font-weight: 500; font-size: 12px; }
+.refrow .p::before { content: "＋ "; color: var(--good); font-weight: 700; }
+.refrow .c::before { content: "－ "; color: var(--bad); font-weight: 700; }
+@media (max-width: 600px) { .refrow { grid-template-columns: 1fr; gap: 4px; } }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 4.3 · Design a Rate Limiter</div>
+    <h1>Windows of Time</h1>
+    <p class="lede">Three ways to count requests over time. One has a loophole you get to exploit. One remembers every request. One makes a clever guess from two numbers.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can show the fixed-window edge exploit (10 requests through a 5/min limit), walk the sliding-log example step by step, compute a sliding-window-counter estimate (<code>3 + 5 × 0.7 = 6.5</code>) and compare all five algorithms on accuracy, memory and bursts.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Exploit the edge</h2><div class="sub">Fixed window counter and its loophole</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Quest 4.2 counted requests with buckets. This quest counts them with <b>windows</b>: slices of time, each with its own counter.</p>
+      <p>The simplest is the <b>fixed window counter</b>. Cut the timeline into equal windows that start on the round minute (or second, or hour). Keep one counter per window. Every request adds 1. When the counter reaches the limit, new requests are dropped until the next window starts and the count goes back to 0.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener">[1]</a> In the book's first picture the windows are 1 second long and the limit is 3 per second, so a 4th request inside the same second is dropped.</p>
+      <p>Here the limit is <b>5 requests per minute</b>. <b>Tap the timeline</b> to send a request at that moment. Then drag the purple <b>60-second ruler</b> (or use the slider) to count the allowed requests in <i>any</i> one-minute span.</p>
+
+      <div class="sim tl">
+        <svg id="tl1" viewBox="0 0 400 184" role="group" aria-label="Timeline from 2:00:00 to 2:02:00 with two one-minute windows"></svg>
+        <div class="rng"><label for="r1"><span>Ruler covers <span class="mono" id="r1lab">2:00:00 – 2:01:00</span></span><span class="muted small">slide it</span></label><input type="range" id="r1" min="0" max="60" step="1" value="0" aria-label="Ruler start time"></div>
+        <div class="sim-bar">
+          <span>Allowed under the ruler: <span class="bignum" id="r1count">0</span> <span class="muted small">(limit 5)</span></span>
+          <span class="row" style="gap:8px"><button class="btn" id="t1reset">↻ Clear</button><button class="btn" id="t1show">▶ Show me</button></span>
+        </div>
+        <div class="simlog" id="t1log"><div>Two windows: 2:00–2:01 and 2:01–2:02. Each lets 5 requests through.</div></div>
+      </div>
+      <ul class="checklist" id="s1goals">
+        <li data-g="tap"><span class="box">✓</span><span>Tap the timeline to send a request</span></li>
+        <li data-g="drop"><span class="box">✓</span><span>Fill a window and watch the 6th request get dropped (red)</span></li>
+        <li data-g="exploit"><span class="box">✓</span><span><b>Challenge:</b> get <b>10</b> allowed requests under one ruler position. <span class="muted">"Show me" plays the answer, without XP.</span></span></li>
+      </ul>
+      <div class="callout warn" id="edgeNote" style="display:none"><b>That's the book's picture.</b> 5 requests land between 2:00:30 and 2:01:00, and 5 more between 2:01:00 and 2:01:30. Each window only ever saw 5, so the limiter was happy both times. But the one-minute span from 2:00:30 to 2:01:30 carried <b>10</b>: twice the limit.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener">[1]</a> Anyone who times calls around the round minute gets double the quota.</div>
+      <div class="callout tip"><b>So why does anyone use it?</b> It's light on memory (one small counter per user per window) and easy to explain. And some products <i>want</i> a quota that resets on the round minute, hour, or at midnight. The weakness is only this one: a burst at a window's edge can let through more than the quota.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener">[1]</a></div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Keep a log</h2><div class="sub">Sliding window log, step by step</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The <b>sliding window log</b> closes the edge loophole by remembering <i>when</i> each request happened, not just how many came in a window.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener">[1]</a> Each user gets a <b>log</b> of timestamps, usually kept in a cache such as Redis. Redis has a type called a <b>sorted set</b>: each member carries a number (its <i>score</i>) and the set stays ordered by that number.<a class="cite" href="https://redis.io/docs/latest/develop/data-types/sorted-sets/" target="_blank" rel="noopener">[5]</a> Use the timestamp as the score and you get a time-ordered log you can trim from the old end.<a class="cite" href="https://engineering.classdojo.com/blog/2015/02/06/rolling-rate-limiter/" target="_blank" rel="noopener">[3]</a></p>
+      <p>Every new request runs three steps. The book's example uses a limit of <b>2 requests per minute</b>. Predict each verdict, then watch the log do it.</p>
+
+      <div class="sim tl">
+        <div class="clock"><span class="t" id="l2now">now = —</span><span class="w" id="l2win">window = —</span></div>
+        <svg id="tl2" viewBox="0 0 400 92" role="img" aria-label="Timeline from 1:00:00 to 1:02:00 showing the logged timestamps and the current one-minute window"></svg>
+        <div class="logbox">
+          <div class="lhead"><span>Sorted set <code>log:user42</code></span><span>size <b id="l2size">0</b> · limit 2</span></div>
+          <div class="lchips" id="l2chips"></div>
+        </div>
+        <ol class="steps" id="l2steps">
+          <li data-s="1">① Remove every timestamp older than <b>now − 60 s</b> <code>ZREMRANGEBYSCORE</code></li>
+          <li data-s="2">② Add the new request's timestamp to the log <code>ZADD</code></li>
+          <li data-s="3">③ If the log size is ≤ the limit, accept. Otherwise reject. <code>ZCARD</code></li>
+        </ol>
+      </div>
+      <div class="challenge boxed" id="l2box"></div>
+      <div class="challenge boxed" id="memBox" style="display:none">
+        <div class="step">Make the memory cost concrete</div>
+        <h3>Your API allows <b>500 requests per hour</b> per user. You have <b>1 million users</b>, and each timestamp takes about <b>8 bytes</b>. In the worst case every user's log is full. How much memory do all the logs need?</h3>
+        <div class="calc"><span class="lab">≈</span><input id="memIn" type="text" inputmode="decimal" autocomplete="off" aria-label="Memory in gigabytes"><span class="lab">GB</span><button class="btn primary" id="memGo">Check</button></div>
+        <div class="explain" id="memEx"></div>
+      </div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Blend two windows</h2><div class="sub">Sliding window counter: calculate and check</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The log is exact but heavy. The <b>sliding window counter</b> is a hybrid of the two ideas so far.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener">[1]</a> It keeps only two fixed-window counters per user (this minute and last minute) and <i>estimates</i> how many requests fall in the last 60 seconds:</p>
+      <div class="formula">rolling ≈ current + previous × overlap</div>
+      <p class="small"><b>current</b> = requests so far in this minute. <b>previous</b> = requests in the whole previous minute. <b>overlap</b> = the share of the rolling 60-second window that still sits inside the previous minute. If you're 30% into this minute, 70% of the rolling window is still in the previous one. Cloudflare runs the same formula in production.<a class="cite" href="https://blog.cloudflare.com/counting-things-a-lot-of-different-things/" target="_blank" rel="noopener">[2]</a></p>
+      <p>Drag the slider to move "now". The purple band is the rolling window. The orange part is the overlap with the previous minute.</p>
+
+      <div class="sim tl">
+        <svg id="tl3" viewBox="0 0 400 150" role="img" aria-label="Previous and current minute with a rolling 60-second window"></svg>
+        <div class="rng"><label for="r3"><span>Now: <span class="mono" id="r3lab">50%</span> into the current minute</span><span class="muted small">limit 7 / min</span></label><input type="range" id="r3" min="5" max="95" step="5" value="50" aria-label="How far into the current minute"></div>
+        <div class="distrow"><span>Previous minute's 5 requests:</span><span class="seg" id="distSeg"><button data-d="even" class="on">spread evenly</button><button data-d="end">bunched at the end</button></span></div>
+        <div class="readout">
+          <div>Overlap with previous<b id="r3ov">50%</b></div>
+          <div>Estimate<b id="r3est">3 + 5 × 0.50 = 5.5</b></div>
+          <div>Real count (a log would know)<b id="r3real">5</b></div>
+        </div>
+      </div>
+      <ul class="checklist" id="s3goals">
+        <li data-g="book"><span class="box">✓</span><span>Set "now" to <b>30%</b>, the book's example. What's the estimate?</span></li>
+        <li data-g="rounds"><span class="box">✓</span><span>Calculate four requests by hand (below)</span></li>
+        <li data-g="blind"><span class="box">✓</span><span>Find the blind spot: keep <b>30%</b> and bunch the previous minute's requests at its end</span></li>
+      </ul>
+      <div class="challenge boxed" id="r3box"></div>
+      <div class="callout warn" id="blindNote" style="display:none"><b>The blind spot.</b> The formula only knows the previous minute's <i>total</i>. It assumes those 5 requests were spread evenly, so it counts 70% of them: 3.5. But they all came in the last second, so all 5 sit inside the rolling window. The real count is 5 + 3 = <b>8</b>, over the limit of 7, while the estimate (6.5, rounded to 6) says "allow". That's why the book calls it an approximation that only suits a not-so-strict look-back window.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener">[1]</a> In practice it's close: Cloudflare found only <b>0.003%</b> of 400 million requests were wrongly allowed or wrongly limited.<a class="cite" href="https://blog.cloudflare.com/counting-things-a-lot-of-different-things/" target="_blank" rel="noopener">[2]</a></div>
+      <div class="callout tip"><b>Why it's popular.</b> Two small counters per user is as cheap as a fixed window. And because it blends in the previous minute, a burst at the edge can't double the quota the way it did in stage 1. The book lists both as pros.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener">[1]</a></div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>The algorithm draft</h2><div class="sub">Five algorithms, one table</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book covers five algorithms: two buckets (Quest 4.2) and the three windows from this quest.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener">[1]</a> Each card below is one algorithm's main <span style="color:var(--good);font-weight:700">pro</span> or main <span style="color:var(--bad);font-weight:700">con</span>. <b>Tap a card, then tap the algorithm it belongs to.</b> A wrong drop just bounces back, with no heart lost, but that card earns no XP.</p>
+      <div class="pool" id="pool"></div>
+      <div class="cols" id="cols"></div>
+      <div id="refWrap" style="display:none">
+        <h3 style="margin:18px 0 4px;font-size:18px">📋 Your reference table</h3>
+        <p class="small muted" style="margin:0">Who uses what, according to the book: token bucket at Amazon and Stripe, leaking bucket at Shopify, and the sliding window counter at Cloudflare.</p>
+        <div class="reftab" id="reftab"></div>
+        <div class="challenge" id="picks"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Clock Wraith</h2><div class="sub">Window curveballs</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The Wraith lives between the ticks of the clock. Five interview curveballs about the three window algorithms. Call each one.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">Windows in 60 seconds</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> You've picked an algorithm. But where do the counters live, how are rules written down, and what does a throttled client actually get back? That's Quest 4.4, <i>The Counter Room</i>.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 4: "Design a Rate Limiter"</a>, the parts on the fixed window counter, sliding window log and sliding window counter in Step 2. Then read Cloudflare's <a href="https://blog.cloudflare.com/counting-things-a-lot-of-different-things/" target="_blank" rel="noopener">How we built rate limiting capable of scaling to millions of domains</a>: it's where the 0.003% figure comes from. ClassDojo's <a href="https://engineering.classdojo.com/blog/2015/02/06/rolling-rate-limiter/" target="_blank" rel="noopener">sorted-set rate limiter</a> shows the sliding log in a few Redis commands.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <b>Rounding is a choice.</b> The book rounds 6.5 down to 6 and says you could round either way. Real systems vary: Cloudflare compares the unrounded weighted rate to the limit.<a class="cite" href="https://blog.cloudflare.com/counting-things-a-lot-of-different-things/" target="_blank" rel="noopener">[2]</a>
+      <b>0.003% is one company's traffic.</b> It's measured on Cloudflare's own mix. Very bursty clients (all of last minute's calls in its final second) push the estimate further off, as you saw in stage 3.
+      <b>Not every log keeps rejects.</b> The book's sliding log stores rejected timestamps too. Some implementations only log accepted requests. That saves memory, but a client that keeps hammering isn't penalized for its rejected attempts. Google Cloud's guide to rate-limiting strategies is a good next read on these trade-offs.<a class="cite" href="https://cloud.google.com/architecture/rate-limiting-strategies-techniques" target="_blank" rel="noopener">[4]</a>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"if the sliding counter only stores two numbers, how does it know which minute is 'previous'?"</i> or <i>"could I fix the fixed-window edge by using smaller windows?"</i> Follow-up questions are part of the quest.
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 4 "Design a Rate Limiter", Step 2: algorithms for rate limiting (ByteByteGo).</li>
+        <li>Cloudflare, "How we built rate limiting capable of scaling to millions of domains", 2017.</li>
+        <li>ClassDojo Engineering, "Better rate limiting with Redis sorted sets", 2015.</li>
+        <li>Google Cloud Architecture Center, "Rate-limiting strategies and techniques".</li>
+        <li>Redis documentation, "Sorted sets".</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0403',
+  winTitle: 'Time windows tamed',
+  badge: '🪟 Badge: Window Warden',
+  cheatsheet: '../reference/ch04-rate-limiter-cheatsheet.html',
+});
+const { sleep, shuffle } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+const BOOK = 'https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter';
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+const pad = n => String(n).padStart(2, '0');
+// seconds since base → h:mm:ss (base is in seconds since midnight)
+const clock = (base, t) => { const s = base + t; return `${Math.floor(s / 3600)}:${pad(Math.floor(s % 3600 / 60))}:${pad(s % 60)}`; };
+const T1 = t => clock(7200, t), T2 = t => clock(3600, t);
+const X = t => 20 + 3 * t; // all three timelines: 120 s across 360 units
+const wait = ms => sleep(Q.reduced ? 40 : ms);
+function svgT(svg, e) { const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; const q = p.matrixTransform(svg.getScreenCTM().inverse()); return (q.x - 20) / 3; }
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); if (xp) Q.addXP(xp, li);
+  return true;
+}
+function nextBtn(row, label, fn, primary = true) { const b = document.createElement('button'); b.className = 'btn' + (primary ? ' primary' : ''); b.textContent = label; b.onclick = fn; row.appendChild(b); return b; }
+function keyActivate(el, fn) { el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(e); } }); }
+function axis(svg, y, labels, fmt) {
+  const g = S('g', { class: 'axis' }, svg);
+  S('line', { x1: 20, y1: y, x2: 380, y2: y }, g);
+  for (let t = 0; t <= 120; t += 10) S('line', { x1: X(t), y1: y, x2: X(t), y2: y + (t % 30 ? 3 : 6) }, g);
+  labels.forEach(t => { S('text', { x: X(t), y: y + 17 }, g).textContent = fmt(t); });
+  return g;
+}
+const num = s => parseFloat(String(s).replace(/,/g, '.').replace(/[^0-9.\-]/g, ''));
+
+/* ================= STAGE 1: fixed window, exploit the edge ================= */
+Q.onStage(1, () => {
+  const svg = $('#tl1'), LIMIT = 5;
+  let reqs = [], start = 0, solved = false, shown = false, quizShown = false, playing = false, curT = 30, drag = null;
+  const goals = new Set();
+  svg.innerHTML = '';
+  // windows
+  S('rect', { class: 'wa', x: X(0), y: 40, width: 180, height: 92 }, svg);
+  S('rect', { class: 'wb', x: X(60), y: 40, width: 180, height: 92 }, svg);
+  S('text', { class: 'wl', x: X(30), y: 15 }, svg).textContent = 'Window 1 · 2:00–2:01';
+  S('text', { class: 'wl', x: X(90), y: 15 }, svg).textContent = 'Window 2 · 2:01–2:02';
+  const wc = [S('text', { class: 'wc', x: X(30), y: 31 }, svg), S('text', { class: 'wc', x: X(90), y: 31 }, svg)];
+  S('line', { class: 'div', x1: X(60), y1: 36, x2: X(60), y2: 136 }, svg);
+  axis(svg, 132, [0, 30, 60, 90, 120], T1);
+  const ruler = S('rect', { class: 'ruler', x: X(0), y: 38, width: 180, height: 96, rx: 6 }, svg);
+  const dotsG = S('g', {}, svg);
+  const cur = S('g', { class: 'cur', style: 'display:none' }, svg);
+  const curL = S('line', { y1: 38, y2: 134 }, cur), curT_ = S('text', { y: 36 }, cur);
+  const track = S('rect', { class: 'track', x: X(0) - 3, y: 38, width: 366, height: 96, tabindex: 0, role: 'button', 'aria-label': 'Timeline. Click or tap to send a request at that time. With the keyboard, use the arrow keys to pick a time and Enter to send.' }, svg);
+  const handle = S('g', { class: 'handle', tabindex: 0, role: 'slider', 'aria-label': '60-second ruler start', 'aria-valuemin': 0, 'aria-valuemax': 60 }, svg);
+  const hR = S('rect', { x: X(0), y: 156, width: 180, height: 24, rx: 8 }, handle);
+  const hT = S('text', { x: X(30), y: 168 }, handle);
+  hT.textContent = '⟷ drag the 60 s ruler';
+
+  const inRuler = s => reqs.filter(r => r.ok && r.t >= s && r.t < s + 60).length;
+  const best = () => { let m = 0; for (let s = 0; s <= 60; s++) m = Math.max(m, inRuler(s)); return m; };
+  const used = w => reqs.filter(r => r.w === w && r.ok).length;
+
+  function drawDots() {
+    dotsG.innerHTML = '';
+    reqs.forEach(r => {
+      const c = S('circle', { class: 'rq ' + (r.ok ? 'ok' : 'no'), cx: X(r.t), cy: 122 - 15 * r.lane, r: 6 }, dotsG);
+      S('title', {}, c).textContent = `${T1(r.t)} · ${r.ok ? 'allowed' : 'dropped'}`;
+    });
+    [0, 1].forEach(w => { const n = used(w); wc[w].textContent = n >= LIMIT ? `${n} / 5 · full` : `${n} / 5 allowed`; wc[w].classList.toggle('full', n >= LIMIT); });
+  }
+  function drawRuler() {
+    ruler.setAttribute('x', X(start)); hR.setAttribute('x', X(start)); hT.setAttribute('x', X(start + 30));
+    handle.setAttribute('aria-valuenow', start); handle.setAttribute('aria-valuetext', `${T1(start)} to ${T1(start + 60)}`);
+    $('#r1').value = start; $('#r1lab').textContent = `${T1(start)} – ${T1(start + 60)}`;
+    const n = inRuler(start), el = $('#r1count');
+    el.textContent = n; el.className = 'bignum' + (n > LIMIT ? ' bad' : '');
+  }
+  function check() {
+    drawRuler();
+    if (!solved && !playing && inRuler(start) >= 10) {
+      solved = true; ruler.classList.add('win');
+      logTo('t1log', `🎯 ${inRuler(start)} allowed requests inside ${T1(start)}–${T1(start + 60)}. The limit was 5 per minute.`, 'g');
+      checkGoal('#s1goals', 'exploit', goals, 30);
+      $('#edgeNote').style.display = 'block';
+      maybeQuiz();
+    }
+  }
+  function place(t) {
+    if (playing) return;
+    t = Math.max(0, Math.min(119, Math.round(t)));
+    if (reqs.length >= 24) { Q.toast('timeline full: clear it', track, 'practice'); return; }
+    const w = t < 60 ? 0 : 1, ok = used(w) < LIMIT;
+    const lane = Math.min(5, reqs.filter(r => Math.abs(r.t - t) < 4).length);
+    reqs.push({ t, w, ok, lane });
+    drawDots();
+    logTo('t1log', `${T1(t)} → window ${w + 1} counter ${ok ? `${used(w)}/5 → <b>allowed</b>` : `already 5/5 → <b>dropped</b>`}`, ok ? '' : 'e');
+    checkGoal('#s1goals', 'tap', goals, 5);
+    if (!ok) checkGoal('#s1goals', 'drop', goals, 5);
+    if (!solved && used(0) >= LIMIT && used(1) >= LIMIT && best() < 10) logTo('t1log', `Both windows are full, but the best ruler position holds only ${best()}. Hint: where in each window did you place them? Clear and try again.`, 'w');
+    check();
+  }
+  function setStart(s) { start = Math.max(0, Math.min(60, Math.round(s))); check(); }
+  function reset() { reqs = []; ruler.classList.remove('win'); drawDots(); setStart(0); }
+
+  track.addEventListener('click', e => place(svgT(svg, e)));
+  track.addEventListener('pointermove', e => { const t = Math.max(0, Math.min(119, Math.round(svgT(svg, e)))); showCur(t); });
+  track.addEventListener('pointerleave', () => { if (document.activeElement !== track) cur.style.display = 'none'; });
+  track.addEventListener('focus', () => showCur(curT));
+  track.addEventListener('blur', () => { cur.style.display = 'none'; });
+  track.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); curT = Math.max(0, Math.min(119, curT + (e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 10 : 1))); showCur(curT); }
+    else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); place(curT); }
+  });
+  function showCur(t) { curT = t; cur.style.display = ''; curL.setAttribute('x1', X(t)); curL.setAttribute('x2', X(t)); curT_.setAttribute('x', Math.max(40, Math.min(360, X(t)))); curT_.textContent = T1(t); }
+
+  handle.addEventListener('pointerdown', e => { if (playing) return; e.preventDefault(); drag = svgT(svg, e) - start; handle.setPointerCapture(e.pointerId); handle.classList.add('drag'); });
+  handle.addEventListener('pointermove', e => { if (drag !== null) setStart(svgT(svg, e) - drag); });
+  const endDrag = () => { drag = null; handle.classList.remove('drag'); };
+  handle.addEventListener('pointerup', endDrag); handle.addEventListener('pointercancel', endDrag);
+  handle.addEventListener('keydown', e => {
+    if (playing) return;
+    const k = e.key, step = e.shiftKey ? 10 : 1;
+    if (k === 'ArrowRight' || k === 'ArrowUp') { e.preventDefault(); setStart(start + step); }
+    else if (k === 'ArrowLeft' || k === 'ArrowDown') { e.preventDefault(); setStart(start - step); }
+    else if (k === 'Home') { e.preventDefault(); setStart(0); }
+    else if (k === 'End') { e.preventDefault(); setStart(60); }
+  });
+  $('#r1').addEventListener('input', e => { if (!playing) setStart(+e.target.value); else e.target.value = start; });
+  $('#t1reset').onclick = () => { if (playing) return; reset(); logTo('t1log', '↻ cleared'); };
+  $('#t1show').onclick = async () => {
+    if (playing) return;
+    reset(); playing = true;
+    logTo('t1log', '▶ The book\'s example: 5 requests late in window 1, 5 early in window 2.', 'w');
+    for (const t of [33, 39, 45, 51, 57, 63, 69, 75, 81, 87]) {
+      const w = t < 60 ? 0 : 1; reqs.push({ t, w, ok: true, lane: 0 }); drawDots(); drawRuler(); await wait(220);
+    }
+    for (let s = 0; s <= 30; s += Q.reduced ? 30 : 2) { start = s; drawRuler(); await wait(30); }
+    start = 30; drawRuler(); ruler.classList.add('win');
+    playing = false; shown = true;
+    logTo('t1log', 'Ruler at 2:00:30–2:01:30: 10 allowed. (Played for you, so no XP. Try it yourself for the 30.)', 'g');
+    $('#edgeNote').style.display = 'block';
+    maybeQuiz();
+  };
+  reset();
+  if (Q.isCleared(1)) $('#edgeNote').style.display = 'block';
+
+  function maybeQuiz() {
+    if (quizShown || !(solved || shown)) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s1quiz'), {
+      q: 'The limit is 5 requests per minute, counted in fixed windows that reset on the round minute. What is the most that can get through in some 60-second span?',
+      options: ['Up to 5 requests', 'Up to 6 requests', 'Up to 10 requests'],
+      correct: 2,
+      good: 'Up to 5 at the very end of one window plus 5 at the very start of the next. Both counters stay within the limit, yet one rolling minute sees 10, twice the quota.',
+      bad: 'Each window checks only its own counter. 5 at the end of one window and 5 at the start of the next both pass, so one rolling minute can see 10: twice the quota.',
+      onDone: () => setTimeout(() => Q.clearStage(1), 900),
+    }), 400);
+  }
+});
+
+/* ================= STAGE 2: sliding window log ================= */
+Q.onStage(2, () => {
+  const svg = $('#tl2'), LIMIT = 2;
+  const REQ = [1, 30, 50, 100]; // seconds after 1:00:00
+  const ANS = ['acc', 'acc', 'rej', 'acc'];
+  const WHY = [
+    'The log was empty, so step ① removes nothing. Step ② adds 1:00:01. Step ③: size 1 ≤ 2, so it\'s <b>accepted</b>.',
+    'The window is [0:59:30, 1:00:30). 1:00:01 is still inside it, so nothing is removed. Add 1:00:30 and the size is 2 ≤ 2: <b>accepted</b>.',
+    'Nothing is old enough to remove. Adding 1:00:50 makes the size 3, over the limit of 2: <b>rejected</b>. Look at the log, though: the red timestamp <b>stays in it</b>. The book\'s version records rejected requests too.',
+    'The window is [1:00:40, 1:01:40). 1:00:01 and 1:00:30 are outdated, so step ① removes them. Add 1:01:40 and the log is [1:00:50, 1:01:40]: size 2 ≤ 2, <b>accepted</b>. Note that the rejected 1:00:50 still counts against this user.',
+  ];
+  let log = [], now = null, i = 0, busy = false, memDone = false, memMissed = 0, quizShown = false;
+  svg.innerHTML = '';
+  const band = S('rect', { class: 'ruler', x: X(0), y: 12, width: 0, height: 50, rx: 5 }, svg);
+  const bandLab = S('text', { class: 'blab', x: 0, y: 9 }, svg);
+  axis(svg, 66, [0, 30, 60, 90, 120], T2);
+  const dotsG = S('g', {}, svg);
+  const nowG = S('g', { class: 'now', style: 'display:none' }, svg);
+  const nowL = S('line', { y1: 10, y2: 66 }, nowG);
+
+  function render(opts = {}) {
+    const picking = !!opts.picking;
+    if (now === null) { band.setAttribute('width', 0); bandLab.textContent = ''; nowG.style.display = 'none'; }
+    else {
+      const a = Math.max(0, now - 60);
+      band.setAttribute('x', X(a)); band.setAttribute('width', 3 * (now - a));
+      bandLab.setAttribute('x', X((a + now) / 2)); bandLab.textContent = now - 60 < 0 ? '← last 60 s' : 'last 60 s';
+      nowG.style.display = ''; nowL.setAttribute('x1', X(now)); nowL.setAttribute('x2', X(now));
+    }
+    dotsG.innerHTML = '';
+    log.forEach(e => S('circle', { class: 'rq ' + (e.old ? 'off' : e.ok === null ? 'pend' : e.ok ? 'ok' : 'no'), cx: X(e.t), cy: 40, r: 7 }, dotsG));
+    $('#l2now').textContent = now === null ? 'now = —' : `now = ${T2(now)}`;
+    $('#l2win').textContent = now === null ? 'window = —' : `window = [${T2(now - 60)}, ${T2(now)})`;
+    const live = log.filter(e => !e.old).length, sz = $('#l2size');
+    sz.textContent = live; sz.classList.toggle('over', live > LIMIT);
+    const box = $('#l2chips');
+    box.innerHTML = log.length ? '' : '<span class="empty">empty</span>';
+    log.slice().sort((a, b) => a.t - b.t).forEach(e => {
+      const b = document.createElement('button');
+      b.className = 'lchip ' + (e.ok === null ? 'new' : e.ok ? 'ok' : 'rej') + (e.old ? ' old' : '') + (picking ? ' picking' : '') + (e.pick ? ' pick' : '');
+      b.textContent = T2(e.t);
+      b.disabled = !picking;
+      b.setAttribute('aria-pressed', picking ? String(!!e.pick) : 'false');
+      if (picking) b.onclick = () => { e.pick = !e.pick; render({ picking: true }); };
+      box.appendChild(b);
+    });
+  }
+  function step(n) { $$('#l2steps li').forEach(li => li.classList.toggle('on', +li.dataset.s === n)); }
+
+  async function play() {
+    step(1); await wait(650);
+    const outdated = log.filter(e => e.t < now - 60);
+    if (outdated.length) { outdated.forEach(e => e.old = true); render(); await wait(900); log = log.filter(e => !e.old); render(); }
+    await wait(350);
+    step(2); log.push({ t: now, ok: null }); render(); await wait(800);
+    step(3); const size = log.length, entry = log[log.length - 1]; entry.ok = size <= LIMIT; render(); await wait(500);
+    return entry.ok ? 'acc' : 'rej';
+  }
+
+  function show() {
+    const box = $('#l2box');
+    now = REQ[i]; render(); step(0);
+    if (i === 3) return pickEvictions(box);
+    predictRound(box);
+  }
+  function pickEvictions(box) {
+    log.forEach(e => e.pick = false);
+    box.innerHTML = `<div class="step">Request 4 of 4 · part 1</div><h3>A request arrives at <b>${T2(now)}</b>. Before anything else: which timestamps will step ① remove? <span class="muted small">Tap them in the log above, then confirm.</span></h3><div class="row"><button class="btn primary" id="evGo">Confirm my pick</button></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+    render({ picking: true });
+    $('#evGo').onclick = () => {
+      const picked = log.filter(e => e.pick).map(e => e.t).sort((a, b) => a - b).join(',');
+      const want = log.filter(e => e.t < now - 60).map(e => e.t).sort((a, b) => a - b).join(',');
+      const ok = picked === want;
+      $('#evGo').disabled = true;
+      log.forEach(e => { e.pick = e.t < now - 60; });
+      render();
+      const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+      ex.innerHTML = (ok ? '<b>Right.</b> ' : '<b>Not quite.</b> ') + 'The window is [1:00:40, 1:01:40). Anything before 1:00:40 is outdated: that\'s <b>1:00:01</b> and <b>1:00:30</b>. 1:00:50 is inside the window, so it stays, even though it was a rejected request.';
+      ok ? Q.addXP(10, $('#evGo')) : Q.loseHeart($('#evGo'));
+      nextBtn($('.row:last-child', box), 'Now predict the verdict →', () => { log.forEach(e => e.pick = false); predictRound(box, true); });
+    };
+  }
+  function predictRound(box, part2) {
+    box.innerHTML = `<div class="step">Request ${i + 1} of 4${part2 ? ' · part 2' : ''}</div><h3>A request arrives at <b>${T2(now)}</b>. Limit: 2 per minute. Accept or reject?</h3><div class="decide"><button class="opt" data-k="acc">✅ Accept</button><button class="opt" data-k="rej">⛔ Reject</button></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+    $$('.decide .opt', box).forEach(b => b.onclick = async () => {
+      if (busy) return; busy = true;
+      $$('.decide .opt', box).forEach(x => x.disabled = true); b.classList.add('picked');
+      const res = await play();
+      const ok = b.dataset.k === ANS[i] && res === ANS[i];
+      b.classList.add(ok ? 'right' : 'wrong');
+      if (!ok) $(`.decide .opt[data-k="${res}"]`, box).classList.add('right');
+      const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+      ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Watch the steps.</b> ') + WHY[i];
+      ok ? Q.addXP(10, b) : Q.loseHeart(b);
+      busy = false;
+      nextBtn($('.row:last-child', box), i < 3 ? 'Next request →' : 'Finish the log →', () => {
+        i++;
+        if (i < REQ.length) return show();
+        step(0);
+        box.innerHTML = '<div class="row"><span class="small muted">Log walk done. Final log: [1:00:50, 1:01:40].</span><button class="btn" id="l2replay">↻ Replay the four requests</button></div>';
+        $('#l2replay').onclick = () => { i = 0; log = []; show(); };
+        if (!memDone) { $('#memBox').style.display = 'block'; setTimeout(() => $('#memBox').scrollIntoView({ behavior: Q.reduced ? 'auto' : 'smooth', block: 'center' }), 200); }
+      });
+    });
+  }
+  $('#memGo').onclick = () => {
+    if (memDone) return;
+    const v = num($('#memIn').value), ex = $('#memEx');
+    if (!isFinite(v)) { ex.className = 'explain show bad'; ex.innerHTML = 'Type a number of gigabytes, like <code>2.5</code>.'; return; }
+    const ok = v >= 3.5 && v <= 4.5;
+    const full = '500 × 8 bytes = 4,000 bytes (4 KB) per user. Times 1,000,000 users = 4,000,000,000 bytes ≈ <b>4 GB</b>, just for timestamps. And that\'s a floor: a Redis sorted set spends several times more than 8 bytes per entry on its own bookkeeping. Worse, with the book\'s version a bot hammering at 10× the limit keeps 5,000 entries in its log, not 500, because rejected requests are logged too. Compare the fixed window: one small counter per user.';
+    if (ok) { memDone = true; $('#memGo').disabled = true; ex.className = 'explain show good'; ex.innerHTML = '<b>Right.</b> ' + full; Q.addXP(memMissed ? 5 : 15, $('#memGo')); maybeQuiz(); return; }
+    memMissed++;
+    if (memMissed === 1) { Q.loseHeart($('#memGo')); ex.className = 'explain show bad'; ex.innerHTML = '<b>Not quite.</b> Work it per user first: how many bytes is 500 timestamps of 8 bytes each? Then multiply by 1,000,000. (1 GB = 1,000,000,000 bytes.) Try again.'; return; }
+    memDone = true; $('#memGo').disabled = true; ex.className = 'explain show bad'; ex.innerHTML = '<b>Here\'s the working.</b> ' + full; maybeQuiz();
+  };
+  $('#memIn').addEventListener('keydown', e => { if (e.key === 'Enter') $('#memGo').click(); });
+  function maybeQuiz() {
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => Q.quiz($('#s2quiz'), {
+      q: 'Why does the sliding window log use more memory than its limit seems to need?',
+      options: ['It keeps timestamps of rejected requests too', 'It stores a full copy of every request body', 'It never trims timestamps from older windows'],
+      correct: 0,
+      good: 'In the book\'s version every attempt is logged, accepted or not. A client sending far over the limit grows its log far past the limit, and every entry is a whole timestamp, not a counter.',
+      bad: 'Old timestamps <i>are</i> trimmed (step ①), and only timestamps are stored. The extra memory comes from logging every attempt, including the rejected ones, so a client hammering the API grows its log far past the limit.',
+      onDone: () => setTimeout(() => Q.clearStage(2), 900),
+    }), 400);
+  }
+  render(); show();
+});
+
+/* ================= STAGE 3: sliding window counter ================= */
+Q.onStage(3, () => {
+  const svg = $('#tl3'), PREV = 5, CUR = 3, LIMIT = 7;
+  const EVEN = [5, 17, 29, 41, 53], END = [59, 59, 59, 59, 59];
+  let p = 50, dist = 'even', roundsDone = false, quizShown = false;
+  const goals = new Set();
+  svg.innerHTML = '';
+  S('rect', { class: 'wa', x: X(0), y: 30, width: 180, height: 72 }, svg);
+  S('rect', { class: 'wb', x: X(60), y: 30, width: 180, height: 72 }, svg);
+  S('text', { class: 'wl', x: X(30), y: 14 }, svg).textContent = 'previous minute · 5 requests';
+  S('text', { class: 'wl', x: X(90), y: 14 }, svg).textContent = 'current minute · 3 so far';
+  S('line', { class: 'div', x1: X(60), y1: 26, x2: X(60), y2: 104 }, svg);
+  axis(svg, 104, [0, 60, 120], T1);
+  const ovl = S('rect', { class: 'ovl', y: 30, height: 72 }, svg);
+  const band = S('rect', { class: 'ruler', y: 26, height: 80, width: 180, rx: 6 }, svg);
+  const oLab = S('text', { class: 'olab', y: 140 }, svg);
+  const dotsG = S('g', {}, svg);
+  const nowG = S('g', { class: 'now' }, svg);
+  const nowL = S('line', { y1: 24, y2: 108 }, nowG), nowT = S('text', { y: 140 }, nowG);
+
+  function render() {
+    const now = 60 + p * 0.6, a = now - 60, ov = (100 - p) / 100;
+    band.setAttribute('x', X(a));
+    ovl.setAttribute('x', X(a)); ovl.setAttribute('width', 3 * (60 - a));
+    oLab.setAttribute('x', X((a + 60) / 2)); oLab.textContent = `overlap ${100 - p}%`;
+    nowL.setAttribute('x1', X(now)); nowL.setAttribute('x2', X(now));
+    nowT.setAttribute('x', Math.min(372, X(now) + 4)); nowT.textContent = 'now';
+    dotsG.innerHTML = '';
+    const prevT = dist === 'even' ? EVEN : END;
+    let real = 0;
+    prevT.forEach((t, k) => { const inside = t >= a; if (inside) real++; S('circle', { class: 'rq ' + (inside ? 'in' : 'off'), cx: X(t), cy: 90 - (dist === 'end' ? 13 * k : 0), r: 6 }, dotsG); });
+    for (let k = 0; k < CUR; k++) { const t = 60 + (k + 0.5) / CUR * (now - 60); S('circle', { class: 'rq in', cx: X(t), cy: 90 - 13 * k * (p < 20 ? 1 : 0), r: 6 }, dotsG); real++; }
+    const est = CUR + PREV * ov;
+    $('#r3lab').textContent = p + '%';
+    $('#r3ov').textContent = (100 - p) + '%';
+    $('#r3est').textContent = `3 + 5 × ${ov.toFixed(2)} = ${+est.toFixed(2)}`;
+    const re = $('#r3real'); re.textContent = real + (real > LIMIT ? ' · over 7!' : ''); re.className = real > LIMIT ? 'bad' : '';
+    if (p === 30 && checkGoal('#s3goals', 'book', goals, 10)) Q.toast('3 + 3.5 = 6.5', $('#r3est'), 'practice');
+    if (p === 30 && dist === 'end' && checkGoal('#s3goals', 'blind', goals, 10)) { $('#blindNote').style.display = 'block'; maybeQuiz(); }
+  }
+  $('#r3').addEventListener('input', e => { p = +e.target.value; render(); });
+  $$('#distSeg button').forEach(b => b.onclick = () => { dist = b.dataset.d; $$('#distSeg button').forEach(x => x.classList.toggle('on', x === b)); render(); });
+  render();
+
+  const ROUNDS = [
+    { lim: 7, prev: 5, cur: 3, pos: 30, est: 6.5, dec: 'allow', why: '3 + 5 × 0.7 = 6.5, rounded down to 6. 6 is under the limit of 7, so this request goes through. That\'s the book\'s example: one more request after this and the limit is reached.' },
+    { lim: 10, prev: 8, cur: 4, pos: 25, est: 10, dec: 'reject', why: 'Overlap is 75%: 4 + 8 × 0.75 = 4 + 6 = 10. The rolling window already holds the full 10, so this one is rejected.' },
+    { lim: 10, prev: 8, cur: 4, pos: 75, est: 6, dec: 'allow', why: 'Same counts, later in the minute. Overlap is only 25%: 4 + 8 × 0.25 = 4 + 2 = 6. Under 10, so allow. The previous minute fades out as "now" moves on.' },
+    { lim: 100, prev: 120, cur: 30, pos: 50, est: 90, dec: 'allow', why: '30 + 120 × 0.5 = 30 + 60 = 90. Under 100, so allow. Notice the previous minute went <i>over</i> 100 (it was a burst), and the blend still lets traffic flow because half of that burst has slid out.' },
+  ];
+  let ri = 0, right = 0;
+  function showRound() {
+    const r = ROUNDS[ri], box = $('#r3box');
+    let dec = null;
+    box.innerHTML = `<div class="step">Round ${ri + 1} of 4 · round down, allow if the result is under the limit</div>
+      <div class="rcard"><b>Limit ${r.lim} per minute.</b> A request arrives.<div class="facts"><span>previous minute: ${r.prev}</span><span>current minute: ${r.cur}</span><span>now: ${r.pos}% in</span></div></div>
+      <div class="calc"><span class="lab">Estimate =</span><input id="r3in" type="text" inputmode="decimal" autocomplete="off" aria-label="Estimate before rounding"><span class="small muted">(before rounding)</span></div>
+      <div class="calc"><span class="lab">Decision:</span><span class="decide"><button class="opt" data-d="allow">✅ Allow</button><button class="opt" data-d="reject">⛔ Reject</button></span><button class="btn primary" id="r3go">Check</button></div>
+      <div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+    $$('.decide .opt', box).forEach(b => b.onclick = () => { dec = b.dataset.d; $$('.decide .opt', box).forEach(x => x.classList.toggle('picked', x === b)); });
+    $('#r3in').addEventListener('keydown', e => { if (e.key === 'Enter') $('#r3go').click(); });
+    $('#r3go').onclick = () => {
+      const v = num($('#r3in').value), ex = $('.explain', box);
+      if (!isFinite(v) || !dec) { ex.className = 'explain show bad'; ex.innerHTML = 'Type the estimate <i>and</i> pick Allow or Reject first.'; return; }
+      const okE = Math.abs(v - r.est) < 0.051, okD = dec === r.dec, ok = okE && okD;
+      $('#r3go').disabled = true; $('#r3in').readOnly = true; $$('.decide .opt', box).forEach(x => x.disabled = true);
+      const pickedB = $(`.decide .opt[data-d="${dec}"]`, box); pickedB.classList.add(okD ? 'right' : 'wrong');
+      if (!okD) $(`.decide .opt[data-d="${r.dec}"]`, box).classList.add('right');
+      ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+      ex.innerHTML = (ok ? '<b>Spot on.</b> ' : `<b>${okE ? 'Right estimate, wrong call.' : `The estimate is ${r.est}, not ${v}.`}</b> `) + r.why;
+      if (ok) { right++; Q.addXP(10, $('#r3go')); } else Q.loseHeart($('#r3go'));
+      nextBtn($('.row:last-child', box), ri < 3 ? 'Next round →' : 'Finish the rounds →', () => {
+        ri++;
+        if (ri < ROUNDS.length) return showRound();
+        roundsDone = true;
+        checkGoal('#s3goals', 'rounds', goals, 0);
+        box.innerHTML = `<div class="step">Rounds done · ${right} of 4 right</div><h3>${goals.has('blind') ? '🔍 You already found the blind spot in the sim above: the estimate can\'t see <i>where</i> last minute\'s requests fell.' : '🔍 What if? The book\'s example assumes last minute\'s 5 requests were spread out. Set "now" back to <b>30%</b> in the sim above and switch them to <b>bunched at the end</b>. Compare the estimate with the real count.'}</h3><div class="row"><button class="btn" id="r3again">↻ Replay the rounds</button></div>`;
+        if (right >= 3) Q.addXP(10, $('#r3again'));
+        $('#r3again').onclick = () => { ri = 0; right = 0; showRound(); };
+        render(); maybeQuiz();
+      });
+    };
+  }
+  showRound();
+  function maybeQuiz() {
+    if (quizShown || !roundsDone || !goals.has('blind')) return; quizShown = true;
+    setTimeout(() => Q.quiz($('#s3quiz'), {
+      q: 'What does the sliding window counter assume about the previous window?',
+      options: ['Its requests were spread out evenly', 'Its requests all came near its end', 'Its count never went over the limit'],
+      correct: 0,
+      good: 'It only stores the previous window\'s total, so it has to guess where in that minute the requests fell. It guesses "evenly", and takes the overlap share of the total.',
+      bad: 'It only stores the previous window\'s total, so it guesses the requests were spread evenly and takes the overlap share. When they really came at the end (the blind spot you just found), it under-counts.',
+      onDone: () => setTimeout(() => Q.clearStage(3), 900),
+    }), 400);
+  }
+});
+
+/* ================= STAGE 4: the algorithm draft ================= */
+Q.onStage(4, () => {
+  const ALG = [
+    { k: 'tb', n: 'Token bucket', who: 'Amazon, Stripe' },
+    { k: 'lb', n: 'Leaking bucket', who: 'Shopify' },
+    { k: 'fw', n: 'Fixed window counter', who: '' },
+    { k: 'sl', n: 'Sliding window log', who: '' },
+    { k: 'sc', n: 'Sliding window counter', who: 'Cloudflare' },
+  ];
+  const CARDS = [
+    { a: 'tb', pro: 1, t: 'Lets short bursts through while tokens last' },
+    { a: 'tb', pro: 0, t: 'Bucket size and refill rate are tricky to tune' },
+    { a: 'lb', pro: 1, t: 'Sends requests on at a steady, fixed rate' },
+    { a: 'lb', pro: 0, t: 'A burst fills the queue with old requests' },
+    { a: 'fw', pro: 1, t: 'One counter per window; resets on the minute' },
+    { a: 'fw', pro: 0, t: 'Bursts at window edges can double the quota' },
+    { a: 'sl', pro: 1, t: 'Exact: no rolling window ever goes over' },
+    { a: 'sl', pro: 0, t: 'Stores a timestamp per request, even rejects' },
+    { a: 'sc', pro: 1, t: 'Smooths spikes with just two counters per key' },
+    { a: 'sc', pro: 0, t: 'An estimate that assumes evenly spread traffic' },
+  ].map((c, i) => ({ ...c, i, miss: false, placed: false }));
+  let sel = null, picksStarted = false;
+  const pool = $('#pool'), cols = $('#cols');
+  cols.innerHTML = ALG.map(a => `<button class="col" data-a="${a.k}" aria-label="Place the selected card under ${a.n}"><span class="ch">${a.n}</span></button>`).join('');
+  function drawPool() {
+    pool.innerHTML = '';
+    shuffle(CARDS.filter(c => !c.placed)).forEach(c => {
+      const b = document.createElement('button');
+      b.className = 'tcard' + (sel === c ? ' sel' : ''); b.dataset.i = c.i;
+      b.innerHTML = `<span class="pc ${c.pro ? 'pro' : 'con'}">${c.pro ? '＋' : '－'}</span>${c.t}`;
+      b.setAttribute('aria-pressed', String(sel === c));
+      b.onclick = () => { sel = sel === c ? null : c; $$('.tcard', pool).forEach(x => { const on = sel && +x.dataset.i === sel.i; x.classList.toggle('sel', on); x.setAttribute('aria-pressed', String(!!on)); }); armCols(); };
+      pool.appendChild(b);
+    });
+    if (!pool.children.length) pool.innerHTML = '<span class="small muted">All ten cards placed.</span>';
+  }
+  function armCols() { $$('.col', cols).forEach(c => c.classList.toggle('armed', !!sel)); }
+  $$('.col', cols).forEach(col => col.onclick = () => {
+    if (!sel) { Q.toast('tap a card first', col, 'practice'); return; }
+    const c = sel;
+    if (col.dataset.a !== c.a) {
+      c.miss = true;
+      const el = $(`.tcard[data-i="${c.i}"]`, pool); el.classList.remove('nope'); void el.offsetWidth; el.classList.add('nope');
+      Q.toast('✗ not that one', col, 'practice');
+      return;
+    }
+    c.placed = true; sel = null;
+    col.insertAdjacentHTML('beforeend', `<span class="placed${c.miss ? ' miss' : ''}"><span class="pc ${c.pro ? 'pro' : 'con'}" style="font-weight:700;color:var(${c.pro ? '--good' : '--bad'})">${c.pro ? '＋' : '－'}</span> ${c.t}</span>`);
+    if (!c.miss) Q.addXP(3, col); else Q.toast('✓ placed (no XP)', col, 'practice');
+    drawPool(); armCols();
+    if (CARDS.every(x => x.placed)) finishBoard();
+  });
+  function finishBoard() {
+    const misses = CARDS.filter(c => c.miss).length;
+    $('#refWrap').style.display = 'block';
+    $('#reftab').innerHTML = ALG.map(a => {
+      const pro = CARDS.find(c => c.a === a.k && c.pro).t, con = CARDS.find(c => c.a === a.k && !c.pro).t;
+      return `<div class="refrow"><div class="nm">${a.n}${a.who ? `<small>used by ${a.who}</small>` : ''}</div><div class="p">${pro}</div><div class="c">${con}</div></div>`;
+    }).join('');
+    Q.toast(misses ? `board done · ${misses} bounced` : 'clean board!', $('#reftab'), 'practice');
+    if (!picksStarted) { picksStarted = true; startPicks(); }
+  }
+  function startPicks() {
+    const P = [
+      { t: 'A partner API with 40 enterprise clients. The contract says no client may <b>ever</b> exceed 100 calls in <b>any</b> 60 seconds.', a: 'sl', why: 'Exactness is the requirement and the user base is small, so the memory cost of a timestamp per request is affordable. Only the log guarantees every rolling window.' },
+      { t: 'A public API with hundreds of millions of keys. Being slightly off now and then is fine. Memory is not.', a: 'sc', why: 'Two counters per key keeps memory tiny, and blending in the previous minute stops edge bursts. Cloudflare measured it wrong on only 0.003% of requests.' },
+      { t: 'A free plan gives 1,000 calls per day, and the quota should reset at midnight.', a: 'fw', why: 'A daily window that resets on the boundary is exactly what the product wants. The edge burst (up to 2,000 around midnight) is usually acceptable for a daily plan.' },
+    ];
+    const box = $('#picks');
+    box.innerHTML = '<div class="step">Which would you pick?</div><div class="sort" id="pickList"></div>';
+    let done = 0;
+    $('#pickList').innerHTML = P.map((s, i) => `<div class="sort-item" data-i="${i}"><p>${s.t}</p><div class="row">${['fw', 'sl', 'sc'].map(k => `<button class="opt" data-k="${k}">${ALG.find(a => a.k === k).n}</button>`).join('')}</div><div class="explain"></div></div>`).join('');
+    $$('#pickList .sort-item').forEach(item => {
+      const s = P[+item.dataset.i];
+      $$('.opt', item).forEach(b => b.onclick = () => {
+        $$('.opt', item).forEach(x => x.disabled = true);
+        const ok = b.dataset.k === s.a;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-k="${s.a}"]`, item).classList.add('right');
+        const ex = $('.explain', item); ex.className = 'explain show ' + (ok ? 'good' : 'bad'); ex.innerHTML = s.why;
+        ok ? Q.addXP(10, b) : Q.loseHeart(b);
+        if (++done === P.length) setTimeout(() => Q.clearStage(4), 900);
+      });
+    });
+  }
+  drawPool();
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss'), {
+  name: '👻 Clock Wraith',
+  xp: 15,
+  choices: [
+    { k: 'fw', label: 'Fixed window', sub: 'counter per round window' },
+    { k: 'sl', label: 'Sliding log', sub: 'timestamp per request' },
+    { k: 'sc', label: 'Sliding counter', sub: 'two counters, blended' },
+  ],
+  scenarios: [
+    { e: '⏰', t: 'Double dip at :00', d: 'A client gets 2× its per-minute quota through by firing a burst just before each round minute and another just after. Which algorithm is your limiter running?', a: 'fw', why: 'Only the fixed window resets on the round minute and forgets the previous window entirely. That edge is exactly what this client is exploiting (stage 1).' },
+    { e: '🪶', t: 'Fix it, cheaply', d: 'You must stop that edge trick for 200 million users, and memory is tight. What do you switch to?', a: 'sc', why: 'The sliding window counter blends in the previous minute, so the edge burst no longer doubles the quota, and it still needs just two counters per key. The log would also fix it, but at a timestamp per request.' },
+    { e: '🧾', t: 'The auditor\'s rule', d: 'Compliance says no rolling 60-second span may <i>ever</i> hold more than the limit. Not "almost never". Ever.', a: 'sl', why: 'Only the sliding log checks the real rolling window, timestamp by timestamp. The counter is an estimate (wrong 0.003% of the time at Cloudflare), and the fixed window can let 2× through.' },
+    { e: '💣', t: 'Memory blew up', d: 'During a bot attack, your sliding-log limiter\'s memory jumped 20×, even though almost every bot request was rejected. Cleanup (step ①) runs fine. Why?',
+      choices: [
+        { k: 'rej', label: 'Rejects logged', sub: 'every attempt is stored' },
+        { k: 'old', label: 'No cleanup', sub: 'old entries pile up' },
+        { k: 'rep', label: 'Replication', sub: 'each log copied 20×' },
+      ], a: 'rej', why: 'In the book\'s version the rejected request\'s timestamp is still added to the log. A bot sending 20× the limit keeps 20× the entries inside the window. Logging only accepted requests would cap it, at the cost of not penalizing the hammering.' },
+    { e: '📉', t: 'How wrong is the estimate?', d: 'Cloudflare checked its sliding window counter against 400 million requests. What share were wrongly allowed or wrongly rate limited?',
+      choices: [
+        { k: 'a', label: '0.003%', sub: 'about 1 in 33,000' },
+        { k: 'b', label: '0.3%', sub: 'about 1 in 330' },
+        { k: 'c', label: '3%', sub: 'about 1 in 33' },
+      ], a: 'a', why: 'Only 0.003%. That\'s why the approximation is good enough for most APIs. It\'s measured on Cloudflare\'s own traffic, though: very bursty clients make it worse.' },
+  ],
+  outro: 'The rule of thumb: fixed window if a round reset is the feature, sliding counter when memory matters and close is good enough, sliding log when it must be exact.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: interview drill ================= */
+Q.onStage(6, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"Walk me through fixed window, sliding log, and sliding window counter, and tell me which you\'d ship."</i>',
+  placeholder: 'Fixed window keeps one counter per round minute…',
+  model: '"A <b>fixed window counter</b> keeps one counter per user per round window and drops requests once it hits the limit. It\'s cheap and simple, but bursts at the edges get through: with 5 per minute, 5 at the end of one minute and 5 at the start of the next means 10 between 2:00:30 and 2:01:30. A <b>sliding window log</b> fixes that by storing each request\'s timestamp in a Redis sorted set: trim entries older than a minute, add the new one, accept if the count is within the limit. It\'s exact, but it costs memory per request, and the book\'s version logs rejected ones too. A <b>sliding window counter</b> keeps just this minute\'s and last minute\'s counts and estimates the rolling count as current plus previous times the overlap, like 3 + 5 × 0.7 = 6.5. It\'s two counters per key and approximate, but Cloudflare saw only 0.003% of requests misjudged. For most APIs I\'d ship the sliding window counter, or a token bucket if I want to allow bursts. I\'d use the log only when exactness matters and volume is small."',
+  checks: ['I explained the fixed-window edge problem with numbers (5/min → 10 in one rolling minute)', 'I named the sliding log\'s memory cost, including logged rejects', 'I gave the sliding counter formula (current + previous × overlap)', 'I made a reasoned pick for what to ship'],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>
