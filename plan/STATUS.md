@@ -2,7 +2,7 @@
 
 Every chapter of *System Design Interview* Vol. 1 as a world of quests. Ticked = done. Regenerate: `python3 plan/tools/status.py`.
 
-**59 of 83 quests built** · 51 live on the map · 8 built, awaiting world review · 11 being built (draft on disk, not verified) · 13 not started.
+**60 of 83 quests built** · 51 live on the map · 9 built, awaiting world review · 10 being built (draft on disk, not verified) · 13 not started.
 
 Legend: `[x]` done · `[ ]` not done. A world is **done** when every quest is built, the world review has run, its cheat sheet
 exists, and its quests are `ready: true` on the map.
@@ -103,7 +103,7 @@ exists, and its quests are `ready: true` on the map.
 
 ## ⬜ World 11 · Design a News Feed System — *Feedstream Falls*
 
-- [ ] `1101` 11.1 · [Two Rivers](../lessons/1101-news-feed-scope-and-flows.html) — being built (unverified draft)
+- [x] `1101` 11.1 · [Two Rivers](../lessons/1101-news-feed-scope-and-flows.html) — built · needs world review
 - [x] `1102` 11.2 · [Push, Pull, or Both](../lessons/1102-news-feed-fanout-push-vs-pull.html) — built · needs world review
 - [ ] `1103` 11.3 · [The Fanout Factory](../lessons/1103-news-feed-publishing-pipeline.html) — being built (unverified draft)
 - [ ] `1104` 11.4 · [Hydrate the Feed](../lessons/1104-news-feed-retrieval-and-caches.html) — not started
