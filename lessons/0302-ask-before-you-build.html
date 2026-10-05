@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Ask Before You Build</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: s1 two-lane race, s2 question deck, s3 chat + whiteboard, s4 requirements board + calc */
+:root { --sticky: #fff3b0; --sticky-ink: #4d3d00; --sticky-line: #e9d77a; --bubble: #eef0ff; --ghost: #8d8aa0; --on-seg: #ffffff; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --sticky: #3a3414; --sticky-ink: #ffe98a; --sticky-line: #5c5320; --bubble: #23264a; --ghost: #7b7898; --on-seg: #0e0f1d; }
+}
+:root[data-theme="dark"] { --sticky: #3a3414; --sticky-ink: #ffe98a; --sticky-line: #5c5320; --bubble: #23264a; --ghost: #7b7898; --on-seg: #0e0f1d; }
+
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.bubble { position: relative; margin: 12px 14px 0; background: var(--bubble); border-radius: 14px; padding: 12px 14px; font-size: 15px; min-height: 48px; }
+.bubble::before { content: ""; position: absolute; left: 22px; top: -8px; border: 8px solid transparent; border-top: 0; border-bottom-color: var(--bubble); }
+.bubble.bad { background: var(--bad-soft); }
+.bubble.bad::before { border-bottom-color: var(--bad-soft); }
+.bubble.good { background: var(--good-soft); }
+.bubble.good::before { border-bottom-color: var(--good-soft); }
+.bubble .who { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); display: block; }
+.note { display: inline-block; font-family: var(--mono); font-size: 12px; padding: 5px 8px; border-radius: 4px 4px 10px 4px; background: var(--sticky); color: var(--sticky-ink); border: 1px solid var(--sticky-line); animation: rise .35s; }
+.note.ghost { background: transparent; color: var(--ghost); border: 2px dashed var(--ghost); font-style: italic; }
+.note.ghost.alarm { border-color: var(--bad); color: var(--bad); animation: shake .4s; }
+button.note { cursor: pointer; text-align: left; min-height: 40px; }
+button.note.ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ---------- stage 1: race ---------- */
+.clockrow { display: flex; align-items: baseline; gap: 10px; padding: 12px 14px 4px; flex-wrap: wrap; }
+.clock { font: 700 30px var(--mono); letter-spacing: .02em; }
+.lane { padding: 10px 14px 12px; border-top: 1px solid var(--line); }
+.lane-h { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; align-items: baseline; font-size: 15px; }
+.lane-h .tag { font-size: 12px; color: var(--muted); }
+.tl { position: relative; height: 22px; margin-top: 8px; border-radius: 7px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; }
+.tl .seg { position: absolute; top: 0; bottom: 0; width: 0; }
+.tl .head { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink); left: 0; }
+.seg.q { background: var(--teal); } .seg.hl { background: var(--accent); } .seg.rw { background: var(--bad); }
+.seg.lq { background: var(--warn); } .seg.dd { background: var(--good); } .seg.wr { background: var(--xp); }
+.ticks { display: flex; justify-content: space-between; font: 600 11px var(--mono); color: var(--muted); padding: 2px 14px 0; }
+.board { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; min-height: 30px; }
+.box2 { font-size: 12.5px; font-weight: 600; padding: 5px 9px; border-radius: 8px; border: 1.5px solid var(--accent); background: var(--accent-soft); animation: rise .35s; }
+.box2.fix { border-color: var(--warn); background: var(--warn-soft); }
+.box2.x { border-color: var(--bad); background: var(--bad-soft); color: var(--bad); text-decoration: line-through; }
+.seglegend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12.5px; color: var(--muted); }
+.seglegend i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+.endcard { display: none; margin-top: 14px; border-radius: 18px; padding: 18px; background: linear-gradient(160deg, var(--accent-soft), var(--teal-soft)); animation: rise .4s; }
+.endcard.show { display: block; }
+.endcard h3 { margin: 0 0 4px; font-size: 21px; }
+.cmp { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14.5px; }
+.cmp th, .cmp td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+.cmp td.n { font-family: var(--mono); font-weight: 700; text-align: right; white-space: nowrap; }
+.cmp td.bad { color: var(--bad); } .cmp td.good { color: var(--good); }
+
+/* ---------- stage 2: question deck ---------- */
+.promptcard { margin: 14px 14px 0; padding: 12px 14px; border-radius: 14px; background: var(--code-bg); color: var(--code-ink); font-family: var(--mono); font-size: 14px; }
+.budget { display: flex; align-items: center; gap: 10px; padding: 12px 14px 0; flex-wrap: wrap; font-size: 14px; }
+.pips { display: flex; gap: 4px; }
+.pip { width: 22px; height: 12px; border-radius: 4px; background: var(--teal); transition: background .3s, opacity .3s; }
+.pip.used { background: var(--line); }
+.pip.waste { background: var(--bad); opacity: .6; }
+.fams { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 10px 14px 0; }
+@media (max-width: 560px) { .fams { grid-template-columns: repeat(2, 1fr); } }
+.fam { border: 2px dashed var(--line); border-radius: 12px; padding: 6px 8px; text-align: center; font-size: 13px; font-weight: 700; color: var(--muted); transition: background .3s, border-color .3s, color .3s; }
+.fam .ic { display: block; font-size: 18px; filter: grayscale(1); opacity: .55; }
+.fam.lit { border-style: solid; border-color: var(--good); background: var(--good-soft); color: var(--good); animation: blip .5s; }
+.fam.lit .ic { filter: none; opacity: 1; }
+@keyframes blip { 45% { transform: scale(1.08); } }
+.qgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 12px 14px 0; }
+@media (max-width: 640px) { .qgrid { grid-template-columns: repeat(2, 1fr); } }
+.qc { text-align: left; border: 2px solid var(--line); background: var(--panel); border-radius: 12px; padding: 9px 10px; font-size: 14px; font-weight: 600; line-height: 1.3; min-height: 64px; display: flex; flex-direction: column; justify-content: space-between; gap: 6px; transition: border-color .2s, background .2s, opacity .2s; }
+.qc:hover:not([disabled]) { border-color: var(--accent); }
+.qc small { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.qc.hit { border-color: var(--good); background: var(--good-soft); }
+.qc.hit small { color: var(--good); }
+.qc.low { border-color: var(--bad); background: var(--bad-soft); opacity: .8; }
+.qc.low small { color: var(--bad); }
+.qc.border { border-color: var(--warn); background: var(--warn-soft); }
+.qc.border small { color: var(--warn); }
+.qc[disabled] { cursor: default; }
+.qc.spent:not(.hit):not(.low):not(.border) { opacity: .45; }
+
+/* ---------- stage 3: chat + whiteboard ---------- */
+.c3 { display: grid; grid-template-columns: 1.15fr 1fr; gap: 0; }
+@media (max-width: 700px) { .c3 { grid-template-columns: 1fr; } }
+.chatcol { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.chatlog { display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto; padding-right: 2px; }
+.msg { max-width: 92%; padding: 8px 12px; border-radius: 14px; font-size: 14.5px; animation: rise .3s; }
+.msg.iv { background: var(--bubble); align-self: flex-start; border-bottom-left-radius: 4px; }
+.msg.me { background: var(--accent); color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
+.msg.act { background: none; color: var(--muted); font-style: italic; align-self: center; font-size: 13.5px; padding: 2px 6px; }
+.msg.bad { background: var(--bad-soft); color: var(--ink); }
+.msg.good { background: var(--good-soft); color: var(--ink); }
+.msg .who { display: block; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
+.asks, .replies { display: grid; gap: 6px; }
+.asks .opt, .replies .opt { font-size: 14px; padding: 9px 12px; }
+.asks .lbl, .replies .lbl { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.wb { border-left: 1px solid var(--line); background: var(--panel); padding: 12px 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-content: start; min-width: 0; }
+@media (max-width: 700px) { .wb { border-left: 0; border-top: 1px solid var(--line); } }
+.wb h4 { margin: 0 0 6px; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.wbcol { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; min-width: 0; }
+.wbcol .empty { font-size: 12.5px; color: var(--muted); font-style: italic; }
+.wbhead { grid-column: 1 / -1; font-size: 13px; font-weight: 700; display: flex; justify-content: space-between; gap: 8px; }
+
+/* ---------- stage 4: requirements board ---------- */
+.slots { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 12px 14px 0; }
+@media (max-width: 560px) { .slots { grid-template-columns: 1fr; } }
+.slot { text-align: left; border: 2px dashed var(--line); background: var(--panel); border-radius: 14px; padding: 9px 12px; min-height: 64px; display: flex; flex-direction: column; gap: 4px; transition: border-color .2s, background .2s; }
+.slot small { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.slot .val { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+.slot.ready { border-color: var(--accent); }
+.slot.over { border-color: var(--accent); background: var(--accent-soft); }
+.slot.filled { border-style: solid; border-color: var(--good); background: var(--good-soft); cursor: default; }
+.slot.filled .val { color: var(--ink); font-weight: 700; }
+.slot .so { font-size: 13.5px; color: var(--ink); animation: rise .35s; }
+.slot .so b { color: var(--good); }
+.slot.nope { animation: shake .4s; border-color: var(--bad); }
+.pile { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 14px 14px; }
+.chipb { font-family: var(--mono); font-size: 13px; padding: 8px 11px; min-height: 40px; border-radius: 10px; border: 1.5px solid var(--sticky-line); background: var(--sticky); color: var(--sticky-ink); transition: transform .15s, box-shadow .15s; }
+.chipb:hover { transform: translateY(-1px); }
+.chipb[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--accent); transform: translateY(-2px); }
+.chipb.used { display: none; }
+.chipb.dud { opacity: .45; text-decoration: line-through; }
+.calcin { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+.calcin input { width: 150px; max-width: 100%; min-height: 42px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); padding: 8px 10px; font: 600 16px var(--mono); }
+.calcmsg { margin-top: 10px; font-size: 15px; display: none; padding: 10px 12px; border-radius: 12px; }
+.calcmsg.show { display: block; animation: rise .3s; }
+.calcmsg.good { background: var(--good-soft); } .calcmsg.bad { background: var(--bad-soft); }
+.stretch { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 3px 8px; border-radius: 99px; background: var(--warn-soft); color: var(--warn); }
+.status { font-weight: 600; }
+.status.good { color: var(--good); } .status.bad { color: var(--bad); }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 3.2 · A Framework for System Design Interviews</div>
+    <h1>Ask Before You Build</h1>
+    <p class="lede">The interviewer says six words: "Design a news feed." The candidates who do well don't start drawing. They start asking. Learn which questions matter, what to do when the answer is "you decide", and how to pin the scope down.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> in the first 3–10 minutes, ask the questions that matter, write down your assumptions, and lock the scope of "design a news feed" with the book's numbers.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Don't Sprint to the Answer</h2><div class="sub">Why jumping straight in backfires</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book splits a 45-minute interview into four steps. <b>Step 1</b> is "understand the problem and establish design scope", and it gets about <b>3 to 10 minutes</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener">[1]</a> <b>Scope</b> means the edges of the problem: what's in, what's out, and how big it has to be.</p>
+      <p>Engineers love hard problems, so the urge is to jump straight to a final design. The book warns against it. A fast answer earns <b>no bonus points</b>. Answering before you understand the requirements is a <b>big red flag</b>, because there's no single right answer to look up. The interview isn't a trivia quiz.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener">[1]</a> Its advice: slow down, think, and ask.</p>
+      <p>Below, two candidates get the same prompt. <b>A</b> starts drawing at 0:30. <b>B</b> spends the first 6 minutes asking questions. Predict first, then run the clock.</p>
+
+      <div class="challenge boxed" id="rPredict"></div>
+
+      <div class="sim" id="race">
+        <div class="clockrow"><span class="clock" id="rClock">00:00</span><span class="muted small">/ 45:00 · same prompt: "Design a news feed."</span></div>
+        <div class="lane" id="laneA">
+          <div class="lane-h"><b>🏃 Candidate A · the sprinter</b><span class="tag">starts drawing at 0:30</span></div>
+          <div class="tl"><div class="head"></div></div>
+          <div class="board" aria-live="polite"></div>
+        </div>
+        <div class="lane" id="laneB">
+          <div class="lane-h"><b>🔍 Candidate B · the scoper</b><span class="tag">asks for 6 minutes first</span></div>
+          <div class="tl"><div class="head"></div></div>
+          <div class="board" aria-live="polite"></div>
+        </div>
+        <div class="ticks"><span>0</span><span>15</span><span>30</span><span>45 min</span></div>
+        <div class="sim-bar"><div class="seglegend"><span><i style="background:var(--teal)"></i>questions</span><span><i style="background:var(--accent)"></i>high-level design</span><span><i style="background:var(--bad)"></i>rework</span><span><i style="background:var(--warn)"></i>late questions</span><span><i style="background:var(--good)"></i>deep dive</span><span><i style="background:var(--xp)"></i>wrap-up</span></div></div>
+        <div class="bubble" id="rBubble" style="display:none"></div>
+        <div class="sim-bar">
+          <span class="row" style="gap:8px"><button class="btn primary" id="rRun" disabled>▶ Run the 45-minute clock</button><button class="btn" id="rSkip" style="display:none">⏭ Skip to the end</button></span>
+          <span class="small muted" id="rHint">Lock in a prediction first.</span>
+        </div>
+        <div class="simlog" id="rLog"><div>Two candidates, one prompt, one clock.</div></div>
+      </div>
+
+      <div class="endcard" id="rEnd">
+        <h3>🏁 B wins: "fast start, slow finish"</h3>
+        <p class="small" style="margin:0">A saved 5½ minutes by skipping questions, then lost 8 to rework and 4 more asking the questions anyway. B knew about video and 5,000 friends before drawing a single box.</p>
+        <table class="cmp">
+          <tr><th></th><th style="text-align:right">A · sprinter</th><th style="text-align:right">B · scoper</th></tr>
+          <tr><td>Minutes spent redoing work</td><td class="n bad">8</td><td class="n good">0</td></tr>
+          <tr><td>Deep-dive minutes</td><td class="n bad">18</td><td class="n good">24</td></tr>
+          <tr><td>Wrap-up minutes</td><td class="n bad">1</td><td class="n good">5</td></tr>
+          <tr><td>Red flags raised</td><td class="n bad">1</td><td class="n good">0</td></tr>
+        </table>
+      </div>
+      <div class="callout tip"><b>Hidden requirements are the trap.</b> "Posts can have video" and "a user can have 5,000 friends" each change the design: video needs a different kind of storage, and 5,000 friends means one post may land in thousands of feeds. Find them at minute 3 and they cost nothing. Find them at minute 14 and you redraw half the board.</div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>The Question Deck</h2><div class="sub">Four question families that matter</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book suggests questions from four families:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener">[1]</a></p>
+      <ul>
+        <li><b>Features:</b> what exactly are we building?</li>
+        <li><b>Users:</b> how many people use the product? A common measure is <b>DAU</b>, daily active users: how many different people use it on a given day.</li>
+        <li><b>Growth:</b> how fast will it grow? What scale do we expect in 3 months, 6 months, a year?</li>
+        <li><b>Stack:</b> what technology does the company already use, and which existing services could we reuse to keep the design simple?</li>
+      </ul>
+      <p>A good question changes the design. A poor one burns a minute and tells the interviewer you can't tell the difference. Your budget is <b>6 minutes</b>, and each question costs 1. Light all four family badges before time runs out.</p>
+
+      <div class="sim">
+        <div class="promptcard">Interviewer: "Design a news feed."</div>
+        <div class="budget"><b>Step 1 clock</b><div class="pips" id="pips"></div><span id="dMin" class="mono">6 min left</span></div>
+        <div class="fams" id="fams"></div>
+        <div class="qgrid" id="qgrid"></div>
+        <div class="bubble" id="dBubble"><span class="who">Interviewer</span>Go ahead, ask me anything.</div>
+        <div class="sim-bar"><span class="status" id="dStatus">0 of 4 families covered</span><button class="btn" id="dReset">↻ New round</button></div>
+      </div>
+      <div class="callout"><b>About "Is there a deadline?"</b> It's borderline. It won't change your boxes in a 45-minute interview, but in a real design review a hard deadline does change what you'd build first. Fine to ask if time allows.</div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Answer or Assume</h2><div class="sub">When the interviewer says "you decide"</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>When you ask a question, the book says one of two things happens. The interviewer <b>answers it</b>, or tells you to <b>make an assumption</b>. Either way, write it on the whiteboard, so both of you can see it and you can point back to it later.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener">[1]</a></p>
+      <p>An <b>assumption</b> is a decision you make yourself when nobody gives you the answer. Say it out loud and it's a decision you own. Keep it in your head and it's a hidden risk: the interviewer may be picturing something else. Good assumptions keep things simple, stay realistic, and come with a one-line reason.</p>
+      <p>This interviewer likes to say "you decide". Ask all four questions, handle each reply, then fast-forward to minute 25 and see what your choices cost.</p>
+
+      <div class="sim">
+        <div class="c3">
+          <div class="chatcol">
+            <div class="chatlog" id="chat" aria-live="polite"><div class="msg iv"><span class="who">Interviewer</span>Design a news feed.</div></div>
+            <div class="asks" id="asks"></div>
+            <div class="replies" id="replies"></div>
+          </div>
+          <div class="wb" aria-label="Whiteboard">
+            <div class="wbhead"><span>🧾 Whiteboard</span><span class="muted small" id="wbCount"></span></div>
+            <div class="wbcol" id="reqCol"><h4>Requirements</h4><span class="empty">answers go here</span></div>
+            <div class="wbcol" id="asmCol"><h4>Assumptions</h4><span class="empty">your calls go here</span></div>
+          </div>
+        </div>
+        <div class="sim-bar"><button class="btn primary" id="ffBtn" disabled>⏩ Fast-forward to minute 25</button><span class="small status" id="c3status">Ask all four questions first.</span></div>
+      </div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Lock the News Feed Scope</h2><div class="sub">The book's worked example</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The chapter ends step 1 with a worked example: a short Q&amp;A for "design a news feed".<a class="cite" href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener">[1]</a> Six facts come out of it. Fill the board from the pile below: <b>tap a chip, then tap its slot</b> (or drag it on a desktop). Watch out, some chips are close but wrong. Each correct slot flips to show the <b>"so what?"</b>: how that fact changes the design.</p>
+
+      <div class="sim">
+        <div class="promptcard">Requirements board · "Design a news feed"</div>
+        <div class="slots" id="slots"></div>
+        <div class="pile" id="pile" aria-label="Answer chips"></div>
+        <div class="sim-bar"><span class="status" id="bStatus">0 / 6 locked</span><span class="small muted" id="bHint">Pick a chip first.</span></div>
+      </div>
+
+      <div class="challenge boxed" id="calc" style="margin-top:16px">
+        <span class="stretch">Stretch · a Ch. 2 skill, not in this chapter</span>
+        <h3 style="margin:8px 0 4px">How busy is that feed?</h3>
+        <p class="small" style="margin:0">If each of the <b>10 million</b> daily active users opens the feed <b>10 times a day</b>, about how many feed reads per second is that, on average? <span class="muted">(A day has 86,400 seconds.)</span></p>
+        <div class="calcin"><input id="calcIn" inputmode="decimal" placeholder="e.g. 5000" aria-label="Feed reads per second"><span class="small muted">reads / second</span><button class="btn primary" id="calcGo">Check</button></div>
+        <div class="calcmsg" id="calcMsg"></div>
+      </div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: First Question Wins</h2><div class="sub">Scoping across different prompts</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Same habit, new prompts. Each card shows a prompt from a later chapter and one question a candidate asks. Tag the family it belongs to, or call it <b>not worth asking</b>. Users and growth are merged into one family here: <b>scale &amp; growth</b>. Beat the boss with at most 2 misses.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say It Like a Senior</h2><div class="sub">Open the interview</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Your first minute sets the tone for the next 44. A crisp scoping opener tells the interviewer you're the kind of engineer who checks what to build before building it.</p>
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> Scope locked. Now turn it into boxes and arrows, sanity-check them, and get the interviewer to agree before you go deep. That's step 2, in Quest 3.3, <a href="0303-blueprint-and-buy-in.html"><i>Blueprint &amp; Buy-in</i></a>.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 3: A framework for system design interviews</a>, the section "Step 1: Understand the problem and establish design scope", including the news feed Q&amp;A. The same example is built out in full in <a href="https://bytebytego.com/courses/system-design-interview/design-a-news-feed-system" target="_blank" rel="noopener">Ch. 11: Design a news feed system</a>. For a second take, read the <a href="https://github.com/donnemartin/system-design-primer#how-to-approach-a-system-design-interview-question" target="_blank" rel="noopener">System Design Primer's "how to approach" section</a>, which starts with the same habit: outline use cases, constraints and assumptions.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <p style="margin-top:0"><b>Name both lists.</b> Many interviewers now expect step 1 to end with two explicit lists: <b>functional requirements</b> (what the system does: post, view feed) and <b>non-functional requirements</b> (how well it does it: latency, availability, consistency). The book covers this implicitly. Saying both lists out loud is a cheap win.</p>
+      <p><b>When do the numbers come?</b> Some interviewers want back-of-the-envelope estimates in step 1, some in step 2, some never. The book places them in step 2 as a sanity check on the design.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/back-of-the-envelope-estimation" target="_blank" rel="noopener">[3]</a> Ask which they prefer. The reads-per-second calculation in stage 4 is our extension, not part of Chapter 3.</p>
+      <p style="margin-bottom:0"><b>The numbers are illustrative.</b> 5,000 friends and 10 million DAU are the book's example values for this exercise, not real Facebook figures. In an interview, the numbers are whatever you and the interviewer agree on, which is exactly why you write them down.</p>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"what if the interviewer refuses to answer anything?"</i> or <i>"how many questions is too many?"</i> Follow-up questions are part of the quest.
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 3 "A framework for system design interviews" (ByteByteGo).</li>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 11 "Design a news feed system" (ByteByteGo), where the chapter's example is built in full.</li>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 2 "Back-of-the-envelope estimation" (ByteByteGo).</li>
+        <li>Donne Martin, <a href="https://github.com/donnemartin/system-design-primer#how-to-approach-a-system-design-interview-question" target="_blank" rel="noopener">The System Design Primer</a>, "How to approach a system design interview question".</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0302',
+  winTitle: 'Scope locked in',
+  badge: '🔍 Badge: Scope Hunter',
+  cheatsheet: '../reference/ch03-framework-cheatsheet.html',
+});
+const { sleep, shuffle, esc } = Q;
+function logTo(el, html, cls) { el.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); el.scrollTop = el.scrollHeight; }
+
+/* ================= STAGE 1: the race ================= */
+Q.onStage(1, () => {
+  const LANES = {
+    A: {
+      segs: [[0, .5, 'q'], [.5, 14, 'hl'], [14, 22, 'rw'], [22, 26, 'lq'], [26, 44, 'dd'], [44, 45, 'wr']],
+      board: [[1, 'Web server'], [3, 'Posts DB (text only)', 'x'], [6, 'Feed = look up all friends on every read', 'x'], [9, 'Load balancer'], [12, 'Cache'], [17, 'Object storage + CDN', 'fix'], [20, 'Fan-out service', 'fix']],
+    },
+    B: {
+      segs: [[0, 6, 'q'], [6, 16, 'hl'], [16, 40, 'dd'], [40, 45, 'wr']],
+      board: [[1, 'mobile + web', 'note'], [2, 'post + view feed', 'note'], [3, 'newest first (assumed)', 'note'], [4, '≤ 5,000 friends', 'note'], [5, '10M DAU', 'note'], [5.5, 'images + video', 'note'], [8, 'API servers'], [10, 'Post service'], [12, 'Fan-out service'], [14, 'Object storage + CDN'], [16, 'Feed cache']],
+    },
+  };
+  const EVENTS = [
+    [.5, 'A starts drawing boxes. No questions asked.', 'w'],
+    [.5, 'B: "Before I draw anything, a few questions…"', 'g'],
+    [6, 'B has six facts on the board, one of them a stated assumption.', 'g'],
+    [14, 'Interviewer: "By the way, posts include video, and users can have up to 5,000 friends."', 'e'],
+    [14, 'A: the text-only database and the per-read friend lookup no longer work. ✗', 'e'],
+    [14.25, 'B: no surprise. Video and 5,000 friends were on the board at minute 5.', 'g'],
+    [16, 'B: high-level design done, and the interviewer agrees with it.', 'g'],
+    [22, 'A finally asks the questions it skipped.', 'w'],
+    [24, 'B deep-dives into fan-out: delivering one post to 5,000 feeds.', 'g'],
+    [26, 'A starts its deep dive, 10 minutes after B.', 'w'],
+    [40, 'B wraps up: bottlenecks, failure cases, next steps.', 'g'],
+    [44, 'A: time is nearly up. One minute left to wrap up.', 'e'],
+  ];
+  const lanes = {};
+  for (const k of ['A', 'B']) {
+    const root = $('#lane' + k), tl = $('.tl', root);
+    const segs = LANES[k].segs.map(([a, b, c]) => { const d = document.createElement('div'); d.className = 'seg ' + c; d.style.left = (a / 45 * 100) + '%'; tl.insertBefore(d, $('.head', tl)); return { a, b, d }; });
+    lanes[k] = { root, segs, head: $('.head', tl), board: $('.board', root), items: [] };
+  }
+  const clock = $('#rClock'), log = $('#rLog'), bubble = $('#rBubble'), runBtn = $('#rRun'), skipBtn = $('#rSkip'), hint = $('#rHint');
+  let pred = null, running = false, skip = false, finishedOnce = false, fired = new Set();
+
+  function reset() {
+    fired = new Set();
+    for (const k in lanes) { lanes[k].board.innerHTML = ''; lanes[k].items = []; }
+    bubble.style.display = 'none';
+    log.innerHTML = '<div>Two candidates, one prompt, one clock.</div>';
+    render(0);
+  }
+  function render(t) {
+    const m = Math.floor(t), s = Math.round((t - m) * 60);
+    clock.textContent = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+    for (const k in lanes) {
+      const L = lanes[k];
+      L.segs.forEach(g => { g.d.style.width = (Math.max(0, Math.min(t, g.b) - g.a) / 45 * 100) + '%'; });
+      L.head.style.left = `calc(${t / 45 * 100}% - 1px)`;
+      LANES[k].board.forEach(([at, txt, cls], i) => {
+        if (t >= at && !L.items[i]) {
+          const el = document.createElement('span');
+          el.className = cls === 'note' ? 'note' : 'box2' + (cls === 'fix' ? ' fix' : '');
+          el.textContent = txt; L.board.appendChild(el); L.items[i] = el;
+        }
+        if (cls === 'x' && t >= 14 && L.items[i]) L.items[i].classList.add('x');
+      });
+    }
+    EVENTS.forEach((e, i) => { if (t >= e[0] && !fired.has(i)) { fired.add(i); logTo(log, e[1], e[2]); } });
+  }
+  async function pause(ms) { const t0 = Date.now(); while (!skip && Date.now() - t0 < ms) await sleep(60); }
+  async function run() {
+    if (running) return;
+    running = true; skip = !!Q.reduced; reset();
+    runBtn.disabled = true; skipBtn.style.display = skip ? 'none' : ''; hint.textContent = 'Clock running…';
+    $('#rEnd').classList.remove('show');
+    let bomb = false;
+    for (let i = 0; i <= 180; i++) {
+      const t = i / 4;
+      render(t);
+      if (!bomb && t >= 14) {
+        bomb = true;
+        bubble.className = 'bubble bad'; bubble.style.display = '';
+        bubble.innerHTML = '<span class="who">Interviewer · minute 14</span>"Oh, by the way: posts can include video, and a user can have up to 5,000 friends."';
+        await pause(1900);
+      }
+      if (!skip) await sleep(55);
+    }
+    render(45);
+    running = false; skipBtn.style.display = 'none';
+    runBtn.disabled = false; runBtn.textContent = '↻ Replay the race'; hint.textContent = 'Same clock, same outcome.';
+    $('#rEnd').classList.add('show');
+    if (!finishedOnce) {
+      finishedOnce = true;
+      const ok = pred === 'B';
+      if (ok) { Q.addXP(15, $('#rEnd h3')); logTo(log, 'Your prediction was right: B.', 'g'); }
+      else { Q.loseHeart($('#rEnd h3')); logTo(log, 'Your prediction missed. B finishes ahead.', 'e'); }
+      $('#rPredict .explain').className = 'explain show ' + (ok ? 'good' : 'bad');
+      $('#rPredict .explain').innerHTML = ok
+        ? '<b>Called it.</b> The six minutes B spent asking paid for themselves by minute 14.'
+        : '<b>Not this time.</b> A looked ahead at minute 10, but the late surprise cost A more time than the questions would have.';
+      await sleep(500);
+      Q.addXP(20, $('#rEnd .cmp'));
+      Q.quiz($('#s1quiz'), {
+        q: 'Why is jumping straight into a solution a red flag?',
+        options: [
+          'You may solve the wrong problem and burn time on rework',
+          'Interviewers reward slow, careful candidates over fast ones',
+          'It isn’t; raw speed is what the interviewer is scoring',
+          'Diagrams aren’t allowed until the second step starts',
+        ],
+        correct: 0,
+        good: 'Without the requirements you might design the wrong thing, like a text-only feed for a product with video, and the rework eats your deep dive. It also shows the interviewer you skip requirements, which is what they are watching for.',
+        bad: 'Speed isn’t the issue either way. Designing before you know the requirements risks solving the wrong problem, and the rework eats your deep dive. It also signals that you skip requirements.',
+        onDone: () => setTimeout(() => Q.clearStage(1), 900),
+      });
+    }
+  }
+  skipBtn.onclick = () => { skip = true; };
+  runBtn.onclick = run;
+
+  const P = $('#rPredict');
+  P.innerHTML = `<div class="step">Predict</div><h3>Who leaves the interviewer with the stronger signal at minute 45?</h3>
+    <div class="opts">
+      <button class="opt" data-p="A">A: drew first, so A finishes further ahead</button>
+      <button class="opt" data-p="B">B: asked first, so B finishes further ahead</button>
+      <button class="opt" data-p="T">A tie: the minutes even out by the end</button>
+    </div><div class="explain"></div>`;
+  $$('.opt', P).forEach(b => b.onclick = () => {
+    pred = b.dataset.p;
+    $$('.opt', P).forEach(x => { x.disabled = true; x.classList.toggle('picked', x === b); });
+    runBtn.disabled = false; hint.textContent = 'Prediction locked. Run it.';
+  });
+  reset();
+});
+
+/* ================= STAGE 2: the question deck ================= */
+Q.onStage(2, () => {
+  const FAMS = [['F', '🧩', 'Features'], ['U', '👥', 'Users'], ['G', '📈', 'Growth'], ['S', '🧰', 'Stack']];
+  const DECK = [
+    { q: 'Which features matter most?', f: 'F', a: 'A user can publish a post and see their friends’ posts in a feed.' },
+    { q: 'Mobile app, web app, or both?', f: 'F', a: 'Both.' },
+    { q: 'Can posts contain images or video?', f: 'F', a: 'Yes, both images and videos.' },
+    { q: 'How many daily active users?', f: 'U', a: 'About 10 million a day.' },
+    { q: 'What scale do we expect in 6–12 months?', f: 'G', a: 'Plan for steady growth. It should scale out by adding servers.' },
+    { q: 'Any existing services to reuse, like login or notifications?', f: 'S', a: 'Yes, there’s a login service and a notification service you can use.' },
+    { q: 'What colour is the like button?', f: null, a: 'Hmm. How would that change your design?' },
+    { q: 'Should I use Java or Go?', f: null, a: 'Whatever you like. It won’t change a single box.' },
+    { q: 'Who are your main competitors?', f: null, a: 'Interesting, but what would you do differently with that?' },
+    { q: 'How many engineers work here?', f: null, a: 'Does that change the system you’d draw?' },
+    { q: 'Do you personally like microservices?', f: null, a: 'What I like doesn’t matter. What does the problem need?' },
+    { q: 'Is there a deadline for launch?', f: 'B', a: 'Sometime next quarter. Good to know, but it won’t change much today.' },
+  ];
+  const famBox = $('#fams'), grid = $('#qgrid'), pips = $('#pips'), bub = $('#dBubble'), status = $('#dStatus');
+  famBox.innerHTML = FAMS.map(([k, ic, n]) => `<div class="fam" data-f="${k}"><span class="ic">${ic}</span>${n}</div>`).join('');
+  const earned = new Set();
+  let left, lit, heartThisRound, over, won = false;
+  function newRound() {
+    left = 6; lit = new Set(); heartThisRound = false; over = false;
+    $$('.fam', famBox).forEach(f => f.classList.remove('lit'));
+    pips.innerHTML = Array.from({ length: 6 }, () => '<span class="pip"></span>').join('');
+    $('#dMin').textContent = '6 min left';
+    bub.className = 'bubble'; bub.innerHTML = '<span class="who">Interviewer</span>Go ahead, ask me anything.';
+    status.className = 'status'; status.textContent = '0 of 4 families covered';
+    grid.innerHTML = '';
+    shuffle(DECK).forEach(c => {
+      const b = document.createElement('button');
+      b.className = 'qc'; b.innerHTML = `<span>${esc(c.q)}</span><small>1 min</small>`;
+      b.setAttribute('aria-label', 'Ask: ' + c.q);
+      b.onclick = () => ask(c, b);
+      grid.appendChild(b);
+    });
+  }
+  function ask(c, b) {
+    if (over || b.disabled) return;
+    b.disabled = true; b.classList.add('spent');
+    left--;
+    const pip = pips.children[5 - left];
+    $('#dMin').textContent = `${left} min left`;
+    bub.innerHTML = `<span class="who">Interviewer</span>${esc(c.a)}`;
+    if (c.f && c.f !== 'B') {
+      const fam = FAMS.find(f => f[0] === c.f);
+      b.classList.add('hit'); $('small', b).textContent = '✓ ' + fam[2];
+      bub.className = 'bubble good'; pip.classList.add('used');
+      const el = $(`.fam[data-f="${c.f}"]`, famBox);
+      if (!lit.has(c.f)) { lit.add(c.f); el.classList.add('lit'); }
+      if (!earned.has(c.f)) { earned.add(c.f); Q.addXP(10, el); }
+    } else if (c.f === 'B') {
+      b.classList.add('border'); $('small', b).textContent = '~ borderline';
+      bub.className = 'bubble'; pip.classList.add('used');
+    } else {
+      b.classList.add('low'); $('small', b).textContent = '✗ low value';
+      bub.className = 'bubble bad'; pip.classList.add('waste');
+      if (!heartThisRound) { heartThisRound = true; Q.loseHeart(b); }
+    }
+    status.textContent = `${lit.size} of 4 families covered`;
+    if (lit.size === 4) {
+      over = true; $$('.qc', grid).forEach(x => x.disabled = true);
+      status.className = 'status good'; status.textContent = `✓ All four families covered with ${left} min to spare`;
+      if (!won) {
+        won = true; Q.addXP(10, status);
+        Q.quiz($('#s2quiz'), {
+          q: 'Which question best helps you size the system?',
+          options: [
+            'How many daily users, and how fast will that grow?',
+            'What is the brand colour of the app’s logo?',
+            'Which code editor does the whole team prefer?',
+            'Is the engineering team fully remote or not?',
+          ],
+          correct: 0,
+          good: 'Users and growth set the scale: how many servers, how much storage, whether one database survives. The other three don’t change a single box.',
+          bad: 'Only the users-and-growth question sizes the system. It decides how many servers and how much storage you need. The other three don’t change a single box.',
+          onDone: () => setTimeout(() => Q.clearStage(2), 900),
+        });
+      }
+    } else if (left === 0) {
+      over = true; $$('.qc', grid).forEach(x => x.disabled = true);
+      const missing = FAMS.filter(f => !lit.has(f[0])).map(f => f[2]).join(', ');
+      status.className = 'status bad'; status.textContent = `⏰ Out of time. Missing: ${missing}. Try a new round.`;
+    }
+  }
+  $('#dReset').onclick = newRound;
+  newRound();
+});
+
+/* ================= STAGE 3: answer or assume ================= */
+Q.onStage(3, () => {
+  const QS = [
+    { k: 'order', ask: 'Should the feed be newest-first, or ranked?', type: 'decide', reply: 'What do you think? You decide.',
+      opts: { stated: '“I’ll assume newest first to keep it simple; ranking can come later.”', silent: 'Nod, say nothing, and keep drawing with my own guess in mind.', stall: '“I can’t go any further until you pick the feed order for me.”' },
+      note: 'Feed is newest first (reverse-chronological)', ghost: 'feed is ranked by relevance (unspoken)',
+      ok: '"Newest first, like you said. Fine."', bad: '"Hold on, why is there a ranking service? I pictured newest first."' },
+    { k: 'platform', ask: 'Is this a mobile app, a web app, or both?', type: 'decide', reply: 'Your call. What would you pick?',
+      opts: { stated: '“I’ll assume both mobile and web, sharing one backend API.”', silent: 'Nod, say nothing, and keep drawing with my own guess in mind.', stall: '“I can’t draw a thing until I know exactly which platforms.”' },
+      note: 'Both mobile + web, one shared API', ghost: 'mobile app only (unspoken)',
+      ok: '"Both clients on one API, as agreed. Good."', bad: '"Wait, I thought this was web only? Why is everything built around the phone app?"' },
+    { k: 'notif', ask: 'Should friends get a notification when I post?', type: 'decide', reply: 'Up to you. You decide.',
+      opts: { stated: '“I’ll leave notifications out of scope and focus on the feed.”', silent: 'Nod, say nothing, and keep drawing with my own guess in mind.', stall: '“I can’t scope this until you tell me if notifications are in.”' },
+      note: 'Notifications out of scope for now', ghost: 'push notifications included (unspoken)',
+      ok: '"Right, notifications were out of scope. Makes sense."', bad: '"Why are we spending ten minutes on push notifications? I never asked for those."' },
+    { k: 'dau', ask: 'How many daily active users do we expect?', type: 'answer', reply: 'About 10 million daily active users.',
+      note: '10M daily active users' },
+  ];
+  const chat = $('#chat'), asks = $('#asks'), replies = $('#replies'), reqCol = $('#reqCol'), asmCol = $('#asmCol'), ff = $('#ffBtn'), st = $('#c3status');
+  const state = {}; // k -> 'answered' | 'stated' | 'silent'
+  const noteEl = {};
+  let busy = false, replayHeart = false, cleanDone = false;
+  const say = (cls, who, html) => { chat.insertAdjacentHTML('beforeend', `<div class="msg ${cls}">${who ? `<span class="who">${who}</span>` : ''}${html}</div>`); chat.scrollTop = chat.scrollHeight; };
+  function pin(col, text, ghost, k) {
+    const e = $('.empty', col); if (e) e.remove();
+    const el = document.createElement(ghost ? 'button' : 'span');
+    el.className = 'note' + (ghost ? ' ghost' : ''); el.textContent = text;
+    if (ghost) { el.disabled = true; el.setAttribute('aria-label', 'Unspoken assumption: ' + text); }
+    col.appendChild(el);
+    if (k) noteEl[k] = el;
+    updateCount();
+    return el;
+  }
+  function updateCount() {
+    const n = Object.keys(state).length;
+    $('#wbCount').textContent = `${n} / 4 questions`;
+  }
+  function renderAsks() {
+    asks.innerHTML = '';
+    const todo = QS.filter(q => !state[q.k]);
+    if (busy || !todo.length) return;
+    asks.insertAdjacentHTML('beforeend', '<span class="lbl">Ask a question</span>');
+    todo.forEach(q => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = q.ask;
+      b.onclick = () => askQ(q);
+      asks.appendChild(b);
+    });
+  }
+  async function askQ(q) {
+    busy = true; renderAsks();
+    say('me', 'You', esc(q.ask));
+    await sleep(Q.reduced ? 0 : 450);
+    say('iv', 'Interviewer', esc(q.reply));
+    if (q.type === 'answer') {
+      state[q.k] = 'answered'; pin(reqCol, q.note);
+      say('act', '', 'You write it under Requirements.');
+      busy = false; renderAsks(); checkAll(); return;
+    }
+    showReplies(q);
+  }
+  function showReplies(q) {
+    replies.innerHTML = '<span class="lbl">Your move</span>';
+    shuffle(['stated', 'silent', 'stall']).forEach(kind => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = q.opts[kind]; b.dataset.kind = kind;
+      b.onclick = () => choose(q, kind, b);
+      replies.appendChild(b);
+    });
+  }
+  function choose(q, kind, b) {
+    if (kind === 'stall') {
+      b.disabled = true; b.classList.add('wrong');
+      say('me', 'You', esc(q.opts.stall));
+      say('iv bad', 'Interviewer', 'I’d rather see how <i>you</i> would decide. Pick something and tell me why.');
+      Q.loseHeart(b);
+      return;
+    }
+    replies.innerHTML = '';
+    if (kind === 'stated') {
+      say('me', 'You', esc(q.opts.stated));
+      say('act', '', 'You write it under Assumptions.');
+      state[q.k] = 'stated'; const el = pin(asmCol, q.note, false, q.k);
+      Q.addXP(10, el);
+    } else {
+      say('act', '', 'You nod and keep drawing. Nothing goes on the board, but a guess sits in your head.');
+      state[q.k] = 'silent'; pin(asmCol, q.ghost, true, q.k);
+    }
+    busy = false; renderAsks(); checkAll();
+  }
+  function checkAll() {
+    const done = QS.every(q => state[q.k]);
+    if (!done) return;
+    const ghosts = QS.filter(q => state[q.k] === 'silent');
+    ff.disabled = false;
+    st.className = 'small status'; st.textContent = ghosts.length ? 'All asked. Now see how it plays out.' : 'All asked, all written down. Fast-forward.';
+  }
+  ff.onclick = async () => {
+    ff.disabled = true;
+    say('act', '', '⏩ Minute 25. You’re halfway through the high-level design.');
+    let bad = 0;
+    for (const q of QS.filter(x => x.type === 'decide')) {
+      await sleep(Q.reduced ? 0 : 650);
+      if (state[q.k] === 'silent') {
+        bad++; noteEl[q.k].classList.add('alarm');
+        say('iv bad', 'Interviewer', esc(q.bad));
+      } else say('iv good', 'Interviewer', esc(q.ok));
+    }
+    if (bad) {
+      st.className = 'small status bad';
+      st.textContent = `${bad} hidden assumption${bad > 1 ? 's' : ''} surfaced late. Tap each dashed note to say it out loud, then replay.`;
+      if (!replayHeart) { replayHeart = true; Q.loseHeart(ff); }
+      QS.filter(q => state[q.k] === 'silent').forEach(q => {
+        const el = noteEl[q.k]; el.disabled = false;
+        el.setAttribute('aria-label', 'Say it out loud: ' + q.note);
+        el.onclick = () => {
+          const s = document.createElement('span'); s.className = 'note'; s.textContent = q.note;
+          el.replaceWith(s); noteEl[q.k] = s; state[q.k] = 'stated';
+          say('me', 'You (rewound)', esc(q.opts.stated));
+          if (QS.every(x => state[x.k] !== 'silent')) { ff.disabled = false; st.className = 'small status'; st.textContent = 'Everything is on the board now. Replay minute 25.'; }
+        };
+      });
+      return;
+    }
+    st.className = 'small status good'; st.textContent = '✓ No surprises. You and the interviewer are looking at the same picture.';
+    ff.disabled = false; ff.textContent = '⏩ Replay minute 25';
+    if (!cleanDone) {
+      cleanDone = true; Q.addXP(20, st);
+      Q.quiz($('#s3quiz'), {
+        q: 'The interviewer says you can choose the feed order. What’s the best response?',
+        options: [
+          'Say “I’ll assume newest first, for simplicity” and write it down',
+          'Pick an order quietly in your head and keep drawing the design',
+          'Wait politely until the interviewer decides the order for you',
+          'Design both orderings in full detail, just to be safe',
+        ],
+        correct: 0,
+        good: 'A stated assumption is a decision you own, with a reason, on the board where both of you can see it. Silence hides a risk, stalling wastes the clock, and designing both doubles your work.',
+        bad: 'State it, give a reason, write it down. Silence hides a risk (you saw it surface at minute 25), stalling wastes the clock, and designing both doubles your work.',
+        onDone: () => setTimeout(() => Q.clearStage(3), 900),
+      });
+    }
+  };
+  updateCount(); renderAsks();
+});
+
+/* ================= STAGE 4: lock the news feed scope ================= */
+Q.onStage(4, () => {
+  const SLOTS = [
+    { k: 'plat', n: 'Platform', a: 'Mobile + web', so: 'Two kinds of client call <b>one shared backend API</b>, so the logic lives on the servers, not in each app.' },
+    { k: 'feat', n: 'Key features', a: 'Post + see friends’ posts', so: 'Two flows to design: <b>publishing a post</b> and <b>building the feed</b>. Likes, comments and search are out for now.' },
+    { k: 'order', n: 'Feed order', a: 'Newest first (assumed)', so: 'Just sort by time: <b>no ranking service in v1</b>. Ranking is a named extension for later.' },
+    { k: 'friends', n: 'Friend limit', a: 'Up to 5,000 friends', so: 'One post may have to reach thousands of feeds. That’s <b>fan-out</b>: delivering one item to many readers.' },
+    { k: 'traffic', n: 'Traffic', a: '10M DAU', so: 'Too much for one server: plan for <b>many servers</b> behind a load balancer, plus caching.' },
+    { k: 'media', n: 'Media', a: 'Images + videos', so: 'Big files go to <b>object storage</b> (a store built for large files) served through a <b>CDN</b> (servers near users), not the main database.' },
+  ];
+  const DUDS = ['Web only', 'Text only', 'Ranked by ML model', 'Up to 1,000 friends', '100M DAU', 'Comments + likes + search'];
+  const slotsEl = $('#slots'), pile = $('#pile'), bStatus = $('#bStatus'), bHint = $('#bHint');
+  let sel = null, filled = 0, boardDone = false, calcDone = false, quizShown = false;
+  const missed = new Set();
+  slotsEl.innerHTML = SLOTS.map(s => `<button class="slot" data-k="${s.k}" aria-label="${s.n} slot, empty"><small>${s.n}</small><span class="val">empty</span></button>`).join('');
+  shuffle([...SLOTS.map(s => ({ t: s.a, k: s.k })), ...DUDS.map(t => ({ t, k: null }))]).forEach(c => {
+    const b = document.createElement('button');
+    b.className = 'chipb'; b.textContent = c.t; b.dataset.k = c.k || ''; b.draggable = true;
+    b.setAttribute('aria-pressed', 'false');
+    b.onclick = () => select(b);
+    b.addEventListener('dragstart', e => { select(b, true); try { e.dataTransfer.setData('text/plain', c.t); } catch (_) {} });
+    pile.appendChild(b);
+  });
+  function select(b, force) {
+    if (sel === b && !force) { b.setAttribute('aria-pressed', 'false'); sel = null; markReady(); bHint.textContent = 'Pick a chip first.'; return; }
+    if (sel) sel.setAttribute('aria-pressed', 'false');
+    sel = b; b.setAttribute('aria-pressed', 'true'); markReady();
+    bHint.textContent = `“${b.textContent}” picked. Now tap its slot.`;
+  }
+  function markReady() { $$('.slot', slotsEl).forEach(s => s.classList.toggle('ready', !!sel && !s.classList.contains('filled'))); }
+  function place(slotBtn) {
+    if (slotBtn.classList.contains('filled')) return;
+    if (!sel) { bHint.textContent = 'Pick a chip from the pile first.'; return; }
+    const s = SLOTS.find(x => x.k === slotBtn.dataset.k);
+    if (sel.dataset.k === s.k) {
+      slotBtn.classList.add('filled'); slotBtn.classList.remove('ready');
+      slotBtn.setAttribute('aria-label', `${s.n}: ${s.a}`);
+      $('.val', slotBtn).textContent = s.a;
+      slotBtn.insertAdjacentHTML('beforeend', `<span class="so">→ ${s.so}</span>`);
+      sel.classList.add('used'); sel = null; filled++;
+      Q.addXP(10, slotBtn);
+      bStatus.className = 'status' + (filled === 6 ? ' good' : ''); bStatus.textContent = filled === 6 ? '✓ 6 / 6 locked. Scope is set.' : `${filled} / 6 locked`;
+      bHint.textContent = filled === 6 ? '' : 'Nice. Next chip.';
+      markReady();
+      if (filled === 6) { boardDone = true; $$('.chipb:not(.used)', pile).forEach(x => { x.classList.add('dud'); x.disabled = true; }); maybeQuiz(); }
+    } else {
+      slotBtn.classList.remove('nope'); void slotBtn.offsetWidth; slotBtn.classList.add('nope');
+      const isDud = !sel.dataset.k;
+      bHint.textContent = isDud ? `“${sel.textContent}” isn’t what the book’s interviewer said.` : `“${sel.textContent}” is real, but it belongs in a different slot.`;
+      if (!missed.has(s.k)) { missed.add(s.k); Q.loseHeart(slotBtn); }
+    }
+  }
+  $$('.slot', slotsEl).forEach(sb => {
+    sb.onclick = () => place(sb);
+    sb.addEventListener('dragover', e => { if (!sb.classList.contains('filled')) { e.preventDefault(); sb.classList.add('over'); } });
+    sb.addEventListener('dragleave', () => sb.classList.remove('over'));
+    sb.addEventListener('drop', e => { e.preventDefault(); sb.classList.remove('over'); place(sb); });
+  });
+
+  // stretch calculation
+  const inp = $('#calcIn'), msg = $('#calcMsg'), go = $('#calcGo');
+  let calcMiss = 0;
+  function parse(v) {
+    let s = String(v).trim().toLowerCase().replace(/[~≈,\s]/g, '').replace(/\/s$|persec$|rps$|qps$/, '');
+    let mult = 1;
+    if (s.endsWith('k')) { mult = 1000; s = s.slice(0, -1); }
+    const n = parseFloat(s);
+    return isFinite(n) ? n * mult : NaN;
+  }
+  function check() {
+    if (calcDone) return;
+    const n = parse(inp.value);
+    if (!isFinite(n)) { msg.className = 'calcmsg show bad'; msg.innerHTML = 'Type a number, like <code>2500</code> or <code>2.5k</code>.'; return; }
+    if (n >= 1000 && n <= 1300) {
+      calcDone = true; inp.readOnly = true; go.disabled = true;
+      msg.className = 'calcmsg show good';
+      msg.innerHTML = '<b>Right, about 1,160 reads per second.</b> 10M × 10 = 100M reads a day. 100M ÷ 86,400 s ≈ 1,160/s. Traffic isn’t flat, so a rough peak is about 2× the average: <b>≈ 2,300/s</b>. That’s the kind of number Chapter 2 teaches you to make in your head.';
+      Q.addXP(20, msg); maybeQuiz();
+      return;
+    }
+    calcMiss++;
+    if (calcMiss === 1) Q.loseHeart(go);
+    msg.className = 'calcmsg show bad';
+    const dir = n < 1000 ? 'too low' : 'too high';
+    msg.innerHTML = calcMiss === 1
+      ? `That’s ${dir}. <b>Hint:</b> first get reads per day (10M users × 10 opens). Then divide by the seconds in a day, 86,400. Rounding 86,400 to 100,000 is fine for a quick estimate.`
+      : `Still ${dir}. 10M × 10 = 100,000,000 reads a day. Divide that by 86,400 seconds. (Anything from 1,000 to 1,300 counts.)`;
+  }
+  go.onclick = check;
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') check(); });
+
+  function maybeQuiz() {
+    if (!boardDone || !calcDone || quizShown) return;
+    quizShown = true;
+    Q.quiz($('#s4quiz'), {
+      q: 'Which requirement most directly creates the <b>fan-out</b> problem?',
+      options: [
+        'Up to 5,000 friends per user',
+        'Both mobile and web clients',
+        'Feed sorted newest first',
+        'Images and videos in posts',
+      ],
+      correct: 0,
+      good: 'Fan-out is one post being delivered to many feeds. The more friends a user can have, the more feeds each post must reach: up to 5,000 here. Chapter 11 spends a whole deep dive on it.',
+      bad: 'Fan-out is one post being delivered to many feeds, so the friend limit drives it: one post, up to 5,000 feeds. Media drives storage, platforms drive the API, and order drives ranking.',
+      onDone: () => setTimeout(() => Q.clearStage(4), 900),
+    });
+  }
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => {
+  const CHOICES = [
+    { k: 'feat', label: 'Features', sub: 'what it does' },
+    { k: 'scale', label: 'Scale &amp; growth', sub: 'how big, how fast' },
+    { k: 'stack', label: 'Existing stack', sub: 'what to reuse' },
+    { k: 'no', label: 'Not worth asking', sub: 'won’t change the design' },
+  ];
+  const SCEN = [
+    { e: '💬', t: 'Chat app', d: '“Is it 1-on-1 chat, group chat, or both?”', a: 'feat', why: 'It decides what you build. Group chat adds member lists and sending one message to many people. The book’s chat chapter opens with almost exactly this question (Ch. 12).' },
+    { e: '🔗', t: 'URL shortener', d: '“How many URLs are created per day?”', a: 'scale', why: 'Volume sets storage and how long the short code must be. The book’s answer is 100 million a day (Ch. 8).' },
+    { e: '🔔', t: 'Notification system', d: '“Do we already have a message queue we can use?”', a: 'stack', why: 'Reusing infrastructure the company already runs simplifies the design, and shows you think about the real company, not just the whiteboard.' },
+    { e: '🚦', t: 'Rate limiter', d: '“What font do the error pages use?”', a: 'no', why: 'A font changes zero boxes. Better questions: does the limiter sit in the client or on the server? Do we throttle by IP address or by user ID? (Ch. 4)' },
+    { e: '🕷️', t: 'Web crawler', d: '“How many pages a month, and how many years do we keep them?”', a: 'scale', why: 'That’s the storage math. The book’s crawler fetches 1 billion pages a month and keeps them for 5 years (Ch. 9).' },
+    { e: '🔎', t: 'Search autocomplete', d: '“Do we need to support multiple languages?”', a: 'feat', why: 'It changes what the system must handle (other alphabets, Unicode). The book’s version starts English-only and saves multiple languages for the wrap-up (Ch. 13).' },
+    { e: '📰', t: 'News feed', d: '“Can we reuse the company’s existing user graph service for friend lists?”', a: 'stack', why: 'Chapter 11’s design gets friend IDs from a graph database. If one already exists, that’s a whole component you don’t have to build.' },
+  ];
+  let attempt = 0;
+  function fight() {
+    attempt++;
+    Q.boss($('#boss'), {
+      name: '🌫️ The Fog of Scope',
+      xp: attempt === 1 ? 15 : 5,
+      choices: CHOICES,
+      scenarios: SCEN,
+      outro: 'Every good opening question changes the design.',
+      onDone: wins => {
+        if (wins >= SCEN.length - 2) { setTimeout(() => Q.clearStage(5), 700); return; }
+        const arena = $('#boss .q-arena');
+        arena.innerHTML = `<div class="scenario"><div class="emoji">🌫️</div><h3>The fog holds</h3><p>${wins} of ${SCEN.length} called correctly. You need at least ${SCEN.length - 2}. Ask yourself for each one: would the answer change a box on the diagram?</p></div><div class="row" style="margin-top:12px"><button class="btn primary" id="rematch">⚔️ Rematch</button></div>`;
+        $('#rematch').onclick = fight;
+      },
+    });
+  }
+  fight();
+});
+
+/* ================= STAGE 6: drill ================= */
+Q.onStage(6, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer says: <i>"Design a news feed."</i> Say your first 60 seconds.',
+  placeholder: 'Before I draw anything, a few questions…',
+  model: '"Before I draw anything, a few questions. Is this mobile, web, or both? What are the must-have features: posting, and seeing friends’ posts? Is there a required order, or can I assume newest first? How many friends can a user have, and how many daily active users do we expect, now and in a year? Can posts include images and video? And is there existing infrastructure I should reuse? I’ll write down whatever we agree, plus any assumptions I make, so we can both refer back to it."',
+  checks: [
+    'I asked about features and platform',
+    'I asked about scale (daily users, friends) and growth',
+    'I asked about media or the existing stack',
+    'I said I’d write the answers and assumptions down',
+  ],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>
