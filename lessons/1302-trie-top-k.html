@@ -227,7 +227,7 @@
           <div class="stat"><b id="s2s">0</b><span>sort ≈ c·log₂c</span></div>
           <div class="stat"><b id="s2t">0</b><span>rough time</span></div>
         </div>
-        <div class="budget"><div class="lbl"><span>Time for one keystroke</span><span>100 ms budget ┃ 200 ms</span></div><div class="btrack"><div class="bfill" id="s2bar"></div><div class="bline"></div></div></div>
+        <div class="budget"><div class="lbl"><span>Time per keystroke</span><span>budget ┃ 100 ms</span></div><div class="btrack"><div class="bfill" id="s2bar"></div><div class="bline"></div></div></div>
         <div class="simlog" id="s2log"><div>Small trie: be 15, bee 20, beer 10, best 35, bet 29. Type a prefix, then press the steps in order.</div></div>
       </div>
       <div class="row" style="margin-top:12px"><button class="btn" id="s2worst">💣 Worst case: a 10-million-node trie, prefix "a"</button><button class="btn" id="s2back" style="display:none">↻ Back to the small trie</button></div>
@@ -484,7 +484,7 @@ function bModel() { const m = buildModel(BWORDS); layout(m, { x0: 70, colW: 110,
 /* ================= STAGE 1: plant a trie ================= */
 Q.onStage(1, () => {
   const WORDS = [{ w: 'tree', f: 10 }, { w: 'try', f: 29 }, { w: 'true', f: 35 }, { w: 'toy', f: 14 }, { w: 'wish', f: 25 }, { w: 'win', f: 50 }];
-  const model = buildModel(WORDS); layout(model, { x0: 30, colW: 60, y0: 30, dy: 58 });
+  const model = buildModel(WORDS); layout(model, { x0: 26, colW: 58, y0: 30, dy: 58 });
   const have = new Set(['']), planted = new Set();
   let pick = null, guess = 0, streak = 0, busy = false, quizShown = false;
   const spell = p => p === '' ? 'root' : ['root', ...p.split('').map((_, i) => p.slice(0, i + 1))].map(x => x === 'root' ? '""' : x.slice(-1)).join(' → ');
@@ -581,7 +581,7 @@ Q.onStage(2, () => {
   const inp = $('#s2in');
   const NS_VISIT = 50, NS_CMP = 5;
   function stats(p, c, sortN, ns, hot) {
-    $('#s2p').textContent = fmt(p); $('#s2c').textContent = fmt(c); $('#s2s').textContent = sortN == null ? '0' : '≈ ' + fmt(sortN);
+    $('#s2p').textContent = fmt(p); $('#s2c').textContent = fmt(c); $('#s2s').textContent = sortN == null ? '0' : '≈ ' + (sortN >= 1e6 ? (sortN / 1e6).toFixed(1) + 'M' : fmt(sortN));
     $('#s2t').textContent = fmtTime(ns);
     const ms = ns / 1e6, bar = $('#s2bar');
     bar.style.width = Math.min(100, ms / 200 * 100) + '%'; bar.classList.toggle('bad', ms > 100);
@@ -664,16 +664,18 @@ Q.onStage(2, () => {
   const blob = $('#blob2'), dots = [];
   (function drawBlob() {
     let seed = 1302; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-    S('text', { class: 'lab', x: 180, y: 278 }, blob).textContent = '10,000,000 nodes · prefix "a" covers ~1,000,000 of them';
+    S('text', { class: 'lab', x: 180, y: 270 }, blob).textContent = '10,000,000 nodes in the trie';
+    S('text', { class: 'lab', x: 180, y: 286 }, blob).textContent = '~1,000,000 of them sit under "a"';
     for (let i = 0; i < 520; i++) {
-      const t = Math.sqrt(rnd()), y = 52 + t * 200, half = t * 160, x = 180 + (rnd() * 2 - 1) * half;
+      const t = Math.sqrt(rnd()), y = 52 + t * 196, half = t * 160, x = 180 + (rnd() * 2 - 1) * half;
       const inA = x < 180 - half + half * 0.35;
       dots.push({ el: S('circle', { class: 'dt', cx: x.toFixed(1), cy: y.toFixed(1), r: 2.6 }, blob), a: inA, y });
     }
     S('line', { class: 'te path', x1: 180, y1: 26, x2: 120, y2: 64 }, blob);
     const r = S('g', { class: 'tn root' }, blob); S('circle', { class: 'nd', cx: 180, cy: 26, r: 15 }, r); S('text', { x: 180, y: 26 }, r).textContent = '""';
     const a = S('g', { class: 'tn path' }, blob); S('circle', { class: 'nd', cx: 120, cy: 64, r: 15 }, a); S('text', { x: 120, y: 64 }, a).textContent = 'a';
-    S('text', { class: 'big', x: 270, y: 50, id: 'blobC' }, blob).textContent = 'c = 0';
+    S('text', { class: 'big', x: 300, y: 64, id: 'blobC' }, blob).textContent = '0';
+    S('text', { class: 'lab', x: 300, y: 32 }, blob).textContent = 'visited (c)';
   })();
   const aDots = dots.filter(d => d.a).sort((x, y) => x.y - y.y);
   $('#s2worst').onclick = async () => {
@@ -687,7 +689,7 @@ Q.onStage(2, () => {
     logTo('s2log', '💣 prefix "a" on a 10M-node trie. ① 1 hop. ② visit everything under "a"…', 'w');
     await anim(2200, pr => {
       const c = Math.round(C * pr * pr);
-      $('#blobC').textContent = 'c = ' + fmt(c);
+      $('#blobC').textContent = c >= 1e6 ? '1M' : c >= 1000 ? Math.round(c / 1000) + 'k' : String(c);
       const lit = Math.round(aDots.length * pr); aDots.forEach((d, i) => d.el.classList.toggle('on', i < lit));
       stats(1, c, null, (1 + c) * NS_VISIT, c > 2e5);
     });
