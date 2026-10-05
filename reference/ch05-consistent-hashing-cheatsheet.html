@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Consistent Hashing Cheat Sheet</title>
+<link rel="icon" href="data:,">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root { --bg: #fbfaf7; --ink: #1c1a26; --muted: #6a6778; --line: #e2ddd2; --accent: #5a48f0; --soft: #f1efe9; --good: #1d9a52; --bad: #d4423f;
+  --teal: #0d9a96; --warn: #b86e00; --panel: #ffffff;
+  --s0: #5a48f0; --s1: #0d9a96; --s2: #c27400; --s3: #d4423f; --s4: #b8409a; --on-s: #ffffff;
+  --font: "Space Grotesk", ui-sans-serif, system-ui, sans-serif; --mono: "JetBrains Mono", ui-monospace, Menlo, monospace; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #0e0f1d; --ink: #ecebf6; --muted: #9a98b4; --line: #2a2d4a; --accent: #8f82ff; --soft: #181a30; --good: #43d98a; --bad: #ff6d6a; --teal: #31d3c8; --warn: #ffb547; --panel: #1d2040;
+  --s0: #8f82ff; --s1: #31d3c8; --s2: #ffb547; --s3: #ff6d6a; --s4: #f07ad0; --on-s: #0e0f1d; } }
+:root[data-theme="dark"] { --bg: #0e0f1d; --ink: #ecebf6; --muted: #9a98b4; --line: #2a2d4a; --accent: #8f82ff; --soft: #181a30; --good: #43d98a; --bad: #ff6d6a; --teal: #31d3c8; --warn: #ffb547; --panel: #1d2040;
+  --s0: #8f82ff; --s1: #31d3c8; --s2: #ffb547; --s3: #ff6d6a; --s4: #f07ad0; --on-s: #0e0f1d; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.5; }
+main { max-width: 860px; margin: 0 auto; padding: 32px 16px 60px; }
+a { color: var(--accent); }
+.kicker { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+h1 { margin: 4px 0 4px; font-size: 30px; letter-spacing: -.01em; }
+.lede { color: var(--muted); margin: 0 0 22px; }
+h2 { font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 26px 0 8px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+h2:has(.ql) { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 10px; }
+h2 .ql { text-transform: none; letter-spacing: 0; font-size: 12.5px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+code { font-family: var(--mono); font-size: .9em; background: var(--soft); padding: .1em .35em; border-radius: 5px; overflow-wrap: anywhere; }
+pre { font-family: var(--mono); font-size: 12.5px; background: var(--soft); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin: 6px 0; overflow-x: auto; line-height: 1.45; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.box { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--soft); min-width: 0; }
+.box pre { background: var(--panel); }
+table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+td.num, th.num { font-family: var(--mono); white-space: nowrap; }
+.yes { color: var(--good); font-weight: 700; } .no { color: var(--bad); font-weight: 700; } .meh { color: var(--warn); font-weight: 700; }
+.say { border-left: 4px solid var(--accent); padding: 10px 14px; background: var(--soft); border-radius: 0 10px 10px 0; font-style: italic; }
+ul, ol { padding-left: 20px; margin: 6px 0; } li { margin: 3px 0; }
+.toc { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+.toc a { font-size: 13px; font-weight: 600; text-decoration: none; color: var(--accent); border: 1px solid var(--line); border-radius: 99px; padding: 4px 10px; }
+section { break-inside: auto; }
+section + section { margin-top: 30px; padding-top: 6px; border-top: 2px solid var(--line); }
+.box ul, .box ol { margin: 4px 0 0; padding-left: 18px; } .box li { margin: 2px 0; }
+p.say { margin-top: 12px; }
+.caveat { font-size: 13.5px; color: var(--muted); }
+.caveat b { color: var(--ink); }
+.foot { margin-top: 28px; font-size: 13px; color: var(--muted); }
+.wide { overflow-x: auto; }
+.formula { font-family: var(--mono); font-size: 13.5px; background: var(--panel); border: 1px dashed var(--accent); border-radius: 10px; padding: 8px 12px; margin: 6px 0; overflow-wrap: anywhere; }
+/* banner to the hands-on lab in World 6 */
+.banner { display: flex; gap: 12px; align-items: center; border: 1px solid var(--line); border-left: 4px solid var(--teal); border-radius: 0 12px 12px 0; padding: 10px 14px; background: var(--soft); margin: 0 0 16px; font-size: 14px; }
+.banner .ico { font-size: 24px; line-height: 1; }
+/* 4-step framework strip */
+.fw { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 0 0 14px; }
+.fw div { border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; background: var(--soft); min-width: 0; }
+.fw i { display: block; font-style: normal; font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.fw b { display: block; font-size: 13px; line-height: 1.25; }
+.fw span { font: 600 11.5px var(--mono); color: var(--muted); }
+@media (max-width: 520px) { .fw { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* key-numbers box */
+.keynums { border: 2px solid var(--accent); border-radius: 14px; padding: 12px 14px 14px; margin: 6px 0 4px; }
+.keynums .t { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+.kn { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.kn div { background: var(--soft); border-radius: 10px; padding: 8px 10px; min-width: 0; }
+.kn b { display: block; font: 700 19px var(--mono); line-height: 1.25; }
+.kn span { font-size: 12.5px; color: var(--muted); }
+.kn .how { display: block; font-family: var(--mono); font-size: 11.5px; }
+/* final design diagram */
+.diagram { border: 1px solid var(--line); border-radius: 14px; background: var(--soft); padding: 10px 8px 4px; margin-top: 8px; }
+.diagram svg { display: block; width: 100%; height: auto; max-width: 560px; margin: 0 auto; }
+.diagram .nb { fill: var(--panel); stroke: var(--ink); stroke-width: 1.6; }
+.diagram .nb.acc { stroke: var(--accent); stroke-width: 2.2; }
+.diagram .nb.tl { stroke: var(--teal); stroke-width: 2.2; }
+.diagram .nt { fill: var(--ink); font: 700 13px var(--font); text-anchor: middle; dominant-baseline: central; }
+.diagram .ns { fill: var(--muted); font: 600 10.5px var(--font); text-anchor: middle; dominant-baseline: central; }
+.diagram .ln { stroke: var(--muted); stroke-width: 1.8; fill: none; }
+.diagram .ln.req { stroke: var(--accent); }
+.diagram .ln.tl { stroke: var(--teal); stroke-dasharray: 5 4; }
+.diagram .ah { fill: var(--muted); } .diagram .ah.req { fill: var(--accent); } .diagram .ah.tl { fill: var(--teal); }
+.diagram .lab { fill: var(--accent); font: 700 10.5px var(--font); }
+.diagram .lab.mu { fill: var(--muted); } .diagram .lab.tl { fill: var(--teal); }
+.diagram .ringc { fill: none; stroke: var(--line); stroke-width: 12; }
+.diagram .walk { fill: none; stroke: var(--ink); stroke-width: 2.5; stroke-dasharray: 1 6; stroke-linecap: round; }
+.diagram .srvc { stroke: var(--panel); stroke-width: 2.5; }
+.diagram .srvt { fill: var(--on-s); font: 700 11.5px var(--font); text-anchor: middle; dominant-baseline: central; }
+.diagram .keyd { fill: var(--ink); }
+.diagram .ctr { fill: var(--muted); font: 600 10.5px var(--font); text-anchor: middle; }
+.diagram figcaption { font-size: 12.5px; color: var(--muted); text-align: center; padding: 4px 6px 6px; }
+.diagram figure { margin: 0; }
+@media print { .toc, .banner { display: none; } section + section { break-before: page; } body { background: #fff; color: #000; font-size: 12px; } main { padding: 0; } .box, code, pre, .say, .kn div, .fw div, .diagram, .formula { background: #f4f4f4; } a { color: inherit; } .keynums { border-color: #000; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="kicker">Cheat sheet · Chapter 5</div>
+  <h1>Design Consistent Hashing</h1>
+  <p class="lede">Every quest in World 5, The Ring Road, on one printable page. <a href="quest-map.html">← Quest map</a></p>
+
+  <div class="banner"><span class="ico" aria-hidden="true">🎛️</span><span><b>Want to drag the ring around?</b> The hands-on hash ring and virtual-node lab live in <a href="../lessons/0002-consistent-hashing.html">Quest 6.2, Slice the Keyspace</a> (<a href="../lessons/0002-consistent-hashing.html#s4">virtual-node lab →</a>). This page is the numbers and the interview answer.</span></div>
+
+  <nav class="toc"><a href="#q51">5.1 Ring math</a><a href="#q52">5.2 Cracks &amp; riders</a><a href="#boss">Boss: interview + final design</a><a href="#caveats">Caveats</a></nav>
+
+  <div class="keynums" aria-label="Key numbers">
+    <div class="t">Key numbers (as used in the quests)</div>
+    <div class="kn">
+      <div><b>N/(N+1)</b><span>keys moved by <code>% N</code> when 1 server joins</span><span class="how">4→5: 80% · 20→21: 95%</span></div>
+      <div><b>1/(N+1)</b><span>keys moved on a ring when 1 joins</span><span class="how">leave: 1/N (k/n rule)</span></div>
+      <div><b>2<sup>160</sup></b><span>SHA-1 hash space</span><span class="how">≈ 1.46 × 10⁴⁸ positions</span></div>
+      <div><b>~18</b><span>comparisons per lookup</span><span class="how">log₂ 256,000 positions</span></div>
+      <div><b>52%</b><span>avg largest arc, 4 random servers</span><span class="how">H<sub>N</sub>/N · 29% at 10 · 5.2% at 100</span></div>
+      <div><b>50%</b><span>neighbour's share after 1 of 4 even servers leaves</span><span class="how">2× everyone else</span></div>
+      <div><b>~38%</b><span>chance some server gets 0 of 8 keys</span><span class="how">4 equal arcs · ~1.3% at 20 keys</span></div>
+      <div><b>1/√V</b><span>load spread with V virtual nodes</span><span class="how">V = 100 → 10% · 400 → 5%</span></div>
+      <div><b>10% / 5%</b><span>book: spread at 100 / 200 vnodes</span><span class="how">simulation: ~9% / ~7%</span></div>
+      <div><b>16</b><span>Cassandra <code>num_tokens</code> default</span><span class="how">since 4.0 (was 256)</span></div>
+      <div><b>24M vs 476M</b><span>boss: keys moved, 20 → 21 servers</span><span class="how">500M keys · ring vs % N</span></div>
+    </div>
+  </div>
+
+  <!-- ===================== 5.1 ===================== -->
+  <section id="q51">
+  <h2>5.1 Ring math <a class="ql" href="../lessons/0501-consistent-hashing-ring-math.html">Quest 5.1 →</a></h2>
+  <div class="grid">
+    <div class="box"><b>The rehashing problem</b><br><code>serverIndex = hash(key) % N</code> spreads keys evenly, but a key keeps its server only if <code>hash % N</code> equals <code>hash % (N±1)</code>. Change N and almost every key remaps. In a cache that's a <b>miss storm</b> on the database.</div>
+    <div class="box"><b>The ring</b><br>Take the hash space (SHA-1: 0 to 2<sup>160</sup>−1) and join its ends. Hash <b>servers</b> (IP or name) and <b>keys</b> with the <b>same</b> function onto it. A key belongs to the <b>first server clockwise</b>. No <code>% N</code> anywhere.</div>
+    <div class="box"><b>What an arc is worth</b><br>A server owns the arc from the previous server (anticlockwise) up to itself.
+      <div class="formula">share = ((pos − prev) mod S) / S</div><span class="caveat">S = size of the space. The <code>mod</code> handles the wrap past 0. Toy: s0 at 32, prev at 240, S = 256 → 48/256 = 18.75%.</span></div>
+  </div>
+
+  <h2>How many keys move when you add one server</h2>
+  <div class="wide"><table>
+    <tr><th>Change</th><th class="num">hash % N</th><th class="num">ring (even arcs)</th></tr>
+    <tr><td>4 → 5 servers</td><td class="num no">80%</td><td class="num yes">20%</td></tr>
+    <tr><td>9 → 10</td><td class="num no">90%</td><td class="num yes">10%</td></tr>
+    <tr><td>20 → 21</td><td class="num no">95%</td><td class="num yes">~5%</td></tr>
+    <tr><td>50 → 51</td><td class="num no">98%</td><td class="num yes">~2%</td></tr>
+    <tr><td>99 → 100</td><td class="num no">99%</td><td class="num yes">1%</td></tr>
+    <tr><td>Remove one: N → N−1</td><td class="num no">(N−1)/N · 4→3: 75%</td><td class="num yes">1/N (its own keys)</td></tr>
+  </table></div>
+  <p>Modulo gets <b>worse</b> as the cluster grows; the ring gets <b>better</b>. The book's rule: on average only <b>k/n</b> keys move (k keys, n servers).</p>
+
+  <div class="grid">
+    <div class="box"><b>Lookup in code</b><br>Keep server positions (<i>tokens</i>) in a <b>sorted array</b>. Binary-search for the first token <b>≥ hash</b>; none → wrap to the first token. O(log T): 256,000 tokens ≈ 18 steps.
+<pre>let lo = 0, hi = tokens.length; // not length-1
+while (lo &lt; hi) {
+  const mid = (lo + hi) &gt;&gt; 1;
+  if (tokens[mid] &lt; h) lo = mid + 1;
+  else hi = mid;
+}
+return tokens[lo % tokens.length]; // wrap</pre>
+      <span class="caveat">Classic bug: <code>hi = length − 1</code> can never say "past the end", so it never wraps.</span></div>
+    <div class="box"><b>Which keys move</b><ul>
+      <li><b>Join:</b> from the new server go <b>anticlockwise</b> to the previous server. Those keys move to the new server, all <b>from its clockwise neighbour</b>.</li>
+      <li><b>Leave:</b> from the leaving server go anticlockwise to the previous server. Those keys go to its <b>clockwise neighbour</b>.</li>
+      <li><b>Virtual nodes:</b> same rule once per position → many small arcs from (or to) many servers.</li>
+      <li>Nothing else on the ring changes.</li></ul></div>
+    <div class="box"><b>Traps that move everything</b><ul>
+      <li><b>Changing the hash function</b> (SHA-1 → Murmur3): every key and server gets a new spot. Plan a migration.</li>
+      <li><b>Hashing an unstable IP:</b> a reboot with a new IP = a remove + an add. Hash a stable server ID.</li>
+      <li><b>Real hash spaces:</b> Dynamo hashes keys with MD5 (128-bit); Cassandra's Murmur3 tokens run −2<sup>63</sup> … 2<sup>63</sup>−1.</li></ul></div>
+  </div>
+  <p class="say">"With hash mod N, going from 20 to 21 servers moves about 20 in 21 keys, roughly 95%, so the whole cache misses at once. On a ring, a lookup is a binary search for the first position at or after the key's hash, wrapping at the top. A new server takes only the arc between itself and the previous server, from its clockwise neighbour: about 1/(N+1) of the keys."</p>
+  <p class="caveat"><b>Caveats:</b> N/(N+1) and 1/(N+1) assume uniform hashes and, for the ring, equal arcs; with one random position per server a join can take far more or less. "Move" in a cache is one miss; in a database the arc must be <b>copied</b> before the new owner serves it (the book stops at "which keys"). SHA-1 is broken for security, which doesn't matter for placement.</p>
+  </section>
+
+  <!-- ===================== 5.2 ===================== -->
+  <section id="q52">
+  <h2>5.2 Cracks in the ring, and who rides it <a class="ql" href="../lessons/0502-consistent-hashing-cracks-and-riders.html">Quest 5.2 →</a></h2>
+  <div class="grid">
+    <div class="box"><b>Crack 1: uneven partitions</b><ul>
+      <li>You don't choose where a server lands; its hash does, and servers come and go.</li>
+      <li>4 even servers, remove one → its clockwise neighbour owns <b>50%</b>.</li>
+      <li>N random servers: largest arc ≈ <b>H<sub>N</sub>/N</b> (H<sub>N</sub> = 1 + ½ + … + 1/N ≈ ln N + 0.58): 52% at N = 4, 29% at 10, 5.2% at 100, i.e. ~ln N × fair share. More servers make it <i>relatively</i> worse.</li></ul></div>
+    <div class="box"><b>Crack 2: uneven keys</b><ul>
+      <li>Even with equal arcs, random keys bunch: 8 keys on 4 arcs leave some server empty ~38% of the time.</li>
+      <li>Heals with scale: noise ≈ 1/√(keys per server), ~3% at 1,000 each.</li>
+      <li><b>One hot key is different:</b> it hashes to one spot, one server. Virtual nodes or more servers can't split it → <b>cache, replicate or split</b> that key.</li></ul></div>
+    <div class="box"><b>The patch: virtual nodes</b><ul>
+      <li>Place each server at many positions (<code>s0#0</code>, <code>s0#1</code>…; Dynamo/Cassandra call them <i>tokens</i>).</li>
+      <li>Share = sum of many small arcs → spread ≈ <b>1/√V</b>. Halving it costs <b>4×</b> the vnodes.</li>
+      <li>A dead server's arcs scatter over many survivors.</li>
+      <li><b>Heterogeneity:</b> vnodes ∝ capacity (2× server → 2× vnodes).</li></ul></div>
+  </div>
+
+  <h2>Virtual nodes: balance vs metadata (1,000 servers, ~24 B per entry)</h2>
+  <div class="wide"><table>
+    <tr><th class="num">V per server</th><th class="num">spread ≈ 1/√V</th><th class="num">ring entries</th><th class="num">per router copy</th><th>verdict</th></tr>
+    <tr><td class="num">1</td><td class="num no">~100%</td><td class="num">1,000</td><td class="num">24 KB</td><td>basic ring, lumpy</td></tr>
+    <tr><td class="num">25</td><td class="num meh">20%</td><td class="num">25,000</td><td class="num">0.6 MB</td><td>still lumpy</td></tr>
+    <tr><td class="num">100</td><td class="num yes">10%</td><td class="num">100,000</td><td class="num">2.4 MB</td><td>book: ~10%</td></tr>
+    <tr><td class="num">256</td><td class="num yes">6%</td><td class="num">256,000</td><td class="num">6.1 MB</td><td>Cassandra's old default</td></tr>
+    <tr><td class="num">400</td><td class="num yes">5%</td><td class="num">400,000</td><td class="num">9.6 MB</td><td>edge of the green zone</td></tr>
+  </table></div>
+  <p class="caveat">Lookups stay cheap (log₂ entries ≈ 17–19 comparisons); the real cost of more vnodes is memory and shipping every membership change to every router.</p>
+
+  <h2>Who uses it: what they hash, what the hash picks</h2>
+  <div class="wide"><table>
+    <tr><th>System</th><th>Hashes</th><th>Picks</th></tr>
+    <tr><td><b>Amazon Dynamo</b></td><td>item key → MD5</td><td>coordinator node + next distinct nodes clockwise (preference list)</td></tr>
+    <tr><td><b>Apache Cassandra</b></td><td>partition key → Murmur3 token</td><td>nodes owning that token range; <code>num_tokens</code> 16 since 4.0</td></tr>
+    <tr><td><b>Discord</b></td><td>guild or session ID</td><td>which Elixir node runs its process (<code>ex_hash_ring</code>)</td></tr>
+    <tr><td><b>Akamai CDN</b></td><td>URL / web object</td><td>which cache server keeps it (Karger et al. 1997, MIT)</td></tr>
+    <tr><td><b>Google Maglev</b></td><td>connection 5-tuple</td><td>backend, via a <b>prime-size lookup table</b>, not a ring</td></tr>
+  </table></div>
+  <div class="grid">
+    <div class="box"><b>Maglev vs ring</b><br>Backends take turns claiming their next preferred free slot (offset + skip) in a table of M slots (65,537 in the paper). <b>Even balance</b> (M/N ± 1 slots each), paid for with <b>a little extra disruption</b>: when a backend leaves, a few survivors' slots move too. A ring is the reverse deal.</div>
+    <div class="box"><b>Other alternatives</b><ul>
+      <li><b>Rendezvous hashing:</b> each key picks the server with the highest <code>hash(key, server)</code>.</li>
+      <li><b>Jump consistent hash:</b> no table, tiny memory, but only for numbered shards added or removed at the end.</li></ul></div>
+  </div>
+  <p class="say">"The basic ring has two problems: arcs are uneven because positions come from the hash, so the biggest can be around ln N times fair share and a removal dumps a whole arc on one neighbour; and keys can bunch, though that fades with scale. Virtual nodes fix the arcs: spread is about one over root V, so a few hundred per server gets you to 5–10%, at the cost of ring metadata on every router, and bigger servers get more. One hot key still lives on one server, so cache or replicate it. Dynamo, Cassandra, Discord and Akamai use rings; Maglev uses a lookup table for even balance."</p>
+  <p class="caveat"><b>Caveats:</b> H<sub>N</sub>/N and 1/√V are idealised maths for <i>random</i> placement; Dynamo later moved to equal-sized fixed partitions ("Strategy 3", §6.2) and Cassandra 4.0 allocates tokens deliberately, which is why 16 is enough. The book's 5% at 200 vnodes is optimistic (a simple simulation gives ~6–7%): teach the trend. Discord and Akamai internals may have changed since their public write-ups.</p>
+  </section>
+
+  <!-- ===================== BOSS ===================== -->
+  <section id="boss">
+  <h2>Boss · Hash it live: the 45-minute interview <a class="ql" href="../lessons/0503-consistent-hashing-boss-hash-it-live.html">Boss quest →</a></h2>
+  <p class="caveat" style="margin-top:0">Chapter 5 is a concept chapter, so the boss frames it as a <b>cache fleet of 20 servers (up to 60 at peak) that grows and shrinks daily</b>. The framing, scoping chat and membership service are the course's additions.</p>
+  <div class="fw" aria-label="The book's 4-step interview framework">
+    <div><i>Step 1</i><b>Scope the problem</b><span>3–10 min</span></div>
+    <div><i>Step 2</i><b>High-level design</b><span>10–15 min</span></div>
+    <div><i>Step 3</i><b>Deep dive</b><span>10–25 min</span></div>
+    <div><i>Step 4</i><b>Wrap up</b><span>3–5 min</span></div>
+  </div>
+
+  <h2>Step 1: six questions → six requirements</h2>
+  <div class="wide"><table>
+    <tr><th>Ask</th><th>Answer</th><th>Requirement</th></tr>
+    <tr><td>Cache or system of record?</td><td>A cache (maybe a store later); every miss hits the DB</td><td>Few keys move on resize</td></tr>
+    <tr><td>How often do servers join or leave?</td><td>Daily, plus random crashes</td><td>A dead server's load spreads out</td></tr>
+    <tr><td>Are all servers the same size?</td><td>New ones have 2× the memory</td><td>Bigger servers carry more</td></tr>
+    <tr><td>How many keys and servers?</td><td>~500M keys, 20 servers, up to 60</td><td>Even load per server</td></tr>
+    <tr><td>Are some keys much hotter?</td><td>Yes, a few celebrity profiles</td><td>Hot keys don't melt one server</td></tr>
+    <tr><td>Client library or proxy?</td><td>Your call; no network hop per lookup</td><td>Lookup is fast and local</td></tr>
+  </table></div>
+  <p class="caveat">Time-wasters: Redis vs Memcached, client language, encrypting keys. Napkin: 500M ÷ 20 = <b>25M keys per server</b>; adding the 21st moves ~<b>24M</b> on a ring (500 ÷ 21) vs ~<b>476M</b> with <code>% N</code> (20/21).</p>
+
+  <h2>Final design</h2>
+  <div class="diagram"><figure>
+    <svg viewBox="0 0 400 300" role="img" aria-label="Final design: app clients carry a ring library and fetch the server list from a membership service; cache servers sit on a hash ring and send heartbeats to the membership service; a client hashes user:42 to position 341, walks clockwise past the top to server A at 30 and sends the request there; on a miss the client reads the database">
+      <defs>
+        <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="ah" d="M0 0L10 5L0 10z"/></marker>
+        <marker id="mr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="ah req" d="M0 0L10 5L0 10z"/></marker>
+        <marker id="mt" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="ah tl" d="M0 0L10 5L0 10z"/></marker>
+      </defs>
+      <!-- ring -->
+      <circle class="ringc" cx="290" cy="170" r="85"/>
+      <text class="ctr" x="290" y="166">hash ring</text>
+      <text class="ctr" x="290" y="181">sorted positions</text>
+      <text class="ctr" x="290" y="79">0</text>
+      <path class="walk" d="M267.9 105.7A68 68 0 0 1 324 111.1"/>
+      <!-- servers: A 30°, B 95°, C 160°, D 230°, E 300° -->
+      <circle class="srvc" cx="332.5" cy="96.4" r="14" style="fill:var(--s0)"/><text class="srvt" x="332.5" y="96.4">A</text>
+      <circle class="srvc" cx="374.7" cy="177.4" r="14" style="fill:var(--s1)"/><text class="srvt" x="374.7" y="177.4">B</text>
+      <circle class="srvc" cx="319.1" cy="249.9" r="14" style="fill:var(--s2)"/><text class="srvt" x="319.1" y="249.9">C</text>
+      <circle class="srvc" cx="224.9" cy="224.6" r="14" style="fill:var(--s3)"/><text class="srvt" x="224.9" y="224.6">D</text>
+      <circle class="srvc" cx="216.4" cy="127.5" r="14" style="fill:var(--s4)"/><text class="srvt" x="216.4" y="127.5">E</text>
+      <!-- key user:42 at 341° -->
+      <path class="keyd" d="M262.3 82.6L269.3 89.6L262.3 96.6L255.3 89.6Z"/>
+      <text class="lab mu" x="250" y="74" text-anchor="end">user:42 → 341</text>
+      <!-- membership -->
+      <path class="ln tl" d="M70 58V104" marker-end="url(#mt)"/>
+      <text class="lab tl" x="76" y="86">server list</text>
+      <path class="ln tl" d="M205 117L172 60" marker-end="url(#mt)"/>
+      <text class="lab tl" x="192" y="100" text-anchor="end">heartbeats</text>
+      <!-- request -->
+      <path class="ln req" d="M140 128Q 230 150 316 104" marker-end="url(#mr)"/>
+      <text class="lab" x="162" y="152">get / set → A</text>
+      <!-- miss -->
+      <path class="ln" d="M70 180V226" marker-end="url(#m)"/>
+      <text class="lab mu" x="76" y="207">on miss</text>
+      <!-- boxes -->
+      <rect class="nb tl" x="10" y="10" width="160" height="46" rx="10"/><text class="nt" x="90" y="26">🗂️ Membership</text><text class="ns" x="90" y="43">ZooKeeper / etcd / gossip</text>
+      <rect class="nb acc" x="10" y="108" width="130" height="70" rx="10"/><text class="nt" x="75" y="128">💻 App clients</text><text class="ns" x="75" y="146">+ ring library</text><text class="ns" x="75" y="161">binary search, local</text>
+      <rect class="nb" x="10" y="230" width="130" height="56" rx="10"/><text class="nt" x="75" y="250">🛢️ Database</text><text class="ns" x="75" y="268">source of truth</text>
+    </svg>
+    <figcaption>Clients keep a ring of server positions (built from the membership service's list) and binary-search it locally: user:42 hashes to 341, no position is ≥ 341, so it wraps to A at 30. Each server has a few hundred virtual nodes (more for 2× servers); only one is drawn per server here. A miss reads the database and refills the cache.</figcaption>
+  </figure></div>
+
+  <h2>Step 3: goal → technique</h2>
+  <div class="wide"><table>
+    <tr><th>Goal</th><th>Technique</th></tr>
+    <tr><td>Few keys move when a server joins</td><td>Hash ring (~k/n keys, not N/(N+1))</td></tr>
+    <tr><td>Even share per server</td><td>Many virtual nodes per server</td></tr>
+    <tr><td>A dead server's load spreads out</td><td>Virtual nodes scattered around the ring</td></tr>
+    <tr><td>A 2× server carries 2× load</td><td>Vnodes ∝ capacity (128 vs 256 → new server gets 2/22 ≈ 9%)</td></tr>
+    <tr><td>Know what to copy to a new node</td><td>Walk anticlockwise to the previous position</td></tr>
+    <tr><td>Fast lookup on every request</td><td>Sorted positions + binary search (12,000 → ~14 steps)</td></tr>
+    <tr><td>Copies on other servers (if it becomes a store)</td><td>Keep walking clockwise to the next distinct servers</td></tr>
+    <tr><td>One key gets 40% of reads</td><td>Cache it in clients, replicate it, or split it</td></tr>
+  </table></div>
+
+  <h2>Curveballs, one line each</h2>
+  <ul>
+    <li><b>"Swap SHA-1 for Murmur3, just config?"</b> No: nearly every key remaps. Migrate (run old and new rings side by side while the new one warms).</li>
+    <li><b>"A server rebooted with a new IP."</b> It's a remove + an add, two moved arcs. Hash a stable server ID.</li>
+    <li><b>"Two clients disagree on the server list."</b> A few extra misses for the moved arc; both converge via membership.</li>
+    <li><b>"One server holds 30%."</b> One position per server: add virtual nodes. Removing it would dump its arc on one neighbour.</li>
+    <li><b>"Why not a key → server table?"</b> 500M rows to store and sync; the ring needs only the server list.</li>
+    <li><b>"We rarely resize, why not % N?"</b> Every crash is a resize, and N/(N+1) of keys move each time.</li>
+    <li><b>"C died, then its neighbour D."</b> Cascade: C's whole arc doubled D's load. Virtual nodes scatter it.</li>
+    <li><b>"Now it's a database."</b> Stream the new node's arcs from the current owners first, then cut over.</li>
+  </ul>
+  <p class="caveat"><b>Step 4, wrap up:</b> recap the benefits (few keys move, even load, easy scale-out), name who runs it (Dynamo, Cassandra, Discord, Akamai, Maglev), and admit the limits (hot key, vnode metadata) with alternatives (rendezvous, jump hash, Maglev). Don't just say "done".</p>
+  <p class="say">"With hash mod N, changing the fleet from N to N+1 servers remaps about N/(N+1) of keys, a miss storm on the database, so I'd use consistent hashing. Servers and keys share one hash space bent into a ring; a key belongs to the first server clockwise, which the client library finds by binary search over sorted positions. A join or leave moves only one arc, about k/n keys, and walking anticlockwise to the previous position tells me exactly which. Each server gets a few hundred virtual nodes, more for bigger machines, which also spreads a failed server's load. Clients get the server list from a membership service. A single hot key still needs caching or replication, and this is the partitioning Dynamo and Cassandra use."</p>
+  </section>
+
+  <section id="caveats">
+  <h2>Honest caveats (where real systems differ from the book)</h2>
+  <ul class="caveat">
+    <li><b>The neat fractions are averages.</b> 1/(N+1) on a join assumes equal arcs; with one random position per server, a join can take far more or less.</li>
+    <li><b>5% at 200 virtual nodes is optimistic.</b> Random placement gives ~1/√V (≈ 7% at 200). 4× the vnodes halves the spread.</li>
+    <li><b>Real systems place tokens on purpose.</b> Dynamo's "Strategy 3" uses equal-sized fixed partitions; Cassandra 4.0's allocator makes 16 tokens enough.</li>
+    <li><b>Hot keys.</b> The book says consistent hashing mitigates hotspots; true for many keys that cluster, not for one very hot key.</li>
+    <li><b>"Move" ≠ "copy".</b> For a cache a moved key is a miss; a database must stream the arc before the new owner serves it. The book stops at which keys move.</li>
+    <li><b>Beyond the chapter.</b> Membership (ZooKeeper, etcd, gossip), the cache-fleet framing and "hash a stable ID" are the course's additions; the book hashes servers by IP or name.</li>
+    <li><b>Toy rings.</b> The quests use 0–99, 0–255 or 0–359 so every key is visible; real rings have 2<sup>64</sup> to 2<sup>160</sup> positions. Maglev's toy uses 7 slots; the paper uses 65,537.</li>
+  </ul>
+  </section>
+
+  <div class="foot">Sources: Alex Xu, <i>System Design Interview</i> <a href="https://bytebytego.com/courses/system-design-interview/design-consistent-hashing">Ch. 5</a> · <a href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews">Ch. 3 (interview framework)</a> · <a href="https://dl.acm.org/doi/10.1145/258533.258660">Karger et al. 1997</a> · <a href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf">Dynamo 2007</a> (§4.1 MD5 keys, §4.2 partitioning and virtual nodes, §4.3 preference list, §6.2 placement strategies) · <a href="https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html">Cassandra architecture docs</a> · <a href="https://discord.com/blog/how-discord-scaled-elixir-to-5-000-000-concurrent-users">Discord: scaling Elixir</a> · <a href="https://github.com/discord/ex_hash_ring">ex_hash_ring</a> · <a href="https://theory.stanford.edu/~tim/s16/l/l1.pdf">Stanford CS168 lecture 1</a> · <a href="https://www.usenix.org/conference/nsdi16/technical-sessions/presentation/eisenbud">Maglev, NSDI 2016</a> · <a href="https://arxiv.org/abs/1406.2294">Jump consistent hash</a> · <a href="https://en.wikipedia.org/wiki/Rendezvous_hashing">Rendezvous hashing</a> · <a href="https://tom-e-white.com/2007/11/consistent-hashing.html">Tom White 2007</a></div>
+</main>
+</body>
+</html>
