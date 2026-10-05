@@ -454,7 +454,7 @@ Q.onStage(1, () => {
   let busy = false, won = false;
   nodes.forEach(nd => {
     const label = `${COUNTRY[nd.c >> 1]} ${TOPIC[nd.c & 1]} ${nd.i === 0 ? 'hub page' : 'small page'}`;
-    const g = S('g', nd.cand ? { class: 'cand', tabindex: 0, role: 'button', 'aria-label': `Pin ${label} as a seed`, 'aria-pressed': 'false' } : {}, nodeG);
+    const g = S('g', nd.cand ? { class: 'cand', 'data-n': nd.n, tabindex: 0, role: 'button', 'aria-label': `Pin ${label} as a seed`, 'aria-pressed': 'false' } : {}, nodeG);
     if (nd.cand) S('circle', { class: 'hit', cx: nd.x, cy: nd.y, r: nd.i === 0 ? 24 : 22 }, g);
     dotEl[nd.n] = S('circle', { class: 'pg', cx: nd.x.toFixed(1), cy: nd.y.toFixed(1), r: nd.r }, g);
     if (nd.cand) keyAct(g, () => togglePin(nd, g));
@@ -464,7 +464,7 @@ Q.onStage(1, () => {
     [...pins].forEach((n, k) => { const nd = nodes[n]; S('circle', { class: 'pin', cx: nd.x, cy: nd.y, r: nd.r + 6 }, pinG); });
     $('#seedCount').textContent = `${pins.size} / ${MAXPINS}`;
     $('#crawlBtn').disabled = busy || pins.size === 0;
-    $$('.cand', nodeG).forEach(g => g.setAttribute('aria-pressed', 'false'));
+    $$('.cand', nodeG).forEach(g => g.setAttribute('aria-pressed', pins.has(+g.dataset.n) ? 'true' : 'false'));
   }
   function resetCrawl() {
     dotEl.forEach(d => { d.classList.remove('on'); d.style.fill = ''; });
@@ -479,7 +479,6 @@ Q.onStage(1, () => {
     else if (pins.size >= MAXPINS) { Q.toast('4 seeds max', g, 'practice'); return; }
     else pins.add(nd.n);
     drawPins();
-    g.setAttribute('aria-pressed', pins.has(nd.n) ? 'true' : 'false');
   }
   function light(n) { const d = dotEl[n]; d.classList.add('on'); d.style.fill = RC(nodes[n].c); if (!Q.reduced) { d.classList.remove('pop'); void d.getBBox(); d.classList.add('pop'); } }
   $('#clearPins').onclick = () => { if (busy) return; pins.clear(); resetCrawl(); drawPins(); };
@@ -713,7 +712,7 @@ Q.onStage(4, () => {
   const PROBES = ['/wiki/Silk', '/wiki/Moth', '/wiki/Beetle', '/wiki/Spider'];
   const FPURL = '/wiki/Ant';
   const bits = new Array(M).fill(false), added = new Set(), goals = new Set();
-  let fpShown = false, quizShown = false, sizeOk = false;
+  let fpShown = false, fpDone = false, quizShown = false, sizeOk = false;
   $('#bits').innerHTML = Array.from({ length: M }, (_, i) => `<div class="bit" data-b="${i}">${i}</div>`).join('');
   const bitEl = $$('#bits .bit');
   function paint(probe) {
@@ -784,12 +783,13 @@ Q.onStage(4, () => {
       explain: `Look at the array: bits ${cs.join(', ')} were all switched on by <i>other</i> URLs. The filter can’t tell, so it says "probably seen". That’s a <b>false positive</b>. Our toy is tiny and ${bits.filter(Boolean).length} of 32 bits are on, so this happens a lot. Real filters are sized to keep it near 1%.`,
     });
     probe(FPURL);
-    await sleep(400);
+    await wait(400);
     await choiceRound(box, {
       title: `So what does our crawler do with <code>${FPURL}</code>?`,
       options: ['Skips it: that page never gets crawled', 'Fetches it twice, just to double-check', 'Removes it from the filter and fetches it'], correct: 0,
       explain: 'URL Seen? trusts the filter, so a brand-new page is quietly skipped. That’s the price of the saved memory. The opposite mistake can’t happen: a "definitely new" answer is always true, so the filter never makes the crawler fetch a URL twice.',
     });
+    fpDone = true;
     maybeQuiz();
   }
 
@@ -823,7 +823,7 @@ Q.onStage(4, () => {
   sizes();
 
   function maybeQuiz() {
-    if (quizShown || !sizeOk || !goals.has('add') || !$('#fpBox .opt.right') || $$('#fpBox .opts').length < 2 || $$('#fpBox .opts').some(o => !o.querySelector('[disabled]'))) return;
+    if (quizShown || !sizeOk || !fpDone) return;
     quizShown = true;
     setTimeout(() => quizChain($('#s4quiz'), [
       { q: 'A Bloom filter answers "definitely not seen". Can that answer be wrong?', options: ['No: an off bit proves it was never added', 'Yes: it is wrong about 1% of the time', 'Only once the filter is nearly all ones'], correct: 0, xp: 10,
@@ -983,7 +983,7 @@ Q.onStage(5, () => {
           b.classList.add(ok ? 'right' : 'wrong'); if (!ok) $(`.opt[data-k="${correct}"]`, opts).classList.add('right');
           const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
           ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Watch.</b> ') + why;
-          if (ok) Q.addXP(5, b); else Q.toast('no penalty', b, 'practice');
+          if (ok && !predPaid.has(correct)) { predPaid.add(correct); Q.addXP(5, b); } else if (!ok) Q.toast('no penalty', b, 'practice'); else Q.toast('✓ already scored', b, 'practice');
           res(ok);
         };
         opts.appendChild(b);
@@ -993,6 +993,7 @@ Q.onStage(5, () => {
   }
   const FETCH = ['frontier>down', 'down>dns', '!down>dns', 'down>parser', 'parser>cseen'];
   let phase = 0, quizShown = false;
+  const predPaid = new Set();
   $('#replayBtn').onclick = async () => {
     if (busyR) return;
     busyR = true; $('#replayBtn').disabled = true;
@@ -1011,7 +1012,6 @@ Q.onStage(5, () => {
       clearToken();
       phase = 1; $('#replayBtn').textContent = '▶ Run page 2';
     } else if (phase === 1) {
-      busyR = true;
       await predictStop('Page 2 is <code>http://</code>en.wikipedia.org/wiki/Spider: the plain-http copy of page 1, same bytes. Where does it stop?', 'cseen',
         'Its URL is different, so nothing stopped it at the frontier. But its fingerprint matches page 1, so Content Seen? throws it away. Its links are never extracted.');
       logTo('log5', '▶ Page 2: http:// copy of /wiki/Spider.');
@@ -1033,7 +1033,7 @@ Q.onStage(5, () => {
       await predictStop('Page 3’s other link is <code>/wiki/Silk</code>, which page 1 already put in the frontier. Where does it stop?', 'useen',
         'It’s a normal page link, so the filter lets it through. But URL Seen? remembers it was queued after page 1, so it’s not added twice.');
       logTo('log5', 'Link B: /wiki/Silk, already queued after page 1.');
-      await move(['cseen>extract'].map(x => x), 'silk');
+      await move(['cseen>extract'], 'silk');
       await move(['extract>filter', 'filter>useen'], 'silk'); flash('useen', 'stop'); stopMark('useen');
       logTo('log5', '✗ /wiki/Silk: already in the frontier → dropped at URL Seen?.', 'e');
       clearToken();

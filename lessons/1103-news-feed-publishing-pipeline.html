@@ -822,7 +822,7 @@ Q.onStage(3, () => {
           q: 'Where is the simplest place to make sure Gus never sees it?',
           options: ['Re-check permissions when his feed is read', 'Run the fanout again for every older post', 'Rebuild every user\'s feed cache each night'],
           correct: 0,
-          good: 'When Gus\'s feed is read, the news feed service turns IDs into full posts and can drop anything he's no longer allowed to see. That\'s Quest 11.4\'s hydration step.',
+          good: 'When Gus\'s feed is read, the news feed service turns IDs into full posts and can drop anything he\'s no longer allowed to see. That\'s Quest 11.4\'s hydration step.',
           bad: 'Re-check at read time. The news feed service hydrates IDs into posts anyway, so it can drop what Gus may no longer see. Re-running or rebuilding is far more work.',
         },
         {
@@ -844,7 +844,7 @@ Q.onStage(4, () => {
   const goals = new Set();
   let mode = 'queue', W = 4, t = 0, last = null, raf = null, ready = false;
   let queue = [], workers = [], jobSeq = 0, postSeq = 980;
-  let inline = null, rush = null, poster = null, pendingKill = false, posts = {};
+  let inline = null, rush = null, poster = null, pendingKill = false, posts = {}, phoneMsg = null;
   const btns = ['#postBtn', '#rushBtn', '#killBtn', '#qReset'].map(s => $(s));
 
   function freshWorkers() { workers = Array.from({ length: 16 }, (_, i) => ({ id: i + 1, job: null, dead: false, revive: 0 })); }
@@ -864,6 +864,7 @@ Q.onStage(4, () => {
   }
   function doPost() {
     if (!ready || active()) return;
+    phoneMsg = null; poster = null;
     if (mode === 'inline') {
       inline = { kind: 'one', start: t };
       log('Inline: the web server writes all 2,000 feed entries before it answers Ana.');
@@ -877,6 +878,7 @@ Q.onStage(4, () => {
   }
   function doRush() {
     if (!ready || active()) return;
+    phoneMsg = null; poster = null;
     if (mode === 'inline') {
       inline = { kind: 'rush', start: t, reqs: Array.from({ length: RUSH }, (_, i) => ({ fin: (Math.floor(i / THREADS) + 1) * (FRIENDS / RATE_IN), st: 'wait' })) };
       $('#reqs').hidden = false;
@@ -910,7 +912,7 @@ Q.onStage(4, () => {
   }
   function reset() {
     if (raf) cancelAnimationFrame(raf);
-    raf = null; t = 0; queue = []; inline = null; rush = null; poster = null; pendingKill = false; posts = {};
+    raf = null; t = 0; queue = []; inline = null; rush = null; poster = null; pendingKill = false; posts = {}; phoneMsg = null;
     freshWorkers(); $('#reqs').hidden = true;
     $$('#reqs .rd').forEach(d => d.className = 'rd');
     $('#q4log').innerHTML = `<div>Reset. Mode: ${mode === 'inline' ? 'inline fanout' : 'queue + workers'}.</div>`;
@@ -927,6 +929,7 @@ Q.onStage(4, () => {
       if (poster.n === 1) { log('📱 Ana sees "Posted!" after 50 ms. The fanout carries on in the background.', 'g'); checkGoal('#s4goals', 'queue', goals, 6); }
       else log(`📱 All ${poster.n} posters see "Posted!" after 50 ms each.`, 'g');
     }
+    if (pendingKill && W < 3 && !workers[2].job) { pendingKill = false; log('Kill cancelled: worker 3 is switched off.', 'w'); }
     // workers
     workers.forEach((w, i) => {
       if (w.dead) { if (t >= w.revive) { w.dead = false; log('Worker 3 restarted and is taking jobs again.'); } return; }
@@ -949,6 +952,7 @@ Q.onStage(4, () => {
       const el = t - inline.start;
       if (inline.kind === 'one' && el >= FRIENDS / RATE_IN) {
         inline = null;
+        phoneMsg = { cls: 'bad', txt: `Posted! after ${(FRIENDS / RATE_IN).toFixed(1)} s`, sub: 'she watched a spinner the whole time' };
         log(`📱 Ana finally sees "Posted!" after ${(FRIENDS / RATE_IN).toFixed(1)} s. Her app spun the whole time.`, 'e');
         checkGoal('#s4goals', 'inline', goals, 6);
       } else if (inline.kind === 'rush') {
@@ -956,6 +960,7 @@ Q.onStage(4, () => {
         if (el >= TIMEOUT) {
           const ok = inline.reqs.filter(r => r.st === 'ok').length;
           inline = null;
+          phoneMsg = { cls: 'bad', txt: `${ok} posted · ${RUSH - ok} timed out`, sub: `${THREADS} threads × 4 s each, ${TIMEOUT} s timeout` };
           log(`Rush hour inline: ${ok} of ${RUSH} posted. ${RUSH - ok} timed out after ${TIMEOUT} s, some with their fanout half done.`, 'e');
           checkGoal('#s4goals', 'rushIn', goals, 6);
         }
@@ -969,7 +974,6 @@ Q.onStage(4, () => {
       else log(`Spike drained in ${el.toFixed(1)} s, over the 10 s target. Nothing was lost, it was just slow. Try more workers.`, 'w');
     }
     render();
-    if (Object.keys(goals).length === 0) {}
     if (goals.size === 5) allGoals();
     if (active() || rush) raf = requestAnimationFrame(tick); else { raf = null; last = null; render(); }
   }
@@ -993,7 +997,9 @@ Q.onStage(4, () => {
       else { pst.className = 'pst'; pst.innerHTML = '<span class="spin"></span>Posting…'; pbar.style.width = '50%'; }
       const left = queue.reduce((s, j) => s + j.writes, 0) + workers.reduce((s, w) => s + (w.job ? w.job.writes - w.job.done : 0), 0);
       psub.textContent = left > 0 ? `fanout running: ${fmt(left)} writes to go` : 'fanout finished';
-    } else if (!inline && pst.classList.contains('bad') === false && !poster) {
+    } else if (phoneMsg) {
+      pst.className = 'pst ' + phoneMsg.cls; pst.textContent = phoneMsg.txt; pbar.style.width = '100%'; psub.textContent = phoneMsg.sub;
+    } else {
       pst.className = 'pst'; pst.textContent = 'Ready to post'; pbar.style.width = '0%'; psub.textContent = '2,000 friends';
     }
     // queue
