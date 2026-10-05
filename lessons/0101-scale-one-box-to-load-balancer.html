@@ -111,7 +111,8 @@ svg text { font-family: var(--font); }
 .gauge { height: 12px; border-radius: 99px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; margin-top: 6px; }
 .gauge div { height: 100%; width: 0; background: linear-gradient(90deg, var(--teal), var(--accent)); transition: width .45s; }
 .boxes { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; padding: 12px 14px; }
-.box1 { border: 2px solid var(--line); border-radius: 14px; padding: 10px 12px; background: var(--panel); transition: border-color .3s, background .3s, opacity .3s; animation: rise .35s; }
+.box1 { border: 2px solid var(--line); border-radius: 14px; padding: 10px 12px; background: var(--panel); transition: border-color .3s, background .3s, opacity .3s; }
+.box1.new { animation: rise .35s; }
 .box1 .bx-top { display: flex; justify-content: space-between; gap: 6px; align-items: baseline; flex-wrap: wrap; }
 .box1 .bx-top span { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
 .box1 .bx-tier { font-size: 13px; color: var(--muted); margin-top: 2px; }
@@ -461,7 +462,7 @@ Q.onStage(1, () => {
   // DNS cloud
   S('path', { class: 'cloud', d: 'M200,72 a18,18 0 0 1 4,-34 a24,24 0 0 1 44,-8 a20,20 0 0 1 34,14 a16,16 0 0 1 -2,28 Z' }, svg);
   T({ class: 'ctext', x: 241, y: 58 }, 'DNS', svg);
-  T({ class: 'csub', x: 241, y: 88 }, 'paid 3rd-party service', svg);
+  T({ class: 'csub', x: 241, y: 91 }, 'paid 3rd-party service', svg);
   // the one server
   const srvG = S('g', { class: 'srv-g' }, svg);
   S('rect', { class: 'srv', x: 286, y: 146, width: 106, height: 124, rx: 10 }, srvG);
@@ -636,7 +637,7 @@ Q.onStage(2, () => {
     db.removeAttribute('tabindex'); db.setAttribute('aria-label', 'Database server');
     const d0 = dx;
     await anim(600, p => { const e = ease(p); setDb(d0 + (86 - d0) * e); web.setAttribute('transform', `translate(${(-86 * e).toFixed(1)},0)`); });
-    webT.textContent = 'Web tier'; webS.textContent = 'handles requests';
+    webT.textContent = 'Web tier'; webS.textContent = 'app servers';
     dbT.textContent = 'Data tier'; dbS.textContent = 'the database';
     link.setAttribute('x1', 120); link.setAttribute('x2', 286);
     $('#knobs').classList.add('on');
@@ -756,25 +757,34 @@ Q.onStage(3, () => {
   const goals = new Set();
   let timer = null, quizShown = false;
   $('#upLadder').innerHTML = TIERS.map((t, i) => `<span data-i="${i}"><b>${t.n}</b>${t.cap} u/s<br>$${t.cost.toLocaleString()}/mo*</span>`).join('');
-  function card(name, ip, tier, load, isDown, idle) {
+  // server cards: built once per server, then updated in place (no flicker on every tick)
+  function cardEl(id) {
+    const el = document.createElement('div'); el.className = 'box1 new'; el.dataset.id = id;
+    el.innerHTML = `<div class="bx-top"><b></b><span></span></div><div class="bx-tier"></div><div class="cpu"><div></div></div><div class="bx-st"><span class="c-st"></span><span class="mono c-cpu"></span></div><div class="small muted mono c-rps"></div>`;
+    $('#upBoxes').appendChild(el);
+    return el;
+  }
+  function paintCard(el, name, ip, tier, load, isDown, idle) {
     const cpu = isDown ? 0 : Math.min(100, load / tier.cap * 100);
     const over = !isDown && load > tier.cap, busy = !isDown && !over && cpu > 80;
-    const cls = isDown ? 'down' : over ? 'over' : busy ? 'busy' : idle ? 'idle' : '';
-    const status = isDown ? '<span class="er">OFFLINE</span>' : over ? '<span class="er">Overloaded: slow, timeouts</span>' : idle ? '<span class="mu">Idle: nobody calls it</span>' : busy ? '<span class="wn">Busy</span>' : '<span class="ok">Healthy</span>';
-    return `<div class="box1 ${cls}"><div class="bx-top"><b>${name}</b><span>${ip}</span></div>
-      <div class="bx-tier"><b>${tier.n}</b> · ${tier.cap} users/s · $${tier.cost.toLocaleString()}/mo*</div>
-      <div class="cpu"><div style="width:${cpu.toFixed(0)}%"></div></div>
-      <div class="bx-st">${status}<span class="mono">${isDown ? '—' : `CPU ${cpu.toFixed(0)}%`}</span></div>
-      <div class="small muted mono">${isDown ? '0' : Math.round(load)} users/s served</div></div>`;
+    el.className = 'box1 ' + (isDown ? 'down' : over ? 'over' : busy ? 'busy' : idle ? 'idle' : '') + (el.classList.contains('new') ? ' new' : '');
+    $('.bx-top b', el).textContent = name; $('.bx-top span', el).textContent = ip;
+    $('.bx-tier', el).innerHTML = `<b>${tier.n}</b> · ${tier.cap} users/s · $${tier.cost.toLocaleString()}/mo*`;
+    $('.cpu div', el).style.width = cpu.toFixed(0) + '%';
+    $('.c-st', el).innerHTML = isDown ? '<span class="er">OFFLINE</span>' : over ? '<span class="er">Overloaded: slow, timeouts</span>' : idle ? '<span class="mu">Idle: nobody calls it</span>' : busy ? '<span class="wn">Busy</span>' : '<span class="ok">Healthy</span>';
+    $('.c-cpu', el).textContent = isDown ? '—' : `CPU ${cpu.toFixed(0)}%`;
+    $('.c-rps', el).textContent = `${isDown ? 0 : Math.round(load)} users/s served`;
   }
+  let card1 = null, card2 = null;
   function render() {
     const t = TIERS[st.tier];
     $('#upTraffic').textContent = Math.round(st.traffic);
     $('#upGauge').style.width = (st.traffic / MAXT * 100) + '%';
     const err = st.down ? 100 : st.traffic > t.cap ? (st.traffic - t.cap) / st.traffic * 100 : 0;
     const e = $('#upErr'); e.textContent = `errors: ${err.toFixed(0)}%`; e.className = 'small ' + (err > 0 ? 'bignum bad' : 'muted');
-    $('#upBoxes').innerHTML = card('Server 1', '15.125.23.214', t, st.traffic, st.down, false) +
-      (st.second ? card('Server 2', '15.125.23.215', TIERS[0], 0, false, true) : '');
+    card1 = card1 || cardEl(1);
+    paintCard(card1, 'Server 1', '15.125.23.214', t, st.traffic, st.down, false);
+    if (st.second) { card2 = card2 || cardEl(2); paintCard(card2, 'Server 2', '15.125.23.215', TIERS[0], 0, false, true); }
     $$('#upLadder span').forEach((s, i) => s.classList.toggle('cur', i === st.tier));
     $('#downBar').classList.toggle('on', st.down);
     const ub = $('#upBtn');

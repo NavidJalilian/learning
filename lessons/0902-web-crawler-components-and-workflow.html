@@ -1,0 +1,1101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Assemble the Spider</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: region colours (stage 1 web map), component tiles (stage 2), dedup race (stage 3),
+   bloom bit array + sizing bars (stage 4), the pipeline diagram (stage 5) */
+:root { --r0: #5a48f0; --r1: #0d9a96; --r2: #c27400; --r3: #d4423f; --r4: #2f7fd8; --r5: #b8409a; --on-r: #ffffff; --tok: #f0b400; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --r0: #8f82ff; --r1: #31d3c8; --r2: #ffb547; --r3: #ff6d6a; --r4: #5aa9ff; --r5: #f07ad0; --on-r: #0e0f1d; --tok: #ffd23f; }
+}
+:root[data-theme="dark"] { --r0: #8f82ff; --r1: #31d3c8; --r2: #ffb547; --r3: #ff6d6a; --r4: #5aa9ff; --r5: #f07ad0; --on-r: #0e0f1d; --tok: #ffd23f; }
+
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.bignum { font-family: var(--mono); font-weight: 700; }
+.bignum.bad { color: var(--bad); }
+.bignum.good { color: var(--good); }
+.hidden { display: none !important; }
+
+/* ---- stage 1: web map ---- */
+.webmap svg { max-width: 560px; margin: 0 auto; }
+.webmap .rbg { opacity: .09; }
+.webmap .rlbl { fill: var(--muted); font: 700 10.5px var(--font); text-anchor: middle; letter-spacing: .04em; }
+.webmap .ed { stroke: var(--line); stroke-width: 1.2; fill: none; transition: stroke .4s, opacity .4s; }
+.webmap .ed.x { stroke-dasharray: 3 4; stroke: var(--muted); opacity: .45; }
+.webmap .ed.hot { stroke: var(--ink); opacity: .7; }
+.webmap .pg { fill: var(--panel); stroke: var(--muted); stroke-width: 1.4; transition: fill .4s, stroke .4s; }
+.webmap .pg.on { stroke: var(--bg); }
+.webmap .cand { cursor: pointer; }
+.webmap .cand .hit { fill: transparent; }
+.webmap .cand:focus { outline: none; }
+.webmap .cand:focus .pg, .webmap .cand:hover .pg { stroke: var(--ink); stroke-width: 2.4; }
+.webmap .pin { fill: none; stroke: var(--ink); stroke-width: 2.5; stroke-dasharray: 3 3; }
+.webmap .pinl { fill: var(--ink); font: 700 10px var(--font); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.webmap .pop { transform-box: fill-box; transform-origin: center; animation: blip .5s; }
+@keyframes blip { 45% { transform: scale(1.6); } }
+.meter { flex: 1; min-width: 180px; }
+.meter .track { position: relative; height: 16px; border-radius: 99px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; }
+.meter .fill { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, var(--teal), var(--good)); transition: width .4s; }
+.meter .goalmark { position: absolute; top: -3px; bottom: -3px; left: 75%; width: 3px; background: var(--ink); border-radius: 2px; }
+.meter .mt { display: flex; justify-content: space-between; font-size: 13px; margin-top: 4px; color: var(--muted); }
+
+/* ---- stage 2: component tiles ---- */
+.jobcard { border-radius: 16px; padding: 14px 16px; background: linear-gradient(160deg, var(--accent-soft), var(--teal-soft)); margin: 14px 0 10px; }
+.jobcard .step { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.jobcard p { margin: 4px 0 0; font-weight: 600; font-size: 17px; }
+.jobcard .hint { font-weight: 500; font-size: 14px; color: var(--muted); min-height: 20px; }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+@media (max-width: 640px) { .tiles { grid-template-columns: 1fr 1fr; } }
+.tile { min-height: 48px; text-align: left; border: 2px solid var(--line); background: var(--panel); border-radius: 12px; padding: 9px 12px; font-weight: 700; font-size: 14.5px; transition: border-color .2s, background .2s; }
+.tile:hover:not([disabled]) { border-color: var(--accent); }
+.tile.no { animation: shake .4s; border-color: var(--bad); }
+.tile.done { border-color: var(--good); background: var(--good-soft); cursor: default; }
+.tile .jb { display: block; font-weight: 500; font-size: 13px; color: var(--ink); margin-top: 3px; }
+.tile .demo { display: block; font: 500 11.5px var(--mono); color: var(--muted); margin-top: 4px; word-break: break-word; animation: rise .4s; }
+.baseurl { font-family: var(--mono); font-size: 13.5px; word-break: break-all; }
+.sort-item .href { font-family: var(--mono); font-weight: 700; word-break: break-all; }
+.sort-item .row .opt { font-family: var(--mono); font-size: 12.5px; word-break: break-all; }
+
+/* ---- stage 3: dedup race ---- */
+.slider { padding: 12px 14px 0; display: grid; gap: 4px; }
+.slider label { display: flex; justify-content: space-between; font-weight: 600; font-size: 14px; gap: 8px; flex-wrap: wrap; }
+.slider input { width: 100%; accent-color: var(--accent); height: 30px; }
+.lanes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px 14px; }
+@media (max-width: 600px) { .lanes { grid-template-columns: 1fr; } }
+.lane { border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; background: var(--panel); }
+.lane h4 { margin: 0 0 4px; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.lane .ctr { font: 700 20px var(--mono); word-break: break-all; }
+.lane .tm { font-size: 13.5px; color: var(--muted); }
+.lane.slow .ctr { color: var(--bad); }
+.lane.fast .ctr { color: var(--good); }
+.pages { display: grid; gap: 5px; padding: 0 14px 12px; }
+.prow { display: grid; grid-template-columns: 1fr auto 78px; gap: 8px; align-items: center; border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; background: var(--panel); font-size: 13px; transition: background .3s, border-color .3s, opacity .3s; }
+.prow .u { font-family: var(--mono); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.prow .fp { font: 600 12px var(--mono); padding: 2px 6px; border-radius: 6px; background: var(--bg-2); color: var(--muted); }
+.prow .vd { font-weight: 700; font-size: 12.5px; text-align: right; }
+.prow.cur { border-color: var(--accent); }
+.prow.dup { background: var(--bad-soft); border-color: transparent; }
+.prow.dup .vd { color: var(--bad); }
+.prow.new { background: var(--good-soft); border-color: transparent; }
+.prow.new .vd { color: var(--good); }
+.fpset { padding: 0 14px 12px; font-size: 13px; color: var(--muted); }
+.fpset .chip { font-size: 11.5px; padding: 3px 7px; }
+.fpset .chip.fresh { border-color: var(--good); color: var(--good); }
+.twin { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
+@media (max-width: 560px) { .twin { grid-template-columns: 1fr; } }
+.twin pre { margin: 0; background: var(--code-bg); color: var(--code-ink); border-radius: 12px; padding: 10px 12px; font-size: 12px; white-space: pre-wrap; word-break: break-word; }
+.twin pre b { color: #ffb36b; }
+.twin .fpout { font: 700 13px var(--mono); margin-top: 6px; min-height: 20px; }
+
+/* ---- stage 4: bloom filter ---- */
+.bits { display: grid; grid-template-columns: repeat(16, 1fr); gap: 3px; padding: 14px; }
+.bit { aspect-ratio: 1; border-radius: 5px; background: var(--bg-2); border: 1px solid var(--line); display: grid; place-items: center; font: 600 9px var(--mono); color: var(--muted); transition: background .35s, color .35s, transform .2s; }
+.bit.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.bit.probe { outline: 3px solid var(--warn); outline-offset: 1px; transform: scale(1.08); }
+.bit.flash { animation: blip .5s; }
+.bloomout { font-family: var(--mono); font-size: 13px; padding: 0 14px 12px; min-height: 44px; word-break: break-word; }
+.bloomout .v { font-weight: 700; }
+.bloomout .v.seen { color: var(--warn); }
+.bloomout .v.new { color: var(--good); }
+.chip.used { opacity: .4; text-decoration: line-through; }
+.chip { min-height: 36px; }
+.probein { display: flex; gap: 8px; padding: 0 14px 12px; flex-wrap: wrap; }
+.probein input { flex: 1; min-width: 160px; min-height: 40px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 6px 10px; font: 13px var(--mono); }
+.sizebars { display: grid; gap: 10px; padding: 12px 14px; }
+.sb { display: grid; grid-template-columns: 128px 1fr 86px; gap: 8px; align-items: center; font-size: 13px; }
+@media (max-width: 560px) { .sb { grid-template-columns: 96px 1fr 72px; font-size: 12px; } }
+.sb .nm { font-weight: 700; }
+.sb .track { height: 18px; border-radius: 6px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; }
+.sb .fill { height: 100%; border-radius: 5px; transition: width .4s; }
+.sb .val { font: 700 13px var(--mono); text-align: right; white-space: nowrap; }
+
+/* ---- stage 5: pipeline ---- */
+.pipe svg { max-width: 520px; margin: 0 auto; }
+.pipe .bx { cursor: pointer; }
+.pipe .bx rect { fill: var(--panel); stroke: var(--line); stroke-width: 2; transition: fill .3s, stroke .3s; }
+.pipe .bx text { fill: var(--ink); font: 700 13.5px var(--font); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.pipe .bx .ix { fill: var(--muted); font: 700 10px var(--mono); text-anchor: start; }
+.pipe .bx:focus { outline: none; }
+.pipe .bx:focus rect, .pipe .bx:hover rect { stroke: var(--accent); }
+.pipe .bx.on rect { fill: var(--accent-soft); stroke: var(--accent); }
+.pipe .bx.lit rect { fill: var(--warn-soft); stroke: var(--warn); }
+.pipe .bx.stop rect { fill: var(--bad-soft); stroke: var(--bad); }
+.pipe .bx.no { animation: shake .4s; }
+.pipe .bx.no rect { stroke: var(--bad); }
+.pipe .ar { fill: none; stroke: var(--accent); stroke-width: 2.4; stroke-linejoin: round; }
+.pipe .ar.loop { stroke: var(--teal); stroke-dasharray: 5 4; }
+.pipe .ar.draw { stroke-dasharray: 400; stroke-dashoffset: 400; animation: drawin .6s forwards; }
+@keyframes drawin { to { stroke-dashoffset: 0; } }
+.pipe .ah { fill: var(--accent); }
+.pipe .ah.loop { fill: var(--teal); }
+.pipe .tok { fill: var(--tok); stroke: var(--ink); stroke-width: 1.5; }
+.pipe .toklbl { fill: var(--ink); font: 700 10px var(--mono); text-anchor: middle; }
+.pipe .xmark { fill: var(--bad); font: 700 22px var(--font); text-anchor: middle; dominant-baseline: central; }
+.progress { font-size: 14px; font-weight: 600; }
+.pred { margin-top: 14px; }
+.pred .opts { grid-template-columns: 1fr 1fr; }
+@media (max-width: 480px) { .pred .opts { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 9.2 · Design a Web Crawler</div>
+    <h1>Assemble the Spider</h1>
+    <p class="lede">You've agreed on scope. Now put the crawler on the whiteboard: eleven boxes, two "have I seen this?" checks, and one loop that never stops feeding itself.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can sketch the crawler from <b>seed URLs</b> to <b>URL storage</b>, say what every box is for, explain why <b>Content Seen?</b> compares fingerprints while <b>URL Seen?</b> uses a Bloom filter or hash table, and trace a page all the way round the loop without notes.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Pick your seeds</h2><div class="sub">Where does the crawl start?</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>A crawler needs somewhere to begin. Those first addresses are the <b>seed URLs</b>. If you only had to crawl one university's website, the seed is easy: its home page.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener">[1]</a></p>
+      <p>For the whole web it's a judgement call. You want seeds whose links fan out to as much of the web as possible. The book's suggestion: <b>carve the web into pieces</b> and seed each piece. You can cut by <b>locality</b> (each country has its own popular sites) or by <b>topic</b> (shopping, sports, healthcare…). There's no single right answer, and the interviewer doesn't expect one. They want to hear you think about coverage.</p>
+      <p>Try it. This toy web has 60 pages in six regions: 3 countries × 2 topics. Pages mostly link to pages in their own region. Dashed lines are the rare links between regions. Tap up to <b>4 pages</b> to pin as seeds, then crawl for <b>3 hops</b> (a hop = follow every link one step). Big dots are <i>hubs</i>, pages with lots of outgoing links.</p>
+      <div class="sim webmap">
+        <svg id="web1" viewBox="0 0 360 314" role="img" aria-label="A toy web of 60 pages in six regions"></svg>
+        <div class="sim-bar">
+          <div class="meter"><div class="track"><div class="fill" id="covFill"></div><div class="goalmark" title="target 75%"></div></div><div class="mt"><span>Coverage: <b id="covVal">0%</b></span><span>target 75%</span></div></div>
+        </div>
+        <div class="sim-bar">
+          <span>Seeds: <b class="bignum" id="seedCount">0 / 4</b></span>
+          <span class="row" style="gap:8px"><button class="btn" id="clearPins">↻ Clear pins</button><button class="btn primary" id="crawlBtn" disabled>🕷️ Crawl 3 hops</button></span>
+        </div>
+        <div class="simlog" id="log1"><div>Tap a page to pin it as a seed. Only hub dots and a couple of small pages per region can be pinned.</div></div>
+      </div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Meet the eleven boxes</h2><div class="sub">Who does what in the pipeline</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book's high-level design has eleven parts.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener">[1]</a> Most names explain themselves once you know the job. Two jargon words first: a <b>queue</b> is a line where the first thing in is the first thing out (FIFO). <b>DNS</b> is the internet's phone book: it turns a name like <code>www.wikipedia.org</code> into an IP address a computer can connect to.</p>
+      <p>A job appears below. Tap the box that does it. Each box you place shows a tiny example of it at work.</p>
+      <div class="jobcard" id="jobcard"><div class="step" id="jobStep"></div><p id="jobText"></p><div class="hint" id="jobHint"></div></div>
+      <div class="tiles" id="tiles"></div>
+      <div class="callout tip" id="boxNotes" style="display:none"><b>Two design details worth saying out loud.</b> The <b>Content Parser</b> is its own box because parsing is slow work, and you don't want it holding up the downloaders. <b>Content Storage</b> keeps most pages on <b>disk</b>, because there are far too many for memory, and caches the <b>popular</b> ones in memory so they can be read fast.</div>
+      <div id="urlx" style="display:none">
+        <h3 style="margin:20px 0 6px;font-size:18px">Be the URL Extractor</h3>
+        <p class="small">Pages often link with <i>relative</i> paths, meaning paths that only make sense next to the page's own address. The extractor turns each one into a full (<i>absolute</i>) URL. You're parsing this page:</p>
+        <p class="baseurl">https://en.wikipedia.org/wiki/Spider</p>
+        <div class="sort" id="urlSort"></div>
+        <div class="callout warn" id="normNote" style="display:none"><b>Beyond the book: normalise, too.</b> The book only mentions making links absolute. Real crawlers also <b>normalise</b> (canonicalise) every URL before checking it: lower-case the host, drop the <code>#fragment</code> and the default port, resolve <code>..</code> segments, sometimes sort query parameters. Otherwise one page sneaks in under many spellings.<a class="cite" href="https://en.wikipedia.org/wiki/URI_normalization" target="_blank" rel="noopener">[5]</a></div>
+      </div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Have I seen this page?</h2><div class="sub">Content Seen? · compare fingerprints, not characters</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The same content turns up under different URLs all the time: <code>http</code> and <code>https</code> versions, <code>/</code> and <code>/index.html</code>, mirror sites, tracking parameters. The book cites a figure of about <b>29%</b> of pages being duplicates.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener">[1]</a> Storing them all wastes disk, and crawling their links again wastes time.</p>
+      <p>The naive check is to compare a new page against every stored page, character by character. The book's point: with billions of pages that's hopeless. Instead, compute a <b>hash</b> of each page: a short, fixed-size number (a <i>fingerprint</i>) that's the same whenever the bytes are the same. Keep the fingerprints in a set and look the new one up. <b>Same fingerprint → same content → throw the page away.</b></p>
+      <p>Below, 8 freshly downloaded pages arrive. Some are copies. Set how many pages are already stored and press <b>Check</b>.</p>
+      <div class="sim">
+        <div class="slider"><label for="nSlider"><span>Pages already stored: <span class="bignum" id="nVal">10</span></span><span class="muted small">1 ms to pull one off disk</span></label><input type="range" id="nSlider" min="1" max="9" step="1" value="1" aria-label="Pages already stored (power of ten)"></div>
+        <div class="lanes">
+          <div class="lane slow"><h4>Char-by-char</h4><div class="ctr" id="slowCtr">0</div><div class="tm">stored pages opened · <span id="slowTm">—</span></div></div>
+          <div class="lane fast"><h4>Fingerprint lookup</h4><div class="ctr" id="fastCtr">0</div><div class="tm">set lookups · <span id="fastTm">—</span></div></div>
+        </div>
+        <div class="pages" id="pages"></div>
+        <div class="fpset" id="fpset"></div>
+        <div class="sim-bar"><span>Discarded: <b class="bignum" id="binCount">0</b> · Kept: <b class="bignum" id="keepCount">0</b></span><button class="btn primary" id="checkBtn">🔍 Check the batch</button></div>
+      </div>
+      <ul class="checklist" id="s3goals">
+        <li data-g="run"><span class="box">✓</span><span>Run a check and watch which pages get thrown away</span></li>
+        <li data-g="big"><span class="box">✓</span><span>Slide the store to <b>1 billion</b> pages and run it again</span></li>
+      </ul>
+      <div class="callout" id="raceNote" style="display:none"><b>What the race shows.</b> The slow lane has to open every stored page for every new page, so its cost grows with the store. The fingerprint lane hashes each new page once and does one lookup, so its cost stays flat. <span class="muted">Real crawlers use 64-bit or longer fingerprints. Ours show 32 bits so they fit on a phone.</span></div>
+      <div class="challenge boxed" id="twist" style="display:none">
+        <div class="step">Twist</div>
+        <h3>These two pages are identical except for one line in the footer. Will our fingerprint call them duplicates?</h3>
+        <div class="twin">
+          <div><pre>&lt;h1&gt;Daily spider facts&lt;/h1&gt;
+&lt;p&gt;Spiders have eight legs.&lt;/p&gt;
+&lt;footer&gt;Updated <b>09:41</b>&lt;/footer&gt;</pre><div class="fpout" id="fpA"></div></div>
+          <div><pre>&lt;h1&gt;Daily spider facts&lt;/h1&gt;
+&lt;p&gt;Spiders have eight legs.&lt;/p&gt;
+&lt;footer&gt;Updated <b>09:42</b>&lt;/footer&gt;</pre><div class="fpout" id="fpB"></div></div>
+        </div>
+        <div class="opts" id="twistOpts"></div>
+        <div class="explain" id="twistEx"></div>
+      </div>
+      <div class="callout warn" id="dupCaveat" style="display:none"><b>Honest caveats.</b> A plain hash only catches <b>byte-for-byte</b> copies. Search engines catch near-duplicates (pages that differ by an ad, a date or a session ID) with fancier fingerprints such as <i>shingling</i> or <i>SimHash</i>, which give similar pages similar fingerprints.<a class="cite" href="https://nlp.stanford.edu/IR-book/html/htmledition/near-duplicates-and-shingling-1.html" target="_blank" rel="noopener">[4]</a> And the 29% figure comes from an SEO-industry estimate, not a careful count of the whole web. Treat it as "a lot, roughly a third".</div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Have I seen this URL?</h2><div class="sub">URL Seen? · hash table or Bloom filter</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p><b>URL Seen?</b> asks a different question: has this <i>address</i> already been fetched, or is it already waiting in the frontier? Skip this check and the same URL gets queued over and over. That piles load on websites, and a pair of pages that link to each other (A → B → A) traps the crawler in an endless loop.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener">[1]</a></p>
+      <p>The book names two usual tools. A <b>hash table</b> stores every URL (or its fingerprint) and answers exactly, but it eats memory. A <b>Bloom filter</b> is a row of bits plus a few hash functions.<a class="cite" href="https://en.wikipedia.org/wiki/Bloom_filter" target="_blank" rel="noopener">[3]</a> To <i>add</i> a URL, hash it with each function and switch those bits on. To <i>check</i> a URL, look at its bits: if any is off, the URL was <b>definitely never added</b>; if all are on, it was <b>probably</b> added.</p>
+      <p>Here's a toy one: 32 bits and 3 hash functions. First, add the 8 URLs the crawler has met so far.</p>
+      <div class="sim">
+        <div class="bits" id="bits"></div>
+        <div class="bloomout" id="bloomOut">All 32 bits are off. Nothing has been added yet.</div>
+        <div class="sim-bar"><span class="small"><b id="bloomMode">Add mode</b> · <span id="bloomFill">0 / 32 bits on</span></span></div>
+        <div style="padding:0 14px 12px"><div class="chips" id="addChips"></div></div>
+        <div id="checkArea" style="display:none">
+          <div style="padding:0 14px"><p class="small" style="margin:6px 0 0"><b>Check mode.</b> Probe a URL. Nothing gets added.</p><div class="chips" id="probeChips"></div></div>
+          <div class="probein" style="margin-top:8px"><input id="probeIn" type="text" placeholder="/wiki/anything" aria-label="URL to check"><button class="btn" id="probeBtn">Check</button></div>
+        </div>
+      </div>
+      <ul class="checklist" id="s4goals">
+        <li data-g="add"><span class="box">✓</span><span>Add all 8 URLs</span></li>
+        <li data-g="seen"><span class="box">✓</span><span>Check a URL you added: "probably seen"</span></li>
+        <li data-g="new"><span class="box">✓</span><span>Check a URL that has a dark bit: "definitely new"</span></li>
+        <li data-g="size"><span class="box">✓</span><span>Slide the sizing panel to <b>10 billion</b> URLs or more</span></li>
+      </ul>
+      <div class="challenge boxed" id="fpBox" style="display:none"></div>
+      <h3 style="margin:22px 0 6px;font-size:18px">How big does it get?</h3>
+      <p class="small">Beyond the book, but interviewers love it. Memory to remember every URL, three ways. Assumptions: about 100 bytes per raw URL, 8-byte fingerprints in a hash set (before the table's own overhead, often 1.5–2×), and a Bloom filter sized for a 1% false-positive rate, which needs about 9.6 bits per URL.<a class="cite" href="https://en.wikipedia.org/wiki/Bloom_filter" target="_blank" rel="noopener">[3]</a></p>
+      <div class="sim">
+        <div class="slider"><label for="szSlider"><span>URLs to remember: <span class="bignum" id="szVal">1 billion</span></span></label><input type="range" id="szSlider" min="0" max="8" step="1" value="3" aria-label="Number of URLs"></div>
+        <div class="sizebars" id="sizeBars"></div>
+        <div class="simlog" id="log4"><div>The book's crawler fetches about 1 billion pages a month (quest 9.1).</div></div>
+      </div>
+      <div class="callout warn"><b>Honest caveat: Bloom filters at web scale.</b> You can't delete from a plain Bloom filter, and its false-positive rate climbs as it fills. So real crawlers size it for the expected count, split it across machines, and rebuild it now and then. Every false positive is a brand-new URL that silently never gets crawled.</div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Walk the workflow</h2><div class="sub">Trace one page round the loop</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Time to wire it up. The book walks the flow as eleven numbered steps.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener">[1]</a> Here you build it yourself. Tap the boxes <b>in the order a crawl touches them</b>, from the very start until a fresh link is recorded. Each right tap draws the next arrow. A wrong tap gets a hint, no penalty.</p>
+      <div class="sim pipe">
+        <svg id="pipe" viewBox="0 0 360 424" role="group" aria-label="Crawler pipeline: tap the boxes in order"></svg>
+        <div class="sim-bar"><span class="progress" id="routeProg">Step 1 of 11</span><span class="small muted" id="routeHint">Where does every crawl begin?</span></div>
+        <div class="simlog" id="log5"><div>Eleven boxes, no arrows yet.</div></div>
+      </div>
+      <div class="challenge" id="replayBox" style="display:none">
+        <div class="step">Packet replay</div>
+        <h3>Now push three real pages through your pipeline.</h3>
+        <p class="small muted">Before each run, predict where the page (or link) stops. Wrong predictions cost nothing. You just see why.</p>
+        <div class="row"><button class="btn primary" id="replayBtn">▶ Run page 1</button></div>
+        <div class="pred" id="predBox"></div>
+      </div>
+      <div class="callout tip"><b>Coming up.</b> The frontier is not really a plain FIFO queue. Quest 9.3, <a href="0903-web-crawler-url-frontier.html">Taming the Frontier</a>, adds priority and politeness. And "ask DNS" is not free: quest 9.4, <a href="0904-web-crawler-downloader-and-robustness.html">Fast Fangs, Thick Skin</a>, shows why crawlers cache it.</div>
+      <div id="s5quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Boss: The Leaky Pipeline</h2><div class="sub">Which box fixes it?</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Your crawler is live and something's wrong. For each incident, pick the box whose job it is to stop it.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 7 ================= -->
+  <section class="stage" data-stage="7" id="s7">
+    <div class="stage-h"><div class="num">7</div><div><h2>Say it like a senior</h2><div class="sub">Draw the pipeline out loud</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 9: "Design a Web Crawler"</a>, Step 2 (the high-level design and the workflow figure). The design is close to <a href="https://courses.cs.washington.edu/courses/cse454/15wi/papers/mercator.pdf" target="_blank" rel="noopener">Mercator</a>, a 1999 crawler paper the book lists as a reference. Its section on "content-seen" and "URL-seen" tests is short and readable.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      Three places where real crawlers go further than the whiteboard. <b>Near-duplicates:</b> exact hashes miss pages that differ by a timestamp, so production systems use shingling or SimHash.<a class="cite" href="https://nlp.stanford.edu/IR-book/html/htmledition/near-duplicates-and-shingling-1.html" target="_blank" rel="noopener">[4]</a> <b>URL normalisation</b> happens before URL Seen?, or the same page gets queued under many spellings.<a class="cite" href="https://en.wikipedia.org/wiki/URI_normalization" target="_blank" rel="noopener">[5]</a> <b>The URL-seen set</b> at web scale is sharded across machines. Mercator kept a small in-memory cache of recent URLs in front of a big on-disk set, because most links point to pages seen recently.<a class="cite" href="https://courses.cs.washington.edu/courses/cse454/15wi/papers/mercator.pdf" target="_blank" rel="noopener">[2]</a>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"why not check Content Seen? before downloading?"</i> or <i>"how many hash functions should a Bloom filter use?"</i>
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 9 "Design a Web Crawler" (ByteByteGo).</li>
+        <li>Heydon &amp; Najork, "Mercator: A Scalable, Extensible Web Crawler", World Wide Web 2(4), 1999.</li>
+        <li>"Bloom filter", Wikipedia (false-positive maths and optimal sizing).</li>
+        <li>Manning, Raghavan &amp; Schütze, <i>Introduction to Information Retrieval</i>, §19.6 "Near-duplicates and shingling".</li>
+        <li>"URI normalization", Wikipedia.</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0902',
+  winTitle: 'Every box wired, every URL accounted for!',
+  badge: '⚙️ Badge: Pipeline Builder',
+  cheatsheet: '../reference/ch09-web-crawler-cheatsheet.html',
+});
+const { sleep, shuffle, esc } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ================= shared helpers ================= */
+// FNV-1a + murmur finaliser: a small, well-mixed 32-bit hash (stand-in for a real 64/128-bit fingerprint)
+function hash32(str) {
+  let h = 0x811c9dc5;
+  for (const c of str) { h ^= c.codePointAt(0); h = Math.imul(h, 0x01000193); }
+  h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16;
+  return h >>> 0;
+}
+const hex8 = n => n.toString(16).padStart(8, '0');
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+const wait = ms => sleep(Q.reduced ? 0 : ms);
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); Q.addXP(xp || 10, li);
+  return true;
+}
+function keyAct(el, fn) {
+  el.addEventListener('click', fn);
+  el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(e); } });
+}
+const fmt = n => Math.round(n).toLocaleString('en-US');
+function fmtTime(ms) {
+  if (ms < 1) return 'under 1 ms';
+  if (ms < 1000) return Math.round(ms) + ' ms';
+  const s = ms / 1000;
+  if (s < 60) return s.toFixed(1) + ' s';
+  if (s < 3600) return (s / 60).toFixed(1) + ' min';
+  if (s < 86400) return (s / 3600).toFixed(1) + ' h';
+  if (s < 86400 * 365) return (s / 86400).toFixed(1) + ' days';
+  return (s / 86400 / 365).toFixed(1) + ' years';
+}
+function fmtBytes(b) {
+  const u = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']; let i = 0;
+  while (b >= 1000 && i < u.length - 1) { b /= 1000; i++; }
+  return (b >= 100 ? Math.round(b) : b.toFixed(1)) + ' ' + u[i];
+}
+// A run of quizzes, one after another; calls done() after the last
+function quizChain(mount, list, done) {
+  let i = 0;
+  const next = () => {
+    if (i >= list.length) return done && done();
+    const q = list[i++];
+    Q.quiz(mount, { ...q, tag: list.length > 1 ? `Check ${i} of ${list.length}` : 'Check', onDone: () => setTimeout(next, 700) });
+  };
+  next();
+}
+
+/* ================= STAGE 1: seeds and coverage ================= */
+Q.onStage(1, () => {
+  const svg = $('#web1');
+  const CX = [60, 180, 300], CY = [92, 242];
+  const COUNTRY = ['US', 'Japan', 'Brazil'], TOPIC = ['shopping', 'sports'];
+  const HOPS = 3, MAXPINS = 4, GOAL = 0.75;
+  const id = (c, i) => c * 10 + i;
+  // pages: c = country*2 + topic. i=0 hub, 1..6 inner pages, 7..9 outer pages (8, 9 can be pinned)
+  const nodes = [], adj = Array.from({ length: 60 }, () => []);
+  for (let c = 0; c < 6; c++) {
+    const cx = CX[c >> 1], cy = CY[c & 1];
+    for (let i = 0; i < 10; i++) {
+      let x = cx, y = cy, r = 4.5;
+      if (i === 0) r = 10;
+      else if (i <= 6) { const a = ((i - 1) * 60 + 30) * Math.PI / 180; x = cx + 28 * Math.sin(a); y = cy - 28 * Math.cos(a); }
+      else { const a = [0, 225, 135][i - 7] * Math.PI / 180; x = cx + 50 * Math.sin(a); y = cy - 50 * Math.cos(a); r = i === 7 ? 4.5 : 6; }
+      nodes.push({ n: id(c, i), c, i, x, y, r, cand: i === 0 || i === 8 || i === 9 });
+    }
+    for (let i = 1; i <= 6; i++) adj[id(c, 0)].push(id(c, i));
+    for (let i = 1; i <= 6; i++) adj[id(c, i)].push(id(c, 7 + (i % 3)));
+    adj[id(c, 7)].push(id(c, 8)); adj[id(c, 8)].push(id(c, 9)); adj[id(c, 9)].push(id(c, 7));
+    adj[id(c, 3)].push(id((c >> 1) * 2 + (1 - (c & 1)), 0));          // same country, other topic → its hub
+    adj[id(c, 5)].push(id((((c >> 1) + 1) % 3) * 2 + (c & 1), 2));     // same topic, next country
+  }
+  const RC = c => `var(--r${c})`;
+  // draw
+  svg.innerHTML = '';
+  for (let c = 0; c < 6; c++) {
+    const cx = CX[c >> 1], cy = CY[c & 1];
+    const bg = S('rect', { class: 'rbg', x: cx - 58, y: cy - 80, width: 116, height: 146, rx: 14 }, svg); bg.style.fill = RC(c);
+    S('text', { class: 'rlbl', x: cx, y: cy - 65 }, svg).textContent = `${COUNTRY[c >> 1]} · ${TOPIC[c & 1]}`;
+  }
+  const edgeG = S('g', {}, svg), nodeG = S('g', {}, svg), pinG = S('g', {}, svg);
+  const edgeEl = new Map();
+  nodes.forEach(a => adj[a.n].forEach(b => {
+    const B = nodes[b], cross = a.c !== B.c;
+    let d;
+    if (cross) { const mx = (a.x + B.x) / 2 + (B.y - a.y) * .18, my = (a.y + B.y) / 2 - (B.x - a.x) * .18; d = `M${a.x.toFixed(1)} ${a.y.toFixed(1)}Q${mx.toFixed(1)} ${my.toFixed(1)} ${B.x.toFixed(1)} ${B.y.toFixed(1)}`; }
+    else d = `M${a.x.toFixed(1)} ${a.y.toFixed(1)}L${B.x.toFixed(1)} ${B.y.toFixed(1)}`;
+    edgeEl.set(a.n + '>' + b, S('path', { class: 'ed' + (cross ? ' x' : ''), d }, edgeG));
+  }));
+  const dotEl = [];
+  const pins = new Set();
+  let busy = false, won = false;
+  nodes.forEach(nd => {
+    const label = `${COUNTRY[nd.c >> 1]} ${TOPIC[nd.c & 1]} ${nd.i === 0 ? 'hub page' : 'small page'}`;
+    const g = S('g', nd.cand ? { class: 'cand', tabindex: 0, role: 'button', 'aria-label': `Pin ${label} as a seed`, 'aria-pressed': 'false' } : {}, nodeG);
+    if (nd.cand) S('circle', { class: 'hit', cx: nd.x, cy: nd.y, r: nd.i === 0 ? 24 : 22 }, g);
+    dotEl[nd.n] = S('circle', { class: 'pg', cx: nd.x.toFixed(1), cy: nd.y.toFixed(1), r: nd.r }, g);
+    if (nd.cand) keyAct(g, () => togglePin(nd, g));
+  });
+  function drawPins() {
+    pinG.innerHTML = '';
+    [...pins].forEach((n, k) => { const nd = nodes[n]; S('circle', { class: 'pin', cx: nd.x, cy: nd.y, r: nd.r + 6 }, pinG); });
+    $('#seedCount').textContent = `${pins.size} / ${MAXPINS}`;
+    $('#crawlBtn').disabled = busy || pins.size === 0;
+    $$('.cand', nodeG).forEach(g => g.setAttribute('aria-pressed', 'false'));
+  }
+  function resetCrawl() {
+    dotEl.forEach(d => { d.classList.remove('on'); d.style.fill = ''; });
+    edgeEl.forEach(e => e.classList.remove('hot'));
+    setCov(0);
+  }
+  function setCov(f) { $('#covFill').style.width = (f * 100) + '%'; $('#covVal').textContent = Math.round(f * 100) + '%'; }
+  function togglePin(nd, g) {
+    if (busy) return;
+    resetCrawl();
+    if (pins.has(nd.n)) pins.delete(nd.n);
+    else if (pins.size >= MAXPINS) { Q.toast('4 seeds max', g, 'practice'); return; }
+    else pins.add(nd.n);
+    drawPins();
+    g.setAttribute('aria-pressed', pins.has(nd.n) ? 'true' : 'false');
+  }
+  function light(n) { const d = dotEl[n]; d.classList.add('on'); d.style.fill = RC(nodes[n].c); if (!Q.reduced) { d.classList.remove('pop'); void d.getBBox(); d.classList.add('pop'); } }
+  $('#clearPins').onclick = () => { if (busy) return; pins.clear(); resetCrawl(); drawPins(); };
+  $('#crawlBtn').onclick = async () => {
+    if (busy || !pins.size) return;
+    busy = true; $('#crawlBtn').disabled = true;
+    resetCrawl();
+    const seen = new Set(pins); let frontier = [...pins];
+    frontier.forEach(light); setCov(seen.size / 60);
+    await wait(350);
+    for (let h = 1; h <= HOPS; h++) {
+      const nx = [];
+      frontier.forEach(u => adj[u].forEach(v => { edgeEl.get(u + '>' + v).classList.add('hot'); if (!seen.has(v)) { seen.add(v); nx.push(v); } }));
+      nx.forEach(light); frontier = nx;
+      setCov(seen.size / 60);
+      await wait(550);
+    }
+    const f = seen.size / 60, pct = Math.round(f * 100);
+    const countries = new Set([...pins].map(n => nodes[n].c >> 1)).size, leaves = [...pins].filter(n => nodes[n].i !== 0).length;
+    logTo('log1', `${pins.size} seed${pins.size === 1 ? '' : 's'} → reached <b>${seen.size}</b> of 60 pages (${pct}%).`, f >= GOAL ? 'g' : 'w');
+    if (f < GOAL) {
+      if (pins.size < MAXPINS) logTo('log1', `You still have ${MAXPINS - pins.size} unused seed${MAXPINS - pins.size === 1 ? '' : 's'}.`, 'w');
+      if (leaves) logTo('log1', 'Small dots are dead-end pages: they only link to a couple of neighbours. Hubs fan out much further.', 'w');
+      if (countries < 3) logTo('log1', `Your seeds cover only ${countries} of 3 countries. Pages mostly link inside their own country, so whole regions stay dark.`, 'w');
+    }
+    busy = false; drawPins();
+    if (f >= GOAL && !won) {
+      won = true;
+      Q.addXP(30, $('#crawlBtn'));
+      logTo('log1', '✓ Target hit. Hubs spread across regions reach the most pages. That is the "split the URL space" idea in action.', 'g');
+      setTimeout(() => Q.quiz($('#s1quiz'), {
+        q: 'The book suggests splitting the URL space to choose seeds. Along which two lines?',
+        options: ['By locality (country) and by topic', 'By page size and by server speed', 'By domain age and by link count'],
+        correct: 0,
+        good: 'Country and topic. Popular sites differ by country, and pages on one subject tend to link to each other, so a seed in each slice reaches more of the web.',
+        bad: 'The book’s two cuts are <b>locality</b> (country) and <b>topic</b> (shopping, sports, healthcare…). Each slice gets its own seeds so the crawl can reach it.',
+        onDone: () => setTimeout(() => Q.clearStage(1), 900),
+      }), 500);
+    }
+  };
+  drawPins();
+});
+
+/* ================= STAGE 2: the eleven boxes ================= */
+Q.onStage(2, () => {
+  const BOX = [
+    { k: 'seed', name: 'Seed URLs', job: 'The starting addresses you hand the crawler on day one.', demo: 'start → https://www.example.edu/' },
+    { k: 'frontier', name: 'URL Frontier', job: 'A to-do queue of URLs still waiting to be fetched.', demo: 'queue [/a, /b, /c] → next out: /a' },
+    { k: 'down', name: 'HTML Downloader', job: 'Fetches the page behind each URL it is handed.', demo: 'GET /wiki/Cat → 200 OK, 84 KB of HTML' },
+    { k: 'dns', name: 'DNS Resolver', job: 'Turns a host name into the IP address to connect to.', demo: 'www.wikipedia.org → 198.35.26.96 (the book’s 2019 lookup)' },
+    { k: 'parser', name: 'Content Parser', job: 'Reads the HTML and rejects broken, malformed pages.', demo: '<html><body>… ✓ valid · <div><p … ✗ broken' },
+    { k: 'cseen', name: 'Content Seen?', job: 'Drops a page when we already hold identical content.', demo: 'fingerprint 9f3a12c0 already stored → drop' },
+    { k: 'cstore', name: 'Content Storage', job: 'Keeps the pages we decided to save, for later use.', demo: 'disk: billions of pages · memory: the hot ones' },
+    { k: 'extract', name: 'URL Extractor', job: 'Pulls the links out of a page as full URLs.', demo: '/wiki/Cat → https://en.wikipedia.org/wiki/Cat' },
+    { k: 'filter', name: 'URL Filter', job: 'Throws out unwanted links: file types, errors, blocked sites.', demo: 'setup.exe ✗ · broken link ✗ · blocklisted site ✗' },
+    { k: 'useen', name: 'URL Seen?', job: 'Skips links we already fetched or already queued.', demo: '/wiki/Cat → seen before → skip' },
+    { k: 'ustore', name: 'URL Storage', job: 'Keeps the record of which URLs have been visited.', demo: 'visited: /wiki/Spider, /wiki/Web, …' },
+  ];
+  const by = Object.fromEntries(BOX.map(b => [b.k, b]));
+  const order = shuffle(BOX.map(b => b.k));
+  let ji = 0, missed = false, busy = false;
+  $('#tiles').innerHTML = BOX.map(b => `<button class="tile" data-k="${b.k}">${esc(b.name)}</button>`).join('');
+  function showJob() {
+    $('#jobStep').textContent = `Job ${ji + 1} of ${BOX.length}`;
+    $('#jobText').textContent = by[order[ji]].job;
+    $('#jobHint').textContent = '';
+    missed = false;
+  }
+  $$('#tiles .tile').forEach(t => t.onclick = () => {
+    if (busy || ji >= order.length || t.classList.contains('done')) return;
+    const want = order[ji], k = t.dataset.k;
+    if (k !== want) {
+      missed = true;
+      t.classList.remove('no'); void t.offsetWidth; t.classList.add('no');
+      $('#jobHint').textContent = `Not that one. ${by[k].name}: ${by[k].job.charAt(0).toLowerCase() + by[k].job.slice(1)}`;
+      return;
+    }
+    t.classList.remove('no'); t.classList.add('done'); t.disabled = true;
+    t.innerHTML = `${esc(by[k].name)}<span class="jb">${esc(by[k].job)}</span><span class="demo">${esc(by[k].demo)}</span>`;
+    if (!missed) Q.addXP(2, t); else Q.toast('✓', t, 'practice');
+    ji++;
+    if (ji < order.length) { showJob(); return; }
+    $('#jobStep').textContent = 'All 11 placed';
+    $('#jobText').textContent = 'Every box has a job. Now be one of them.';
+    $('#jobHint').textContent = '';
+    Q.addXP(10, $('#jobcard'));
+    $('#boxNotes').style.display = 'block';
+    $('#urlx').style.display = 'block';
+    startUrlx();
+  });
+  showJob();
+
+  function startUrlx() {
+    const BASE = 'https://en.wikipedia.org/wiki/';
+    const ITEMS = [
+      { h: '/wiki/Web', o: [BASE + 'Web', BASE + 'Spider/wiki/Web', 'https://wiki/Web'], a: 0, why: 'A leading <code>/</code> means "from the root of this host", so keep the scheme and host and swap in the new path.' },
+      { h: 'Arachnid', o: [BASE + 'Arachnid', 'https://en.wikipedia.org/Arachnid', 'https://Arachnid'], a: 0, why: 'No leading slash: it replaces the last segment of the current path, so <code>Spider</code> becomes <code>Arachnid</code> inside <code>/wiki/</code>.' },
+      { h: '#History', o: [BASE + 'Spider (same page)', 'https://en.wikipedia.org/History', BASE + 'History'], a: 0, why: 'A <code>#fragment</code> points to a spot <i>inside</i> the same page. The crawler drops it, so this is just the Spider page again. URL Seen? will skip it.' },
+      { h: 'https://commons.wikimedia.org/x', o: ['https://commons.wikimedia.org/x', BASE + 'commons.wikimedia.org/x', 'https://en.wikipedia.org/x'], a: 0, why: 'It already has a scheme and host, so it is absolute. Leave it alone.' },
+    ];
+    let done = 0;
+    $('#urlSort').innerHTML = ITEMS.map((it, n) => `<div class="sort-item" data-n="${n}"><p>Link found: <span class="href">${esc(it.h)}</span></p><div class="row">${shuffle(it.o.map((o, i) => ({ o, i }))).map(({ o, i }) => `<button class="opt" data-i="${i}">${esc(o)}</button>`).join('')}</div><div class="explain"></div></div>`).join('');
+    $$('#urlSort .sort-item').forEach(item => {
+      const it = ITEMS[+item.dataset.n];
+      $$('.opt', item).forEach(b => b.onclick = () => {
+        $$('.opt', item).forEach(x => x.disabled = true);
+        const ok = +b.dataset.i === it.a;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-i="${it.a}"]`, item).classList.add('right');
+        const ex = $('.explain', item); ex.className = 'explain show ' + (ok ? 'good' : 'bad'); ex.innerHTML = it.why;
+        ok ? Q.addXP(5, b) : Q.loseHeart(b);
+        if (++done === ITEMS.length) { $('#normNote').style.display = 'block'; setTimeout(quizzes, 600); }
+      });
+    });
+  }
+  function quizzes() {
+    quizChain($('#s2quiz'), [
+      { q: 'Why is the Content Parser a separate box instead of part of the downloader?', options: ['So slow parsing never holds up downloads', 'So pages can be parsed before they arrive', 'So DNS answers can be cached inside it'], correct: 0, xp: 10,
+        good: 'Parsing takes real CPU time. Doing it inside the downloader would slow the whole fetch loop, so it gets its own box that can scale on its own.',
+        bad: 'The reason is speed: parsing is slow, and the book splits it out so it doesn’t slow down the downloaders.' },
+      { q: 'Where does Content Storage keep most of its pages?', options: ['On disk, with popular pages cached in memory', 'In memory, with old pages moved out to disk', 'All in memory, so every read is low latency'], correct: 0, xp: 10,
+        good: 'The data set is far too big for memory, so it lives on disk. The popular pages sit in memory to keep reads fast.',
+        bad: 'There’s too much data for memory. Most of it sits on <b>disk</b>, and only <b>popular</b> content is kept in memory for speed.' },
+    ], () => setTimeout(() => Q.clearStage(2), 600));
+  }
+});
+
+/* ================= STAGE 3: Content Seen? ================= */
+Q.onStage(3, () => {
+  const CONTENT = {
+    A: '<h1>Example Shop</h1><p>Deals of the day</p>',
+    B: '<h1>Morning news</h1><p>Rain later</p>',
+    C: '<h1>Post 7</h1><p>How spiders spin silk</p>',
+    D: '<h1>Docs</h1><p>Getting started</p>',
+    E: '<h1>Cat</h1><p>A small domesticated mammal</p>',
+  };
+  const PAGES = [
+    { u: 'http://shop.example.com/', c: 'A' },
+    { u: 'https://news.example.com/today', c: 'B' },
+    { u: 'https://shop.example.com/index.html', c: 'A' },
+    { u: 'https://blog.example.com/post-7', c: 'C' },
+    { u: 'https://mirror.example.net/post-7', c: 'C' },
+    { u: 'https://docs.example.com/start', c: 'D' },
+    { u: 'https://docs.example.com/start?ref=nav', c: 'D' },
+    { u: 'https://wiki.example.org/cat', c: 'E' },
+  ];
+  const FP = Object.fromEntries(Object.entries(CONTENT).map(([k, v]) => [k, hex8(hash32(v))]));
+  const goals = new Set();
+  let busy = false, twistShown = false;
+  const nOf = () => Math.pow(10, +$('#nSlider').value);
+  function setN() { $('#nVal').textContent = fmt(nOf()); }
+  $('#nSlider').addEventListener('input', setN);
+  function resetBoard() {
+    $('#pages').innerHTML = PAGES.map((p, i) => `<div class="prow" data-i="${i}"><span class="u" title="${esc(p.u)}">${esc(p.u)}</span><span class="fp">········</span><span class="vd">waiting</span></div>`).join('');
+    $('#fpset').innerHTML = `Fingerprint set: <span class="muted">${fmt(nOf())} stored, including</span> <span class="chip">${FP.A}</span> <span class="muted">(shop.example.com, crawled yesterday)</span><div class="chips" id="fpNew"></div>`;
+    $('#binCount').textContent = '0'; $('#keepCount').textContent = '0';
+    $('#slowCtr').textContent = '0'; $('#fastCtr').textContent = '0'; $('#slowTm').textContent = '—'; $('#fastTm').textContent = '—';
+  }
+  $('#checkBtn').onclick = async () => {
+    if (busy) return;
+    busy = true; $('#checkBtn').disabled = true; $('#nSlider').disabled = true;
+    resetBoard();
+    const N = nOf(), set = new Set([FP.A]);
+    let opened = 0, lookups = 0, bin = 0, keep = 0;
+    const rows = $$('#pages .prow');
+    for (let i = 0; i < PAGES.length; i++) {
+      const p = PAGES[i], r = rows[i], fp = FP[p.c];
+      r.classList.add('cur');
+      await wait(220);
+      $('.fp', r).textContent = fp;
+      opened += N + keep;              // slow lane: open every stored page, plus the ones kept this batch
+      lookups += 1;
+      $('#slowCtr').textContent = fmt(opened); $('#slowTm').textContent = '≈ ' + fmtTime(opened * 1);
+      $('#fastCtr').textContent = fmt(lookups); $('#fastTm').textContent = '≈ ' + fmtTime(lookups * 0.001) + ' + hashing';
+      await wait(200);
+      r.classList.remove('cur');
+      if (set.has(fp)) { r.classList.add('dup'); $('.vd', r).textContent = '✗ duplicate'; bin++; }
+      else { set.add(fp); r.classList.add('new'); $('.vd', r).textContent = '✓ new'; keep++; $('#fpNew').insertAdjacentHTML('beforeend', `<span class="chip fresh">${fp}</span>`); }
+      $('#binCount').textContent = bin; $('#keepCount').textContent = keep;
+    }
+    busy = false; $('#checkBtn').disabled = false; $('#nSlider').disabled = false;
+    $('#raceNote').style.display = 'block';
+    checkGoal('#s3goals', 'run', goals, 10);
+    if (N >= 1e9) checkGoal('#s3goals', 'big', goals, 5);
+    else if (!goals.has('big')) Q.toast('now try 1 billion', $('#nSlider'), 'practice');
+    if (goals.size === 2 && !twistShown) { twistShown = true; setTimeout(showTwist, 500); }
+  };
+  function showTwist() {
+    const box = $('#twist'); box.style.display = 'block';
+    const a = '<h1>Daily spider facts</h1><p>Spiders have eight legs.</p><footer>Updated 09:41</footer>';
+    const b = a.replace('09:41', '09:42');
+    const opts = $('#twistOpts');
+    const OPT = [['Yes: a duplicate, the hash catches it', false], ['No: the hash sees two different pages', true]];
+    opts.innerHTML = '';
+    OPT.forEach(([t, right]) => {
+      const btn = document.createElement('button'); btn.className = 'opt'; btn.textContent = t;
+      btn.onclick = () => {
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        btn.classList.add(right ? 'right' : 'wrong');
+        if (!right) $$('.opt', opts)[1].classList.add('right');
+        $('#fpA').textContent = 'fingerprint ' + hex8(hash32(a));
+        $('#fpB').textContent = 'fingerprint ' + hex8(hash32(b));
+        const ex = $('#twistEx'); ex.className = 'explain show ' + (right ? 'good' : 'bad');
+        ex.innerHTML = (right ? '<b>Right.</b> ' : '<b>Not quite.</b> ') + 'One changed character gives a completely different fingerprint, so our check keeps both. An exact hash only catches pages that are byte-for-byte identical.';
+        right ? Q.addXP(10, btn) : Q.loseHeart(btn);
+        $('#dupCaveat').style.display = 'block';
+        setTimeout(quizzes, 700);
+      };
+      opts.appendChild(btn);
+    });
+    box.scrollIntoView({ behavior: Q.reduced ? 'auto' : 'smooth', block: 'nearest' });
+  }
+  function quizzes() {
+    quizChain($('#s3quiz'), [
+      { q: 'Roughly what share of web pages does the book say are duplicates?', options: ['About 3% of pages', 'About 29% of pages', 'About 60% of pages'], correct: 1, xp: 10,
+        good: 'About 29%, so nearly a third. That’s why Content Seen? is worth a box of its own.',
+        bad: 'The book’s figure is about <b>29%</b>, nearly a third of pages.' },
+      { q: 'Why compare fingerprints instead of comparing whole pages?', options: ['A fingerprint is tiny and found in one lookup', 'Fingerprints shrink pages so storage is cheaper', 'Hashing also proves that the HTML is valid'], correct: 0, xp: 10,
+        good: 'Each page boils down to a small fixed-size value. One set lookup answers "seen it?" no matter how many pages are stored or how long they are.',
+        bad: 'It’s about the lookup: a short fixed-size fingerprint can be found in a set in one step, whatever the size of the store. Checking HTML is the parser’s job.' },
+    ], () => setTimeout(() => Q.clearStage(3), 600));
+  }
+  setN(); resetBoard();
+});
+
+/* ================= STAGE 4: URL Seen? and the Bloom filter ================= */
+Q.onStage(4, () => {
+  const M = 32, SALTS = ['h1:', 'h2:', 'h3:'];
+  const cellsOf = u => SALTS.map(s => hash32(s + u) % M);
+  const ADD = ['/wiki/Spider', '/wiki/Web', '/wiki/Silk', '/wiki/Insect', '/wiki/Arachnid', '/wiki/Venom', '/wiki/Fly', '/wiki/Tarantula'];
+  const PROBES = ['/wiki/Silk', '/wiki/Moth', '/wiki/Beetle', '/wiki/Spider'];
+  const FPURL = '/wiki/Ant';
+  const bits = new Array(M).fill(false), added = new Set(), goals = new Set();
+  let fpShown = false, quizShown = false, sizeOk = false;
+  $('#bits').innerHTML = Array.from({ length: M }, (_, i) => `<div class="bit" data-b="${i}">${i}</div>`).join('');
+  const bitEl = $$('#bits .bit');
+  function paint(probe) {
+    bitEl.forEach((el, i) => { el.classList.toggle('on', bits[i]); el.classList.toggle('probe', !!probe && probe.includes(i)); });
+    $('#bloomFill').textContent = `${bits.filter(Boolean).length} / ${M} bits on`;
+  }
+  $('#addChips').innerHTML = ADD.map(u => `<button class="chip" data-u="${u}">+ ${u}</button>`).join('');
+  $$('#addChips .chip').forEach(c => c.onclick = () => {
+    const u = c.dataset.u; if (added.has(u)) return;
+    added.add(u); c.classList.add('used'); c.disabled = true;
+    const cs = cellsOf(u);
+    cs.forEach(i => { bits[i] = true; const el = bitEl[i]; el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); });
+    paint(cs);
+    $('#bloomOut').innerHTML = `add <b>${u}</b>: h1 → ${cs[0]}, h2 → ${cs[1]}, h3 → ${cs[2]}. Those bits are now on.`;
+    if (added.size === ADD.length) {
+      checkGoal('#s4goals', 'add', goals, 10);
+      $('#bloomMode').textContent = 'Check mode';
+      $('#checkArea').style.display = 'block';
+      $('#bloomOut').innerHTML += ' <span class="muted">All 8 added. Now check some URLs.</span>';
+    }
+  });
+  function probe(u) {
+    u = (u || '').trim(); if (!u) return;
+    const cs = cellsOf(u), allOn = cs.every(i => bits[i]);
+    paint(cs);
+    const parts = cs.map((c, k) => `h${k + 1} → ${c} ${bits[c] ? 'on' : '<b>off</b>'}`).join(', ');
+    $('#bloomOut').innerHTML = `check <b>${esc(u)}</b>: ${parts} → <span class="v ${allOn ? 'seen' : 'new'}">${allOn ? 'probably seen' : 'definitely new'}</span>` +
+      (allOn ? (added.has(u) ? ' <span class="muted">(correct: it was added)</span>' : ' <span class="muted">(it was never added!)</span>') : ' <span class="muted">(one dark bit is proof)</span>');
+    if (allOn && added.has(u)) checkGoal('#s4goals', 'seen', goals, 5);
+    if (!allOn) checkGoal('#s4goals', 'new', goals, 5);
+    if (goals.has('seen') && goals.has('new') && !fpShown) { fpShown = true; setTimeout(showFP, 600); }
+  }
+  $('#probeChips').innerHTML = PROBES.map(u => `<button class="chip" data-u="${u}">? ${u}</button>`).join('');
+  $$('#probeChips .chip').forEach(c => c.onclick = () => probe(c.dataset.u));
+  $('#probeBtn').onclick = () => probe($('#probeIn').value);
+  $('#probeIn').addEventListener('keydown', e => { if (e.key === 'Enter') probe($('#probeIn').value); });
+
+  function choiceRound(box, { title, options, correct, explain, xp = 10 }) {
+    return new Promise(res => {
+      const wrap = document.createElement('div');
+      wrap.innerHTML = `<h3 style="margin:4px 0 10px">${title}</h3><div class="opts"></div><div class="explain"></div>`;
+      box.appendChild(wrap);
+      const opts = $('.opts', wrap);
+      options.forEach((o, i) => {
+        const b = document.createElement('button'); b.className = 'opt'; b.textContent = o;
+        b.onclick = () => {
+          $$('.opt', opts).forEach(x => x.disabled = true);
+          const ok = i === correct;
+          b.classList.add(ok ? 'right' : 'wrong'); if (!ok) $$('.opt', opts)[correct].classList.add('right');
+          const ex = $('.explain', wrap); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+          ex.innerHTML = (ok ? '<b>Right.</b> ' : '<b>Not quite.</b> ') + explain;
+          ok ? Q.addXP(xp, b) : Q.loseHeart(b);
+          res(ok);
+        };
+        opts.appendChild(b);
+      });
+    });
+  }
+  async function showFP() {
+    const box = $('#fpBox'); box.style.display = 'block'; box.innerHTML = '<div class="step">Predict first</div>';
+    const cs = cellsOf(FPURL);
+    paint(cs);
+    $('#bloomOut').innerHTML = `next up: <b>${FPURL}</b> (never added). Its hashes point at bits ${cs.join(', ')}, outlined above.`;
+    box.scrollIntoView({ behavior: Q.reduced ? 'auto' : 'smooth', block: 'nearest' });
+    await choiceRound(box, {
+      title: `The crawler never added <code>${FPURL}</code>. Its three bits are ${cs.join(', ')}. What will the filter answer?`,
+      options: ['"Probably seen"', '"Definitely new"'], correct: 0,
+      explain: `Look at the array: bits ${cs.join(', ')} were all switched on by <i>other</i> URLs. The filter can’t tell, so it says "probably seen". That’s a <b>false positive</b>. Our toy is tiny and ${bits.filter(Boolean).length} of 32 bits are on, so this happens a lot. Real filters are sized to keep it near 1%.`,
+    });
+    probe(FPURL);
+    await sleep(400);
+    await choiceRound(box, {
+      title: `So what does our crawler do with <code>${FPURL}</code>?`,
+      options: ['Skips it: that page never gets crawled', 'Fetches it twice, just to double-check', 'Removes it from the filter and fetches it'], correct: 0,
+      explain: 'URL Seen? trusts the filter, so a brand-new page is quietly skipped. That’s the price of the saved memory. The opposite mistake can’t happen: a "definitely new" answer is always true, so the filter never makes the crawler fetch a URL twice.',
+    });
+    maybeQuiz();
+  }
+
+  // sizing panel
+  const COUNTS = [1e8, 2.5e8, 5e8, 1e9, 2.5e9, 5e9, 1e10, 2.5e10, 5e10];
+  const BARS = [
+    { nm: 'Raw URL strings', per: 100, col: 'var(--bad)' },
+    { nm: 'Fingerprint set', per: 8, col: 'var(--warn)' },
+    { nm: 'Bloom filter, 1%', per: 9.585 / 8, col: 'var(--good)' },
+  ];
+  $('#sizeBars').innerHTML = BARS.map((b, i) => `<div class="sb"><span class="nm">${b.nm}</span><div class="track"><div class="fill" style="background:${b.col}"></div></div><span class="val"></span></div>`).join('');
+  const cname = n => n >= 1e9 ? `${+(n / 1e9).toFixed(1)} billion` : `${Math.round(n / 1e6)} million`;
+  function sizes() {
+    const n = COUNTS[+$('#szSlider').value];
+    $('#szVal').textContent = cname(n);
+    $$('#sizeBars .sb').forEach((row, i) => {
+      $('.fill', row).style.width = Math.max(1.5, BARS[i].per / BARS[0].per * 100) + '%';
+      $('.val', row).textContent = fmtBytes(n * BARS[i].per);
+    });
+    return n;
+  }
+  $('#szSlider').addEventListener('input', () => {
+    const n = sizes();
+    if (n >= 1e10 && !sizeOk) {
+      sizeOk = true;
+      checkGoal('#s4goals', 'size', goals, 5);
+      logTo('log4', `${cname(n)} URLs: raw strings need ${fmtBytes(n * 100)}, far beyond one machine’s memory. The Bloom filter needs ${fmtBytes(n * 9.585 / 8)}, which still fits in one big server’s RAM. That’s why crawlers reach for it.`, 'g');
+      maybeQuiz();
+    }
+  });
+  sizes();
+
+  function maybeQuiz() {
+    if (quizShown || !sizeOk || !goals.has('add') || !$('#fpBox .opt.right') || $$('#fpBox .opts').length < 2 || $$('#fpBox .opts').some(o => !o.querySelector('[disabled]'))) return;
+    quizShown = true;
+    setTimeout(() => quizChain($('#s4quiz'), [
+      { q: 'A Bloom filter answers "definitely not seen". Can that answer be wrong?', options: ['No: an off bit proves it was never added', 'Yes: it is wrong about 1% of the time', 'Only once the filter is nearly all ones'], correct: 0, xp: 10,
+        good: 'Adding a URL always switches on all its bits, and bits never switch off. So if any bit is off, that URL was never added. No false negatives.',
+        bad: 'An off bit is proof. Adding a URL turns on all of its bits, and nothing turns them off again. Mistakes only go the other way (false positives).' },
+      { q: 'Why does a crawler need URL Seen? at all?', options: ['To stop repeat fetches and endless link loops', 'To check that each URL’s server is still online', 'To rank URLs by importance before fetching'], correct: 0, xp: 10,
+        good: 'Without it the same URLs are queued again and again: wasted work, extra load on websites, and loops like A → B → A that never end.',
+        bad: 'Its job is to stop the crawler adding a URL it has already fetched or queued. Otherwise you get wasted load and infinite loops. Ranking URLs is the frontier’s business (quest 9.3).' },
+    ], () => setTimeout(() => Q.clearStage(4), 600)), 500);
+  }
+});
+
+/* ================= STAGE 5: build and replay the workflow ================= */
+Q.onStage(5, () => {
+  const svg = $('#pipe');
+  const W = 140, H = 50, L = 24, R = 196;
+  const BX = {
+    seed: { x: L, y: 6, t: 'Seed URLs' }, dns: { x: R, y: 6, t: 'DNS Resolver' },
+    frontier: { x: L, y: 78, t: 'URL Frontier' }, down: { x: R, y: 78, t: 'HTML Downloader' },
+    ustore: { x: L, y: 150, t: 'URL Storage' }, parser: { x: R, y: 150, t: 'Content Parser' },
+    useen: { x: L, y: 222, t: 'URL Seen?' }, cseen: { x: R, y: 222, t: 'Content Seen?' },
+    filter: { x: L, y: 294, t: 'URL Filter' }, cstore: { x: R, y: 294, t: 'Content Storage' },
+    extract: { x: L, y: 366, t: 'URL Extractor' },
+  };
+  const cx = k => BX[k].x + W / 2, cy = k => BX[k].y + H / 2, top = k => BX[k].y, bot = k => BX[k].y + H;
+  // arrows: name → points
+  const EDGE = {
+    'seed>frontier': [[cx('seed'), bot('seed')], [cx('frontier'), top('frontier')]],
+    'frontier>down': [[L + W, cy('frontier')], [R, cy('down')]],
+    'down>dns': [[cx('down'), top('down')], [cx('dns'), bot('dns')]],
+    'down>parser': [[cx('down'), bot('down')], [cx('parser'), top('parser')]],
+    'parser>cseen': [[cx('parser'), bot('parser')], [cx('cseen'), top('cseen')]],
+    'cseen>cstore': [[cx('cseen'), bot('cseen')], [cx('cstore'), top('cstore')]],
+    'cseen>extract': [[R, cy('cseen')], [180, cy('cseen')], [180, cy('extract')], [L + W, cy('extract')]],
+    'extract>filter': [[cx('extract'), top('extract')], [cx('filter'), bot('filter')]],
+    'filter>useen': [[cx('filter'), top('filter')], [cx('useen'), bot('useen')]],
+    'useen>ustore': [[cx('useen'), top('useen')], [cx('ustore'), bot('ustore')]],
+    'useen>frontier': [[L, cy('useen')], [10, cy('useen')], [10, cy('frontier')], [L, cy('frontier')]],
+  };
+  // the arrow drawn when a box is placed
+  const INTO = { frontier: 'seed>frontier', down: 'frontier>down', dns: 'down>dns', parser: 'down>parser', cseen: 'parser>cseen', cstore: 'cseen>cstore', extract: 'cseen>extract', filter: 'extract>filter', useen: 'filter>useen', ustore: 'useen>ustore' };
+  const GROUPS = [['seed'], ['frontier'], ['down'], ['dns'], ['parser'], ['cseen'], ['cstore', 'extract'], ['filter'], ['useen'], ['ustore']];
+  const SAY = {
+    seed: 'The crawl begins with a hand-picked list of starting URLs.',
+    frontier: 'Those seeds become the first entries in the to-do queue.',
+    down: 'A downloader takes a batch of URLs off the queue.',
+    dns: 'To connect, it needs each host’s IP address, so it asks DNS. Then it fetches the HTML.',
+    parser: 'The raw HTML is checked: broken pages stop here.',
+    cseen: 'A valid page is fingerprinted. Do we already hold this exact content?',
+    cstore: 'Content we haven’t seen gets saved.',
+    extract: 'The same new page is mined for links, made into full URLs.',
+    filter: 'Junk links are dropped: wrong file types, dead links, blocked sites.',
+    useen: 'Each link that survives: fetched or queued already? If so, ignore it.',
+    ustore: 'A brand-new URL is recorded…',
+  };
+  const HINT = {
+    seed: 'Where does every crawl begin?',
+    frontier: 'The seeds need somewhere to wait their turn.',
+    down: 'Something has to take URLs off the queue and fetch them.',
+    dns: 'Fetching from a host name needs an IP address first.',
+    parser: 'Raw HTML just arrived. Check it isn’t broken.',
+    cseen: 'Valid page. Is this exact content already stored?',
+    cstore: 'New content: it gets saved AND its links get pulled out.',
+    extract: 'New content: it gets saved AND its links get pulled out.',
+    filter: 'Raw links include junk (.exe files, dead links, blocked sites).',
+    useen: 'Clean links. Have we fetched or queued any already?',
+    ustore: 'New URLs get recorded, then rejoin the queue.',
+  };
+  let gi = 0, placed = new Set(), built = false, busyR = false;
+  const ORDER_TOTAL = 11;
+  function draw() {
+    svg.innerHTML = '';
+    const defs = S('defs', {}, svg);
+    const mk = (id, cls) => { const m = S('marker', { id, viewBox: '0 0 10 10', refX: 8, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' }, defs); S('path', { d: 'M0 0L10 5L0 10z', class: cls }, m); };
+    mk('ah5', 'ah'); mk('ah5l', 'ah loop');
+    S('g', { id: 'arrG' }, svg);
+    const bxG = S('g', { id: 'bxG' }, svg);
+    S('g', { id: 'fxG' }, svg);
+    Object.entries(BX).forEach(([k, b]) => {
+      const g = S('g', { class: 'bx', 'data-k': k, tabindex: 0, role: 'button', 'aria-label': b.t }, bxG);
+      S('rect', { x: b.x, y: b.y, width: W, height: H, rx: 11 }, g);
+      S('text', { x: b.x + W / 2, y: b.y + H / 2 + 1 }, g).textContent = b.t;
+      S('text', { class: 'ix', x: b.x + 7, y: b.y + 12 }, g);
+      keyAct(g, () => tap(k, g));
+    });
+  }
+  function arrow(name, opts = {}) {
+    const pts = EDGE[name], loop = !!opts.loop;
+    const d = pts.map((p, i) => (i ? 'L' : 'M') + p[0] + ' ' + p[1]).join('');
+    const p = S('path', { class: 'ar' + (loop ? ' loop' : '') + (Q.reduced ? '' : ' draw'), d, 'marker-end': `url(#${loop ? 'ah5l' : 'ah5'})`, 'data-e': name }, $('#arrG', svg));
+    if (name === 'down>dns') p.setAttribute('marker-start', 'url(#ah5)');
+    return p;
+  }
+  const boxEl = k => $(`.bx[data-k="${k}"]`, svg);
+  function tap(k, g) {
+    if (built || busyR) return;
+    const grp = GROUPS[gi];
+    if (!grp || !grp.includes(k) || placed.has(k)) {
+      if (placed.has(k)) { Q.toast('already placed', g, 'practice'); return; }
+      g.classList.remove('no'); void g.getBBox(); g.classList.add('no');
+      $('#routeHint').textContent = 'Hint: ' + HINT[grp.find(x => !placed.has(x))];
+      return;
+    }
+    placed.add(k); g.classList.add('on');
+    $('.ix', g).textContent = placed.size;
+    if (INTO[k]) arrow(INTO[k]);
+    logTo('log5', `${placed.size}. <b>${BX[k].t}</b>: ${SAY[k]}`);
+    if (grp.every(x => placed.has(x))) gi++;
+    if (placed.size === ORDER_TOTAL) return finishRoute();
+    $('#routeProg').textContent = `Step ${placed.size + 1} of ${ORDER_TOTAL}`;
+    $('#routeHint').textContent = GROUPS[gi].length > 1 ? 'This page goes two places next.' : '';
+  }
+  function finishRoute() {
+    built = true;
+    arrow('useen>frontier', { loop: true });
+    logTo('log5', '…and it also joins the URL Frontier. The loop closes and the crawler keeps feeding itself.', 'g');
+    $('#routeProg').textContent = '✓ Pipeline wired';
+    $('#routeHint').textContent = 'The teal arrow is the loop.';
+    Q.addXP(25, svg);
+    $('#replayBox').style.display = 'block';
+  }
+  draw();
+
+  /* ---- packet replay ---- */
+  let token = null;
+  function pathPts(edges) {
+    const pts = [];
+    edges.forEach(e => { const [name, rev] = e.startsWith('!') ? [e.slice(1), true] : [e, false]; let p = EDGE[name].slice(); if (rev) p = p.reverse(); p.forEach(q => { const l = pts[pts.length - 1]; if (!l || l[0] !== q[0] || l[1] !== q[1]) pts.push(q); }); });
+    return pts;
+  }
+  async function move(edges, label) {
+    const fx = $('#fxG', svg);
+    const pts = pathPts(edges);
+    if (!token) { token = S('g', {}, fx); S('circle', { class: 'tok', r: 8 }, token); S('text', { class: 'toklbl', y: -12 }, token); }
+    $('text', token).textContent = label || '';
+    const put = (x, y) => token.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)})`);
+    if (Q.reduced) { const l = pts[pts.length - 1]; put(l[0], l[1]); return; }
+    for (let i = 1; i < pts.length; i++) {
+      const [x0, y0] = pts[i - 1], [x1, y1] = pts[i], len = Math.hypot(x1 - x0, y1 - y0), dur = Math.max(120, len * 3.2);
+      await new Promise(res => { const t0 = performance.now(); const fr = now => { const p = Math.min(1, (now - t0) / dur); put(x0 + (x1 - x0) * p, y0 + (y1 - y0) * p); p < 1 ? requestAnimationFrame(fr) : res(); }; requestAnimationFrame(fr); });
+    }
+  }
+  function flash(k, cls = 'lit') { const g = boxEl(k); g.classList.add(cls); setTimeout(() => g.classList.remove(cls), cls === 'stop' ? 2200 : 900); }
+  function stopMark(k) { const fx = $('#fxG', svg); const t = S('text', { class: 'xmark', x: BX[k].x + W - 14, y: BX[k].y + 14 }, fx); t.textContent = '✗'; setTimeout(() => t.remove(), 2400); }
+  function clearToken() { if (token) { token.remove(); token = null; } }
+  const STOPS = [['parser', 'Content Parser'], ['cseen', 'Content Seen?'], ['filter', 'URL Filter'], ['useen', 'URL Seen?']];
+  function predictStop(title, correct, why) {
+    return new Promise(res => {
+      const box = $('#predBox');
+      box.innerHTML = `<div class="step">Predict</div><h3 style="margin:4px 0 10px">${title}</h3><div class="opts"></div><div class="explain"></div>`;
+      const opts = $('.opts', box);
+      STOPS.forEach(([k, t]) => {
+        const b = document.createElement('button'); b.className = 'opt'; b.textContent = 'Stops at ' + t; b.dataset.k = k;
+        b.onclick = () => {
+          $$('.opt', opts).forEach(x => x.disabled = true);
+          const ok = k === correct;
+          b.classList.add(ok ? 'right' : 'wrong'); if (!ok) $(`.opt[data-k="${correct}"]`, opts).classList.add('right');
+          const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+          ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Watch.</b> ') + why;
+          if (ok) Q.addXP(5, b); else Q.toast('no penalty', b, 'practice');
+          res(ok);
+        };
+        opts.appendChild(b);
+      });
+      box.scrollIntoView({ behavior: Q.reduced ? 'auto' : 'smooth', block: 'nearest' });
+    });
+  }
+  const FETCH = ['frontier>down', 'down>dns', '!down>dns', 'down>parser', 'parser>cseen'];
+  let phase = 0, quizShown = false;
+  $('#replayBtn').onclick = async () => {
+    if (busyR) return;
+    busyR = true; $('#replayBtn').disabled = true;
+    if (phase === 0) {
+      logTo('log5', '▶ Page 1: <b>/wiki/Spider</b>, never seen before.');
+      await move(['seed>frontier'], 'p1'); flash('frontier');
+      await move(FETCH, 'p1'); flash('cseen');
+      logTo('log5', 'New fingerprint → saved to Content Storage and sent for link extraction.', 'g');
+      await move(['cseen>cstore'], 'p1'); flash('cstore'); await wait(300);
+      await move(['!cseen>cstore', 'cseen>extract'], 'p1'); flash('extract');
+      logTo('log5', 'Found 2 links: /wiki/Silk and /wiki/Venom. Both pass the filter, both are new.', 'g');
+      await move(['extract>filter', 'filter>useen'], '2 links'); flash('useen');
+      await move(['useen>ustore'], '2 links'); flash('ustore'); await wait(250);
+      await move(['!useen>ustore', 'useen>frontier'], '+2'); flash('frontier');
+      logTo('log5', '✓ 2 new URLs recorded and queued. The frontier grew.', 'g');
+      clearToken();
+      phase = 1; $('#replayBtn').textContent = '▶ Run page 2';
+    } else if (phase === 1) {
+      busyR = true;
+      await predictStop('Page 2 is <code>http://</code>en.wikipedia.org/wiki/Spider: the plain-http copy of page 1, same bytes. Where does it stop?', 'cseen',
+        'Its URL is different, so nothing stopped it at the frontier. But its fingerprint matches page 1, so Content Seen? throws it away. Its links are never extracted.');
+      logTo('log5', '▶ Page 2: http:// copy of /wiki/Spider.');
+      await move(['frontier>down', 'down>dns', '!down>dns', 'down>parser', 'parser>cseen'], 'p2');
+      flash('cseen', 'stop'); stopMark('cseen');
+      logTo('log5', '✗ Same fingerprint as page 1 → discarded at Content Seen?.', 'e');
+      clearToken();
+      phase = 2; $('#replayBtn').textContent = '▶ Run page 3';
+    } else if (phase === 2) {
+      await predictStop('Page 3 is new and links to <code>setup.exe</code>. Where does that link stop?', 'filter',
+        'An .exe is not a web page we want, so the URL Filter drops it before anyone asks URL Seen?.');
+      logTo('log5', '▶ Page 3: /wiki/Web, new content. Link A: setup.exe.');
+      await move(FETCH, 'p3'); flash('cseen');
+      await move(['cseen>extract'], 'p3'); flash('extract');
+      await move(['extract>filter'], 'exe'); flash('filter', 'stop'); stopMark('filter');
+      logTo('log5', '✗ setup.exe: unwanted file type → dropped by the URL Filter.', 'e');
+      clearToken();
+      await wait(500);
+      await predictStop('Page 3’s other link is <code>/wiki/Silk</code>, which page 1 already put in the frontier. Where does it stop?', 'useen',
+        'It’s a normal page link, so the filter lets it through. But URL Seen? remembers it was queued after page 1, so it’s not added twice.');
+      logTo('log5', 'Link B: /wiki/Silk, already queued after page 1.');
+      await move(['cseen>extract'].map(x => x), 'silk');
+      await move(['extract>filter', 'filter>useen'], 'silk'); flash('useen', 'stop'); stopMark('useen');
+      logTo('log5', '✗ /wiki/Silk: already in the frontier → dropped at URL Seen?.', 'e');
+      clearToken();
+      phase = 3; $('#replayBtn').textContent = '↻ Replay from page 1';
+      if (!quizShown) {
+        quizShown = true;
+        setTimeout(() => Q.quiz($('#s5quiz'), {
+          q: 'A page has just been downloaded and parsed. Which check runs on it first?',
+          options: ['Content Seen?, on the page’s content', 'URL Seen?, on the page’s own address', 'Both at once, in two parallel lanes'],
+          correct: 0, xp: 15,
+          good: 'Content Seen? checks the page itself. URL Seen? only runs later, on the links pulled out of a page that survived.',
+          bad: 'The page first meets <b>Content Seen?</b>. URL Seen? works on the <i>extracted links</i>, further down the pipe, and only for pages that weren’t duplicates.',
+          onDone: () => setTimeout(() => Q.clearStage(5), 900),
+        }), 400);
+      }
+    } else {
+      phase = 0; $('#predBox').innerHTML = ''; busyR = false; $('#replayBtn').disabled = false; $('#replayBtn').textContent = '▶ Run page 1';
+      return $('#replayBtn').onclick();
+    }
+    busyR = false; $('#replayBtn').disabled = false;
+  };
+});
+
+/* ================= STAGE 6: boss ================= */
+Q.onStage(6, () => Q.boss($('#boss'), {
+  name: '🕸️ The Leaky Pipeline',
+  xp: 12,
+  choices: [
+    { k: 'cseen', label: 'Content Seen?', sub: 'duplicate pages' },
+    { k: 'useen', label: 'URL Seen?', sub: 'duplicate URLs' },
+    { k: 'filter', label: 'URL Filter', sub: 'unwanted links' },
+    { k: 'parser', label: 'Content Parser', sub: 'bad HTML' },
+  ],
+  scenarios: [
+    { e: '📰', t: 'One article, stored 40 times', d: 'The same news story lives on 40 mirror domains, and storage holds all 40 copies.', a: 'cseen', why: 'Different URLs, identical bytes. Only a content fingerprint check can see they’re the same page.' },
+    { e: '🔁', t: 'Round and round', d: 'Logs show /home → /about → /home → /about… fetched over and over, forever.', a: 'useen', why: 'Two pages link to each other. Remembering which URLs were already fetched or queued is what breaks the loop.' },
+    { e: '📦', t: 'Storage full of downloads', d: 'You only want HTML, but disk is filling with .zip and .mp4 files.', a: 'filter', why: 'File types we don’t want should be dropped as links, before anyone fetches them. That’s the URL Filter’s job.' },
+    { e: '🧩', t: 'Broken pages saved', d: 'Half-written pages with unclosed tags and cut-off bodies are landing in storage.', a: 'parser', why: 'The parser validates HTML and rejects malformed pages, so they never take up storage.' },
+    { e: '🚫', t: 'Blocklisted site crawled', d: 'A site on your blocklist turns up in the crawl logs.', a: 'filter', why: 'Blocklisted sites are filtered out at the link stage, so they never reach the frontier.' },
+    { e: '📋', t: '12 copies in the queue', d: 'The frontier holds the same URL twelve times.', a: 'useen', why: 'Before a link joins the frontier, URL Seen? checks whether it’s already there or already fetched.' },
+    { e: '🔐', t: 'http and https twins', d: 'Every page is stored twice, once from http:// and once from https://, with identical bytes.', a: 'cseen', why: 'The URLs differ, so URL Seen? lets both in. Content Seen? catches the identical bytes. Bonus point: normalising URLs (one scheme) would catch it even earlier.' },
+  ],
+  outro: 'Same page under two URLs? Content Seen?. Same URL twice? URL Seen?. Shouldn’t be crawled at all? URL Filter. Broken HTML? Parser.',
+  onDone: () => Q.clearStage(6),
+}));
+
+/* ================= STAGE 7: interview drill ================= */
+Q.onStage(7, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"OK, scope agreed. Walk me through the high-level design of your crawler."</i>',
+  placeholder: 'We start from seed URLs…',
+  model: '"We start from a set of seed URLs, split by country and topic for coverage, and load them into the URL Frontier, which is basically a queue of URLs still to fetch. HTML Downloaders take URLs from it, look up each host’s IP through a DNS resolver, and fetch the page. A Content Parser validates the HTML. Then Content Seen? hashes the page and drops it if we already have that fingerprint, which matters because something like 30% of pages are duplicates. New pages go to Content Storage, mostly on disk with hot pages cached, and to the URL Extractor, which turns relative links into absolute URLs. The URL Filter removes unwanted file types, error links and blocklisted sites. URL Seen? then drops any URL we’ve already fetched or queued, using a hash table, or a Bloom filter if memory is tight and we can accept a few missed pages. Whatever survives is recorded in URL Storage and goes back into the frontier, and the loop repeats."',
+  checks: [
+    'I named the frontier, downloader, DNS, parser, both "seen?" checks, extractor, filter and both stores',
+    'I explained that Content Seen? compares hashes (fingerprints), not whole pages',
+    'I named a Bloom filter or hash table for URL Seen? and its trade-off',
+    'I closed the loop: new URLs go back into the frontier',
+  ],
+  onDone: () => Q.clearStage(7),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

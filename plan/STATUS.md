@@ -2,7 +2,7 @@
 
 Every chapter of *System Design Interview* Vol. 1 as a world of quests. Ticked = done. Regenerate: `python3 plan/tools/status.py`.
 
-**53 of 83 quests built** · 40 live on the map · 13 built, awaiting world review · 13 being built (draft on disk, not verified) · 17 not started.
+**53 of 83 quests built** · 46 live on the map · 7 built, awaiting world review · 15 being built (draft on disk, not verified) · 15 not started.
 
 Legend: `[x]` done · `[ ]` not done. A world is **done** when every quest is built, the world review has run, its cheat sheet
 exists, and its quests are `ready: true` on the map.
@@ -85,7 +85,7 @@ exists, and its quests are `ready: true` on the map.
 ## ⬜ World 9 · Design a Web Crawler — *Spider Web Wilds*
 
 - [ ] `0901` 9.1 · [Release the Spider](../lessons/0901-web-crawler-scope-and-estimates.html) — being built (unverified draft)
-- [ ] `0902` 9.2 · [Assemble the Spider](../lessons/0902-web-crawler-components-and-workflow.html) — not started
+- [ ] `0902` 9.2 · [Assemble the Spider](../lessons/0902-web-crawler-components-and-workflow.html) — being built (unverified draft)
 - [ ] `0903` 9.3 · [Taming the Frontier](../lessons/0903-web-crawler-url-frontier.html) — not started
 - [ ] `0904` 9.4 · [Fast Fangs, Thick Skin](../lessons/0904-web-crawler-downloader-and-robustness.html) — being built (unverified draft)
 - [x] `0905` 9.5 · [Beware the Spider Traps](../lessons/0905-web-crawler-traps-and-extensibility.html) — built · needs world review
@@ -105,20 +105,20 @@ exists, and its quests are `ready: true` on the map.
 
 - [ ] `1101` 11.1 · [Two Rivers](../lessons/1101-news-feed-scope-and-flows.html) — being built (unverified draft)
 - [ ] `1102` 11.2 · [Push, Pull, or Both](../lessons/1102-news-feed-fanout-push-vs-pull.html) — being built (unverified draft)
-- [ ] `1103` 11.3 · [The Fanout Factory](../lessons/1103-news-feed-publishing-pipeline.html) — not started
+- [ ] `1103` 11.3 · [The Fanout Factory](../lessons/1103-news-feed-publishing-pipeline.html) — being built (unverified draft)
 - [ ] `1104` 11.4 · [Hydrate the Feed](../lessons/1104-news-feed-retrieval-and-caches.html) — not started
 - [ ] `1105` BOSS · [Design It Live: News Feed](../lessons/1105-news-feed-boss-design-it-live.html) — not started
 - [ ] World review + cheat sheet
 
-## ⬜ World 12 · Design a Chat System — *Chatterbox Citadel*
+## ✅ World 12 · Design a Chat System — *Chatterbox Citadel*
 
-- [x] `1201` 12.1 · [Open the Pipe](../lessons/1201-chat-connections.html) — built · needs world review
-- [x] `1202` 12.2 · [The Switchboard](../lessons/1202-chat-high-level-design.html) — built · needs world review
-- [x] `1203` 12.3 · [The Message Vault](../lessons/1203-chat-storage-and-ids.html) — built · needs world review
-- [x] `1204` 12.4 · [Special Delivery](../lessons/1204-chat-message-flows.html) — built · needs world review
-- [x] `1205` 12.5 · [The Green Dot](../lessons/1205-chat-online-presence.html) — built · needs world review
-- [x] `1206` BOSS · [Design It Live: Chat](../lessons/1206-chat-boss-design-it-live.html) — built · needs world review
-- [ ] World review + cheat sheet
+- [x] `1201` 12.1 · [Open the Pipe](../lessons/1201-chat-connections.html) — live
+- [x] `1202` 12.2 · [The Switchboard](../lessons/1202-chat-high-level-design.html) — live
+- [x] `1203` 12.3 · [The Message Vault](../lessons/1203-chat-storage-and-ids.html) — live
+- [x] `1204` 12.4 · [Special Delivery](../lessons/1204-chat-message-flows.html) — live
+- [x] `1205` 12.5 · [The Green Dot](../lessons/1205-chat-online-presence.html) — live
+- [x] `1206` BOSS · [Design It Live: Chat](../lessons/1206-chat-boss-design-it-live.html) — live
+- [x] World review + cheat sheet — [ch12-chat-cheatsheet.html](../reference/ch12-chat-cheatsheet.html)
 
 ## ⬜ World 13 · Design a Search Autocomplete System — *Typeahead Tower*
 

@@ -923,7 +923,7 @@ Q.onStage(3, () => {
 /* ================= STAGE 4: who rides the ring ================= */
 Q.onStage(4, () => {
   const goals = new Set();
-  let quizShown = false, magPredicted = false, magDone = false;
+  let quizShown = false;
   const SYS = [
     { k: 'dyn', name: 'Amazon Dynamo', h: 'item key → MD5', p: 'a coordinator node, plus the next distinct nodes clockwise for copies',
       why: `Dynamo hashes each key with MD5. The first node clockwise coordinates it, and the next distinct nodes hold the copies (its "preference list"; replication is Quest 6.3).${CITE(2, DYNAMO)}`,
@@ -967,7 +967,8 @@ Q.onStage(4, () => {
 
   /* --- Maglev toy --- */
   const M = 7, PERM = [[5, 0, 2, 4, 6, 1, 3], [2, 1, 0, 6, 5, 4, 3], [0, 3, 6, 2, 5, 1, 4]], OS = [[5, 2], [2, 6], [0, 3]];
-  let G, before = null, killed = false, slotFound = false;
+  // round state (reset by ↻) vs. once-per-visit flags (prediction resolved, slot XP given)
+  let G, before = null, killed = false, slotFound = false, filling = false, magPick = -1, predResolved = false, slotAwarded = false;
   function fresh(alive) { return { alive, next: [0, 0, 0], entry: Array(M).fill(-1), n: 0, turn: 0, tried: [new Set(), new Set(), new Set()], won: [new Set(), new Set(), new Set()] }; }
   function step(g, log) {
     const i = g.alive[g.turn % g.alive.length], skipped = [];
@@ -980,35 +981,35 @@ Q.onStage(4, () => {
   function renderMag(flash) {
     $('#pref4').innerHTML = [0, 1, 2].map(i => {
       const dead = !G.alive.includes(i);
-      return `<div class="prow" style="${dead ? 'opacity:.35' : ''}"><div class="lab"><b style="color:${SC(i)}">B${i}</b><span>offset ${OS[i][0]}, skip ${OS[i][1]}${dead ? ' · 💀 dead' : ''}</span></div><div class="pcells">${PERM[i].map((s, j) => {
+      return `<div class="prow" style="${dead ? 'opacity:.35' : ''}"><div class="lab"><b style="color:${SC(i)}">B${i}</b><span>offset ${OS[i][0]}, skip ${OS[i][1]} · preference order${dead ? ' · 💀 dead' : ''}</span></div><div class="pcells">${PERM[i].map((s, j) => {
         const won = G.won[i].has(j), tried = G.tried[i].has(j), nx = !dead && G.n < M && j === G.next[i] && G.alive[G.turn % G.alive.length] === i;
         return `<div class="pc${won ? ' won' : ''}${tried ? ' tried' : ''}${nx ? ' next' : ''}" style="${won ? `background:${SC(i)}` : ''}">${s}</div>`;
       }).join('')}</div></div>`;
     }).join('');
+    const tappable = killed && !slotFound;
     $('#slots4').innerHTML = G.entry.map((o, s) => {
-      const was = killed && before ? before[s] : -1, changed = killed && was !== o;
-      return `<button class="slot${o >= 0 ? ' own' : ''}${flash === s ? ' flash' : ''}" data-s="${s}" style="${o >= 0 ? `background:${SC(o)}` : ''}" ${killed && !slotFound ? '' : 'disabled'} aria-label="Slot ${s}${o >= 0 ? ', backend B' + o : ', empty'}${changed ? ', was B' + was : ''}"><small>${s}</small>${o >= 0 ? 'B' + o : '·'}${killed ? `<span class="was">was B${was}</span>` : ''}</button>`;
+      const was = killed && before ? before[s] : -1;
+      return `<button class="slot${o >= 0 ? ' own' : ''}${flash === s ? ' flash' : ''}${slotFound && s === 6 ? ' picked' : ''}" data-s="${s}" style="${o >= 0 ? `background:${SC(o)}` : ''}" ${tappable ? '' : 'disabled'} aria-label="Slot ${s}${o >= 0 ? ', backend B' + o : ', empty'}${killed ? ', was B' + was : ''}"><small>${s}</small>${o >= 0 ? 'B' + o : '·'}${killed ? `<span class="was">was B${was}</span>` : ''}</button>`;
     }).join('');
     const cnt = [0, 1, 2].map(i => G.entry.filter(x => x === i).length);
-    $('#counts4').innerHTML = G.n ? `Slots: ${[0, 1, 2].filter(i => G.alive.includes(i)).map(i => `<b style="color:${SC(i)}">B${i}</b> ${cnt[i]}`).join(' · ')}` : '';
-    $('#mnext4').disabled = !magPredicted || G.n >= M || killed;
-    $('#mfill4').disabled = !magPredicted || G.n >= M || killed;
+    $('#counts4').innerHTML = G.n ? `Slots: ${G.alive.map(i => `<b style="color:${SC(i)}">B${i}</b> ${cnt[i]}`).join(' · ')}` : '';
+    const canStep = magPick >= 0 && G.n < M && !killed && !filling;
+    $('#mnext4').disabled = !canStep; $('#mfill4').disabled = !canStep;
+    $('#mkill4').style.display = G.n >= M && !killed ? '' : 'none';
     $$('#slots4 .slot').forEach(b => b.onclick = () => tapSlot(+b.dataset.s, b));
   }
   function filled() {
-    if (magDone) return;
-    magDone = true;
-    const cnt = [0, 1, 2].map(i => G.entry.filter(x => x === i).length).sort().join('/');
-    const ok = magPick === 0, opts = $('#mpred4 .opts');
-    const btn = $(`.opt[data-i="${magPick}"]`, opts);
+    logTo('mlog4', 'Table full. Now press 💀 B1 dies.', 'g');
+    renderMag();
+    if (predResolved) return;
+    predResolved = true;
+    const ok = magPick === 0, opts = $('#mpred4 .opts'), btn = $(`.opt[data-i="${magPick}"]`, opts);
     btn.classList.add(ok ? 'right' : 'wrong'); if (!ok) $('.opt[data-i="0"]', opts).classList.add('right');
     const ex = $('#mpred4 .explain'); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
-    ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + `The split is ${cnt}: B0 3, B1 2, B2 2. Taking turns means nobody can get more than one slot ahead of anyone else, so every backend ends with M/N slots, give or take one. A ring with 3 random points could easily hand one server half the space.`;
+    ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + 'B0 got 3 slots, B1 and B2 got 2 each. Taking turns means no backend can get more than one slot ahead of another, so each ends with M/N slots, give or take one. A ring with 3 random points could easily hand one server half the space.';
     ok ? Q.addXP(20, btn) : Q.loseHeart(btn);
-    $('#mkill4').style.display = '';
     if (markGoal('#s4goals', 'mag', goals)) maybeQuiz();
   }
-  let magPick = -1;
   function setupPredict() {
     const box = $('#mpred4');
     box.innerHTML = `<h3 style="font-size:16px;margin:14px 0 0">Predict: with 7 slots and 3 backends taking turns, how many slots does each backend end up with?</h3><div class="opts"></div><div class="explain"></div>`;
@@ -1016,32 +1017,36 @@ Q.onStage(4, () => {
     shuffle(['2, 2 and 3 slots, in some order', '1, 1 and 5 slots, in some order', '0, 3 and 4 slots, in some order'].map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
       const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
       b.onclick = () => {
-        $$('.opt', opts).forEach(x => x.disabled = true); b.classList.add('picked'); magPick = i; magPredicted = true;
+        if (magPick >= 0) return;
+        $$('.opt', opts).forEach(x => x.disabled = true); b.classList.add('picked'); magPick = i;
         logTo('mlog4', 'Prediction locked in. Press ▶ Next turn: B0, B1, B2 take turns.');
         renderMag();
       };
       opts.appendChild(b);
     });
   }
-  function turn() { if (G.n >= M) return; const c = step(G, true); renderMag(c); if (G.n >= M) { logTo('mlog4', 'Table full.', 'g'); filled(); } }
-  $('#mnext4').onclick = turn;
-  $('#mfill4').onclick = async () => { $('#mfill4').disabled = true; $('#mnext4').disabled = true; while (G.n < M) { const c = step(G, true); renderMag(c); if (!Q.reduced) await sleep(280); } logTo('mlog4', 'Table full.', 'g'); filled(); };
+  $('#mnext4').onclick = () => { if (G.n >= M || filling) return; const c = step(G, true); renderMag(c); if (G.n >= M) filled(); };
+  $('#mfill4').onclick = async () => {
+    if (filling) return; filling = true; renderMag();
+    while (G.n < M) { const c = step(G, true); renderMag(c); if (!Q.reduced) await sleep(280); }
+    filling = false; filled();
+  };
   $('#mkill4').onclick = () => {
     before = G.entry.slice();
     G = fresh([0, 2]); while (G.n < M) step(G, false);
-    killed = true; $('#mkill4').style.display = 'none';
+    killed = true;
     logTo('mlog4', '💀 B1 died. Rebuilt the table with B0 and B2 taking turns.', 'w');
-    logTo('mlog4', 'Now tap the slot that changed owner even though its backend is still alive.');
+    logTo('mlog4', 'Tap the slot that changed owner even though its backend is still alive.');
     renderMag();
   };
   function tapSlot(s, b) {
     if (!killed || slotFound) return;
     const was = before[s], now = G.entry[s];
     if (s === 6) {
-      slotFound = true; b.classList.add('picked');
+      slotFound = true;
       logTo('mlog4', 'Slot 6: B0 → B2. B0 is alive and well, but its slot moved anyway. That\'s Maglev\'s small extra disruption.', 'g');
-      Q.addXP(15, b); $('#c4mag').style.display = 'block'; renderMag();
-      $('#slots4 .slot[data-s="6"]').classList.add('picked');
+      if (!slotAwarded) { slotAwarded = true; Q.addXP(15, b); }
+      $('#c4mag').style.display = 'block'; renderMag();
       if (markGoal('#s4goals', 'slot', goals)) maybeQuiz();
     } else if (was === 1) {
       logTo('mlog4', `Slot ${s} did change (B1 → B${now}), but B1 died, so it had to. Look for a survivor's slot that moved.`);
@@ -1052,13 +1057,11 @@ Q.onStage(4, () => {
     }
   }
   $('#mreset4').onclick = () => {
-    G = fresh([0, 1, 2]); before = null; killed = false;
-    if (magDone) { magDone = false; magPredicted = true; magPick = 0; setupPredictDone(); }
-    slotFound = false; $('#mkill4').style.display = 'none';
-    $('#mlog4').innerHTML = '<div>Reset. Press ▶ Next turn.</div>';
+    if (filling) return;
+    G = fresh([0, 1, 2]); before = null; killed = false; slotFound = false;
+    $('#mlog4').innerHTML = `<div>Reset. ${magPick >= 0 ? 'Press ▶ Next turn.' : 'Predict first, then press Next turn.'}</div>`;
     renderMag();
   };
-  function setupPredictDone() { $('#mpred4').innerHTML = '<p class="small muted" style="margin:12px 0 0">Replay: fill the table again (practice).</p>'; magDone = true; }
   G = fresh([0, 1, 2]);
   setupPredict(); renderMag();
 
