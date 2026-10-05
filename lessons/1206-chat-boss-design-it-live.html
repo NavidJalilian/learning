@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Design It Live: Chat</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: interview clock, chat, framework strip, question deck, architecture builder, matching map, flow recap, wrap-up, scorecard */
+:root { --wire: #5a48f0; --ws: #0d9a96; --http: #c27400; --frame: #b9b2a3; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --wire: #8f82ff; --ws: #31d3c8; --http: #ffb547; --frame: #3c4066; }
+}
+:root[data-theme="dark"] { --wire: #8f82ff; --ws: #31d3c8; --http: #ffb547; --frame: #3c4066; }
+
+.stage, .victory { scroll-margin-top: 150px; }
+@media (max-width: 560px) { .stage-b { padding: 18px 14px 22px; } .stage-h { padding: 16px 14px; } }
+
+/* sticky interview clock */
+.ivbar { position: sticky; top: var(--hudH, 66px); z-index: 15; margin-top: 22px; display: flex; align-items: center; gap: 12px; padding: 8px 14px; background: color-mix(in srgb, var(--panel) 90%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); font-size: 13px; }
+.ivbar .clk { font-family: var(--mono); font-weight: 700; font-size: 16px; white-space: nowrap; transition: color .3s; }
+.ivbar .clk small { color: var(--muted); font-weight: 400; font-size: 12px; }
+.ivbar.over .clk { color: var(--warn); }
+.ivbar .trk { flex: 1; min-width: 50px; height: 8px; border-radius: 99px; background: var(--bg-2); position: relative; overflow: hidden; border: 1px solid var(--line); }
+.ivbar .fill { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, var(--teal), var(--accent)); transition: width .6s cubic-bezier(.2,.8,.2,1); border-radius: 99px; }
+.ivbar.over .fill { background: linear-gradient(90deg, var(--warn), var(--bad)); }
+.ivbar .stp { font-weight: 700; white-space: nowrap; color: var(--accent); }
+.ivbar .stp small { color: var(--muted); font-weight: 600; }
+@media (max-width: 560px) { .ivbar { gap: 9px; padding: 7px 11px; } .ivbar .stp small { display: none; } }
+
+/* chat with the interviewer */
+.chat { display: flex; flex-direction: column; gap: 10px; margin: 14px 0; max-height: 340px; overflow-y: auto; padding: 6px 2px; }
+.chat:empty { display: none; }
+.msg { display: flex; gap: 8px; align-items: flex-end; max-width: 90%; animation: rise .3s; }
+.msg .av { font-size: 20px; width: 34px; height: 34px; border-radius: 50%; background: var(--accent-soft); display: grid; place-items: center; flex: none; }
+.msg .bub { padding: 9px 13px; border-radius: 16px; font-size: 15px; line-height: 1.45; }
+.msg.iv .bub { background: var(--bg-2); border-bottom-left-radius: 4px; }
+.msg.me { align-self: flex-end; }
+.msg.me .bub { background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+.msg.me .bub code { background: rgba(255,255,255,.18); color: #fff; }
+.msg .who { display: block; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin-bottom: 2px; }
+.typing i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); margin: 0 2px; animation: blink 1s infinite; }
+.typing i:nth-child(2) { animation-delay: .15s; } .typing i:nth-child(3) { animation-delay: .3s; }
+@keyframes blink { 50% { opacity: .2; } }
+
+/* framework strip */
+.fw { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 14px 0 6px; }
+@media (max-width: 640px) { .fw { grid-template-columns: repeat(2, 1fr); } }
+.fw div { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--bg); }
+.fw b { display: block; font-size: 14px; }
+.fw span { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.fw i { font-style: normal; font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: .08em; text-transform: uppercase; }
+
+/* step 1: question deck + requirement board */
+.qdeck { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+@media (max-width: 560px) { .qdeck { grid-template-columns: 1fr; } }
+.qdeck .opt { font-size: 14.5px; padding: 10px 12px; min-height: 44px; }
+.qdeck .opt.waste { border-color: var(--bad); background: var(--bad-soft); opacity: .75; }
+.reqs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin: 12px 0 4px; }
+.req { border: 1.5px dashed var(--line); border-radius: 10px; padding: 7px 10px; font-size: 13px; color: var(--muted); min-height: 36px; display: flex; align-items: center; gap: 6px; transition: background .3s, border-color .3s; }
+.req.got { border-style: solid; border-color: var(--good); background: var(--good-soft); color: var(--ink); font-weight: 600; animation: rise .35s; }
+.lbl { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-top: 16px; }
+
+/* step 2: architecture builder */
+.sim svg.arch { max-width: 480px; margin: 0 auto; }
+.arch .frame { fill: none; stroke: var(--frame); stroke-width: 1.5; stroke-dasharray: 5 5; }
+.arch .frl { fill: var(--muted); font: 700 10.5px var(--font); letter-spacing: .08em; text-transform: uppercase; }
+.arch .ghost { fill: none; stroke: var(--line); stroke-width: 2; stroke-dasharray: 6 5; }
+.arch .gq { fill: var(--muted); font: 700 20px var(--font); text-anchor: middle; opacity: .55; }
+.arch .nd rect { fill: var(--panel); stroke: var(--accent); stroke-width: 2; }
+.arch .nd.user rect { fill: var(--accent-soft); }
+.arch .nd text { fill: var(--ink); font: 600 12.5px var(--font); text-anchor: middle; }
+.arch .nd text .s { fill: var(--muted); font-weight: 500; font-size: 10.5px; }
+.arch .nd.pop { animation: rise .35s; }
+.arch .wire { stroke: var(--wire); stroke-width: 2.5; fill: none; stroke-linecap: round; opacity: .7; }
+.arch .cwire { stroke: var(--muted); stroke-width: 2.5; fill: none; stroke-dasharray: 6 5; }
+.arch .cwire.http { stroke: var(--http); stroke-dasharray: none; }
+.arch .cwire.ws { stroke: var(--ws); stroke-dasharray: none; stroke-width: 3.5; }
+.arch .pillbg { fill: var(--panel); stroke: var(--muted); stroke-width: 1.5; }
+.arch .pill-http .pillbg { stroke: var(--http); }
+.arch .pill-ws .pillbg { stroke: var(--ws); }
+.arch .pilltx { fill: var(--muted); font: 700 10.5px var(--mono); text-anchor: middle; }
+.arch .pill-http .pilltx { fill: var(--http); }
+.arch .pill-ws .pilltx { fill: var(--ws); }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+@media (max-width: 640px) { .tiles { grid-template-columns: 1fr 1fr; } }
+.tiles .opt { text-align: center; font-weight: 600; font-size: 14px; padding: 10px 6px; min-height: 52px; }
+.tiles .opt small { display: block; font-weight: 500; font-size: 12px; color: var(--muted); }
+.opt.nope { animation: shake .4s; }
+.lrow { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; background: var(--bg); font-size: 14.5px; }
+@media (max-width: 560px) { .lrow { grid-template-columns: 1fr; } }
+.lrow .row { flex-wrap: nowrap; }
+.lrow .opt { padding: 8px 12px; font-size: 13.5px; min-height: 42px; white-space: nowrap; font-family: var(--mono); }
+.lrows { display: grid; gap: 8px; margin-top: 12px; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.legend span::before { content: ""; display: inline-block; width: 18px; height: 0; border-top: 3px solid var(--muted); margin-right: 6px; vertical-align: 3px; }
+.legend .lh::before { border-color: var(--http); }
+.legend .lw::before { border-color: var(--ws); }
+.legend .li::before { border-color: var(--wire); }
+
+/* step 3: matching map */
+.mgrid { position: relative; display: grid; grid-template-columns: 1fr 1fr; column-gap: 34px; margin-top: 12px; }
+.mcol { display: flex; flex-direction: column; gap: 8px; position: relative; z-index: 1; }
+.mcol h4 { margin: 0 0 2px; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.mcol .opt { font-size: 14px; padding: 9px 11px; min-height: 44px; line-height: 1.3; }
+.mcol .opt.sel { border-color: var(--warn); background: var(--warn-soft); }
+.mcol .opt.paired { border-color: var(--good); background: var(--good-soft); }
+.mcol .opt .tagn { display: inline-grid; place-items: center; min-width: 20px; height: 20px; border-radius: 99px; background: var(--good); color: #fff; font-size: 11px; font-weight: 700; margin-right: 6px; vertical-align: 1px; }
+.mlines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; overflow: visible; }
+.mlines path { fill: none; stroke: var(--good); stroke-width: 2.5; stroke-linecap: round; }
+@media (max-width: 560px) { .mgrid { column-gap: 20px; } .mcol .opt { font-size: 13px; padding: 8px 9px; } }
+
+/* step 3: 1-on-1 flow recap */
+.sim svg.flow { max-width: 480px; margin: 0 auto; }
+.flow .fl { stroke: var(--line); stroke-width: 3; fill: none; stroke-linecap: round; transition: stroke .3s; }
+.flow .fl.hot { stroke: var(--accent); }
+.flow .fl.off { stroke-dasharray: 6 5; }
+.flow .fn rect { fill: var(--panel); stroke: var(--muted); stroke-width: 2; transition: stroke .3s, fill .3s; }
+.flow .fn.hot rect { stroke: var(--accent); fill: var(--accent-soft); }
+.flow .fn text { fill: var(--ink); font: 600 12.5px var(--font); text-anchor: middle; }
+.flow .fn text .s { fill: var(--muted); font-weight: 500; font-size: 10.5px; }
+.flow .stepn { fill: var(--accent); font: 700 11px var(--mono); text-anchor: middle; }
+.flow .pkt { fill: var(--xp); stroke: var(--ink); stroke-width: 1.5; }
+
+/* step 5: wrap-up */
+.wrapcards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+@media (max-width: 560px) { .wrapcards { grid-template-columns: 1fr; } }
+.wrapcards .opt { font-size: 14.5px; min-height: 44px; }
+.wrapcards .opt small { display: block; font-size: 12.5px; color: var(--muted); font-weight: 500; }
+.wrapcards .opt .verdict { display: block; font-size: 13px; margin-top: 4px; color: var(--muted); }
+
+/* scorecard */
+.scorecard { margin-top: 18px; border: 1px solid var(--line); border-radius: 18px; padding: 18px; background: var(--bg); }
+.scorecard h3 { margin: 0 0 2px; font-size: 19px; }
+.sc-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+.sc-stats div { border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; background: var(--panel); text-align: center; }
+.sc-stats b { display: block; font-size: 20px; }
+.sc-stats span { font-size: 12px; color: var(--muted); }
+.sc-row { display: grid; grid-template-columns: 150px 1fr auto; gap: 12px; align-items: center; margin-top: 12px; font-size: 14.5px; }
+@media (max-width: 560px) { .sc-row { grid-template-columns: 1fr auto; } .sc-row .sc-bar { grid-column: 1 / -1; grid-row: 2; } }
+.sc-bar { height: 12px; background: var(--bg-2); border-radius: 99px; overflow: hidden; border: 1px solid var(--line); }
+.sc-bar div { height: 100%; width: 0; border-radius: 99px; background: linear-gradient(90deg, var(--teal), var(--accent)); transition: width .9s cubic-bezier(.2,.8,.2,1); }
+.verd { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 99px; white-space: nowrap; background: var(--bg-2); color: var(--muted); }
+.verd.v3 { background: var(--good-soft); color: var(--good); }
+.verd.v2 { background: var(--teal-soft); color: var(--teal); }
+.verd.v1 { background: var(--warn-soft); color: var(--warn); }
+.verd.v0 { background: var(--bad-soft); color: var(--bad); }
+.sc-overall { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.sc-overall b { font-size: 22px; }
+.sc-time { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 12px; }
+.sc-time td, .sc-time th { padding: 5px 6px; border-bottom: 1px solid var(--line); text-align: left; }
+.sc-time th { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.sc-time .ok { color: var(--good); font-weight: 700; } .sc-time .ov { color: var(--warn); font-weight: 700; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Boss · Design a Chat System</div>
+    <h1>Design It Live: Chat</h1>
+    <p class="lede">One prompt, one interviewer, 45 minutes on the clock. Everything from Quests 12.1–12.5 comes back, but this time nobody tells you which topic is next.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> given "design a chat system", you can scope it in 5 minutes, sketch the high-level design, deep-dive into service discovery, message flows and presence, handle "what happens when X fails?" follow-ups, and wrap up with sensible extensions.</p></div>
+  </section>
+
+  <div class="ivbar" id="ivbar" aria-live="polite">
+    <span class="clk">🕐 <b id="ivClock">00:00</b> <small>/ 45:00</small></span>
+    <div class="trk"><div class="fill" id="ivFill"></div></div>
+    <span class="stp" id="ivStep">Step 1 <small>· scope</small></span>
+  </div>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Scope it</h2><div class="sub">Step 1 · understand the problem (3–10 min)</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Every interview in the book follows the same four steps<a class="cite" href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener">[2]</a>. The clock bar above counts <b>game-minutes</b>, and every move costs some. Good moves earn <i>signal</i>: the evidence an interviewer writes down to decide "hire" or "no hire".</p>
+      <div class="fw">
+        <div><i>Step 1</i><b>Scope the problem</b><span>3–10 min</span></div>
+        <div><i>Step 2</i><b>High-level design</b><span>10–15 min</span></div>
+        <div><i>Step 3</i><b>Deep dive</b><span>10–25 min</span></div>
+        <div><i>Step 4</i><b>Wrap up</b><span>3–5 min</span></div>
+      </div>
+      <div class="chat" id="chat1"></div>
+      <div id="s1open"></div>
+      <div id="deckWrap" style="display:none">
+        <div class="lbl">Requirements board</div>
+        <div class="reqs" id="reqs"></div>
+        <div class="lbl">Your questions: ask the ones that shape the design (time-wasters burn 2 minutes)</div>
+        <div class="qdeck" id="qdeck"></div>
+      </div>
+      <div id="s1lock"></div>
+      <div class="callout warn" id="s1caveat" style="display:none"><b>Honest caveat.</b> The minute ranges are the book's suggestions; the 45-minute game clock is our own framing. The book's chat chapter also skips back-of-the-envelope maths (rough traffic and storage numbers). Some interviewers ask anyway, so have one ready. For example, <i>if</i> each user sends 40 messages a day (our assumption, not the book's), 50 million users send 2 billion messages a day, about 23,000 a second on average.</div>
+      <div class="row" id="s1replay" style="display:none;margin-top:14px"><button class="btn">↻ Replay the scoping</button></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Sketch it</h2><div class="sub">Step 2 · high-level design and buy-in (10–15 min)</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Time to draw. Tap the components that belong on the whiteboard; each lands in its slot. Two tiles are traps, and each costs a heart. Then label how the users connect, and defend your choices.</p>
+      <div class="chat" id="chat2"></div>
+      <div class="sim">
+        <svg class="arch" id="arch" viewBox="0 0 480 404" role="img" aria-label="Whiteboard: the chat system's high-level design"></svg>
+        <div class="sim-bar"><span class="legend"><span class="lh">HTTP</span><span class="lw">WebSocket</span><span class="li">internal</span></span><span class="mono small" id="archStatus">0 / 7 components</span></div>
+      </div>
+      <div class="tiles" id="tiles"></div>
+      <div id="s2links"></div>
+      <div id="s2q1"></div>
+      <div id="s2q2"></div>
+      <div id="s2q3"></div>
+      <div class="callout warn" id="s2caveat" style="display:none"><b>Honest caveat: name the access pattern, then the product.</b> The book cites Facebook Messenger on HBase and Discord on Cassandra. Both have moved on since. Messenger moved off HBase to MySQL with the MyRocks engine around 2018, and Discord moved from Cassandra to ScyllaDB in 2022<a class="cite" href="https://discord.com/blog/how-discord-stores-trillions-of-messages" target="_blank" rel="noopener">[4]</a>. The reasoning still holds: a huge, append-heavy history, read mostly by "latest messages in this channel". Say that first, then name a store.</div>
+      <div class="row" id="s2replay" style="display:none;margin-top:14px"><button class="btn">↻ Rebuild from a blank whiteboard</button></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>The technique map</h2><div class="sub">Step 3 · every requirement needs a mechanism</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>In the deep dive, each promise from Step 1 needs a <b>mechanism</b> that delivers it. Connect each requirement on the left to its mechanism on the right: tap one, then the other. A wrong pair costs a heart. When the map is done, you'll trace one message through the system.</p>
+      <div class="chat" id="chat3"></div>
+      <div class="mgrid" id="mgrid"><svg class="mlines" id="mlines" aria-hidden="true"></svg><div class="mcol" id="mleft"><h4>Requirement</h4></div><div class="mcol" id="mright"><h4>Mechanism</h4></div></div>
+      <div class="explain" id="mex"></div>
+      <div id="s3pred"></div>
+      <div id="flowWrap" style="display:none">
+        <div class="sim">
+          <svg class="flow" id="flow" viewBox="0 0 480 300" role="img" aria-label="The 1-on-1 message flow from Alice to Bob"></svg>
+          <div class="sim-bar"><span class="small"><b>Bob is</b> <span class="seg" id="bobSeg"><button data-b="on">online</button><button data-b="off" class="on">offline</button></span></span><button class="btn primary" id="playFlow">▶ Play the flow</button></div>
+          <div class="simlog" id="flowLog" aria-live="polite"></div>
+        </div>
+      </div>
+      <div class="callout warn" id="s3caveat" style="display:none"><b>Honest caveat: the cursor and the IDs don't quite fit.</b> The book picks a <i>local</i> sequence number for message IDs: unique only inside one 1-on-1 chat or group. But it syncs devices with a <i>single</i> <code>cur_max_message_id</code> per device. If IDs restart in every channel, one number can't say "what I've seen" across all of them. A strong answer keeps a cursor <b>per conversation</b> on each device, or gives each user's inbox its own sequence.</div>
+      <div class="row" id="s3replay" style="display:none;margin-top:14px"><button class="btn">↻ Shuffle and match again</button></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Boss: the curveball barrage</h2><div class="sub">Step 3 · "what happens when…?"</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Now Maya stops nodding and starts poking holes. Seven curveballs from across the chapter. Each answer takes about 1.5 game-minutes. A wrong one costs a heart and an extra minute of backtracking.</p>
+      <div class="cb" id="barrage"></div>
+      <div class="callout warn" id="s4caveat" style="display:none"><b>Honest caveats from the curveballs.</b> (1) The book's whole failure story is two lines: service discovery hands clients a new chat server, and messages are resent with "retry and queueing". <b>Jittered backoff</b> (each client waits a slightly random time before reconnecting) and <b>dedupe by a client-made message ID</b> are standard practice, but they go beyond the book. (2) Real chat stacks carry far more machinery: WhatsApp runs on Erlang, and Discord on Elixir with ScyllaDB<a class="cite" href="https://discord.com/blog/how-discord-stores-trillions-of-messages" target="_blank" rel="noopener">[4]</a>. Expect routing tables, rate limits and per-user sequences that a 45-minute sketch leaves out.</div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Wrap it up</h2><div class="sub">Step 4 · the last 3–5 minutes</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book's rule: the interview isn't over when the diagram is done<a class="cite" href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener">[2]</a>. Use the last minutes to show you can see past the sketch. Pick the <b>five extensions the book suggests</b>. Each weak pick costs a heart.</p>
+      <div class="chat" id="chat5"></div>
+      <p class="small muted" id="wrapHint" style="margin:0">Strong picks: <b id="wrapCount">0</b> / 5</p>
+      <div class="wrapcards" id="wrapcards"></div>
+      <div id="s5q"></div>
+      <div class="callout warn" id="s5caveat" style="display:none"><b>Honest caveat: end-to-end encryption changes more than the book says.</b> WhatsApp uses the Signal protocol<a class="cite" href="https://www.whatsapp.com/security/WhatsApp-Security-Whitepaper.pdf" target="_blank" rel="noopener">[6]</a><a class="cite" href="https://signal.org/docs/" target="_blank" rel="noopener">[7]</a>. The server stores only ciphertext (scrambled bytes it has no key for). So server-side search, moderation and spam filtering get much harder. Multi-device sync gets harder too: the sender encrypts a separate copy for each of the recipient's devices.</div>
+      <div class="row" id="s5replay" style="display:none;margin-top:14px"><button class="btn">↻ Try the close again</button></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">The 60-second version + your scorecard</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div id="scorecard"></div>
+      <div class="row" id="s6replay" style="display:none;margin-top:14px"><button class="btn">↻ Write it again</button></div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Re-read the whole of <a href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener">Ch. 12 — Design a Chat System</a>, especially the adjusted high-level design figure, the 1-on-1 message flow and the wrap-up list. Pair it with the dos and don'ts in <a href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener">Ch. 3 — A Framework for System Design Interviews</a>. Then read Slack's <a href="https://slack.engineering/flannel-an-application-level-edge-cache-to-make-slack-scale/" target="_blank" rel="noopener">Flannel post</a>: it's the real system behind the book's "improve load time" point.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note</h4>
+      The book's design is a sketch sized for a 45-minute interview. Run it <b>out loud</b> once this week: set a timer, draw the whiteboard on paper, and answer each curveball from stage 4 without looking. Three deeper points to have ready. (1) Storage products change; access patterns don't. See how <a href="https://discord.com/blog/how-discord-stores-trillions-of-messages" target="_blank" rel="noopener">Discord stores trillions of messages</a>, bucketed by channel and time. (2) End-to-end encryption moves work to the clients. The <a href="https://www.whatsapp.com/security/WhatsApp-Security-Whitepaper.pdf" target="_blank" rel="noopener">WhatsApp white paper</a> shows how multi-device works when the server can't read anything. (3) Service discovery is a real coordination service. <a href="https://zookeeper.apache.org/" target="_blank" rel="noopener">ZooKeeper</a> stores which chat servers are alive and how busy each one is.
+    </div>
+    <div class="card2">
+      <h4>🗺️ Review this world</h4>
+      Weak spot on your scorecard? Replay the matching quest: <a href="1201-chat-connections.html">12.1 Open the Pipe</a> (polling vs WebSocket) · <a href="1202-chat-high-level-design.html">12.2 The Switchboard</a> (stateless vs stateful, service discovery) · <a href="1203-chat-storage-and-ids.html">12.3 The Message Vault</a> (KV store, tables, message IDs) · <a href="1204-chat-message-flows.html">12.4 Special Delivery</a> (1-on-1 flow, multi-device, groups) · <a href="1205-chat-online-presence.html">12.5 The Green Dot</a> (heartbeats, presence fan-out).
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"how would the design change for Discord-sized servers with 1 million members?"</i> or <i>"play the interviewer and grill me on presence."</i> A live mock round with follow-up questions is the best next step.
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 12 "Design a Chat System" (ByteByteGo).</li>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 3 "A Framework for System Design Interviews" (ByteByteGo).</li>
+        <li>Slack Engineering, "Flannel: An Application-Level Edge Cache to Make Slack Scale".</li>
+        <li>Discord blog, "How Discord Stores Trillions of Messages" (2023).</li>
+        <li>Apache ZooKeeper project site.</li>
+        <li>WhatsApp, "WhatsApp Encryption Overview" (technical white paper).</li>
+        <li>Signal, protocol documentation.</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '1206',
+  winTitle: 'You designed a chat system live',
+  badge: '👑 Badge: Chat Architect',
+  cheatsheet: '../reference/ch12-chat-cheatsheet.html',
+});
+const { sleep, shuffle } = Q;
+const CITE = (n, url) => `<a class="cite" href="${url}" target="_blank" rel="noopener">[${n}]</a>`;
+const BOOK = 'https://bytebytego.com/courses/system-design-interview/design-a-chat-system';
+const FLANNEL = 'https://slack.engineering/flannel-an-application-level-edge-cache-to-make-slack-scale/';
+const ZK = 'https://zookeeper.apache.org/';
+const WAPP = 'https://www.whatsapp.com/security/WhatsApp-Security-Whitepaper.pdf';
+const practice = n => Q.review || Q.isCleared(n);
+
+/* ================= interview record: clock + signals =================
+   Stored separately from the engine's progress, under its own key.
+   Each stage keeps { min, sig: { req|hld|dd|comm: [got, max] } } (stage 4 also keeps wins).
+   A stage's record is wiped the first time you act in it during a page load, so replays overwrite. */
+const IKEY = 'sdq:v1:1206-interview';
+const PAR = { 1: 8.5, 2: 11.5, 3: 5.5, 4: 10.5, 5: 3.5 };      // perfect-play minutes per stage
+const STEPS = [
+  { name: 'Step 1 · Scope', stages: [1], lo: 3, hi: 10 },
+  { name: 'Step 2 · High-level design', stages: [2], lo: 10, hi: 15 },
+  { name: 'Step 3 · Deep dive', stages: [3, 4], lo: 10, hi: 25 },
+  { name: 'Step 4 · Wrap up', stages: [5], lo: 3, hi: 5 },
+];
+function iload() { try { return JSON.parse(localStorage.getItem(IKEY) || '{}') || {}; } catch (_) { return {}; } }
+function isave(d) { try { localStorage.setItem(IKEY, JSON.stringify(d)); } catch (_) {} }
+if (!Q.review && ![1, 2, 3, 4, 5, 6].some(n => Q.isCleared(n))) { try { localStorage.removeItem(IKEY); } catch (_) {} }
+const begun = new Set();
+function tick(n, min, cat, got, max, extra) {
+  const d = iload();
+  if (!begun.has(n) || !d[n]) { begun.add(n); d[n] = { min: 0, sig: {} }; }
+  d[n].min += min;
+  if (cat) { const s = d[n].sig[cat] || [0, 0]; s[0] += got; s[1] += max; d[n].sig[cat] = s; }
+  if (extra) Object.assign(d[n], extra);
+  isave(d); renderBar();
+}
+const stageMin = (d, n) => d[n] ? d[n].min : (Q.isCleared(n) ? PAR[n] : 0);
+const fmt = m => { const s = Math.round(m * 60); return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; };
+function renderBar() {
+  const d = iload();
+  const total = [1, 2, 3, 4, 5].reduce((s, n) => s + stageMin(d, n), 0);
+  let cur = 1; while (cur <= 6 && Q.isCleared(cur)) cur++;
+  const st = STEPS.find(s => s.stages.includes(cur));
+  const spent = st ? st.stages.reduce((s, n) => s + stageMin(d, n), 0) : 0;
+  $('#ivClock').textContent = fmt(total);
+  $('#ivFill').style.width = Math.min(100, total / 45 * 100) + '%';
+  $('#ivbar').classList.toggle('over', !!(total > 45 || (st && spent > st.hi)));
+  const [a, b] = st ? st.name.split(' · ') : [cur === 6 ? 'Debrief' : 'Done', 'interview over'];
+  $('#ivStep').innerHTML = `${a} <small>· ${b.toLowerCase()}${st ? ` · ${fmt(spent)} of ${st.lo}–${st.hi}m` : ''}</small>`;
+}
+function setHudH() { const h = $('#hud'); if (h) document.documentElement.style.setProperty('--hudH', h.offsetHeight + 'px'); }
+addEventListener('resize', setHudH);
+const done = n => { Q.clearStage(n); renderBar(); };
+
+/* ================= chat helper ================= */
+function Chat(el) {
+  let queue = Promise.resolve(), first = true;
+  const add = (who, html) => {
+    const m = document.createElement('div'); m.className = 'msg ' + who;
+    m.innerHTML = who === 'iv' ? `<span class="av" aria-hidden="true">👩🏽‍💼</span><div class="bub">${html}</div>` : `<div class="bub">${html}</div>`;
+    el.appendChild(m); el.scrollTop = el.scrollHeight; return m;
+  };
+  return {
+    iv(html) {
+      queue = queue.then(async () => {
+        const m = add('iv', '<span class="typing" aria-label="typing"><i></i><i></i><i></i></span>');
+        await sleep(Q.reduced ? 0 : 420);
+        $('.bub', m).innerHTML = (first ? '<span class="who">Maya · interviewer</span>' : '') + html; first = false;
+        el.scrollTop = el.scrollHeight;
+      });
+      return queue;
+    },
+    me(html) { queue = queue.then(() => { add('me', html); }); return queue; },
+    clear() { el.innerHTML = ''; first = true; queue = Promise.resolve(); },
+  };
+}
+function nudge(b) { b.classList.remove('nope'); void b.offsetWidth; b.classList.add('nope'); }
+function tween(dur, fn) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 0) { fn(1); return res(); }
+    const t0 = performance.now();
+    const f = now => { const p = Math.min(1, (now - t0) / dur); fn(p); p < 1 ? requestAnimationFrame(f) : res(); };
+    requestAnimationFrame(f);
+  });
+}
+const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+
+/* ================= STAGE 1: scope it ================= */
+const ASK = [
+  { q: '1-on-1 chat, group chat, or both?', a: 'Both. And 1-on-1 messages should arrive with low latency.', r: ['💬 1-on-1 (low latency) + groups'], good: true },
+  { q: 'Mobile app, web app, or both?', a: 'Both. And one account can be logged in on several devices at the same time.', r: ['📱 Mobile + web', '🔁 Multi-device'], good: true },
+  { q: 'What scale should it support?', a: '50 million daily active users.', r: ['📈 50M DAU'], good: true },
+  { q: 'Is there a limit on group size?', a: 'Yes: at most 100 people per group.', r: ['👥 Groups ≤ 100'], good: true },
+  { q: 'Which features matter most?', a: '1-on-1 chat, group chat and an online indicator. Text messages only, no media. Users who are offline should get a push notification.', r: ['🟢 Online indicator', '🔔 Push notifications'], good: true },
+  { q: 'Message size limit, and how long do we keep history?', a: 'Text under 100,000 characters. And keep the chat history forever.', r: ['✉️ Text < 100K chars', '🗄️ History forever'], good: true },
+  { q: 'Do we need end-to-end encryption?', a: 'Not for now. We can talk about it at the end if there\'s time.', r: ['🔓 No E2E (for now)'], good: true },
+  { q: 'Which programming language should I use?', a: 'Whatever you like. It won\'t change the architecture.', good: false },
+  { q: 'What colour should the chat bubbles be?', a: 'That\'s a question for the design team. Let\'s stay on the system.', good: false },
+  { q: 'Should we run it all on Kubernetes?', a: 'Maybe, later. That\'s deployment detail, not scope.', good: false },
+  { q: 'Do you want emoji reactions in v1?', a: 'That adds scope instead of clarifying it. Let\'s pin down what we must build first.', good: false },
+];
+const TILES1 = ASK.filter(a => a.good).flatMap(a => a.r);
+const chat1 = Chat($('#chat1'));
+let found = 0;
+function setup1() {
+  chat1.clear(); found = 0;
+  $('#s1open').innerHTML = ''; $('#s1lock').innerHTML = ''; $('#deckWrap').style.display = 'none'; $('#s1caveat').style.display = 'none';
+  $('#reqs').innerHTML = TILES1.map((t, i) => `<div class="req" data-r="${i}">? requirement ${i + 1}</div>`).join('');
+  chat1.iv('Hi, thanks for coming in. Today\'s prompt: <b>design a chat system.</b> You have 45 minutes. Where do you want to start?').then(() => {
+    Q.quiz($('#s1open'), {
+      tag: 'Your first move', xp: 10,
+      q: 'The clock is running. What do you do first?',
+      options: ['Ask questions to pin down what we\'re building', 'Draw the WebSocket servers and a database', 'Say "it\'s WhatsApp" and copy its design'],
+      correct: 0,
+      good: '"Chat app" covers everything from Facebook Messenger to Slack to Discord, and they solve different problems. The book\'s advice: settle the requirements before you draw anything.' + CITE(1, BOOK),
+      bad: 'Drawing first is the classic red flag. "Chat app" could mean 1-on-1 messaging, a work tool like Slack, or a gaming community like Discord. Each is a different design. Ask first.' + CITE(1, BOOK),
+      onDone: ok => {
+        tick(1, 0.5, 'comm', ok ? 1 : 0, 1);
+        chat1.me('Before I draw anything, can I ask a few questions to pin down the scope?');
+        chat1.iv('Please do.').then(showDeck);
+      },
+    });
+  });
+}
+function showDeck() {
+  $('#deckWrap').style.display = 'block';
+  const goods = ASK.filter(a => a.good);
+  $('#qdeck').innerHTML = shuffle(ASK.map((a, i) => ({ a, i }))).map(({ a, i }) => `<button class="opt" data-q="${i}">${a.q}</button>`).join('');
+  $$('#qdeck .opt').forEach(b => b.onclick = async () => {
+    if (b.disabled || found >= goods.length) return;
+    const a = ASK[+b.dataset.q]; b.disabled = true;
+    chat1.me(a.q);
+    if (a.good) {
+      b.classList.add('right'); Q.addXP(6, b); tick(1, 1, 'req', 1, 1); found++;
+      a.r.forEach(r => { const slot = $(`#reqs .req[data-r="${TILES1.indexOf(r)}"]`); slot.classList.add('got'); slot.textContent = r; });
+      chat1.iv(a.a);
+      if (found === goods.length) {
+        $$('#qdeck .opt').forEach(x => x.disabled = true);
+        await chat1.iv('That\'s a solid list. One check before we move on.');
+        lockQuiz();
+      }
+    } else {
+      b.classList.add('waste'); Q.toast(practice(1) ? '✗ practice' : '−2 min', b, practice(1) ? 'practice' : 'minus'); tick(1, 2, 'req', 0, 1);
+      chat1.iv(a.a + ' <span class="muted">(−2 min)</span>');
+    }
+  });
+}
+function lockQuiz() {
+  Q.quiz($('#s1lock'), {
+    tag: 'Lock in the requirements', xp: 15,
+    q: 'Which requirement forces the server to push data to a client without being asked?',
+    options: ['Low-latency delivery to the receiver', 'Keeping the chat history forever', 'Text messages under 100K characters'],
+    correct: 0,
+    good: 'Plain HTTP only lets the <i>client</i> start a conversation. For Bob to get Alice\'s message the moment it arrives, the server needs a way to reach Bob first. That\'s why chat needs polling, long polling or WebSocket (Quest 12.1). "History forever" is a storage question; the size limit only caps the payload.',
+    bad: 'It\'s <b>low-latency delivery</b>. Plain HTTP is client-initiated, so for Bob to get Alice\'s message the instant it arrives, the server must be able to reach Bob first: polling, long polling or WebSocket (Quest 12.1). The other two are about storage and payload size.',
+    onDone: ok => {
+      tick(1, 1, 'req', ok ? 1 : 0, 1);
+      $('#s1caveat').style.display = 'block';
+      $('#s1replay').style.display = 'flex';
+      setTimeout(() => done(1), 900);
+    },
+  });
+}
+$('#s1replay .btn').onclick = () => { $('#s1replay').style.display = 'none'; begun.delete(1); setup1(); };
+Q.onStage(1, setup1);
+
+/* ================= STAGE 2: sketch it ================= */
+const NODES = {
+  users: { x: 240, y: 34, w: 170, l: ['👥 Users', 'mobile + web clients'] },
+  lb: { x: 89, y: 160, l: ['Load balancer', 'HTTP front door'] },
+  api: { x: 89, y: 258, l: ['API servers', 'login, profiles'] },
+  sd: { x: 89, y: 356, l: ['Service discovery', 'ZooKeeper'] },
+  chat: { x: 258, y: 160, l: ['Chat servers', 'send + receive'] },
+  pres: { x: 392, y: 160, l: ['Presence servers', 'online / offline'] },
+  kv: { x: 258, y: 272, l: ['KV store', 'chat history'] },
+  notif: { x: 392, y: 362, l: ['Notification', 'servers · push'] },
+};
+const NAME = { lb: 'load balancer', api: 'API servers', sd: 'service discovery', chat: 'chat servers', pres: 'presence servers', kv: 'key-value store', notif: 'notification servers' };
+const INTERNAL = [['lb', 'api'], ['api', 'sd'], ['api', 'kv'], ['chat', 'kv'], ['pres', 'kv'], ['chat', 'notif']];
+const CLIENT = [
+  { k: 'lb', from: 175, t: 0.4, a: 'http', what: 'Users → load balancer → API servers', sub: 'log in, sign up, edit profile' },
+  { k: 'chat', from: 240, t: 0.4, a: 'ws', what: 'Users ↔ chat servers', sub: 'send and receive messages' },
+  { k: 'pres', from: 305, t: 0.4, a: 'ws', what: 'Users ↔ presence servers', sub: 'online status, heartbeats' },
+];
+const LINKWHY = {
+  lb: 'Login, signup and profile edits are ordinary request/response calls. Stateless API servers behind a load balancer, over <b>HTTP</b>, are the right tool.',
+  chat: 'Messages flow both ways and the server must push to Bob at any moment, so each client keeps a persistent <b>WebSocket</b> to one chat server. The book uses WebSocket for sending <i>and</i> receiving.',
+  pres: 'Presence servers receive heartbeats and push friends\' status changes to the client, all over a <b>WebSocket</b>: the real-time path.',
+};
+const TILES2 = [
+  { k: 'lb', t: '⚖️ Load balancer', s: 'spreads HTTP requests' },
+  { k: 'api', t: '🖥️ API servers', s: 'login, signup, profiles' },
+  { k: 'sd', t: '🧭 Service discovery', s: 'picks a chat server' },
+  { k: 'chat', t: '💬 Chat servers', s: 'hold the live connections' },
+  { k: 'pres', t: '🟢 Presence servers', s: 'online / offline status' },
+  { k: 'kv', t: '🗄️ Key-value store', s: 'chat history' },
+  { k: 'notif', t: '🔔 Notification servers', s: 'push to offline phones' },
+  { k: 'mono', t: '🏢 One giant chat server', s: 'holds every connection', bad: 'The book does the maths: 1 million concurrent users at about 10 KB of memory per connection is only about 10 GB, so it might even fit. But one server is a <b>single point of failure</b>. Propose it and most interviewers mark it as a red flag.' },
+  { k: 'p2p', t: '📲 Phone-to-phone links', s: 'no server in between', bad: 'In this design, clients never talk to each other directly. The chat service has to <b>store</b> messages (history forever), find the right recipients, and <b>hold</b> messages for people who are offline. Phones can\'t do that for each other.' },
+];
+const SAY = {
+  lb: 'The load balancer is the front door for ordinary HTTP calls and spreads them across the API servers.',
+  api: 'API servers handle everything that isn\'t real-time: login, signup, profile changes. They\'re <b>stateless</b>, so any server can take any request and we can add more freely.',
+  sd: 'Service discovery (Apache ZooKeeper, for example) keeps a list of every chat server and picks the best one for each user, by location and capacity.' + CITE(5, ZK),
+  chat: 'Chat servers are <b>stateful</b>: each client keeps one persistent connection to one chat server and stays on it while that server is up.',
+  pres: 'Presence servers track who\'s online and fan status changes out to friends.',
+  kv: 'The key-value store holds chat history. Generic data like profiles and friend lists can sit in a relational database.',
+  notif: 'Notification servers send push notifications to users who are offline. It\'s third-party integration: the push itself goes through Apple\'s or Google\'s push service.',
+};
+const chat2 = Chat($('#chat2'));
+let placed = new Set(), labels = {}, s2state = 'build';
+function archSVG() {
+  const box = (k, n) => { const w = n.w || 116, x = n.x - w / 2, y = n.y - 25; return { w, x, y }; };
+  const frames = `<rect class="frame" x="16" y="114" width="146" height="284" rx="12"/><text class="frl" x="24" y="129">Stateless</text>
+    <rect class="frame" x="186" y="114" width="278" height="84" rx="12"/><text class="frl" x="194" y="129">Stateful · real-time</text>
+    <rect class="frame" x="326" y="306" width="138" height="92" rx="12"/><text class="frl" x="334" y="321">Third-party</text>`;
+  const wires = INTERNAL.filter(([a, b]) => placed.has(a) && placed.has(b)).map(([a, b]) => {
+    const A = NODES[a], B = NODES[b];
+    if (a === 'chat' && b === 'notif') return `<path class="wire" d="M316 178 L392 337"/>`;
+    return `<path class="wire" d="M${A.x} ${A.y} L${B.x} ${B.y}"/>`;
+  }).join('');
+  const cw = CLIENT.filter(c => placed.has(c.k)).map(c => {
+    const B = NODES[c.k], x1 = c.from, y1 = 56, x2 = B.x, y2 = B.y - 25;
+    const lab = labels[c.k], cls = lab ? ' ' + lab : '';
+    const px = x1 + (x2 - x1) * c.t, py = y1 + (y2 - y1) * c.t;
+    const txt = lab === 'http' ? 'HTTP' : lab === 'ws' ? 'WebSocket' : '?';
+    const pw = lab === 'ws' ? 72 : lab === 'http' ? 44 : 26;
+    return `<path class="cwire${cls}" d="M${x1} ${y1} L${x2} ${y2}"/><g class="pill-${lab || 'q'}"><rect class="pillbg" x="${px - pw / 2}" y="${py - 10}" width="${pw}" height="20" rx="10"/><text class="pilltx" x="${px}" y="${py + 4}">${txt}</text></g>`;
+  }).join('');
+  const nodes = Object.entries(NODES).map(([k, n]) => {
+    const { w, x, y } = box(k, n);
+    if (k !== 'users' && !placed.has(k)) return `<g><rect class="ghost" x="${x}" y="${y}" width="${w}" height="50" rx="10"/><text class="gq" x="${n.x}" y="${n.y + 7}">?</text></g>`;
+    return `<g class="nd${k === 'users' ? ' user' : ''}" data-k="${k}"><rect x="${x}" y="${y}" width="${w}" height="50" rx="10"/><text x="${n.x}" y="${n.y - 3}">${n.l[0]}<tspan class="s" x="${n.x}" dy="15">${n.l[1]}</tspan></text></g>`;
+  }).join('');
+  return frames + `<g>${wires}${cw}</g><g>${nodes}</g>`;
+}
+function renderArch(pop) {
+  $('#arch').innerHTML = archSVG();
+  $('#archStatus').textContent = `${placed.size} / 7 components` + (placed.size === 7 ? ` · ${Object.keys(labels).length} / 3 links labelled` : '');
+  if (pop) { const g = $(`#arch .nd[data-k="${pop}"]`); if (g) g.classList.add('pop'); }
+}
+function setup2() {
+  chat2.clear(); placed = new Set(); labels = {}; s2state = 'build';
+  ['#s2links', '#s2q1', '#s2q2', '#s2q3'].forEach(s => $(s).innerHTML = '');
+  $('#s2caveat').style.display = 'none';
+  renderArch();
+  chat2.iv('Good scope. Now give me a high-level design. Draw it like you would on the whiteboard.');
+  $('#tiles').innerHTML = shuffle(TILES2).map(t => `<button class="opt" data-k="${t.k}">${t.t}<small>${t.s}</small></button>`).join('');
+  $$('#tiles .opt').forEach(b => b.onclick = () => onTile(b));
+}
+async function onTile(b) {
+  if (s2state !== 'build' || b.disabled) return;
+  const t = TILES2.find(x => x.k === b.dataset.k);
+  b.disabled = true;
+  if (t.bad) {
+    b.classList.add('wrong'); Q.loseHeart(b); tick(2, 1.5, 'hld', 0, 1);
+    chat2.me(`Let's add ${t.t.replace(/^\S+ /, '').toLowerCase()}.`); chat2.iv(t.bad + ' <span class="muted">(−1.5 min)</span>');
+    return;
+  }
+  placed.add(t.k); b.classList.add('right'); Q.addXP(5, b); tick(2, 1, 'hld', 1, 1);
+  chat2.me(`Adding ${NAME[t.k]}.`); chat2.iv(SAY[t.k]);
+  renderArch(t.k);
+  if (placed.size === 7) {
+    s2state = 'label';
+    $$('#tiles .opt').forEach(x => x.disabled = true);
+    await chat2.iv('That\'s all the boxes. Now the lines from the users: <b>how does each one talk to the system?</b>');
+    showLinks();
+  }
+}
+function showLinks() {
+  $('#s2links').innerHTML = `<div class="challenge"><div class="step">Label the client links</div><h3>HTTP or WebSocket?</h3><div class="lrows">${CLIENT.map(c => `<div class="lrow" data-k="${c.k}"><span><b>${c.what}</b><br><span class="small muted">${c.sub}</span></span><div class="row"><button class="opt" data-l="http">HTTP</button><button class="opt" data-l="ws">WebSocket</button></div></div>`).join('')}</div></div>`;
+  $$('#s2links .lrow').forEach(row => {
+    const c = CLIENT.find(x => x.k === row.dataset.k);
+    $$('.opt', row).forEach(b => b.onclick = async () => {
+      if (s2state !== 'label') return;
+      $$('.opt', row).forEach(x => x.disabled = true);
+      const ok = b.dataset.l === c.a;
+      b.classList.add(ok ? 'right' : 'wrong');
+      if (!ok) $(`.opt[data-l="${c.a}"]`, row).classList.add('right');
+      labels[c.k] = c.a; renderArch();
+      chat2.me(`${c.what}: ${b.dataset.l === 'ws' ? 'WebSocket' : 'HTTP'}.`);
+      if (ok) { Q.addXP(5, b); tick(2, 0.5, 'hld', 1, 1); chat2.iv(LINKWHY[c.k]); }
+      else { Q.loseHeart(b); tick(2, 1, 'hld', 0, 1); chat2.iv('Not quite. ' + LINKWHY[c.k] + ' <span class="muted">(−1 min)</span>'); }
+      if (Object.keys(labels).length === 3) {
+        s2state = 'buyin';
+        await chat2.iv('Nice: stateless services on the left, the stateful real-time service on the right, third-party push at the bottom.' + CITE(1, BOOK));
+        await chat2.iv('Let me push back on a few choices.');
+        buyIn(0);
+      }
+    });
+  });
+}
+const BUY = [
+  { tag: 'Buy-in 1 / 3', q: 'Maya: "Why not long polling? It\'s simpler than WebSocket."',
+    options: ['Polls can land on a server that doesn\'t have the message, and drops go unnoticed', 'Long polling can\'t run over HTTPS, so every message would be sent unencrypted', 'Long polling needs its own special port, and most firewalls block that port'],
+    good: 'The book lists three drawbacks. (1) HTTP servers are usually stateless, so a round-robin load balancer can send Bob\'s poll to a server that doesn\'t hold Alice\'s message. (2) The server has no good way to tell that a client has disconnected. (3) It\'s wasteful: a quiet user still reconnects after every timeout. WebSocket runs over ports 80/443, so firewalls are fine with it (Quest 12.1).' + CITE(1, BOOK) },
+  { tag: 'Buy-in 2 / 3', q: 'Maya: "Why a key-value store for chat history, not the relational DB you use for profiles?"',
+    options: ['It scales out easily, stays fast, and copes with a huge long tail of data', 'It lets us join messages with users and groups in one quick SQL query', 'It gives strong ACID transactions across millions of rows at once'],
+    good: 'Chat history is enormous: Facebook Messenger and WhatsApp handle about 60 billion messages a day. Most reads hit recent messages, but search, mentions and "jump to message" need random access to old ones too. Relational indexes get slow and costly as they grow; a key-value store scales out and keeps latency low. Proven chat apps use them: HBase at Facebook Messenger, Cassandra at Discord (Quest 12.3).' + CITE(1, BOOK) },
+  { tag: 'Buy-in 3 / 3', q: 'Maya: "Two messages arrive at nearly the same moment. How do you keep them in order?"',
+    options: ['Sort by message_id: unique, time-sortable, a sequence per channel', 'Sort by created_at: the server timestamp written on each message', 'Sort by arrival: whichever chat server handled it first goes first'],
+    good: 'You can\'t trust <code>created_at</code>: two messages can be created at the same instant. The ID must be unique and sortable by time. Options: a database auto-increment (most NoSQL stores lack it), a global generator like Snowflake, or the book\'s pick, a <b>local sequence per channel</b>, because order only matters within one chat or group (Quest 12.3).' + CITE(1, BOOK) },
+];
+function buyIn(i) {
+  const B = BUY[i];
+  Q.quiz($('#s2q' + (i + 1)), {
+    tag: B.tag, xp: 15, q: B.q, options: B.options, correct: 0, good: B.good,
+    onDone: ok => {
+      tick(2, 1, 'hld', ok ? 1 : 0, 1);
+      if (i < BUY.length - 1) { setTimeout(() => buyIn(i + 1), 500); return; }
+      s2state = 'done';
+      chat2.iv('Good. I\'m bought in. Let\'s go deeper.');
+      $('#s2caveat').style.display = 'block'; $('#s2replay').style.display = 'flex';
+      setTimeout(() => done(2), 900);
+    },
+  });
+}
+$('#s2replay .btn').onclick = () => { $('#s2replay').style.display = 'none'; begun.delete(2); setup2(); };
+Q.onStage(2, setup2);
+
+/* ================= STAGE 3: technique map + flow recap ================= */
+const PAIRS = [
+  { k: 'lat', r: 'Low-latency delivery', m: 'WebSocket: a persistent two-way link to a chat server', why: 'The connection stays open, so the chat server can push a message the instant it arrives. No polling delay.' },
+  { k: 'pick', r: 'Pick a chat server for each user', m: 'Service discovery (ZooKeeper), by location and capacity', why: 'After login, service discovery picks the best chat server for this user, close by and not overloaded, and the client opens its WebSocket there.' + CITE(5, ZK) },
+  { k: 'off', r: 'Recipient is offline', m: 'Push notification, with history kept in the KV store', why: 'The message is stored in the KV store anyway. If Bob is offline, notification servers send a push; his app syncs when he opens it.' },
+  { k: 'dev', r: 'Same account on phone and laptop', m: 'Each device keeps its own cur_max_message_id', why: 'Each device remembers the newest message ID it has. Anything in the KV store for this user with a bigger ID is new to that device.' },
+  { k: 'grp', r: 'Small group chat (≤ 100)', m: 'Copy each message into every member\'s sync queue', why: 'The message sync queue works like an inbox. Each client only checks its own inbox, and with 100 members the extra copies are cheap. WeChat does something similar, with groups capped at 500.' },
+  { k: 'pres', r: 'Online indicator', m: 'Presence servers + a heartbeat every 5 s, 30 s timeout', why: 'A client is online while its heartbeats keep arriving. No heartbeat for 30 seconds means offline, so a brief network blip doesn\'t flip the green dot.' },
+  { k: 'fan', r: 'Friends see status changes', m: 'A pub/sub channel for each friend pair', why: 'When Alice\'s status changes, presence servers publish to channels A-B, A-C and A-D. Bob, Carol and Dave are each subscribed to theirs.' },
+  { k: 'big', r: 'Presence in huge groups', m: 'Fetch status on entering the group, or on refresh', why: 'In a 100,000-member group, pushing every status change would mean 100,000 events per change. Fetch on demand instead.' },
+  { k: 'ord', r: 'Messages in the right order', m: 'A per-channel, time-sortable message_id', why: 'Order by ID, not timestamp: two messages can share a created_at. A local sequence per channel is enough, because order only matters within one chat.' },
+];
+const chat3 = Chat($('#chat3'));
+let mSel = { l: null, r: null }, mPairs = [], ro3 = null, flowBusy = false, s3done = false;
+function drawLines() {
+  const g = $('#mgrid'), svg = $('#mlines'); if (!g || !svg) return;
+  const R = g.getBoundingClientRect();
+  svg.setAttribute('viewBox', `0 0 ${R.width} ${R.height}`);
+  svg.innerHTML = mPairs.map(k => {
+    const a = $(`#mleft .opt[data-k="${k}"]`), b = $(`#mright .opt[data-k="${k}"]`); if (!a || !b) return '';
+    const A = a.getBoundingClientRect(), B = b.getBoundingClientRect();
+    const x1 = A.right - R.left, y1 = A.top + A.height / 2 - R.top, x2 = B.left - R.left, y2 = B.top + B.height / 2 - R.top, mx = (x1 + x2) / 2;
+    return `<path d="M${x1} ${y1} C${mx} ${y1} ${mx} ${y2} ${x2} ${y2}"/>`;
+  }).join('');
+}
+function setup3() {
+  chat3.clear(); mSel = { l: null, r: null }; mPairs = []; s3done = false;
+  $('#s3pred').innerHTML = ''; $('#flowWrap').style.display = 'none'; $('#flowLog').innerHTML = '';
+  $('#mex').className = 'explain'; $('#s3caveat').style.display = 'none';
+  chat3.iv('Your requirements board is full of promises. Convince me each one is actually delivered.');
+  $('#mleft').innerHTML = '<h4>Requirement</h4>' + shuffle(PAIRS).map(p => `<button class="opt" data-k="${p.k}" data-side="l">${p.r}</button>`).join('');
+  $('#mright').innerHTML = '<h4>Mechanism</h4>' + shuffle(PAIRS).map(p => `<button class="opt" data-k="${p.k}" data-side="r">${p.m}</button>`).join('');
+  $$('#mgrid .opt').forEach(b => b.onclick = () => pick3(b));
+  drawLines();
+  if (!ro3 && typeof ResizeObserver === 'function') { ro3 = new ResizeObserver(() => drawLines()); ro3.observe($('#mgrid')); }
+}
+function pick3(b) {
+  if (b.disabled || b.classList.contains('paired')) return;
+  const side = b.dataset.side;
+  if (mSel[side] === b) { b.classList.remove('sel'); mSel[side] = null; return; }
+  if (mSel[side]) mSel[side].classList.remove('sel');
+  mSel[side] = b; b.classList.add('sel');
+  if (!(mSel.l && mSel.r)) return;
+  const L = mSel.l, R = mSel.r; mSel = { l: null, r: null };
+  L.classList.remove('sel'); R.classList.remove('sel');
+  const ok = L.dataset.k === R.dataset.k, P = PAIRS.find(p => p.k === L.dataset.k), ex = $('#mex');
+  if (ok) {
+    mPairs.push(P.k);
+    const n = mPairs.length;
+    [L, R].forEach(x => { x.classList.add('paired'); x.disabled = true; x.insertAdjacentHTML('afterbegin', `<span class="tagn">${n}</span>`); });
+    Q.addXP(8, R); tick(3, 0.5, 'dd', 1, 1);
+    ex.className = 'explain show good'; ex.innerHTML = `<b>${P.r} → ${P.m}.</b> ${P.why}`;
+    drawLines();
+    if (mPairs.length === PAIRS.length) mapDone();
+  } else {
+    nudge(L); nudge(R); Q.loseHeart(R); tick(3, 1, 'dd', 0, 1);
+    const RP = PAIRS.find(p => p.k === R.dataset.k);
+    ex.className = 'explain show bad'; ex.innerHTML = `<b>Not that pair.</b> "${RP.m}" solves a different problem: <i>${RP.r.toLowerCase()}</i>. Try another mechanism for "${P.r}".`;
+  }
+}
+async function mapDone() {
+  await chat3.iv('Every promise has a mechanism. Now walk me through one message. Alice sends Bob "lunch?", and <b>Bob\'s phone is switched off</b>.');
+  Q.quiz($('#s3pred'), {
+    tag: 'Predict, then watch', xp: 15,
+    q: 'The message is stored in the KV store. Bob is offline. What happens next?',
+    options: ['Notification servers send a push to Bob\'s phone', 'Chat server 2 keeps it in memory until Bob is back', 'Alice\'s app shows "not delivered" and drops it'],
+    correct: 0,
+    good: 'Step 5b of the book\'s flow: if the recipient is offline, push notification servers send a notification. The message itself is safe in the KV store, so Bob\'s app fetches it when he reconnects.' + CITE(1, BOOK),
+    bad: 'It\'s a <b>push notification</b> (step 5b in the book\'s flow). Nothing waits in a chat server\'s memory: the message is already safe in the KV store, and Bob\'s app fetches it when he reconnects.' + CITE(1, BOOK),
+    onDone: async ok => {
+      tick(3, 1, 'dd', ok ? 1 : 0, 1);
+      $('#flowWrap').style.display = 'block';
+      setBob('off');
+      await playFlow();
+      if (!s3done) {
+        s3done = true;
+        chat3.iv('Exactly the flow I wanted. Flip Bob online and replay it if you like. Then let\'s break things.');
+        $('#s3caveat').style.display = 'block'; $('#s3replay').style.display = 'flex';
+        setTimeout(() => done(3), 700);
+      }
+    },
+  });
+}
+const FN = {
+  alice: { x: 70, y: 45, l: ['👩 Alice', 'sender'] },
+  cs1: { x: 240, y: 45, l: ['Chat server 1', 'Alice\'s'] },
+  idg: { x: 410, y: 45, l: ['ID generator', 'message_id'] },
+  kv: { x: 70, y: 150, l: ['KV store', 'saved forever'] },
+  q: { x: 240, y: 150, l: ['Sync queue', 'Bob\'s inbox'] },
+  cs2: { x: 410, y: 150, l: ['Chat server 2', 'Bob\'s'] },
+  pn: { x: 240, y: 255, l: ['Push servers', 'notification'] },
+  bob: { x: 410, y: 255, l: ['🧑 Bob', 'offline 📴'] },
+};
+const FL = [['alice', 'cs1'], ['cs1', 'idg'], ['cs1', 'q'], ['q', 'kv'], ['q', 'cs2', 'on'], ['cs2', 'bob', 'on'], ['q', 'pn', 'off'], ['pn', 'bob', 'off']];
+let bobState = 'off';
+function flowSVG() {
+  const lines = FL.map(([a, b, br]) => `<path class="fl${br ? ' br-' + br : ''}" data-e="${a}-${b}" d="M${FN[a].x} ${FN[a].y} L${FN[b].x} ${FN[b].y}"/>`).join('');
+  const nodes = Object.entries(FN).map(([k, n]) => `<g class="fn" data-k="${k}"><rect x="${n.x - 60}" y="${n.y - 24}" width="120" height="48" rx="10"/><text x="${n.x}" y="${n.y - 3}">${n.l[0]}<tspan class="s" x="${n.x}" dy="15" ${k === 'bob' ? 'id="bobSub"' : ''}>${n.l[1]}</tspan></text></g>`).join('');
+  return `<g>${lines}</g><g>${nodes}</g><g id="fpkts"></g>`;
+}
+function setBob(s) {
+  bobState = s;
+  $$('#bobSeg button').forEach(b => { b.classList.toggle('on', b.dataset.b === s); b.setAttribute('aria-pressed', b.dataset.b === s); });
+  $('#flow').innerHTML = flowSVG();
+  $('#bobSub').textContent = s === 'on' ? 'online 🟢' : 'offline 📴';
+  $$('#flow .fl.br-' + (s === 'on' ? 'off' : 'on')).forEach(p => p.classList.add('off'));
+}
+async function hop(a, b) {
+  const A = FN[a], B = FN[b];
+  const ln = $(`#flow .fl[data-e="${a}-${b}"]`) || $(`#flow .fl[data-e="${b}-${a}"]`); if (ln) ln.classList.add('hot');
+  const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle'); c.setAttribute('r', 8); c.setAttribute('class', 'pkt');
+  $('#fpkts').appendChild(c);
+  await tween(520, p => { const k = ease(p); c.setAttribute('cx', A.x + (B.x - A.x) * k); c.setAttribute('cy', A.y + (B.y - A.y) * k); });
+  c.remove(); $(`#flow .fn[data-k="${b}"]`).classList.add('hot');
+}
+function flog(html, cls) { const d = document.createElement('div'); if (cls) d.className = cls; d.innerHTML = html; const L = $('#flowLog'); L.appendChild(d); L.scrollTop = L.scrollHeight; }
+async function playFlow() {
+  if (flowBusy) return; flowBusy = true; $('#playFlow').disabled = true;
+  setBob(bobState); $('#flowLog').innerHTML = '';
+  $('#flow .fn[data-k="alice"]').classList.add('hot');
+  const gap = () => sleep(Q.reduced ? 0 : 220);
+  flog('1 · Alice sends "lunch?" to chat server 1 over her WebSocket.'); await hop('alice', 'cs1'); await gap();
+  flog('2 · Chat server 1 gets a message ID from the ID generator.'); await hop('cs1', 'idg'); await hop('idg', 'cs1'); await gap();
+  flog('3 · The message goes into the message sync queue.'); await hop('cs1', 'q'); await gap();
+  flog('4 · It is stored in the key-value store.'); await hop('q', 'kv'); await gap();
+  if (bobState === 'on') {
+    flog('5a · Bob is online, so it is forwarded to chat server 2, where Bob is connected.', 'g'); await hop('q', 'cs2'); await gap();
+    flog('6 · Chat server 2 pushes it to Bob over his persistent WebSocket. ✓', 'g'); await hop('cs2', 'bob');
+  } else {
+    flog('5b · Bob is offline, so the push notification servers take over.', 'w'); await hop('q', 'pn'); await gap();
+    flog('6 · Bob\'s phone shows a notification. When he opens the app, it fetches every message above its cur_max_message_id. ✓', 'w'); await hop('pn', 'bob');
+  }
+  flowBusy = false; $('#playFlow').disabled = false;
+}
+$$('#bobSeg button').forEach(b => b.onclick = () => { if (!flowBusy) setBob(b.dataset.b); });
+$('#playFlow').onclick = () => playFlow();
+$('#s3replay .btn').onclick = () => { if (flowBusy) return; $('#s3replay').style.display = 'none'; begun.delete(3); setup3(); };
+addEventListener('resize', drawLines);
+Q.onStage(3, setup3);
+
+/* ================= STAGE 4: curveball barrage =================
+   Each curveball has its own three full-sentence options, so this is a small boss runner built from the
+   same CSS as Q.boss (boss-top, bosshp, scenario, opts). Option 0 is the right one; options are shuffled. */
+const CURVE = [
+  { e: '💥', t: 'A chat server crashes', d: '"One chat server was holding 200,000 open connections. It just died. What happens?"',
+    o: ['Clients reconnect via service discovery, then sync from their cursor', 'Every message that server was holding is lost for good', 'The load balancer quietly moves the open sockets elsewhere'],
+    why: '<b>Reconnect, then catch up.</b> The book: service discovery (ZooKeeper) hands each client a new chat server to connect to. Messages were already written to the KV store, so nothing is lost: each device fetches everything above its <code>cur_max_message_id</code>. A load balancer can\'t move a TCP connection; it died with the process. Bonus point: add random jitter to each reconnect so 200,000 clients don\'t all stampede at once.' + CITE(1, BOOK) },
+  { e: '🚇', t: 'Bob drives into a tunnel', d: '"Bob loses signal for 10 seconds. Does his green dot go grey?"',
+    o: ['No: he\'s marked offline only after 30 s with no heartbeat', 'Yes, at once, because his WebSocket connection dropped', 'Yes, after 5 s, as soon as he misses one heartbeat'],
+    why: '<b>Heartbeat with a timeout.</b> The client sends a heartbeat every 5 seconds, and presence servers mark it offline only after x = 30 seconds of silence. Short blips don\'t flip the dot and spam his friends with status changes (Quest 12.5).' + CITE(1, BOOK) },
+  { e: '📴', t: 'Bob\'s phone is off', d: '"Alice messages Bob, but his phone is switched off. Walk me through it."',
+    o: ['Saved in the KV store, a push goes out, and his app syncs later', 'Alice\'s chat server retries Bob every second until he answers', 'The message waits only in Alice\'s app until Bob comes online'],
+    why: '<b>Store, notify, sync.</b> The message is stored in the KV store whether Bob is online or not. Because he\'s offline, the notification servers send a push. When he opens the app, it connects to a chat server and fetches what it missed (Quest 12.4).' + CITE(1, BOOK) },
+  { e: '🏟️', t: 'Groups of 100,000', d: '"Product wants 100,000-member groups. What breaks, and what changes?"',
+    o: ['Stop per-member inbox copies; fetch presence on entry, not by push', 'Nothing breaks: just keep the design and add more chat servers', 'Send every group message to all members as a push notification'],
+    why: '<b>Both fan-outs explode.</b> One message would mean 100,000 inbox copies, and each status change 100,000 presence events. The book\'s design is for small groups. WeChat uses a similar design and caps groups at 500. For huge groups, store each message once per channel and have members read from it. Load online status only when someone opens the group or refreshes (Quests 12.4–12.5).' + CITE(1, BOOK) },
+  { e: '👯', t: 'Bob sees it twice', d: '"Alice\'s app timed out and resent a message. Bob now sees it twice. Fix it."',
+    o: ['Client-made message ID; the server drops repeats it has seen', 'Turn off retries, so a lost message is simply never resent', 'Let Bob\'s app hide any two messages that have the same text'],
+    why: '<b>Idempotent sends.</b> The book only says resending uses "retry and queueing". Retries mean duplicates are possible. So the client attaches its own unique ID to each send, and the server ignores an ID it has already stored (an <i>idempotent</i> write: doing it twice has the same effect as once). Hiding equal text would eat Alice\'s genuine second "ok". This goes beyond the book.' + CITE(1, BOOK) },
+  { e: '🔀', t: 'Messages appear swapped', d: '"Two group messages have the same created_at, and members see them in different orders."',
+    o: ['Order by the per-channel message_id, never by created_at', 'Store created_at in nanoseconds so ties can never happen', 'Break every tie by sorting on the sender\'s display name'],
+    why: '<b>IDs, not clocks.</b> Two messages can be created at the same moment, and different servers\' clocks drift anyway. The book orders by a message ID that is unique and time-sortable, generated per channel (Quest 12.3).' + CITE(1, BOOK) },
+  { e: '💻', t: 'A week offline', d: '"Alice\'s laptop was closed for a week. She opens it. How does it catch up?"',
+    o: ['Fetch messages with IDs above its cur_max_message_id, in pages', 'Re-download her entire chat history from the very first day', 'Copy the missing messages over from her phone via Bluetooth'],
+    why: '<b>Per-device cursor.</b> The laptop keeps its own <code>cur_max_message_id</code>, separate from her phone\'s. It asks the KV store for her messages above it, page by page, so a week of backlog doesn\'t arrive as one huge response. (With per-channel IDs, keep one cursor per conversation; see the stage 3 caveat.) (Quest 12.4)' + CITE(1, BOOK) },
+];
+function setup4() {
+  const mount = $('#barrage');
+  let bi = 0, wins = 0;
+  mount.innerHTML = `<div class="boss-top"><b>🎯 Curveball barrage</b><div class="bosshp"><div></div></div><span class="mono small q-count"></span></div><div class="q-arena"></div>`;
+  const hp = $('.bosshp div', mount), count = $('.q-count', mount), arena = $('.q-arena', mount);
+  function show() {
+    const s = CURVE[bi];
+    count.textContent = `${bi + 1} / ${CURVE.length}`;
+    hp.style.width = (100 - (bi / CURVE.length) * 100) + '%';
+    arena.innerHTML = `<div class="scenario"><div class="emoji">${s.e}</div><h3>${s.t}</h3><p class="iv-q" style="font-style:italic;color:var(--ink)">👩🏽‍💼 ${s.d}</p></div><div class="opts" style="margin-top:14px"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+    const opts = $('.opts', arena);
+    shuffle(s.o.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = () => {
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        const ok = i === 0;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $('.opt[data-i="0"]', opts).classList.add('right');
+        const ex = $('.explain', arena); ex.className = 'explain show ' + (ok ? 'good' : 'bad'); ex.innerHTML = s.why;
+        if (ok) { wins++; Q.addXP(15, b); tick(4, 1.5, 'dd', 1, 1, { wins }); } else { Q.loseHeart(b); tick(4, 2.5, 'dd', 0, 1, { wins }); }
+        hp.style.width = (100 - ((bi + 1) / CURVE.length) * 100) + '%';
+        const nx = document.createElement('button'); nx.className = 'btn primary';
+        nx.textContent = bi < CURVE.length - 1 ? 'Next curveball →' : '⚔️ Final blow';
+        nx.onclick = () => {
+          bi++;
+          if (bi < CURVE.length) return show();
+          arena.innerHTML = `<div class="scenario"><div class="emoji">💥</div><h3>Barrage survived</h3><p>${wins} of ${CURVE.length} curveballs handled. ${wins >= 6 ? 'Maya writes "strong deep dive" in her notes.' : 'Review the ones you missed. Interviewers love repeat questions.'}</p></div><div class="row" style="margin-top:12px;justify-content:center"><button class="btn" id="replay4">↻ Face the barrage again</button></div>`;
+          $('#replay4').onclick = () => { begun.delete(4); setup4(); };
+          $('#s4caveat').style.display = 'block';
+          Q.burst(); done(4);
+        };
+        $('.row', arena).appendChild(nx);
+      };
+      opts.appendChild(b);
+    });
+  }
+  show();
+}
+Q.onStage(4, setup4);
+
+/* ================= STAGE 5: wrap up ================= */
+const WRAP = [
+  { t: '🖼️ Media files', s: 'compression, cloud storage, thumbnails', good: true, say: 'Photos and videos are far bigger than text. I\'d compress them, keep them in cloud object storage, and show thumbnails first.' },
+  { t: '🔐 End-to-end encryption', s: 'only the two ends can read', good: true, say: 'WhatsApp encrypts end to end: only the sender and the recipient can read a message, not even the server.' },
+  { t: '💾 Cache messages on the client', s: 'less data over the wire', good: true, say: 'Keep recent messages on the device, so the app downloads much less from the server.' },
+  { t: '⚡ Edge cache for fast load', s: 'like Slack\'s Flannel', good: true, say: 'To cut load time, Slack built a geographically distributed cache of users\' data, channels and more, close to users.' + CITE(3, FLANNEL) },
+  { t: '🛟 Error handling', s: 'chat-server failure, message resend', good: true, say: 'A chat server can hold hundreds of thousands of connections. If it dies, service discovery hands clients a new one. Failed sends use retry and queueing.' },
+  { t: '🦀 Rewrite every service in Rust', s: 'for raw speed', good: false, why: 'The language isn\'t our bottleneck, and it answers none of the requirements. It reads as a personal preference, not design.' },
+  { t: '🔗 Switch every API to GraphQL', s: 'one flexible endpoint', good: false, why: 'That changes the shape of the API, not how the system scales. And the hot path here is WebSocket, not request/response.' },
+  { t: '⛓️ Blockchain for integrity', s: 'tamper-proof history', good: false, why: 'We run every server ourselves; there\'s no untrusted party to protect against. It would add latency and cost for no requirement.' },
+  { t: '♾️ Drop the 100-member limit', s: 'it\'s free to lift', good: false, why: 'Not free at all. Per-member inbox copies and presence fan-out both grow with group size: 100,000 events per status change in a huge group.' },
+];
+const chat5 = Chat($('#chat5'));
+let wrapGood = 0, s5state = 'pick';
+function setup5() {
+  chat5.clear(); wrapGood = 0; s5state = 'pick';
+  $('#s5q').innerHTML = ''; $('#s5caveat').style.display = 'none'; $('#wrapCount').textContent = '0';
+  chat5.iv('We have about four minutes left. If you had more time, what would you add or improve?');
+  const wc = $('#wrapcards');
+  wc.innerHTML = shuffle(WRAP.map((c, i) => ({ c, i }))).map(({ c, i }) => `<button class="opt" data-w="${i}">${c.t}<small>${c.s}</small></button>`).join('');
+  $$('.opt', wc).forEach(b => b.onclick = async () => {
+    if (s5state !== 'pick' || b.disabled) return;
+    const c = WRAP[+b.dataset.w]; b.disabled = true;
+    if (c.good) {
+      b.classList.add('right'); b.insertAdjacentHTML('beforeend', '<span class="verdict">✓ from the book</span>');
+      Q.addXP(10, b); tick(5, 0.5, 'comm', 1, 1); wrapGood++;
+      $('#wrapCount').textContent = wrapGood;
+      chat5.me(c.say);
+      if (wrapGood === 5) {
+        s5state = 'q';
+        $$('.opt', wc).forEach(x => x.disabled = true);
+        await chat5.iv('That\'s a strong close. One follow-up on encryption.');
+        followUp5();
+      }
+    } else {
+      b.classList.add('wrong'); b.insertAdjacentHTML('beforeend', '<span class="verdict">✗ weak close</span>');
+      Q.loseHeart(b); tick(5, 1.5, 'comm', 0, 1);
+      chat5.me(c.t.replace(/^\S+ /, '') + '?');
+      chat5.iv(c.why + ' <span class="muted">(−1.5 min)</span>');
+    }
+  });
+}
+function followUp5() {
+  Q.quiz($('#s5q'), {
+    tag: 'Follow-up', xp: 15,
+    q: 'Maya: "If we add end-to-end encryption, which server feature gets harder?"',
+    options: ['Server-side search and content moderation', 'Routing messages to the right chat server', 'Counting how many users are online right now'],
+    correct: 0,
+    good: 'With end-to-end encryption, the server only ever holds ciphertext (scrambled bytes). It can still route messages and track presence, because those use metadata. But it can\'t <b>read</b> content, so it can\'t search it, filter spam or moderate it.' + CITE(6, WAPP),
+    bad: 'Routing and presence only need metadata (who, where, when), which the server still sees. What breaks is anything that must <b>read</b> content: server-side search, spam filtering and moderation.' + CITE(6, WAPP),
+    onDone: ok => {
+      tick(5, 1, 'comm', ok ? 1 : 0, 1);
+      chat5.iv('Thanks, I\'ve got what I need. 🤝');
+      $('#s5caveat').style.display = 'block'; $('#s5replay').style.display = 'flex';
+      setTimeout(() => done(5), 900);
+    },
+  });
+}
+$('#s5replay .btn').onclick = () => { $('#s5replay').style.display = 'none'; begun.delete(5); setup5(); };
+Q.onStage(5, setup5);
+
+/* ================= STAGE 6: drill + scorecard ================= */
+const CATS = [
+  { k: 'req', n: 'Requirements', from: 'Step 1 questions' },
+  { k: 'hld', n: 'High-level design', from: 'whiteboard, links, buy-in' },
+  { k: 'dd', n: 'Deep dive', from: 'technique map + curveballs' },
+  { k: 'comm', n: 'Communication', from: 'first move, timing, close, pitch' },
+];
+const VERD = [[.85, 'Strong hire', 3], [.7, 'Hire', 2], [.5, 'Lean hire', 1], [0, 'No hire (yet)', 0]];
+const verdict = r => VERD.find(v => r >= v[0]);
+function renderScore() {
+  const d = iload(), sums = {};
+  Object.keys(d).forEach(n => Object.entries((d[n] && d[n].sig) || {}).forEach(([k, [g, m]]) => { const s = sums[k] || [0, 0]; s[0] += g; s[1] += m; sums[k] = s; }));
+  const steps = STEPS.map(s => {
+    const played = s.stages.every(n => d[n]);
+    const m = s.stages.reduce((t, n) => t + stageMin(d, n), 0);
+    return { ...s, m, played, ok: m <= s.hi };
+  });
+  // timing discipline counts toward communication: one point per step inside the book's budget
+  const playedSteps = steps.filter(s => s.played);
+  if (playedSteps.length) { const s = sums.comm || [0, 0]; s[0] += playedSteps.filter(x => x.ok).length; s[1] += playedSteps.length; sums.comm = s; }
+  const total = [1, 2, 3, 4, 5].reduce((t, n) => t + stageMin(d, n), 0);
+  const hearts = $$('.hud .heart:not(.lost)').length;
+  const cb = d[4] ? `${d[4].wins || 0} / ${CURVE.length}` : '—';
+  const over = total - 45;
+  const rows = CATS.map(c => {
+    const s = sums[c.k];
+    if (!s || !s[1]) return `<div class="sc-row"><span><b>${c.n}</b><br><span class="small muted">${c.from}</span></span><div class="sc-bar"><div></div></div><span class="verd">not played</span></div>`;
+    const r = Math.max(0, Math.min(1, s[0] / s[1])), v = verdict(r);
+    return `<div class="sc-row"><span><b>${c.n}</b><br><span class="small muted">${c.from}</span></span><div class="sc-bar"><div data-w="${Math.round(r * 100)}"></div></div><span class="verd v${v[2]}">${Math.round(r * 100)}% · ${v[1]}</span></div>`;
+  });
+  const rated = CATS.map(c => sums[c.k]).filter(s => s && s[1]);
+  const avg = rated.length ? rated.reduce((t, s) => t + Math.min(1, s[0] / s[1]), 0) / rated.length : 0;
+  const ov = verdict(avg);
+  $('#scorecard').innerHTML = `<div class="scorecard"><div class="kicker">Interviewer's scorecard</div><h3>Your signals from this run</h3>
+    <p class="small muted" style="margin:0">Computed from your choices in every stage. Replaying a stage overwrites its part.</p>
+    <div class="sc-stats"><div><b>${'♥'.repeat(hearts) || '0'}</b><span>hearts left</span></div><div><b>${cb}</b><span>curveballs right</span></div><div><b>${over > 0 ? '+' + fmt(over) : '0:00'}</b><span>clock overrun</span></div></div>
+    ${rows.join('')}
+    <table class="sc-time"><thead><tr><th>Step</th><th>Your time</th><th>Book's range</th></tr></thead><tbody>
+    ${steps.map(s => `<tr><td>${s.name}</td><td>${s.played || s.stages.some(n => Q.isCleared(n)) ? fmt(s.m) : '—'}</td><td>${s.lo}–${s.hi} min ${s.played ? (s.ok ? '<span class="ok">✓</span>' : '<span class="ov">over</span>') : ''}</td></tr>`).join('')}
+    </tbody></table>
+    <div class="sc-overall"><span>Total ${fmt(total)} of 45:00 ${total <= 45 ? '<span style="color:var(--good);font-weight:700">✓ on time</span>' : '<span style="color:var(--warn);font-weight:700">over time</span>'}</span><span>Overall&nbsp; <b>${rated.length ? ov[1] : '—'}</b></span></div></div>`;
+  requestAnimationFrame(() => setTimeout(() => $$('#scorecard .sc-bar div[data-w]').forEach(b => b.style.width = b.dataset.w + '%'), 60));
+}
+const CHECKS = [
+  'I scoped with numbers (50M DAU, 100-member groups)',
+  'I covered WebSocket + service discovery + KV store + message IDs',
+  'I traced online/offline delivery and multi-device sync',
+  'I covered presence (heartbeat + fan-out)',
+  'I named at least two wrap-up extensions',
+];
+function setup6() {
+  renderScore();
+  Q.drill($('#drill'), {
+    prompt: 'Maya, at the door: <i>"You have one minute. Summarise your chat system design."</i>',
+    placeholder: 'Scope first: 1-on-1 and groups up to 100, 50 million daily users…',
+    minWords: 45,
+    model: '"Scope: 1-on-1 and groups up to 100, mobile and web, 50 million DAU, text only, presence, multi-device, push, history forever. Clients keep a WebSocket to a chat server picked by service discovery (ZooKeeper) based on location and load. Login and profiles are stateless API servers behind a load balancer. On send, the chat server gets a per-channel, time-sortable message ID, queues the message and stores it in a key-value store like Cassandra, keyed by channel_id and message_id. Then it\'s forwarded to the recipient\'s chat server, or a push notification goes out if they\'re offline. Each device syncs with its own cur_max_message_id. Small groups fan out into per-member inboxes; huge ones would read from the channel. Presence uses heartbeats with a 30-second timeout and pub/sub to friends. Next I\'d add media, end-to-end encryption, client caching, and failure handling for chat-server crashes and resends."',
+    checks: CHECKS,
+    onDone: n => {
+      tick(6, 0, 'comm', n, CHECKS.length);
+      renderScore();
+      $('#scorecard').scrollIntoView({ behavior: Q.reduced ? 'auto' : 'smooth', block: 'center' });
+      $('#s6replay').style.display = 'flex';
+      setTimeout(() => { done(6); renderScore(); }, 1200);
+    },
+  });
+}
+$('#s6replay .btn').onclick = () => { $('#s6replay').style.display = 'none'; begun.delete(6); setup6(); };
+Q.onStage(6, setup6);
+
+Q.start();
+setHudH(); renderBar();
+})();
+</script>
+</body>
+</html>

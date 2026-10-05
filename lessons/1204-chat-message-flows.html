@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Special Delivery</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: step track (s1), flow map (s1), device sync (s2), fan-out lab (s3), bug flows (s4) */
+:root { --pk: #f0b400; --off: #8a8799; --src-a: #5a48f0; --src-g: #c27400; --src-c: #0d9a96; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --pk: #ffd23f; --off: #6d6b85; --src-a: #8f82ff; --src-g: #ffb547; --src-c: #31d3c8; }
+}
+:root[data-theme="dark"] { --pk: #ffd23f; --off: #6d6b85; --src-a: #8f82ff; --src-g: #ffb547; --src-c: #31d3c8; }
+
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.bmsg { font-size: 14px; min-height: 22px; margin-top: 10px; font-weight: 600; }
+.bmsg.bad { color: var(--bad); }
+.bmsg.good { color: var(--good); }
+.hintline { font-size: 14px; padding: 8px 14px; border-top: 1px solid var(--line); background: var(--panel); min-height: 38px; }
+.hintline.bad { color: var(--bad); }
+.hintline.good { color: var(--good); }
+
+/* ---------- stage 1: tap-in-order track ---------- */
+.track { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 6px; }
+.track > li { display: grid; gap: 6px; }
+.track .fork { grid-template-columns: 1fr 1fr; }
+.slot { position: relative; min-height: 44px; padding: 9px 10px 9px 44px; border-radius: 10px; border: 1.5px dashed color-mix(in srgb, var(--muted) 50%, transparent); font-size: 14px; line-height: 1.35; color: var(--muted); }
+.slot .sn { position: absolute; left: 9px; top: 9px; min-width: 26px; height: 22px; padding: 0 4px; border-radius: 7px; display: grid; place-items: center; font: 700 11.5px var(--mono); background: var(--bg-2); color: var(--muted); }
+.slot.filled { border-style: solid; border-color: transparent; background: var(--accent-soft); color: var(--ink); animation: rise .3s; }
+.slot.filled .sn { background: var(--accent); color: #fff; }
+.forkcap { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
+.pool { display: grid; gap: 8px; margin-top: 14px; }
+.stepc { text-align: left; border: 2px solid var(--line); background: var(--bg); border-radius: 12px; padding: 10px 12px; font-size: 14.5px; line-height: 1.35; min-height: 44px; transition: border-color .2s, transform .1s; }
+.stepc:hover { border-color: var(--accent); transform: translateX(2px); }
+.stepc.nope { border-color: var(--bad); background: var(--bad-soft); animation: shake .4s; }
+
+/* ---------- stage 1: flow map ---------- */
+.map svg { max-width: 520px; margin: 0 auto; }
+.map .edge { stroke: var(--line); stroke-width: 3; stroke-linecap: round; transition: stroke .3s; }
+.map .edge.on { stroke: var(--pk); }
+.map .node rect { fill: var(--panel); stroke: var(--muted); stroke-width: 2; transition: fill .3s, stroke .3s; }
+.map .node .ic { font-size: 18px; text-anchor: middle; dominant-baseline: central; }
+.map .node .nm { fill: var(--ink); font: 700 12.5px var(--font); text-anchor: middle; }
+.map .node .sb { fill: var(--muted); font: 600 10.5px var(--mono); text-anchor: middle; }
+.map .node.tap { cursor: pointer; }
+.map .node.tap:hover rect, .map .node.tap:focus rect { stroke: var(--accent); stroke-width: 3; }
+.map .node:focus { outline: none; }
+.map .node.pick rect { stroke: var(--accent); stroke-width: 3.5; stroke-dasharray: 7 4; fill: var(--accent-soft); }
+.map .node.lit rect { stroke: var(--pk); stroke-width: 3.5; stroke-dasharray: none; }
+.map .node.ok rect { stroke: var(--good); stroke-width: 3.5; stroke-dasharray: none; fill: var(--good-soft); }
+.map .node.miss rect { stroke: var(--warn); stroke-width: 3.5; stroke-dasharray: 4 3; fill: var(--warn-soft); }
+.map .node.extra rect { stroke: var(--bad); stroke-width: 3.5; stroke-dasharray: none; fill: var(--bad-soft); }
+.map .node.off rect { stroke: var(--off); stroke-dasharray: 5 4; fill: var(--bg-2); }
+.map .node.me rect { fill: var(--bg-2); }
+.map .pk { fill: var(--pk); stroke: var(--bg); stroke-width: 2.5; }
+.map .stepbig { fill: var(--accent); font: 700 34px var(--mono); text-anchor: middle; }
+.map .stepsm { fill: var(--muted); font: 600 11.5px var(--font); text-anchor: middle; }
+.maplegend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--muted); padding: 8px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+.maplegend i { display: inline-block; width: 14px; height: 10px; border-radius: 3px; vertical-align: middle; margin-right: 5px; border: 2px solid; }
+.scorechips { display: flex; gap: 8px; flex-wrap: wrap; }
+.scorechips span { font-size: 13px; font-weight: 700; padding: 4px 10px; border-radius: 99px; background: var(--bg-2); color: var(--muted); }
+.scorechips span.done { background: var(--good-soft); color: var(--good); }
+
+/* ---------- stage 2: device sync ---------- */
+.syncgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 14px; }
+@media (max-width: 640px) { .syncgrid { grid-template-columns: 1fr; } }
+.colh { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+.kvlist { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.mid { font: 700 12.5px var(--mono); border-radius: 8px; padding: 6px 2px; text-align: center; background: var(--panel); border: 1.5px solid var(--line); transition: background .3s, border-color .3s; }
+.mid small { display: block; font: 600 10.5px var(--font); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mid.fresh { border-color: var(--warn); animation: blip .5s; }
+.mid.hit { background: var(--teal-soft); border-color: var(--teal); }
+.mid.ghost { border-style: dashed; color: var(--muted); background: transparent; }
+@keyframes blip { 45% { transform: scale(1.15); } }
+.devs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-content: start; }
+.dev { border: 2px solid var(--line); border-radius: 14px; padding: 10px; background: var(--panel); transition: opacity .3s; min-width: 0; }
+.dev.asleep { border-style: dashed; background: var(--bg-2); }
+.dev.asleep .cur, .dev.asleep .hd { opacity: .55; }
+.dev .hd { font-weight: 700; font-size: 14px; }
+.dev .st { font-size: 12px; font-weight: 700; color: var(--good); }
+.dev.asleep .st { color: var(--muted); }
+.dev .curl { font: 600 10.5px var(--mono); color: var(--muted); margin-top: 6px; word-break: break-all; }
+.dev .cur { font: 700 26px var(--mono); line-height: 1.1; }
+.dev .cur.tick { color: var(--teal); }
+.dev .have { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 6px; min-height: 18px; }
+.dev .have span { font: 600 10.5px var(--mono); padding: 1px 4px; border-radius: 5px; background: var(--bg-2); }
+.dev .have span.n { background: var(--teal-soft); color: var(--teal); }
+.dev .btn { margin-top: 8px; width: 100%; padding: 8px 6px; font-size: 13.5px; min-height: 40px; }
+.qbar { font-family: var(--mono); font-size: 12.5px; padding: 9px 14px; border-top: 1px solid var(--line); background: var(--code-bg); color: var(--code-ink); min-height: 38px; word-break: break-word; }
+.qbar .k { color: #9fa8ff; }
+.qbar .v { color: #6ee7a8; }
+.idpicks { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; max-width: 420px; }
+.idpick { min-height: 42px; border-radius: 10px; border: 2px solid var(--line); background: var(--panel); font: 700 14px var(--mono); }
+.idpick[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.idpick.right { border-color: var(--good); background: var(--good-soft); color: var(--good); }
+.idpick.wrong { border-color: var(--bad); background: var(--bad-soft); color: var(--bad); }
+.idpick.missed { border-color: var(--warn); border-style: dashed; color: var(--warn); }
+
+/* ---------- stage 3: fan-out lab ---------- */
+.slider { padding: 12px 14px 0; display: grid; gap: 4px; }
+.slider label { display: flex; justify-content: space-between; font-weight: 600; font-size: 14px; gap: 8px; flex-wrap: wrap; }
+.slider input { width: 100%; accent-color: var(--accent); height: 28px; }
+.ticks { display: grid; grid-template-columns: repeat(6, 1fr); font: 600 10.5px var(--mono); color: var(--muted); text-align: center; }
+.fan { padding: 12px 14px 14px; }
+.fan-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sender { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; }
+.bubble { background: var(--accent); color: #fff; border-radius: 14px 14px 14px 4px; padding: 6px 12px; font-size: 13.5px; font-weight: 500; }
+.bubble.fly { animation: flyout .6s; }
+@keyframes flyout { 50% { transform: translateY(-6px) scale(1.06); } }
+.inboxes { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 12px; min-height: 66px; align-content: flex-start; }
+.ib { width: 22px; height: 22px; border-radius: 5px; background: var(--bg-2); border: 1.5px solid var(--line); transition: background .25s, border-color .25s; }
+.inboxes.tiny .ib { width: 13px; height: 13px; border-radius: 3px; }
+.ib.big { width: auto; height: auto; padding: 7px 10px; font-size: 13px; font-weight: 600; }
+.ib.hit { background: var(--teal-soft); border-color: var(--teal); }
+.inboxes.tiny .ib.hit { background: var(--teal); }
+.ib.store { border: 2px solid var(--accent); background: var(--accent-soft); }
+.ib.store.hit { background: var(--accent); color: #fff; }
+.ib.reader { border-style: dashed; color: var(--muted); }
+.ib.reader.hit { border-color: var(--teal); color: var(--ink); background: transparent; }
+.bigcount { font: 700 28px var(--mono); }
+.bigcount small { font: 600 13px var(--font); color: var(--muted); }
+.prog { height: 12px; border-radius: 99px; background: var(--bg-2); overflow: hidden; border: 1px solid var(--line); margin-top: 6px; }
+.prog div { height: 100%; width: 0; background: linear-gradient(90deg, var(--teal), var(--accent)); }
+.fstats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 0 14px 14px; }
+.fstats > div { border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; background: var(--panel); min-width: 0; }
+.fstats span { display: block; font-size: 11.5px; color: var(--muted); font-weight: 600; line-height: 1.25; }
+.fstats b { font: 700 18px var(--mono); }
+.fstats b.bad { color: var(--bad); }
+.fstats b.good { color: var(--good); }
+@media (max-width: 480px) { .fstats b { font-size: 15px; } }
+.bobview { display: grid; grid-template-columns: 1fr 1.3fr; gap: 14px; padding: 14px; }
+@media (max-width: 600px) { .bobview { grid-template-columns: 1fr; } }
+.srcs { display: grid; gap: 6px; align-content: start; }
+.src { border-radius: 10px; padding: 7px 10px; font-size: 13.5px; font-weight: 600; border-left: 5px solid; background: var(--panel); }
+.src.a, .imsg.a { border-color: var(--src-a); }
+.src.g, .imsg.g { border-color: var(--src-g); }
+.src.c, .imsg.c { border-color: var(--src-c); }
+.src.ping { animation: blip .45s; }
+.inboxcol { border: 2px solid var(--line); border-radius: 14px; padding: 8px; background: var(--panel); min-height: 120px; }
+.imsg { border-left: 5px solid; border-radius: 8px; padding: 5px 9px; background: var(--bg); font-size: 13.5px; margin-top: 5px; animation: rise .3s; }
+.imsg small { color: var(--muted); font-weight: 600; display: block; font-size: 11.5px; }
+#modeSeg button { min-height: 36px; }
+.seg button.on { background: var(--accent); color: #fff; }
+
+/* ---------- stage 4: bug flows ---------- */
+.flows { display: grid; gap: 14px; margin-top: 12px; }
+.flow { border: 1px solid var(--line); border-radius: 16px; padding: 14px; background: var(--bg); }
+.flow h3 { margin: 0 0 4px; font-size: 16px; }
+.flow .fsub { font-size: 13px; color: var(--muted); margin: 0 0 6px; }
+.ln { display: flex; gap: 10px; width: 100%; text-align: left; border: 2px solid var(--line); background: var(--panel); border-radius: 10px; padding: 9px 12px; margin-top: 6px; font-size: 14.5px; line-height: 1.4; min-height: 44px; align-items: flex-start; transition: border-color .2s, background .2s; }
+.ln:hover:not([disabled]) { border-color: var(--accent); }
+.ln[disabled] { cursor: default; }
+.ln .n { font: 700 12px var(--mono); color: var(--muted); flex: none; width: 16px; padding-top: 3px; }
+.ln.bug { border-color: var(--bad); background: var(--bad-soft); }
+.ln.wrong { border-color: var(--bad); animation: shake .4s; }
+.ln.fixed { border-color: var(--good); background: var(--good-soft); animation: rise .4s; }
+.ln.clean { border-color: var(--good); }
+.flow .res { font-size: 14px; margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: var(--bg-2); }
+.flow .res.bad { background: var(--bad-soft); }
+.flow .res.good { background: var(--good-soft); }
+.flow .row { margin-top: 10px; }
+.flow .nobug { min-height: 42px; }
+
+/* ---------- boss: 5 choices ---------- */
+#boss .choice { grid-template-columns: repeat(3, 1fr); }
+#boss .choice .opt b { font-size: 17px; }
+@media (max-width: 560px) { #boss .choice { grid-template-columns: 1fr 1fr; } #boss .choice .opt b { font-size: 15px; } }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 12.4 · Design a Chat System</div>
+    <h1>Special Delivery</h1>
+    <p class="lede">Alice hits send. Half a second later Bob's phone buzzes. Trace every hop in between, keep a phone and a laptop in sync, and see why a 6-person group and a 200,000-person channel need different plumbing.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can trace a message from sender to receiver in the book's <b>six steps</b> (online and offline), explain <code>cur_max_message_id</code> for <b>multi-device sync</b>, and explain <b>per-recipient inboxes</b> for small groups and why they don't work for huge ones.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Six hops to Bob</h2><div class="sub">The 1-on-1 chat flow</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>In Quest 12.2 you met the parts. Now watch them work together. The book traces one message from Alice (user A) to Bob (user B) in six steps, with a fork at step 5: one branch if Bob is online, one if he isn't.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener">[1]</a></p>
+      <p>One new term. The <b>message sync queue</b> is a queue that sits between the chat server and the rest of the system. The chat server drops the message on it and moves on; the queue gets it stored and on its way to Bob. That way the chat server isn't stuck waiting.</p>
+      <p><b>Part 1.</b> The seven cards below are shuffled. Tap them in the order they happen. At the fork, either branch can go first.</p>
+      <ol class="track" id="track">
+        <li><div class="slot" data-slot="1"><span class="sn">1</span><span class="tx">…</span></div></li>
+        <li><div class="slot" data-slot="2"><span class="sn">2</span><span class="tx">…</span></div></li>
+        <li><div class="slot" data-slot="3"><span class="sn">3</span><span class="tx">…</span></div></li>
+        <li><div class="slot" data-slot="4"><span class="sn">4</span><span class="tx">…</span></div></li>
+        <li><div class="forkcap">Step 5 is a fork: online or offline?</div></li>
+        <li class="fork"><div class="slot" data-slot="5a"><span class="sn">5a</span><span class="tx">…</span></div><div class="slot" data-slot="5b"><span class="sn">5b</span><span class="tx">…</span></div></li>
+        <li><div class="slot" data-slot="6"><span class="sn">6</span><span class="tx">…</span></div></li>
+      </ol>
+      <div class="pool" id="pool"></div>
+      <div class="bmsg" id="ordMsg"></div>
+
+      <p style="margin-top:22px"><b>Part 2: predict, then watch.</b> Set Bob online or offline. <b>Tap every box you think the message will touch</b>, then press Send. Do one run in each mode.</p>
+      <div class="sim map">
+        <div class="sim-bar">
+          <span class="row" style="gap:8px"><span class="small">Bob is</span><span class="seg" id="bobSeg"><button data-m="on" class="on">online</button><button data-m="off">offline</button></span></span>
+          <span class="scorechips"><span id="scOn">online run</span><span id="scOff">offline run</span></span>
+        </div>
+        <svg id="map1" viewBox="0 0 420 350" role="img" aria-label="Chat flow map: Alice, chat server 1, ID generator, KV store, message sync queue, push notification servers, chat server 2, Bob"></svg>
+        <div class="maplegend"><span><i style="border-color:var(--accent);background:var(--accent-soft)"></i>your pick</span><span><i style="border-color:var(--good);background:var(--good-soft)"></i>right</span><span><i style="border-color:var(--warn);background:var(--warn-soft)"></i>missed</span><span><i style="border-color:var(--bad);background:var(--bad-soft)"></i>not used</span></div>
+        <div class="hintline" id="mapHint">Tap the boxes the message will pass through (Alice is the sender, so she's already in).</div>
+        <div class="sim-bar"><button class="btn primary" id="sendBtn" disabled>▶ Send “Dinner at 8?”</button><button class="btn" id="mapReset">↻ Clear picks</button></div>
+        <div class="simlog" id="s1log"><div>Alice's phone keeps a WebSocket open to chat server 1. Bob's phone (when online) keeps one open to chat server 2.</div></div>
+      </div>
+      <ul class="checklist" id="s1goals">
+        <li data-g="order"><span class="box">✓</span><span>Put the seven steps in order</span></li>
+        <li data-g="on"><span class="box">✓</span><span>Predict and watch a run with Bob <b>online</b></span></li>
+        <li data-g="off"><span class="box">✓</span><span>Predict and watch a run with Bob <b>offline</b></span></li>
+      </ul>
+      <div class="callout warn"><b>Honest caveat: how does chat server 1 find Bob?</b> The book's step 5a just says the message goes to the server Bob is connected to. It doesn't say how anyone knows which server that is. Real systems keep a lookup table of user → server (often in Redis), or have each chat server subscribe to a per-user topic, so a message for Bob lands wherever Bob happens to be.</div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Many devices, one account</h2><div class="sub">cur_max_message_id</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Alice has a phone and a laptop. Each one opens its <b>own</b> WebSocket to a chat server (maybe different servers). So how does the laptop catch up after a night asleep?</p>
+      <p>The book's answer: each device keeps one number, <code>cur_max_message_id</code>, the highest message ID it already has. A message is new for that device when two things are true:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener">[1]</a></p>
+      <ul>
+        <li>it was sent <b>to</b> the logged-in user (Alice), and</li>
+        <li>its ID in the KV store is <b>greater than</b> that device's <code>cur_max_message_id</code>.</li>
+      </ul>
+      <p>Because every device has its own cursor (a bookmark of "where I'm up to"), sync is simple. A device that wakes up asks for everything above its bookmark. Try it: close the laptop, let messages arrive, then predict what it fetches.</p>
+      <div class="sim">
+        <div class="syncgrid">
+          <div><div class="colh">🗄️ KV store · messages to Alice</div><div class="kvlist" id="kvList"></div></div>
+          <div class="devs">
+            <div class="dev" id="devPhone"><div class="hd">📱 Phone</div><div class="st">● online</div><div class="curl">cur_max_message_id</div><div class="cur">105</div><div class="have"></div></div>
+            <div class="dev" id="devLaptop"><div class="hd">💻 Laptop</div><div class="st">● online</div><div class="curl">cur_max_message_id</div><div class="cur">105</div><div class="have"></div><button class="btn" id="lidBtn">Close the laptop</button></div>
+          </div>
+        </div>
+        <div class="qbar" id="qbar">// waiting…</div>
+        <div class="sim-bar"><button class="btn primary" id="fiveBtn">📨 5 new messages for Alice</button><button class="btn" id="syncReset">↻ Reset</button></div>
+        <div class="simlog" id="s2log"><div>Both devices have messages 101–105, so both cursors read 105.</div></div>
+      </div>
+      <ul class="checklist" id="s2goals">
+        <li data-g="close"><span class="box">✓</span><span>Close the laptop, then let 5 messages arrive</span></li>
+        <li data-g="fetch"><span class="box">✓</span><span>Predict exactly which IDs the laptop fetches when it wakes</span></li>
+        <li data-g="bonus"><span class="box">✓</span><span>Bonus round: a laptop that forgot its cursor</span></li>
+      </ul>
+      <div class="challenge boxed" id="pickBox" style="display:none">
+        <div class="step">Predict first</div>
+        <h3>The laptop is about to wake up with its cursor at 105. Tap <b>every</b> ID it will fetch.</h3>
+        <div class="idpicks" id="idPicks"></div>
+        <div class="row" style="margin-top:12px"><button class="btn primary" id="openBtn" disabled>🔓 Open the laptop and sync</button></div>
+        <div class="explain" id="pickEx"></div>
+      </div>
+      <div class="challenge boxed" id="bonusBox" style="display:none"></div>
+      <div class="callout warn"><b>Honest caveat: one cursor needs one sequence.</b> A single <code>cur_max_message_id</code> only works if every message to Alice gets an ID from one rising sequence. In Quest 12.3 the book lets IDs be unique only <i>within one chat</i> (a local sequence). Then "ID &gt; 105" means nothing across chats, and a device needs one cursor <i>per conversation</i>, or the server keeps a per-user inbox sequence. The book glosses over this mismatch. It's a great thing to spot out loud.</div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Small-group fan-out</h2><div class="sub">One inbox per recipient</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Alice posts in a group with Bob and Carol. The book's design <b>copies the message into each member's message sync queue</b>: one copy for Bob, one for Carol. Think of each member's sync queue as their personal <b>inbox</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener">[1]</a> Copying one event out to many destinations is called <b>fan-out</b>.</p>
+      <p>The book gives two reasons this suits small groups. Sync stays simple, because each client only ever checks its own inbox. And when the group is small, one copy per member is cheap. WeChat does something similar and caps groups at 500 members. Drag the slider to see where "cheap" stops being true.</p>
+      <div class="sim">
+        <div class="slider"><label for="gSlider"><span>Group size: <b class="mono" id="gVal">3</b> members</span><span class="seg" id="modeSeg"><button data-m="copy" class="on">Copy per inbox</button><button data-m="once">Store once</button></span></label>
+          <input type="range" id="gSlider" min="0" max="5" step="1" value="0" aria-label="Group size">
+          <div class="ticks"><span>3</span><span>10</span><span>100</span><span>500</span><span>10k</span><span>100k</span></div>
+        </div>
+        <div class="fan">
+          <div class="fan-top"><span class="sender">👩 Alice</span><span class="bubble" id="bubble">See you all at 7!</span></div>
+          <div id="fanArea"></div>
+        </div>
+        <div class="fstats">
+          <div><span>Writes per message</span><b id="stCopies">2</b></div>
+          <div><span>Storage a day (1,000 msgs × 1 KB)</span><b id="stStore">2 MB</b></div>
+          <div><span id="stReadL">Where each member reads</span><b id="stRead">own inbox</b></div>
+        </div>
+        <div class="sim-bar"><button class="btn primary" id="fanSend">✉️ Send 1 message</button><span class="small muted" id="fanNote">The sender doesn't need a copy, so writes = members − 1.</span></div>
+        <div class="simlog" id="s3log"><div>3 members: Alice, Bob, Carol.</div></div>
+      </div>
+      <ul class="checklist" id="s3goals">
+        <li data-g="small"><span class="box">✓</span><span>Send a message in a small group (3 or 10 members)</span></li>
+        <li data-g="pred"><span class="box">✓</span><span>Predict the copies for a 100,000-member group</span></li>
+        <li data-g="once"><span class="box">✓</span><span>At 10k or 100k members, switch to <b>Store once</b> and send</span></li>
+        <li data-g="inbox"><span class="box">✓</span><span>Watch Bob's single inbox fill from three sources</span></li>
+      </ul>
+      <div class="challenge boxed" id="fanPred"></div>
+
+      <p style="margin-top:20px"><b>The recipient's side.</b> Flip it around. Bob is in a 1-on-1 chat with Alice, another with Carol, and in the Book club group. All of it lands in <b>one</b> inbox, his message sync queue. His app reads that one place.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener">[1]</a></p>
+      <div class="sim">
+        <div class="bobview">
+          <div class="srcs"><div class="src a" id="srcA">👩 Alice <span class="muted small">· 1-on-1</span></div><div class="src g" id="srcG">📚 Book club <span class="muted small">· group</span></div><div class="src c" id="srcC">🧑‍🦰 Carol <span class="muted small">· 1-on-1</span></div></div>
+          <div class="inboxcol"><div class="colh">📥 Bob's inbox (his message sync queue)</div><div id="bobInbox"></div></div>
+        </div>
+        <div class="sim-bar"><button class="btn primary" id="bobPlay">▶ Play the incoming messages</button></div>
+      </div>
+      <div class="callout tip"><b>Numbers to anchor on.</b> The book's own requirements cap group chats at 100 members, and WeChat's cap is 500. At those sizes a copy per member is a few hundred writes at most. The book stops at "a copy per member is not acceptable for big groups". The usual fix, which goes past the book, is to <b>store the message once</b> per channel and have members read the channel (fan-out on read). Discord, for example, stores messages per channel.<a class="cite" href="https://discord.com/blog/how-discord-stores-billions-of-messages" target="_blank" rel="noopener">[2]</a> <span class="muted">Group caps change over time and by product. WhatsApp has raised its limit more than once. The principle is what matters: copying per member only stays cheap while groups are small.</span></div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>When delivery fails</h2><div class="sub">Retry, queue, and don't double-post</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Networks drop things. The book's wrap-up names the two standard ways to resend a message: <b>retry</b> and <b>queueing</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener">[1]</a> Retrying brings a new risk: the same message can arrive twice. That's called <b>at-least-once delivery</b>.</p>
+      <p>The rest of this stage goes past the book. In an interview, say so ("beyond the basic design…"). Three rules make retries safe:</p>
+      <ul>
+        <li><b>Ack only after storing.</b> An <i>ack</i> (acknowledgement) is the server's "got it". Send it only once the message is safely in storage.</li>
+        <li><b>The client stamps every message with its own ID</b> (a <code>client_msg_id</code>) before the first try, and reuses it on every retry.</li>
+        <li><b>The server dedupes on that ID.</b> If it has already stored that ID, it skips the write. That makes the send <b>idempotent</b>: doing it twice has the same effect as doing it once.</li>
+      </ul>
+      <p>Below are three flows. In each one, <b>tap the line that causes the bug</b>, or press "No bug here".</p>
+      <div class="flows" id="flows"></div>
+      <div class="callout warn"><b>Honest caveat: "exactly once" is a myth.</b> Over a real network you can't guarantee a message is delivered exactly once. What chat apps really do is at-least-once delivery plus deduplication. To the user that looks exactly like exactly-once.</div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Lost-Mail Hydra</h2><div class="sub">Every message, exactly where it belongs</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Seven deliveries. For each one, pick the path the message takes (or how the device gets it). Same five choices every time.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">Trace the message out loud</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> Step 5 kept asking "is Bob online?". Who actually knows that, and how does Alice's app show the little green dot? That's Quest 12.5, <a href="1205-chat-online-presence.html"><i>The Green Dot</i></a>: login, logout, heartbeats, and fanning out status changes.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 12: Design a Chat System</a>, Step 3 "Message flows" (1-on-1 flow, multi-device sync, small group chat) and the wrap-up's note on resending. Then read Discord's <a href="https://discord.com/blog/how-discord-stores-billions-of-messages" target="_blank" rel="noopener">How Discord Stores Billions of Messages</a> to see per-channel storage in practice, and Meta's 2010 <a href="https://engineering.fb.com/2010/11/15/core-infra/the-underlying-technology-of-messages/" target="_blank" rel="noopener">The Underlying Technology of Messages</a> for how a huge inbox system was built.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <ul style="margin:0;padding-left:20px">
+        <li><b>When does Alice see "sent"?</b> The book's figure doesn't say whether step 3 (queue) or step 4 (store) must finish first. Real systems ack the sender only after the message is durably stored (or durably queued), then deliver.</li>
+        <li><b>Routing to Bob's server</b> needs a user → server lookup (often Redis) or a per-user pub/sub topic. The book leaves it out.</li>
+        <li><b>Cursors need one sequence.</b> With per-chat IDs, a device keeps a cursor per conversation, or the server gives each user's inbox its own rising sequence.</li>
+        <li><b>Huge groups</b> flip to fan-out on read: one stored copy per channel, and each member keeps a "last read" pointer into the channel. That's the same cursor idea as stage 2, applied per channel.</li>
+      </ul>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"if the sync queue already holds the message, why store it in the KV store too?"</i> or <i>"how would a 200,000-member channel send push notifications?"</i>
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 12 "Design a Chat System": Message flows and Wrap-up (ByteByteGo).</li>
+        <li>Stanislav Vishnevskiy, "How Discord Stores Billions of Messages", Discord blog, 2017.</li>
+        <li>Kannan Muthukkaruppan, "The Underlying Technology of Messages", Meta Engineering, 2010.</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '1204',
+  winTitle: 'Delivered, every time',
+  badge: '📬 Badge: Courier',
+  cheatsheet: '../reference/ch12-chat-cheatsheet.html',
+});
+const { sleep, shuffle } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+const f1 = n => n.toFixed(1);
+const wait = ms => sleep(Q.reduced ? 0 : ms);
+function anim(dur, f) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 1) { f(1); return res(); }
+    const t0 = performance.now();
+    const fr = now => { const p = Math.min(1, (now - t0) / dur); f(p); p < 1 ? requestAnimationFrame(fr) : res(); };
+    requestAnimationFrame(fr);
+  });
+}
+const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function mark(listSel, g) { const li = $(`${listSel} [data-g="${g}"]`); if (li.classList.contains('done')) return false; li.classList.add('done'); return true; }
+function checkGoal(listSel, g, xp) { if (!mark(listSel, g)) return false; Q.addXP(xp || 10, $(`${listSel} [data-g="${g}"]`)); return true; }
+// Predict-then-watch round (same shape as the other quests).
+function predict(box, { step, title, options, correct, act, explain, xp = 20 }) {
+  box.innerHTML = `${step ? `<div class="step">${step}</div>` : ''}<h3>${title}</h3><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+  const opts = $('.opts', box);
+  let busy = false;
+  return new Promise(resolve => {
+    shuffle(options.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = async () => {
+        if (busy) return; busy = true;
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        b.classList.add('picked');
+        await act();
+        const ok = i === correct;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-i="${correct}"]`, opts).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + explain;
+        ok ? Q.addXP(xp, b) : Q.loseHeart(b);
+        resolve({ ok, row: $('.row', box) });
+      };
+      opts.appendChild(b);
+    });
+  });
+}
+
+/* ================= STAGE 1: six hops to Bob ================= */
+Q.onStage(1, () => {
+  /* ---- part 1: tap in order ---- */
+  const STEPS = [
+    { k: '1', t: 'Alice’s app sends the message to chat server 1' },
+    { k: '2', t: 'Chat server 1 gets a message ID from the ID generator' },
+    { k: '3', t: 'Chat server 1 puts the message on the message sync queue' },
+    { k: '4', t: 'The message is saved in the key-value store' },
+    { k: '5a', t: 'Bob is online: it goes to chat server 2, where Bob is connected' },
+    { k: '5b', t: 'Bob is offline: the push notification servers send him a push' },
+    { k: '6', t: 'Chat server 2 sends it down Bob’s WebSocket to his phone' },
+  ];
+  const SEQ = ['1', '2', '3', '4', '5', '5', '6'];
+  const HINT = {
+    '1': 'Start where the message starts: Alice’s phone.',
+    '2': 'Before it’s stored or sent anywhere, the message needs a number of its own.',
+    '3': 'Chat server 1 hands the message off so it isn’t stuck waiting.',
+    '4': 'Next it has to be saved somewhere durable.',
+    '5': 'Now it depends on whether Bob is online. Either branch can go first.',
+    '6': 'The last hop reaches Bob’s phone.',
+  };
+  let oi = 0, mistakes = 0, ordered = false;
+  const pool = $('#pool'), msg = $('#ordMsg');
+  function buildOrder() {
+    oi = 0; mistakes = 0;
+    $$('#track .slot').forEach(s => { s.classList.remove('filled'); $('.tx', s).textContent = '…'; });
+    pool.innerHTML = '';
+    shuffle(STEPS).forEach(s => {
+      const b = document.createElement('button'); b.className = 'stepc'; b.dataset.k = s.k; b.textContent = s.t;
+      b.onclick = () => tapStep(s, b);
+      pool.appendChild(b);
+    });
+    msg.className = 'bmsg'; msg.textContent = '';
+  }
+  function tapStep(s, b) {
+    const want = SEQ[oi];
+    const ok = want === '5' ? s.k.startsWith('5') : s.k === want;
+    if (!ok) {
+      b.classList.remove('nope'); void b.offsetWidth; b.classList.add('nope');
+      msg.className = 'bmsg bad'; msg.textContent = 'Not yet. ' + HINT[want];
+      if (!ordered && mistakes === 0) Q.loseHeart(b);
+      mistakes++;
+      return;
+    }
+    const slot = $(`#track .slot[data-slot="${s.k}"]`);
+    slot.classList.add('filled'); $('.tx', slot).textContent = s.t;
+    b.remove(); oi++;
+    msg.className = 'bmsg'; msg.textContent = '';
+    if (oi === SEQ.length) {
+      msg.className = 'bmsg good';
+      msg.textContent = mistakes ? `All seven in place (${mistakes} wrong tap${mistakes > 1 ? 's' : ''} on the way).` : 'All seven in place, first try.';
+      if (!ordered) { ordered = true; if (mark('#s1goals', 'order')) Q.addXP(mistakes ? 10 : 20, $('#s1goals [data-g="order"]')); }
+      const again = document.createElement('button'); again.className = 'btn'; again.textContent = '↻ Shuffle and try again'; again.onclick = buildOrder;
+      pool.appendChild(again);
+      maybeQuiz();
+    }
+  }
+  buildOrder();
+
+  /* ---- part 2: flow map ---- */
+  const NODES = {
+    a: { x: 70, y: 52, ic: '👩', nm: 'Alice' },
+    cs1: { x: 210, y: 52, ic: '🖥️', nm: 'Chat server 1' },
+    id: { x: 350, y: 52, ic: '🔢', nm: 'ID generator' },
+    kv: { x: 70, y: 172, ic: '🗄️', nm: 'KV store' },
+    q: { x: 210, y: 172, ic: '📮', nm: 'Sync queue' },
+    pn: { x: 350, y: 172, ic: '🔔', nm: 'PN servers' },
+    cs2: { x: 210, y: 292, ic: '🖥️', nm: 'Chat server 2' },
+    b: { x: 350, y: 292, ic: '📱', nm: 'Bob' },
+  };
+  const EDGES = [['a', 'cs1'], ['cs1', 'id'], ['cs1', 'q'], ['q', 'kv'], ['q', 'pn'], ['q', 'cs2'], ['cs2', 'b'], ['pn', 'b']];
+  const TRUTH = { on: ['cs1', 'id', 'q', 'kv', 'cs2', 'b'], off: ['cs1', 'id', 'q', 'kv', 'pn', 'b'] };
+  const HW = 52, HH = 34;
+  const ek = (a, b) => [a, b].sort().join('-');
+  const svg = $('#map1');
+  const eG = S('g', {}, svg), nG = S('g', {}, svg), fx = S('g', {}, svg);
+  const stepBig = S('text', { class: 'stepbig', x: 70, y: 296 }, svg), stepSm = S('text', { class: 'stepsm', x: 70, y: 318 }, svg);
+  const eEl = {}, nEl = {};
+  EDGES.forEach(([a, b]) => { const A = NODES[a], B = NODES[b]; eEl[ek(a, b)] = S('line', { class: 'edge', x1: A.x, y1: A.y, x2: B.x, y2: B.y }, eG); });
+  let mode = 'on', picks = new Set(), running = false, ranOnce = false;
+  const scored = { on: false, off: false };
+  Object.entries(NODES).forEach(([id, n]) => {
+    const g = S('g', { class: 'node' + (id === 'a' ? ' me' : ''), 'data-id': id }, nG);
+    S('rect', { x: n.x - HW, y: n.y - HH, width: HW * 2, height: HH * 2, rx: 12 }, g);
+    S('text', { class: 'ic', x: n.x, y: n.y - 12 }, g).textContent = n.ic;
+    S('text', { class: 'nm', x: n.x, y: n.y + 11 }, g).textContent = n.nm;
+    const sb = S('text', { class: 'sb', x: n.x, y: n.y + 25 }, g);
+    if (id !== 'a') {
+      g.classList.add('tap'); g.setAttribute('tabindex', 0); g.setAttribute('role', 'button'); g.setAttribute('aria-pressed', 'false');
+      g.setAttribute('aria-label', `${n.nm}: tap to predict the message passes here`);
+      const act = () => togglePick(id);
+      g.addEventListener('click', act);
+      g.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); act(); } });
+    }
+    nEl[id] = { g, sb };
+  });
+  const hint = (t, c) => { const h = $('#mapHint'); h.className = 'hintline' + (c ? ' ' + c : ''); h.innerHTML = t; };
+  function togglePick(id) {
+    if (running) return;
+    if (ranOnce) resetMap();
+    picks.has(id) ? picks.delete(id) : picks.add(id);
+    nEl[id].g.classList.toggle('pick', picks.has(id));
+    nEl[id].g.setAttribute('aria-pressed', picks.has(id));
+    $('#sendBtn').disabled = !picks.size;
+    hint(picks.size ? `${picks.size} box${picks.size > 1 ? 'es' : ''} picked. Press Send when you're happy.` : 'Tap the boxes the message will pass through (Alice is the sender, so she\'s already in).');
+  }
+  function subs() {
+    Object.values(nEl).forEach(o => o.sb.textContent = '');
+    nEl.a.sb.textContent = 'sender';
+    nEl.b.sb.textContent = mode === 'on' ? '● online' : 'offline';
+    nEl.b.g.classList.toggle('off', mode === 'off');
+  }
+  function resetMap() {
+    ranOnce = false; picks.clear();
+    Object.values(nEl).forEach(o => { o.g.classList.remove('pick', 'lit', 'ok', 'miss', 'extra'); o.g.setAttribute('aria-pressed', 'false'); });
+    Object.values(eEl).forEach(e => e.setAttribute('class', 'edge'));
+    fx.innerHTML = ''; stepBig.textContent = ''; stepSm.textContent = '';
+    subs(); $('#sendBtn').disabled = true;
+    hint('Tap the boxes the message will pass through (Alice is the sender, so she\'s already in).');
+  }
+  function packet(a, b, dur = 520) {
+    const A = NODES[a], B = NODES[b];
+    eEl[ek(a, b)].setAttribute('class', 'edge on');
+    const p = S('circle', { class: 'pk', r: 8, cx: A.x, cy: A.y }, fx);
+    return anim(dur, t => { const q = ease(t); p.setAttribute('cx', f1(A.x + (B.x - A.x) * q)); p.setAttribute('cy', f1(A.y + (B.y - A.y) * q)); })
+      .then(() => { setTimeout(() => p.remove(), Q.reduced ? 0 : 120); nEl[b].g.classList.add('lit'); });
+  }
+  const step = (n, s) => { stepBig.textContent = n; stepSm.textContent = s; };
+  async function run() {
+    running = true; ranOnce = true;
+    $('#sendBtn').disabled = true;
+    const m = mode;
+    Object.values(eEl).forEach(e => e.setAttribute('class', 'edge'));
+    hint('Watch the message travel…');
+    logTo('s1log', `— Send with Bob <b>${m === 'on' ? 'online' : 'offline'}</b> —`);
+    step('1', 'Alice → server 1'); await packet('a', 'cs1'); logTo('s1log', '1 · Alice’s app sends “Dinner at 8?” over her WebSocket to chat server 1.');
+    await wait(150);
+    step('2', 'get an ID'); await packet('cs1', 'id', 420); nEl.id.sb.textContent = '→ 1042'; await packet('id', 'cs1', 420);
+    logTo('s1log', '2 · Chat server 1 gets message ID 1042 from the ID generator.');
+    await wait(150);
+    step('3', 'onto the queue'); await packet('cs1', 'q'); logTo('s1log', '3 · Chat server 1 puts it on the message sync queue and moves on.');
+    await wait(150);
+    step('4', 'store it'); await packet('q', 'kv'); nEl.kv.sb.textContent = '1042 saved ✓'; logTo('s1log', '4 · The message is stored in the key-value store. It is now safe, whatever happens to Bob.', 'g');
+    await wait(150);
+    if (m === 'on') {
+      step('5a', 'Bob is online'); await packet('q', 'cs2'); logTo('s1log', '5a · Bob is online, so it goes to chat server 2, where Bob is connected.');
+      await wait(150);
+      step('6', 'down the socket'); await packet('cs2', 'b'); nEl.b.sb.textContent = '💬 Dinner at 8?'; logTo('s1log', '6 · Chat server 2 pushes it down Bob’s open WebSocket. Delivered.', 'g');
+    } else {
+      step('5b', 'Bob is offline'); await packet('q', 'pn'); logTo('s1log', '5b · Bob is offline: no WebSocket to use. The push notification (PN) servers take over.', 'w');
+      await wait(150);
+      step('🔒', 'push to lock screen'); await packet('pn', 'b'); nEl.b.sb.textContent = '🔒 push shown'; logTo('s1log', '→ Bob’s lock screen shows “Alice: Dinner at 8?”. When he opens the app it syncs from the KV store.', 'g');
+    }
+    // score the prediction
+    const truth = new Set(TRUTH[m]);
+    const miss = [...truth].filter(x => !picks.has(x)), extra = [...picks].filter(x => !truth.has(x));
+    Object.entries(nEl).forEach(([id, o]) => {
+      if (id === 'a') return;
+      o.g.classList.remove('pick', 'lit');
+      if (truth.has(id) && picks.has(id)) o.g.classList.add('ok');
+      else if (truth.has(id)) o.g.classList.add('miss');
+      else if (picks.has(id)) o.g.classList.add('extra');
+    });
+    const ok = !miss.length && !extra.length;
+    const nm = ids => ids.map(x => NODES[x].nm).join(', ');
+    const other = m === 'on' ? 'PN servers sit this one out: Bob has a live socket.' : 'Chat server 2 sits this one out: Bob has no live socket to push down.';
+    hint(ok ? `Exactly right. ${other}` : `${miss.length ? `Missed: <b>${nm(miss)}</b>. ` : ''}${extra.length ? `Not used: <b>${nm(extra)}</b>. ` : ''}${other}`, ok ? 'good' : 'bad');
+    if (!scored[m]) {
+      scored[m] = true;
+      mark('#s1goals', m);
+      $('#' + (m === 'on' ? 'scOn' : 'scOff')).classList.add('done');
+      $('#' + (m === 'on' ? 'scOn' : 'scOff')).textContent = (m === 'on' ? 'online run' : 'offline run') + ' ✓';
+      ok ? Q.addXP(15, $('#sendBtn')) : Q.loseHeart($('#sendBtn'));
+      if (!scored.on || !scored.off) logTo('s1log', `Now flip Bob to <b>${m === 'on' ? 'offline' : 'online'}</b> and predict again.`);
+    }
+    running = false;
+    maybeQuiz();
+  }
+  $('#sendBtn').onclick = () => { if (!running && picks.size) run(); };
+  $('#mapReset').onclick = () => { if (!running) resetMap(); };
+  $$('#bobSeg button').forEach(b => b.onclick = () => {
+    if (running) return;
+    mode = b.dataset.m;
+    $$('#bobSeg button').forEach(x => x.classList.toggle('on', x === b));
+    resetMap();
+  });
+  resetMap();
+
+  let quizShown = false;
+  function maybeQuiz() {
+    if (quizShown || !ordered || !scored.on || !scored.off) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s1quiz'), {
+      q: 'Bob is offline when Alice hits send. Is her message lost?',
+      options: ['No: it’s in the KV store, and Bob syncs when he’s back', 'Yes, unless Bob reconnects within a few seconds', 'No: chat server 1 keeps it in memory until Bob returns', 'Yes: the push notification carries the only copy'],
+      correct: 0,
+      good: 'Step 4 already saved it in the key-value store before the fork. The push is just a nudge. When Bob opens the app, it fetches what it missed (that’s the next stage).',
+      bad: 'Look where the fork is: <i>after</i> step 4. The message is already in the key-value store whether Bob is online or not. The push is only a nudge, and Bob’s app fetches the message when he reconnects. Nothing is held in a chat server’s memory.',
+      onDone: () => setTimeout(() => Q.clearStage(1), 900),
+    }), 500);
+  }
+});
+
+/* ================= STAGE 2: many devices, one account ================= */
+Q.onStage(2, () => {
+  const MSG = { 101: 'Bob', 102: 'Carol', 103: 'Bob', 104: 'Dan', 105: 'Carol', 106: 'Bob', 107: 'Dan', 108: 'Carol', 109: 'Bob', 110: 'Eve' };
+  const range = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
+  let kv, phone, laptop, phase, busy = false;
+  const hits = new Set(), fresh = new Set();
+  const scored = { close: false, fetch: false, bonus: false };
+  const picks = new Set();
+  function render() {
+    $('#kvList').innerHTML = range(101, 110).map(id => kv.includes(id)
+      ? `<div class="mid${hits.has(id) ? ' hit' : fresh.has(id) ? ' fresh' : ''}" data-id="${id}">${id}<small>${MSG[id]}</small></div>`
+      : `<div class="mid ghost" data-id="${id}">·<small>&nbsp;</small></div>`).join('');
+    [[phone, '#devPhone'], [laptop, '#devLaptop']].forEach(([d, sel]) => {
+      const el = $(sel);
+      el.classList.toggle('asleep', !d.on);
+      $('.st', el).textContent = d.on ? '● online' : '💤 asleep';
+      $('.cur', el).textContent = d.cur;
+      $('.have', el).innerHTML = d.have.map(id => `<span class="${id > 105 ? 'n' : ''}">${id}</span>`).join('');
+    });
+    const lid = $('#lidBtn');
+    lid.textContent = phase === 'start' || phase === 'fetched' ? 'Close the laptop' : phase === 'asleep' ? 'Open the laptop' : 'Predict first ↓';
+    lid.disabled = phase === 'missed' || busy;
+  }
+  function reset() {
+    kv = range(101, 105);
+    phone = { cur: 105, have: range(101, 105), on: true };
+    laptop = { cur: 105, have: range(101, 105), on: true };
+    phase = 'start'; picks.clear(); hits.clear(); fresh.clear();
+    $('#qbar').textContent = '// waiting…';
+    $('#pickBox').style.display = 'none';
+    render();
+  }
+  async function tick(dev, sel, id) {
+    dev.cur = id; dev.have.push(id); render();
+    const c = $(sel + ' .cur'); c.classList.add('tick'); await wait(260); c.classList.remove('tick');
+  }
+  $('#lidBtn').onclick = () => {
+    if (busy) return;
+    if (phase === 'start' || phase === 'fetched') {
+      if (phase === 'fetched') { reset(); }
+      laptop.on = false; phase = 'asleep'; render();
+      logTo('s2log', '💻 Laptop closed. Its WebSocket drops; its cursor stays at 105.');
+    } else if (phase === 'asleep') {
+      laptop.on = true; phase = 'start'; render();
+      logTo('s2log', '💻 Laptop open again. Nothing arrived while it slept, so there was nothing to fetch.');
+    }
+  };
+  $('#fiveBtn').onclick = async () => {
+    if (busy) return;
+    if (phase !== 'asleep') {
+      Q.toast(phase === 'missed' ? 'predict first ↓' : 'close the laptop first', $('#fiveBtn'), 'practice');
+      logTo('s2log', phase === 'missed' ? 'Messages are waiting. Predict what the laptop fetches below.' : 'Close the laptop first, so it misses these.', 'w');
+      return;
+    }
+    busy = true; render();
+    for (const id of range(106, 110)) {
+      kv.push(id); fresh.add(id); render();
+      await tick(phone, '#devPhone', id);
+      logTo('s2log', `📨 ${id} from ${MSG[id]} → stored. Phone is online: gets it live, cursor → ${id}. Laptop: asleep, still 105.`);
+      await wait(200);
+    }
+    phase = 'missed'; busy = false; render();
+    const li = $('#s2goals [data-g="close"]'); li.classList.add('done');
+    if (!scored.close) { scored.close = true; Q.addXP(10, li); }
+    showPick();
+  };
+  function showPick() {
+    picks.clear();
+    const box = $('#pickBox'); box.style.display = 'block';
+    $('#pickEx').className = 'explain'; $('#pickEx').innerHTML = '';
+    $('#idPicks').innerHTML = range(101, 110).map(id => `<button class="idpick" data-id="${id}" aria-pressed="false">${id}</button>`).join('');
+    $$('#idPicks .idpick').forEach(b => b.onclick = () => {
+      if (busy || phase !== 'missed') return;
+      const id = +b.dataset.id;
+      picks.has(id) ? picks.delete(id) : picks.add(id);
+      b.setAttribute('aria-pressed', picks.has(id));
+      $('#openBtn').disabled = !picks.size;
+    });
+    $('#openBtn').disabled = true;
+    if (!Q.reduced) setTimeout(() => box.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
+  }
+  $('#openBtn').onclick = async () => {
+    if (busy || phase !== 'missed' || !picks.size) return;
+    busy = true; $('#openBtn').disabled = true;
+    laptop.on = true; render();
+    logTo('s2log', '💻 Laptop wakes, reconnects its WebSocket, and asks for anything above its cursor.');
+    $('#qbar').innerHTML = `<span class="k">fetch</span> messages <span class="k">where</span> message_to = <span class="v">alice</span> <span class="k">and</span> message_id &gt; <span class="v">${laptop.cur}</span>`;
+    await wait(500);
+    const want = range(106, 110);
+    for (const id of want) { hits.add(id); await tick(laptop, '#devLaptop', id); }
+    logTo('s2log', `→ got ${want.join(', ')}. Laptop cursor → 110. Both devices now agree.`, 'g');
+    // score
+    const truth = new Set(want);
+    $$('#idPicks .idpick').forEach(b => {
+      const id = +b.dataset.id; b.disabled = true;
+      if (truth.has(id) && picks.has(id)) b.classList.add('right');
+      else if (truth.has(id)) b.classList.add('missed');
+      else if (picks.has(id)) b.classList.add('wrong');
+    });
+    const ok = want.every(id => picks.has(id)) && [...picks].every(id => truth.has(id));
+    const ex = $('#pickEx'); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+    ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Not quite.</b> ') + 'Two filters: sent <b>to Alice</b>, and ID <b>greater than 105</b>. That’s 106 to 110, nothing more. 101–105 are already on the laptop (its cursor says so), so asking again would waste bandwidth.';
+    if (!scored.fetch) { scored.fetch = true; mark('#s2goals', 'fetch'); ok ? Q.addXP(25, $('#openBtn')) : Q.loseHeart($('#openBtn')); }
+    phase = 'fetched'; busy = false; render();
+    if (!scored.bonus) runBonus();
+    maybeQuiz();
+  };
+  async function runBonus() {
+    const box = $('#bonusBox'); box.style.display = 'block';
+    const { row } = await predict(box, {
+      step: 'Bonus round',
+      title: 'Alice reinstalls the laptop app. Its <code>cur_max_message_id</code> resets to <b>0</b>. On the next sync, what does it fetch?',
+      options: ['All ten messages, 101 to 110', 'Nothing, since it had them before', 'Only the newest one, 110'],
+      correct: 0, xp: 15,
+      act: async () => {
+        busy = true;
+        kv = range(101, 110); hits.clear(); fresh.clear();
+        laptop.on = true; laptop.cur = 0; laptop.have = []; render();
+        logTo('s2log', '💻 App reinstalled: cursor = 0, local messages gone.', 'w');
+        $('#qbar').innerHTML = `<span class="k">fetch</span> messages <span class="k">where</span> message_to = <span class="v">alice</span> <span class="k">and</span> message_id &gt; <span class="v">0</span>`;
+        await wait(400);
+        for (const id of range(101, 110)) { hits.add(id); await tick(laptop, '#devLaptop', id); }
+        logTo('s2log', '→ every message is above 0, so all ten come down again. Cursor → 110.', 'g');
+        busy = false; render();
+      },
+      explain: 'Every ID is above 0, so all ten count as new and the laptop downloads its whole history again. The cursor is the device’s memory of what it has. Lose it and you resync from scratch. That’s fine here because messages are keyed by ID, so a refetch can’t create duplicates.',
+    });
+    scored.bonus = true; mark('#s2goals', 'bonus');
+    row.innerHTML = '<span class="small muted">Press ↻ Reset above to replay the sim as practice.</span>';
+    maybeQuiz();
+  }
+  $('#syncReset').onclick = () => { if (!busy) { reset(); logTo('s2log', '↻ Reset: both devices at 105.'); } };
+  reset();
+  let quizShown = false;
+  function maybeQuiz() {
+    if (quizShown || !scored.fetch || !scored.bonus) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s2quiz'), {
+      q: 'Why does each device keep its own cursor, instead of one cursor per account?',
+      options: ['Each device misses different messages while it is away', 'One shared cursor would need a much longer message ID', 'The KV store can only answer one device per account', 'Phones and laptops use different message ID formats'],
+      correct: 0,
+      good: 'Devices go offline at different times, so “what I already have” is different for each one. One cursor per account would tell the sleeping laptop it was up to date just because the phone was.',
+      bad: 'It’s about timing, not ID formats or limits. Devices go offline at different times, so each has a different idea of what it already has. A shared cursor would tell the sleeping laptop it was up to date just because the phone was.',
+      onDone: () => setTimeout(() => Q.clearStage(2), 900),
+    }), 500);
+  }
+});
+
+/* ================= STAGE 3: small-group fan-out ================= */
+Q.onStage(3, () => {
+  const SIZES = [3, 10, 100, 500, 10000, 100000];
+  const NAMES = ['Bob', 'Carol', 'Dan', 'Eve', 'Finn', 'Gia', 'Hal', 'Ivy', 'Jo'];
+  let idx = 0, mode = 'copy', busy = false, predicted = false;
+  const fmtN = n => n.toLocaleString('en-US');
+  function fmtKB(kb) {
+    if (kb >= 1e6) { const g = kb / 1e6; return `${g >= 10 ? Math.round(g) : g.toFixed(1).replace(/\.0$/, '')} GB`; }
+    if (kb >= 1e3) { const m = kb / 1e3; return `${m >= 10 ? Math.round(m) : m.toFixed(1).replace(/\.0$/, '')} MB`; }
+    return `${kb} KB`;
+  }
+  const members = () => SIZES[idx];
+  function render() {
+    const n = members(), copies = mode === 'copy' ? n - 1 : 1;
+    $('#gVal').textContent = fmtN(n);
+    $('#gSlider').value = idx;
+    $$('#modeSeg button').forEach(b => b.classList.toggle('on', b.dataset.m === mode));
+    const c = $('#stCopies'); c.textContent = fmtN(copies); c.className = copies > 1000 ? 'bad' : copies <= 10 ? 'good' : '';
+    const st = $('#stStore'); st.textContent = fmtKB(copies * 1000); st.className = copies * 1000 >= 1e6 ? 'bad' : '';
+    $('#stRead').textContent = mode === 'copy' ? 'own inbox' : 'the channel';
+    $('#fanNote').textContent = mode === 'copy' ? 'The sender doesn’t need a copy, so writes = members − 1.' : `1 write. Each of the ${fmtN(n - 1)} other members reads the channel when they open the chat.`;
+    const area = $('#fanArea');
+    if (mode === 'copy') {
+      if (n <= 10) area.innerHTML = `<div class="inboxes">${NAMES.slice(0, n - 1).map(nm => `<span class="ib big">📥 ${nm}</span>`).join('')}</div>`;
+      else if (n <= 100) area.innerHTML = `<div class="inboxes tiny" aria-label="${n - 1} inboxes">${'<span class="ib"></span>'.repeat(n - 1)}</div>`;
+      else area.innerHTML = `<div style="margin-top:12px"><div class="bigcount"><span id="fanCount">0</span> <small>/ ${fmtN(n - 1)} inbox copies written</small></div><div class="prog"><div id="fanProg"></div></div></div>`;
+    } else {
+      area.innerHTML = `<div class="inboxes"><span class="ib big store" id="storeTile">🗃️ Channel store · 1 copy</span>${n <= 10 ? NAMES.slice(0, n - 1).map(nm => `<span class="ib big reader">👀 ${nm}</span>`).join('') : `<span class="ib big reader">👀 ${fmtN(n - 1)} members read it</span>`}</div>`;
+    }
+  }
+  async function send() {
+    busy = true; $('#fanSend').disabled = true;
+    const n = members(), b = $('#bubble');
+    b.classList.remove('fly'); void b.offsetWidth; b.classList.add('fly');
+    render();
+    if (mode === 'copy') {
+      if (n <= 100) {
+        const tiles = $$('#fanArea .ib'), per = Math.max(8, 900 / tiles.length);
+        for (const t of tiles) { t.classList.add('hit'); if (!Q.reduced) await sleep(per); }
+      } else {
+        const cnt = $('#fanCount'), pr = $('#fanProg');
+        await anim(1300, p => { const v = Math.round((n - 1) * ease(p)); cnt.textContent = fmtN(v); pr.style.width = (ease(p) * 100) + '%'; });
+      }
+      logTo('s3log', `${fmtN(n)} members → <b>${fmtN(n - 1)}</b> inbox cop${n - 1 === 1 ? 'y' : 'ies'} for one message. At 1,000 messages a day: ${fmtKB((n - 1) * 1000)}.`, n - 1 > 1000 ? 'e' : n - 1 > 100 ? 'w' : '');
+      if (n <= 10) checkGoal('#s3goals', 'small');
+    } else {
+      $('#storeTile').classList.add('hit');
+      await wait(400);
+      for (const t of $$('#fanArea .reader')) { t.classList.add('hit'); await wait(90); }
+      logTo('s3log', `Store once: <b>1</b> write for ${fmtN(n)} members. Now every member’s app has to read the channel, instead of just its own inbox.`, 'g');
+      if (n >= 10000) checkGoal('#s3goals', 'once');
+    }
+    busy = false; $('#fanSend').disabled = false;
+    maybeQuiz();
+  }
+  $('#gSlider').addEventListener('input', e => { if (busy) { e.target.value = idx; return; } idx = +e.target.value; render(); });
+  $$('#modeSeg button').forEach(b => b.onclick = () => {
+    if (busy) return;
+    mode = b.dataset.m; render();
+    logTo('s3log', mode === 'once' ? 'Mode: <b>store once</b>, members read from the channel (fan-out on read).' : 'Mode: <b>copy per inbox</b> (fan-out on write), as in the book.');
+  });
+  $('#fanSend').onclick = () => { if (!busy) send(); };
+  render();
+
+  // prediction
+  predict($('#fanPred'), {
+    step: 'Predict first',
+    title: 'Same design, but the group has <b>100,000</b> members. How many copies does Alice’s one message create?',
+    options: ['1 copy', '500 copies', '99,999 copies', '100,000 copies'],
+    correct: 2, xp: 25,
+    act: async () => { mode = 'copy'; idx = 5; render(); await send(); },
+    explain: 'Every member except the sender gets a copy: 100,000 − 1 = <b>99,999 writes</b> for a single message. At 1,000 messages a day that’s about <b>100 GB a day</b>, for one group. This is <i>write amplification</i>: one write becomes thousands. It’s why the book says a copy per member is not acceptable for big groups. Now flip to <b>Store once</b> and send again.',
+  }).then(() => { predicted = true; mark('#s3goals', 'pred'); maybeQuiz(); });
+
+  // Bob's inbox
+  const INC = [['a', 'Alice', 'Lunch tomorrow?'], ['g', 'Book club · Dan', 'Chapter 4 done!'], ['c', 'Carol', 'Running 5 min late'], ['g', 'Book club · Eve', 'No spoilers please'], ['a', 'Alice', '12:30 ok?'], ['c', 'Carol', 'Here now']];
+  let playing = false;
+  $('#bobPlay').onclick = async () => {
+    if (playing) return; playing = true; $('#bobPlay').disabled = true;
+    const box = $('#bobInbox'); box.innerHTML = '';
+    for (const [k, who, t] of INC) {
+      const src = $('#src' + k.toUpperCase()); src.classList.remove('ping'); void src.offsetWidth; src.classList.add('ping');
+      box.insertAdjacentHTML('beforeend', `<div class="imsg ${k}"><small>${who}</small>${t}</div>`);
+      await wait(450);
+    }
+    box.insertAdjacentHTML('beforeend', '<div class="small muted" style="margin-top:8px">Three sources, one queue. Bob’s app only ever checks this one inbox.</div>');
+    playing = false; $('#bobPlay').disabled = false; $('#bobPlay').textContent = '↻ Play again';
+    checkGoal('#s3goals', 'inbox');
+    maybeQuiz();
+  };
+
+  let quizShown = false;
+  function maybeQuiz() {
+    const done = ['small', 'once', 'inbox'].every(g => $(`#s3goals [data-g="${g}"]`).classList.contains('done'));
+    if (quizShown || !predicted || !done) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s3quiz'), {
+      q: 'Why does the book copy each message into every member’s inbox for <b>small</b> groups?',
+      options: ['Each client reads only its own inbox, and copies are cheap', 'It is the only way to keep a group’s messages in order', 'Copies let the chat server skip the ID generator step', 'Push notifications need one stored copy per member'],
+      correct: 0,
+      good: 'Both of the book’s reasons: sync stays simple (each client checks one inbox), and with at most ~100 members the extra copies cost little.',
+      bad: 'The book gives two reasons: sync stays simple because each client checks only its own inbox, and with small groups (the book caps them at 100) the extra copies are cheap. Ordering comes from message IDs, not from copying.',
+      onDone: () => setTimeout(() => Q.quiz($('#s3quiz'), {
+        tag: 'Check 2',
+        q: 'A 100,000-member channel uses the same copy-per-inbox design. What breaks first?',
+        options: ['Writes: one post turns into 99,999 inbox copies', 'Reads: each member must scan 100,000 inboxes', 'IDs: the generator runs out of message IDs', 'Sockets: each member needs 100,000 WebSockets'],
+        correct: 0,
+        good: 'Write amplification. Each post becomes 99,999 writes (and about 100 GB a day at 1,000 posts). Reads are still cheap, since each member reads one inbox. That’s why huge groups store the message once and let members read the channel.',
+        bad: 'Reads stay cheap (each member reads one inbox) and IDs and sockets don’t change. What explodes is <b>writes</b>: 99,999 copies per post. That’s why huge groups store once and let members read the channel.',
+        onDone: () => setTimeout(() => Q.clearStage(3), 900),
+      }), 700),
+    }), 500);
+  }
+});
+
+/* ================= STAGE 4: when delivery fails ================= */
+Q.onStage(4, () => {
+  const FLOWS = [
+    {
+      t: 'Flow A', s: 'Alice sends “Pay you back $50”. The server is about to crash.',
+      lines: ['Alice’s app → chat server: “Pay you back $50”', 'Chat server → Alice’s app: ack ✓ (her app shows “sent”)', 'Chat server → KV store: start writing the message…', '💥 The chat server crashes before the write finishes'],
+      res: 'Result: Alice sees ✓ sent. The message was never stored and never reaches Bob.',
+      bug: 1,
+      fixed: ['Alice’s app → chat server: “Pay you back $50”', 'Chat server → KV store: write the message and wait until it’s saved', 'Only then → Alice’s app: ack ✓', '💥 A crash before the save means no ack, so Alice’s app retries'],
+      fixRes: 'Fixed: store first, then ack. A crash can no longer hide a lost message.',
+      why: 'Line 2 is the bug: <b>ack before persist</b>. The ack is a promise that the message is safe. Sent before the write, a crash breaks that promise silently. Store first, then ack. If the server dies before acking, Alice’s app sees no ack and retries.',
+      wrongWhy: { 3: 'The crash is just bad luck, and servers do crash. The real bug is that the ack (line 2) went out <i>before</i> the write, so Alice was told “sent” for a message nobody had saved.', d: 'Look again: Alice was told “sent” for a message that was never saved.' },
+    },
+    {
+      t: 'Flow B', s: 'Same message. This time the ack gets lost on the way back.',
+      lines: ['Alice’s app → chat server: “Pay you back $50”', 'Chat server stores it as message 9001 and delivers it to Bob', 'The ack is lost. Alice’s app times out and sends it again', 'Chat server stores the resend as a brand-new message 9002'],
+      res: 'Result: Bob sees “Pay you back $50” twice. Did Alice mean $100?',
+      bug: 3,
+      fixed: ['Alice’s app → chat server: { client_msg_id: c-7f3, “Pay you back $50” }', 'Chat server stores it under c-7f3 as message 9001 and delivers it', 'The ack is lost. Alice’s app resends with the same c-7f3', 'Chat server sees c-7f3 is already stored: skips the write, acks again'],
+      fixRes: 'Fixed: one client_msg_id per message, so the server spots the repeat.',
+      why: 'Line 4 is the bug: <b>no dedupe key</b>. Retrying is correct; the book names retry as the way to resend. But the server has no way to tell the resend is the same message. Give each message a client-made ID once, reuse it on every retry, and the server can drop repeats.',
+      wrongWhy: { 2: 'Retrying (line 3) is the right move, and the book names it. The bug is that the server can’t tell the resend is a repeat, so line 4 stores it twice.', d: 'The first store and delivery were fine. Find the line where the duplicate is created.' },
+    },
+    {
+      t: 'Flow C', s: 'The same lost ack, with the three rules in place.',
+      lines: ['Alice’s app → chat server: { client_msg_id: c-7f3, “Pay you back $50” }', 'Chat server stores it under c-7f3 (write confirmed), then acks', 'The ack is lost. Alice’s app resends with the same c-7f3', 'Chat server finds c-7f3 already stored: skips the write, acks again'],
+      res: 'Result: Bob sees the message once. Alice sees ✓ sent.',
+      bug: -1,
+      why: 'No bug. The ack comes after the write, the retry reuses the same ID, and the server drops the repeat. Bob sees it once. This is <b>at-least-once delivery plus dedupe</b>.',
+      wrongWhy: { d: 'That line is fine here. The ack comes after the write, the retry reuses the same ID, and the server drops the repeat. This flow has no bug.' },
+    },
+  ];
+  let answered = 0;
+  const wrap = $('#flows');
+  wrap.innerHTML = FLOWS.map((f, fi) => `<div class="flow" data-f="${fi}"><h3>${f.t}</h3><p class="fsub">${f.s}</p><div class="lns">${f.lines.map((l, li) => `<button class="ln" data-l="${li}"><span class="n">${li + 1}</span><span class="t">${l}</span></button>`).join('')}</div><div class="res">${f.res}</div><div class="row"><button class="btn nobug">✓ No bug here</button></div><div class="explain"></div></div>`).join('');
+  $$('#flows .flow').forEach(card => {
+    const f = FLOWS[+card.dataset.f];
+    const lns = $$('.ln', card), nb = $('.nobug', card), ex = $('.explain', card);
+    const answer = async (pick, el) => {
+      lns.forEach(b => b.disabled = true); nb.disabled = true;
+      const ok = pick === f.bug;
+      if (ok) Q.addXP(15, el); else Q.loseHeart(el);
+      if (!ok && pick >= 0) lns[pick].classList.add('wrong');
+      if (f.bug >= 0) lns[f.bug].classList.add('bug');
+      else lns.forEach(b => b.classList.add('clean'));
+      ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+      ex.innerHTML = ok ? '<b>Found it.</b> ' + f.why : '<b>Not quite.</b> ' + (pick >= 0 ? (f.wrongWhy[pick] || f.wrongWhy.d) : 'There is a bug in this one.') + ' ' + f.why;
+      const res = $('.res', card); res.className = 'res ' + (f.bug >= 0 ? 'bad' : 'good');
+      if (f.fixed) {
+        await wait(1100);
+        lns.forEach((b, i) => { $('.t', b).textContent = f.fixed[i]; b.classList.remove('bug', 'wrong'); if (f.fixed[i] !== f.lines[i]) b.classList.add('fixed'); });
+        res.className = 'res good'; res.textContent = f.fixRes;
+      }
+      if (++answered === FLOWS.length) setTimeout(quiz, 600);
+    };
+    lns.forEach((b, i) => b.onclick = () => answer(i, b));
+    nb.onclick = () => answer(-1, nb);
+  });
+  function quiz() {
+    Q.quiz($('#s4quiz'), {
+      q: 'What makes it safe for Alice’s app to retry a send?',
+      options: ['A client-made message ID that the server dedupes on', 'A shorter timeout, so the retry happens sooner', 'Sending every message to two chat servers at once', 'Acking before the write, so the app never waits'],
+      correct: 0,
+      good: 'The client stamps the message once and reuses the ID on every retry. The server stores by that ID and ignores repeats. Retries become idempotent: twice has the same effect as once.',
+      bad: 'Faster retries or extra servers create <i>more</i> duplicates, and acking early loses messages (Flow A). The fix is a client-made message ID that the server dedupes on, so a retry is idempotent.',
+      onDone: () => setTimeout(() => Q.clearStage(4), 900),
+    });
+  }
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss'), {
+  name: '🐉 Lost-Mail Hydra',
+  xp: 15,
+  choices: [
+    { k: 'fwd', label: 'Forward', sub: 'via the recipient’s chat server' },
+    { k: 'push', label: 'Push + sync later', sub: 'PN servers, catch up on open' },
+    { k: 'cur', label: 'Fetch above cursor', sub: 'IDs > cur_max_message_id' },
+    { k: 'copy', label: 'Copy to inboxes', sub: 'one per member' },
+    { k: 'once', label: 'Store once', sub: 'members read the channel' },
+  ],
+  scenarios: [
+    { e: '🟢', t: 'Bob is online', d: 'Bob’s phone has a WebSocket open to chat server 7. Alice sends him “On my way”.', a: 'fwd', why: 'Step 5a then 6: the message is stored, then routed to chat server 7, which pushes it down Bob’s open WebSocket.' },
+    { e: '📴', t: 'Bob’s phone is off', d: 'Alice messages Bob. Bob has no open connection on any device.', a: 'push', why: 'Step 5b: the message is already stored, so the push notification servers send a nudge. When Bob opens the app, it syncs what it missed.' },
+    { e: '🌅', t: 'Morning laptop', d: 'Alice’s laptop slept all night while her phone kept chatting. She opens the lid.', a: 'cur', why: 'The laptop reconnects and asks for messages to Alice with an ID above its own <code>cur_max_message_id</code>. The phone’s cursor is irrelevant.' },
+    { e: '👨‍👩‍👧‍👦', t: 'Family group, 6 people', d: 'Dad posts a caption under a new photo in a 6-person family chat.', a: 'copy', why: 'A small group: the book copies the message into each of the 5 other members’ inboxes. Five cheap writes, and each phone reads only its own inbox.' },
+    { e: '📣', t: '200,000-member channel', d: 'An announcement goes out in a channel with 200,000 members.', a: 'once', why: 'Copying per member would mean 199,999 writes per post. The book rules that out for big groups. Store it once and have members read the channel (fan-out on read).' },
+    { e: '📲', t: 'A tablet joins the party', d: 'Bob’s tablet logs in for the first time today. His phone was online all day.', a: 'cur', why: 'Same rule as the laptop. The tablet fetches messages to Bob above its own cursor. Each device keeps its own.' },
+    { e: '💼', t: '50-person team chat', d: 'A team chat with 50 members, on a WeChat-style design (groups capped at 500).', a: 'copy', why: '50 members is well under WeChat’s 500 cap and close to the book’s 100-member limit. 49 inbox copies per message is cheap, and sync stays simple.' },
+  ],
+  outro: 'The pattern: online → forward via their server; offline → push, then sync; reconnecting device → fetch above its own cursor; small group → copy per inbox; huge group → store once.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: interview drill ================= */
+Q.onStage(6, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"Walk me through what happens when Alice sends Bob a message, and how Bob’s phone and laptop both stay in sync."</i>',
+  placeholder: 'Alice’s client sends the message over its WebSocket to…',
+  model: '"Alice’s client sends the message over its WebSocket to chat server 1. The server gets a message ID from the ID generator, puts the message on the message sync queue, and it’s stored in the key-value store. If Bob is online, the message goes to the chat server he’s connected to and down his WebSocket. If he’s offline, the push notification servers send a push. Each of Bob’s devices keeps its own <code>cur_max_message_id</code>. On reconnect, a device fetches messages to Bob with a higher ID. For small groups I’d copy each message into every member’s inbox, which keeps sync simple; WeChat caps groups at 500. For huge groups I’d store it once and have members read from the channel. Retries carry a client message ID, so duplicates get dropped."',
+  checks: ['I covered both the online and the offline branch', 'I explained cur_max_message_id, one per device', 'I explained inbox fan-out for small groups and where it stops working'],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

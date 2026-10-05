@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>The Green Dot</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: s1 login/logout diagram + KV row, s2/s3 train ride timeline, s3 countdown ring + tuning lab, s4 pub/sub fan-out */
+:root { --tunnel: #3d3850; --rail: #9a95a8; --off: #a3a0b0; --wire: #b9b4c6; --on-tok: #ffffff; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --tunnel: #04050c; --rail: #5b5878; --off: #5d5a76; --wire: #3c3f63; --on-tok: #0e0f1d; }
+}
+:root[data-theme="dark"] { --tunnel: #04050c; --rail: #5b5878; --off: #5d5a76; --wire: #3c3f63; --on-tok: #0e0f1d; }
+
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.bignum { font-family: var(--mono); font-weight: 700; }
+.bignum.bad { color: var(--bad); }
+.bignum.good { color: var(--good); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+/* stage 1: diagram */
+.arch svg { max-width: 560px; margin: 0 auto; }
+.arch .nd rect, .arch .nd path.shape { fill: var(--panel); stroke: var(--line); stroke-width: 2; transition: stroke .3s, fill .3s; }
+.arch .nd text { fill: var(--ink); font: 700 13px var(--font); text-anchor: middle; pointer-events: none; }
+.arch .nd text.s { fill: var(--muted); font: 600 10.5px var(--font); }
+.arch .nd.tap { cursor: pointer; }
+.arch .nd.tap:hover rect, .arch .nd.tap:hover path.shape, .arch .nd.tap:focus rect, .arch .nd.tap:focus path.shape { stroke: var(--accent); }
+.arch .nd:focus { outline: none; }
+.arch .nd.right rect, .arch .nd.right path.shape { stroke: var(--good); fill: var(--good-soft); }
+.arch .nd.wrong rect, .arch .nd.wrong path.shape { stroke: var(--bad); fill: var(--bad-soft); }
+.arch .nd.glow rect, .arch .nd.glow path.shape { stroke: var(--accent); stroke-width: 3; }
+.arch .edge { fill: none; stroke: var(--wire); stroke-width: 3; }
+.arch .edge.ws { stroke: var(--teal); stroke-dasharray: 7 5; }
+.arch .edge.hot { stroke: var(--accent); }
+.arch .elab { fill: var(--muted); font: 700 10.5px var(--mono); text-anchor: middle; }
+.arch .pk { fill: var(--accent); stroke: var(--bg); stroke-width: 2; }
+.arch .me { transition: fill .4s; }
+.kv { margin: 0; border-top: 1px solid var(--line); background: var(--panel); padding: 10px 14px; font-family: var(--mono); font-size: 12.5px; }
+.kv .cap { font-family: var(--font); font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.kvg { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.3fr); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.kvg span { padding: 6px 8px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.kvg span:nth-last-child(-n+3) { border-bottom: 0; }
+.kvg .h { background: var(--bg-2); color: var(--muted); font-weight: 600; }
+.kvg .flash { animation: flash 1s; }
+@keyframes flash { 0% { background: var(--xp); color: #1c1a26; } 100% { background: transparent; } }
+.st-on { color: var(--good); font-weight: 700; }
+.st-off { color: var(--muted); font-weight: 700; }
+
+/* stage 2 + 3: train ride */
+.ride svg { max-width: 640px; margin: 0 auto; }
+.ride .sky { fill: var(--bg); }
+.ride .track { stroke: var(--rail); stroke-width: 3; stroke-linecap: round; }
+.ride .sleeper { stroke: var(--rail); stroke-width: 1.5; opacity: .6; }
+.ride .tun { fill: var(--tunnel); opacity: .92; }
+.ride .tunl { fill: var(--muted); font: 700 11px var(--mono); text-anchor: middle; }
+.ride .train rect.body { fill: var(--accent); }
+.ride .train rect.win { fill: var(--on-tok); opacity: .9; }
+.ride .rowl { fill: var(--muted); font: 700 10px var(--font); letter-spacing: .06em; text-transform: uppercase; }
+.ride .stbg { fill: var(--bg-2); stroke: var(--line); }
+.ride .seg-on { fill: var(--good); }
+.ride .seg-off { fill: var(--off); }
+.ride .hb { fill: var(--teal); }
+.ride .hbmiss { fill: none; stroke: var(--muted); stroke-width: 1.3; stroke-dasharray: 2 2; }
+.ride .axis { fill: var(--muted); font: 600 10px var(--mono); text-anchor: middle; }
+.ride .now { stroke: var(--ink); stroke-width: 1.5; opacity: .5; }
+.fbar { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; padding: 12px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+.fbar.three { grid-template-columns: 1fr auto auto; }
+@media (max-width: 520px) { .fbar.three { grid-template-columns: 1fr auto; } .fbar.three .friend { grid-column: 1 / -1; } }
+.friend { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 14px; padding: 8px 12px; background: var(--bg); min-width: 0; }
+.friend .ph { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.friend .nm { font-weight: 700; }
+.fdot { width: 14px; height: 14px; border-radius: 50%; background: var(--off); flex: none; transition: background .25s, box-shadow .25s; }
+.fdot.on { background: var(--good); box-shadow: 0 0 0 4px var(--good-soft); }
+.fdot.blink { animation: blink .5s; }
+@keyframes blink { 50% { transform: scale(1.6); } }
+.counter { text-align: center; line-height: 1.1; }
+.counter b { display: block; font: 700 26px var(--mono); }
+.counter span { font-size: 11.5px; color: var(--muted); }
+.cring { width: 86px; height: 86px; }
+.cring .bgc { fill: none; stroke: var(--bg-2); stroke-width: 10; }
+.cring .arc { fill: none; stroke: var(--teal); stroke-width: 10; stroke-linecap: round; transition: stroke .3s; }
+.cring .arc.zero { stroke: var(--bad); }
+.cring text { fill: var(--ink); font: 700 22px var(--mono); text-anchor: middle; dominant-baseline: central; }
+.cring text.s { fill: var(--muted); font: 600 9.5px var(--font); }
+.tpred { display: grid; gap: 10px; margin-top: 8px; }
+.tpred .sort-item p { margin-bottom: 8px; }
+.tpred .opt.picked { background: var(--accent-soft); }
+.calc { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.calc input { font: 600 17px var(--mono); padding: 9px 12px; border-radius: 12px; border: 2px solid var(--line); background: var(--bg); color: var(--ink); width: 170px; max-width: 100%; }
+.calc input:focus { border-color: var(--accent); outline: none; }
+.lab { margin-top: 14px; border: 1px solid var(--line); border-radius: 18px; overflow: hidden; background: var(--bg); }
+.lab svg { display: block; width: 100%; height: auto; max-width: 640px; margin: 0 auto; }
+.slider { padding: 12px 14px 0; display: grid; gap: 4px; }
+.slider label { display: flex; justify-content: space-between; font-weight: 600; font-size: 14px; gap: 8px; flex-wrap: wrap; }
+.slider input { width: 100%; accent-color: var(--accent); height: 30px; }
+.reads { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 12px 14px 14px; }
+@media (max-width: 520px) { .reads { grid-template-columns: 1fr; } }
+.reads div { border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; background: var(--panel); }
+.reads b { display: block; font: 700 20px var(--mono); }
+.reads span { font-size: 12.5px; color: var(--muted); }
+.reads .warnv b { color: var(--warn); }
+.reads .badv b { color: var(--bad); }
+.labwarn { margin: 0 14px 12px; font-size: 14px; color: var(--bad); font-weight: 600; min-height: 0; }
+.lab .ghost { fill: var(--warn); opacity: .28; }
+.lab .ghostl { fill: var(--warn); font: 700 10px var(--font); }
+.lab .dead { fill: var(--bg-2); }
+.lab .deadl { fill: var(--muted); font: 700 10px var(--font); }
+.lab .hbl { stroke: var(--teal); stroke-width: 1.4; }
+
+/* stage 4: pub/sub */
+.pubsub svg { max-width: 480px; margin: 0 auto; }
+.pubsub .chan { stroke: var(--wire); stroke-width: 2.5; }
+.pubsub .chan.thin { stroke-width: .6; opacity: .45; }
+.pubsub .pill-r { fill: var(--panel); stroke: var(--line); }
+.pubsub .pill-t { fill: var(--muted); font: 700 11px var(--mono); text-anchor: middle; dominant-baseline: central; }
+.pubsub .mem { fill: var(--off); transition: fill .35s, opacity .35s; }
+.pubsub .mem.on { fill: var(--good); }
+.pubsub .mem.stale { opacity: .35; }
+.pubsub .fr circle.body { fill: var(--panel); stroke: var(--line); stroke-width: 2; }
+.pubsub .fr text { fill: var(--ink); font: 700 15px var(--font); text-anchor: middle; dominant-baseline: central; }
+.pubsub .fr .mem { stroke: var(--panel); stroke-width: 2.5; }
+.pubsub .me circle.body { fill: var(--accent); }
+.pubsub .me text { fill: #fff; font: 700 18px var(--font); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.pubsub .me .halo { fill: none; stroke-width: 4; transition: stroke .3s; }
+.pubsub .me { cursor: pointer; }
+.pubsub .me:focus { outline: none; }
+.pubsub .me:focus circle.body, .pubsub .me:hover circle.body { stroke: var(--ink); stroke-width: 3; }
+.pubsub .pulse { fill: var(--accent); }
+.pubsub .wave { fill: none; stroke: var(--accent); stroke-width: 3; }
+.pubsub .you { fill: none; stroke: var(--ink); stroke-width: 2; }
+.pubsub .youl { fill: var(--ink); font: 700 11px var(--font); text-anchor: middle; }
+.pubsub .biglab { fill: var(--muted); font: 600 11px var(--font); text-anchor: middle; }
+.ctrls { display: grid; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+.ctrls .lbl { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.seg.wide { display: flex; flex-wrap: wrap; }
+.seg.wide button { flex: 1; min-height: 40px; min-width: 64px; font-size: 13.5px; }
+.seg button[disabled] { opacity: .45; cursor: not-allowed; }
+.ctrls .btn { padding: 9px 14px; font-size: 14px; }
+.evline { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 14px; }
+.evline b { font-family: var(--mono); font-size: 17px; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 12.5 · Design a Chat System</div>
+    <h1>The Green Dot</h1>
+    <p class="lede">Every chat app shows a little green dot next to friends who are online. Behind that dot sit a database write, a steady heartbeat, and a fan-out that turns scary at 100,000 members.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can explain how presence servers track online status, why marking a user offline on every disconnect is bad, how a heartbeat with a timeout fixes it, and how status changes fan out to friends, plus why that breaks for huge groups.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Login and logout</h2><div class="sub">Who flips the dot</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>In the book's design, a group of <b>presence servers</b> owns the green dot. They keep track of who is online, and they talk to each phone over a <b>WebSocket</b> (a connection that stays open, so either side can send at any time).<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener">[1]</a> They are <i>stateful</i>: each one holds live connections, which you met in <a href="1202-chat-high-level-design.html">Quest 12.2</a>.</p>
+      <p>The status itself lives in a <b>key-value store</b> (a database that maps a key, like <code>user:alice</code>, to a small value). Before you press anything, predict:</p>
+      <div class="challenge boxed" id="s1pred">
+        <div class="step">Predict first</div>
+        <h3 style="margin:4px 0 0">Alice opens the app. Which box writes her status into the key-value store? Tap it in the diagram.</h3>
+        <div class="explain" id="s1predEx"></div>
+      </div>
+      <div class="sim arch">
+        <svg id="arch" viewBox="0 0 400 230" role="img" aria-label="Alice's phone, API servers, presence servers and the key-value store"></svg>
+        <div class="kv">
+          <div class="cap">Key-value store · one row per user</div>
+          <div class="kvg">
+            <span class="h">key</span><span class="h">status</span><span class="h">last_active_at</span>
+            <span>user:alice</span><span id="kvStatus" class="st-off">offline</span><span id="kvTime">none yet</span>
+          </div>
+        </div>
+        <div class="sim-bar">
+          <span class="row" style="gap:8px"><button class="btn primary" id="loginBtn" disabled>Log in</button><button class="btn" id="logoutBtn" disabled>Log out</button></span>
+          <span class="small muted" id="s1hint">Predict first, then the buttons wake up.</span>
+        </div>
+        <div class="simlog" id="s1log"><div>Alice is logged out. Her row says offline.</div></div>
+      </div>
+      <ul class="checklist" id="s1goals">
+        <li data-g="login"><span class="box">✓</span><span>Log Alice in: watch which path the request takes</span></li>
+        <li data-g="logout"><span class="box">✓</span><span>Log her out: notice the logout takes a different road</span></li>
+      </ul>
+      <div class="callout" id="s1note" style="display:none"><b>Two roads, one row.</b> Login rides the WebSocket straight to the presence servers. Logout is a normal HTTP request, so it goes through the stateless API servers first, which hand it to the presence servers. Either way, the presence servers are the only ones that write the status row.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener">[1]</a> <span class="muted">Apps use a timestamp like <code>last_active_at</code> for "last seen 5 min ago" labels.</span></div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>The tunnel problem</h2><div class="sub">Why "disconnected = offline" flickers</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Login and logout are easy, because the user tells you. The hard case is a <b>disconnection</b>: the connection just drops. The simplest rule is "connection gone, so mark them offline, and when it comes back, mark them online."</p>
+      <p>Phones lose their connection all the time. Alice is on a 2-minute train ride with three tunnels: 4, 12 and 50 seconds without signal. Bob, her friend, is watching her dot.</p>
+      <div class="sim ride">
+        <svg id="ride2" viewBox="0 0 400 150" role="img" aria-label="Train ride timeline with three tunnels"></svg>
+        <div class="fbar">
+          <div class="friend"><span class="fdot on" id="r2dot"></span><div><div class="ph">Bob's phone</div><span class="nm">Alice</span> · <span id="r2st">online</span></div></div>
+          <div class="counter"><b id="r2count">0</b><span>status changes<br>sent to friends</span></div>
+        </div>
+        <div class="simlog" id="r2log"><div>Naive mode: a dropped connection means offline, right away.</div></div>
+      </div>
+      <div class="challenge boxed" id="s2pred"></div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Heartbeat</h2><div class="sub">Every 5 seconds: still here</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book's fix: while Alice is online, her app sends a tiny <b>heartbeat</b> event to the presence servers every few seconds. It just means "still here". The server keeps a timer per user. If a heartbeat arrives within <b>x seconds</b>, she stays online. If x seconds pass with no heartbeat, she's marked offline.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener">[1]</a></p>
+      <p>The book's numbers: a heartbeat every <b>5 seconds</b>, and <b>x = 30 seconds</b>. So a short drop just means a few missed heartbeats, and nobody notices. Same train, same tunnels. In this sim the app also sends a heartbeat the moment it reconnects.</p>
+      <div class="challenge boxed">
+        <div class="step">Predict each tunnel</div>
+        <h3>With heartbeats every 5 s and x = 30 s, does Bob see Alice go offline?</h3>
+        <div class="tpred" id="tpred"></div>
+        <div class="row" style="margin-top:12px"><button class="btn primary" id="r3run" disabled>▶ Ride with heartbeats</button><span class="small muted" id="r3hint">Make all three calls first.</span></div>
+      </div>
+      <div class="sim ride">
+        <svg id="ride3" viewBox="0 0 400 150" role="img" aria-label="Train ride timeline with heartbeats"></svg>
+        <div class="fbar three">
+          <div class="friend"><span class="fdot on" id="r3dot"></span><div><div class="ph">Bob's phone</div><span class="nm">Alice</span> · <span id="r3st">online</span></div></div>
+          <svg class="cring" viewBox="0 0 100 100" aria-label="Presence server countdown"><circle class="bgc" cx="50" cy="50" r="40"></circle><circle class="arc" id="cArc" cx="50" cy="50" r="40" transform="rotate(-90 50 50)"></circle><text x="50" y="46" id="cNum">30</text><text class="s" x="50" y="66">s left</text></svg>
+          <div class="counter"><b id="r3count">0</b><span>status changes<br>sent to friends</span></div>
+        </div>
+        <div class="sim-bar"><div class="legend"><span><i style="background:var(--teal);border-radius:50%"></i>heartbeat arrived</span><span><i style="border:1.5px dashed var(--muted);border-radius:50%"></i>heartbeat lost (no signal)</span><span><i style="background:var(--good)"></i>online</span><span><i style="background:var(--off)"></i>offline</span></div></div>
+        <div class="simlog" id="r3log"><div>The ring is the presence server's timer for Alice. Each heartbeat refills it to 30.</div></div>
+      </div>
+      <div id="r3after" style="display:none">
+        <div class="challenge boxed" id="calcBox">
+          <div class="step">Calculate and check</div>
+          <h3>The book plans for about 1,000,000 users online at once. Each sends a heartbeat every 5 seconds. How many heartbeats per second hit the presence tier?</h3>
+          <div class="calc"><input id="calcIn" inputmode="numeric" autocomplete="off" placeholder="heartbeats / s" aria-label="Heartbeats per second"><button class="btn primary" id="calcBtn">Check</button></div>
+          <div class="explain" id="calcEx"></div>
+        </div>
+      </div>
+      <div id="labWrap" style="display:none">
+        <p style="margin-top:18px"><b>Tuning lab.</b> Now Alice's battery dies at the 120-second mark, with no logout. Drag the two dials and watch three things: how often the dot flips during the ride, how many <b>ghost seconds</b> she keeps looking online after the phone is dead, and what it costs.</p>
+        <div class="lab">
+          <svg id="labSvg" viewBox="0 0 400 118" role="img" aria-label="Status timeline for the chosen heartbeat settings"></svg>
+          <div class="slider"><label for="hIn"><span>Heartbeat every <span class="bignum" id="hVal">5</span> s</span><span class="muted small">1 to 30 s</span></label><input type="range" id="hIn" min="1" max="30" step="1" value="5"></div>
+          <div class="slider"><label for="xIn"><span>Offline after <span class="bignum" id="xVal">30</span> s of silence (x)</span><span class="muted small">5 to 120 s</span></label><input type="range" id="xIn" min="5" max="120" step="5" value="30"></div>
+          <div class="reads">
+            <div id="rdFlip"><b id="flipVal">2</b><span>status flips during the ride</span></div>
+            <div id="rdGhost"><b id="ghostVal">25 s</b><span>ghost seconds after the battery dies</span></div>
+            <div><b id="loadVal">200,000</b><span>heartbeats / s at 1M users</span></div>
+          </div>
+          <p class="labwarn" id="labWarn"></p>
+        </div>
+        <ul class="checklist" id="s3goals">
+          <li data-g="flicker"><span class="box">✓</span><span>Make it flicker: get <b>4 or more</b> flips during the ride</span></li>
+          <li data-g="ghost"><span class="box">✓</span><span>Make a ghost: keep Alice "online" <b>60+ seconds</b> after her battery dies</span></li>
+          <li data-g="book"><span class="box">✓</span><span>Go back to the book's settings: <b>5 s</b> and <b>30 s</b></span></li>
+        </ul>
+        <div class="callout tip" id="labNote" style="display:none"><b>That's the dial you're tuning.</b> A short timeout notices real departures fast but flickers on every tunnel. A long one is calm but leaves ghosts. A shorter heartbeat interval also costs more: at 1 second it's 1,000,000 heartbeats per second. The timeout has to be several intervals long, so one or two lost heartbeats don't count as leaving. <span class="muted">The 200,000/s figure is our worked example from the book's 1M concurrent users, not a number the book gives.</span></div>
+        <div id="s3quiz"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Fan out the dot</h2><div class="sub">Pub/sub per friend pair, and the big-group trap</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Alice's status changed. How do her friends find out? The book uses <b>publish-subscribe</b> (pub/sub): senders post to a named <i>channel</i>, and everyone subscribed to that channel gets the post.<a class="cite" href="https://redis.io/docs/latest/develop/interact/pubsub/" target="_blank" rel="noopener">[3]</a> The presence servers keep one channel <b>per friend pair</b>. A's change is published to channels A-B, A-C and A-D. B, C and D are subscribed, and the update reaches their phones over their WebSockets.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener">[1]</a></p>
+      <p>Tap <b>A</b> (or the button) to flip Alice's status. Each dot on a friend shows A's status as that friend's screen shows it.</p>
+      <div class="sim pubsub">
+        <svg id="ps" viewBox="0 0 400 320" role="img" aria-label="Alice in the center, linked to her friends by pub/sub channels"></svg>
+        <div class="ctrls">
+          <div><div class="lbl">People who see A's dot</div>
+            <div class="seg wide" id="sizeSeg"><button data-n="3" class="on">3 friends</button><button data-n="100">100</button><button data-n="500">500</button><button data-n="100000" disabled title="Make the prediction below first">100,000</button></div></div>
+          <div><div class="lbl">Strategy</div>
+            <div class="seg wide" id="modeSeg"><button data-m="push" class="on">Push every change</button><button data-m="fetch">Fetch on entry / refresh</button></div></div>
+          <div class="row"><button class="btn primary" id="flipA">Flip A's status</button><button class="btn" id="openG" style="display:none">📂 Open the group (as "you")</button></div>
+          <div class="evline"><span>Events per status change: <b id="evPer">3</b></span><span>Events sent so far: <b id="evTot">0</b></span></div>
+        </div>
+        <div class="simlog" id="pslog"><div>A is online. B, C and D each subscribe to their channel with A.</div></div>
+      </div>
+      <div class="challenge boxed" id="s4pred"></div>
+      <ul class="checklist" id="s4goals">
+        <li data-g="flip"><span class="box">✓</span><span>Push mode, 3 friends: flip A and watch three channels fire</span></li>
+        <li data-g="big"><span class="box">✓</span><span>Predict, then see one flip in a 100,000-member group</span></li>
+        <li data-g="fetch"><span class="box">✓</span><span>Big group, fetch mode: flip A, then open the group as "you"</span></li>
+      </ul>
+      <div class="callout" id="s4note" style="display:none"><b>The book's fix for big groups.</b> Don't push. Fetch online status only when a user opens the group or refreshes the friend list.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener">[1]</a> The trade-off: everyone else's copy of the dot can be <b>stale</b> until they open or refresh. For a hint like a green dot, that's fine. Slack made a similar move for big teams: its edge cache, Flannel, loads user and channel data lazily, when a client needs it, instead of sending it all up front.<a class="cite" href="https://slack.engineering/flannel-an-application-level-edge-cache-to-make-slack-scale/" target="_blank" rel="noopener">[2]</a></div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Flicker Phantom</h2><div class="sub">Keep the dot honest</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The Phantom makes dots lie: ghosts that never leave, dots that flicker, and fan-out storms. Six situations. For each, pick the presence move that handles it.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">Explain the green dot</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next up: the chapter boss.</b> In <a href="1206-chat-boss-design-it-live.html">Design It Live: Chat</a> you run the whole interview, and presence is one of the deep dives. If the 1-on-1 message path is fuzzy, replay <a href="1204-chat-message-flows.html">Quest 12.4</a> first.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 12: "Design a Chat System"</a>, the "Online presence" part of Step 3 (login, logout, disconnection, heartbeat and status fan-out, about three pages). Then skim the <a href="https://redis.io/docs/latest/develop/interact/pubsub/" target="_blank" rel="noopener">Redis Pub/Sub docs</a> to see what a channel really is, and Slack's <a href="https://slack.engineering/flannel-an-application-level-edge-cache-to-make-slack-scale/" target="_blank" rel="noopener">Flannel post</a> for why big teams forced lazy loading.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <p style="margin:0 0 8px"><b>Channel per pair is a lot of channels.</b> One channel per friend pair means millions of tiny channels. Many real systems keep one channel per user ("Alice's presence") that all her friends subscribe to, or they batch presence updates. Same idea, cheaper bookkeeping.</p>
+      <p style="margin:0 0 8px"><b>Heartbeats cost battery.</b> A ping every 5 seconds keeps waking the phone's radio. Real apps often stretch the interval when the app is in the background, piggyback on other traffic, or show "last seen" instead of a live dot.</p>
+      <p style="margin:0 0 8px"><b>Presence is eventually consistent, on purpose.</b> A dot can be up to 30 seconds stale. That's a fine trade for a hint. Don't reach for strong consistency here.</p>
+      <p style="margin:0"><b>Pub/sub can drop messages.</b> Redis Pub/Sub delivers at most once: a subscriber that's disconnected at that moment simply misses the post.<a class="cite" href="https://redis.io/docs/latest/develop/interact/pubsub/" target="_blank" rel="noopener">[3]</a> For presence that's tolerable, because the next change, a refresh or a reconnect fixes the dot.</p>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"if presence servers are stateful, what happens to the timers when one of them dies?"</i> or <i>"how would you show 'typing…' without melting the servers?"</i>
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 12 "Design a Chat System", Step 3: Online presence (ByteByteGo).</li>
+        <li>Slack Engineering, "Flannel: An Application-Level Edge Cache to Make Slack Scale".</li>
+        <li>Redis documentation, "Redis Pub/Sub".</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '1205',
+  winTitle: 'The dot never lies (much)',
+  badge: '🟢 Badge: Presence Sentinel',
+  cheatsheet: '../reference/ch12-chat-cheatsheet.html',
+});
+const { sleep, shuffle } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+const fmt = n => n.toLocaleString('en-US');
+function anim(dur, f) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 1) { f(1); return res(); }
+    const t0 = performance.now();
+    const fr = now => { const p = Math.min(1, (now - t0) / dur); f(p); p < 1 ? requestAnimationFrame(fr) : res(); };
+    requestAnimationFrame(fr);
+  });
+}
+const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); Q.addXP(xp || 10, li);
+  return true;
+}
+function tapable(el, label, fn) {
+  el.setAttribute('tabindex', '0'); el.setAttribute('role', 'button'); el.setAttribute('aria-label', label);
+  el.addEventListener('click', fn);
+  el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } });
+}
+// Predict-then-watch round (pattern from 0002). Resolves after the pick and the action.
+function predict(box, { step, title, options, correct, act, explain, xp = 20 }) {
+  box.innerHTML = `${step ? `<div class="step">${step}</div>` : ''}<h3>${title}</h3><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+  const opts = $('.opts', box);
+  let busy = false;
+  return new Promise(resolve => {
+    shuffle(options.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = async () => {
+        if (busy) return; busy = true;
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        b.classList.add('picked');
+        await act();
+        const ok = i === correct;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-i="${correct}"]`, opts).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + explain;
+        ok ? Q.addXP(xp, b) : Q.loseHeart(b);
+        resolve({ ok, row: $('.row', box) });
+      };
+      opts.appendChild(b);
+    });
+  });
+}
+
+/* ---------- the train ride model (stages 2 and 3) ---------- */
+// Times are in deciseconds (0.1 s) so every heartbeat interval is an exact integer.
+const TUN = [{ a: 12, b: 16 }, { a: 32, b: 44 }, { a: 62, b: 112 }];   // seconds without signal: 4, 12, 50
+const RIDE = 120;
+const inTunD = i => TUN.some(u => i >= u.a * 10 && i < u.b * 10);
+// mode 'naive': online = connected. mode 'hb': online while the last heartbeat is < x seconds old.
+// The app stops sending at deathS (battery dies). Returns per-decisecond status plus heartbeat times.
+function simulate(mode, h, x, endS, deathS = Infinity) {
+  const n = Math.round(endS * 10), on = new Uint8Array(n + 1), hb = [], miss = [];
+  if (mode === 'naive') { for (let i = 0; i <= n; i++) on[i] = (i < deathS * 10 && !inTunD(i)) ? 1 : 0; return { on, hb, miss, n }; }
+  const set = new Set();
+  for (let k = 0; k * h < Math.min(endS, deathS); k++) { const i = k * h * 10; (inTunD(i) ? miss.push(i) : set.add(i)); }
+  TUN.forEach(u => { if (u.b < Math.min(endS, deathS)) set.add(u.b * 10); }); // reconnect: one heartbeat right away
+  hb.push(...[...set].sort((a, b) => a - b));
+  let p = -1, last = -Infinity;
+  for (let i = 0; i <= n; i++) { while (p + 1 < hb.length && hb[p + 1] <= i) { p++; last = hb[p]; } on[i] = (i - last) < x * 10 ? 1 : 0; }
+  return { on, hb, miss, n };
+}
+const flipsIn = (on, from, to) => { let c = 0; for (let i = from + 1; i < to; i++) if (on[i] !== on[i - 1]) c++; return c; };
+
+function makeRide(svg, { hbRow }) {
+  const X = t => 20 + t * 3;          // 0..120 s -> 20..380
+  svg.innerHTML = '';
+  // track + sleepers
+  for (let t = 0; t <= RIDE; t += 4) S('line', { class: 'sleeper', x1: X(t), y1: 60, x2: X(t), y2: 66 }, svg);
+  S('line', { class: 'track', x1: X(0), y1: 63, x2: X(RIDE), y2: 63 }, svg);
+  const train = S('g', { class: 'train' }, svg);
+  S('rect', { class: 'body', x: -14, y: 0, width: 28, height: 13, rx: 4 }, train);
+  [-9, -2, 5].forEach(wx => S('rect', { class: 'win', x: wx, y: 3, width: 5, height: 4, rx: 1 }, train));
+  TUN.forEach(u => {
+    const x1 = X(u.a) - 3, x2 = X(u.b) + 3;
+    S('path', { class: 'tun', d: `M${x1} 68 L${x1} 46 Q${x1} 36 ${x1 + 7} 36 L${x2 - 7} 36 Q${x2} 36 ${x2} 46 L${x2} 68 Z` }, svg);
+    S('text', { class: 'tunl', x: (x1 + x2) / 2, y: 30 }, svg).textContent = (u.b - u.a) + ' s';
+  });
+  S('text', { class: 'rowl', x: 20, y: 14 }, svg).textContent = 'Alice on the train';
+  let hbG = null;
+  if (hbRow) { S('text', { class: 'rowl', x: 20, y: 84 }, svg).textContent = 'heartbeats'; hbG = S('g', {}, svg); }
+  S('text', { class: 'rowl', x: 20, y: hbRow ? 109 : 96 }, svg).textContent = 'what Bob sees';
+  const sy = hbRow ? 114 : 102;
+  S('rect', { class: 'stbg', x: X(0), y: sy, width: X(RIDE) - X(0), height: 12, rx: 3 }, svg);
+  const cid = svg.id + '-clip';
+  const defs = S('defs', {}, svg), cp = S('clipPath', { id: cid }, defs), clipR = S('rect', { x: X(0), y: sy - 2, width: 0, height: 16 }, cp);
+  const segG = S('g', { 'clip-path': `url(#${cid})` }, svg);
+  [0, 30, 60, 90, 120].forEach(t => S('text', { class: 'axis', x: X(t), y: 144 }, svg).textContent = t + 's');
+  const nowL = S('line', { class: 'now', x1: X(0), y1: 22, x2: X(0), y2: sy + 14 }, svg);
+  function placeTrain(t) { train.setAttribute('transform', `translate(${X(t).toFixed(1)} 47)`); nowL.setAttribute('x1', X(t)); nowL.setAttribute('x2', X(t)); clipR.setAttribute('width', Math.max(0, X(t) - X(0))); }
+  function load(sim) {
+    segG.innerHTML = ''; if (hbG) hbG.innerHTML = '';
+    let st = 0;
+    for (let i = 1; i <= RIDE * 10 + 1; i++) {
+      if (i > RIDE * 10 || sim.on[i] !== sim.on[st]) {
+        S('rect', { class: sim.on[st] ? 'seg-on' : 'seg-off', x: X(st / 10), y: sy, width: X(Math.min(i, RIDE * 10) / 10) - X(st / 10), height: 12 }, segG);
+        st = i;
+      }
+    }
+    placeTrain(0);
+  }
+  // Play the ride. cb(kind, i, extra) fires for: 'hb', 'miss', 'flip', 'in', 'out', 'tick'.
+  async function play(sim, cb, dur = 8000) {
+    load(sim);
+    const hbs = new Set(sim.hb), ms = new Set(sim.miss);
+    let prev = -1;
+    const step = i => {
+      if (hbs.has(i)) { if (hbG) S('circle', { class: 'hb', cx: X(i / 10), cy: 92, r: 3 }, hbG); cb('hb', i); }
+      if (ms.has(i)) { if (hbG) S('circle', { class: 'hbmiss', cx: X(i / 10), cy: 92, r: 3 }, hbG); cb('miss', i); }
+      if (i > 0 && sim.on[i] !== sim.on[i - 1]) cb('flip', i, sim.on[i]);
+      TUN.forEach((u, k) => { if (i === u.a * 10) cb('in', i, k); if (i === u.b * 10) cb('out', i, k); });
+    };
+    await anim(Q.reduced ? 0 : dur, p => {
+      const cur = Math.round(p * RIDE * 10);
+      for (let i = prev + 1; i <= cur; i++) step(i);
+      prev = Math.max(prev, cur);
+      placeTrain(cur / 10); cb('tick', cur);
+    });
+  }
+  placeTrain(0);
+  return { load, play, placeTrain };
+}
+const tStr = i => (i / 10 % 1 ? (i / 10).toFixed(1) : i / 10) + 's';
+
+/* ================= STAGE 1: login / logout ================= */
+Q.onStage(1, () => {
+  const svg = $('#arch');
+  const goals = new Set();
+  let predicted = false, busy = false, loggedIn = false, quizShown = false;
+  const edges = {
+    http: S('path', { class: 'edge', d: 'M96 92 C 125 92, 130 44, 160 44' }, svg),
+    ws: S('path', { class: 'edge ws', d: 'M96 134 C 125 134, 130 182, 160 182' }, svg),
+    down: S('path', { class: 'edge', d: 'M212 66 L212 156' }, svg),
+    kv: S('path', { class: 'edge', d: 'M264 182 C 292 182, 296 126, 318 126' }, svg),
+  };
+  S('text', { class: 'elab', x: 118, y: 60 }, svg).textContent = 'HTTP';
+  S('text', { class: 'elab', x: 108, y: 176 }, svg).textContent = 'WebSocket';
+  // nodes
+  function box(id, x, y, w, h, label, sub) {
+    const g = S('g', { class: 'nd tap', 'data-id': id }, svg);
+    S('rect', { x, y, width: w, height: h, rx: 12 }, g);
+    S('text', { x: x + w / 2, y: y + h / 2 - (sub ? 3 : -4) }, g).textContent = label;
+    if (sub) S('text', { class: 's', x: x + w / 2, y: y + h / 2 + 13 }, g).textContent = sub;
+    return g;
+  }
+  const phone = S('g', { class: 'nd tap', 'data-id': 'phone' }, svg);
+  S('rect', { x: 22, y: 66, width: 74, height: 96, rx: 14 }, phone);
+  const meDot = S('circle', { class: 'me', cx: 59, cy: 100, r: 11, fill: 'var(--off)' }, phone);
+  S('text', { x: 59, y: 130 }, phone).textContent = 'Alice';
+  S('text', { class: 's', x: 59, y: 146 }, phone).textContent = 'phone';
+  const api = box('api', 160, 20, 104, 46, 'API servers', 'stateless · HTTP');
+  const pres = box('pres', 160, 156, 104, 52, 'Presence', 'servers · WebSocket');
+  const kv = S('g', { class: 'nd tap', 'data-id': 'kv' }, svg);
+  S('path', { class: 'shape', d: 'M318 98 Q318 88 349 88 Q380 88 380 98 L380 152 Q380 162 349 162 Q318 162 318 152 Z' }, kv);
+  S('path', { d: 'M318 98 Q318 108 349 108 Q380 108 380 98', fill: 'none', stroke: 'var(--line)', 'stroke-width': 2 }, kv);
+  S('text', { x: 349, y: 130 }, kv).textContent = 'KV';
+  S('text', { class: 's', x: 349, y: 146 }, kv).textContent = 'store';
+  const pk = S('circle', { class: 'pk', r: 7, cx: -20, cy: -20 }, svg);
+  const NAMES = { phone: "Alice's phone", api: 'API servers', pres: 'Presence servers', kv: 'Key-value store' };
+  async function travel(path, ms = 650, back = false) {
+    path.classList.add('hot');
+    const L = path.getTotalLength();
+    await anim(Q.reduced ? 0 : ms, p => { const q = path.getPointAtLength(L * (back ? 1 - ease(p) : ease(p))); pk.setAttribute('cx', q.x); pk.setAttribute('cy', q.y); });
+    path.classList.remove('hot');
+  }
+  const glow = async g => { g.classList.add('glow'); await sleep(Q.reduced ? 0 : 250); g.classList.remove('glow'); };
+  function writeRow(status, time) {
+    const s = $('#kvStatus'); s.textContent = status; s.className = status === 'online' ? 'st-on' : 'st-off';
+    s.classList.remove('flash'); void s.offsetWidth; s.classList.add('flash');
+    if (time) { const t = $('#kvTime'); t.textContent = time; t.classList.remove('flash'); void t.offsetWidth; t.classList.add('flash'); }
+  }
+  // prediction: tap a node
+  [phone, api, pres, kv].forEach(g => tapable(g, NAMES[g.dataset.id] + ': pick this box', () => {
+    if (predicted) return;
+    predicted = true;
+    const ok = g.dataset.id === 'pres';
+    g.classList.add(ok ? 'right' : 'wrong'); if (!ok) pres.classList.add('right');
+    const ex = $('#s1predEx'); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+    ex.innerHTML = (ok ? '<b>Right: the presence servers.</b> ' : `<b>Not the ${NAMES[g.dataset.id].toLowerCase()}.</b> It's the presence servers. `) +
+      'They hold the WebSocket to Alice\'s phone, so they are the first to know the connection is up, and they own the status. The store just stores. Now log her in and watch.';
+    ok ? Q.addXP(20, g) : Q.loseHeart(g);
+    setTimeout(() => { [phone, api, pres, kv].forEach(n => n.classList.remove('right', 'wrong')); }, 2600);
+    $('#loginBtn').disabled = false; $('#s1hint').textContent = 'Log in, then log out.';
+  }));
+  $('#loginBtn').onclick = async () => {
+    if (busy || loggedIn) return; busy = true; $('#loginBtn').disabled = true;
+    logTo('s1log', '1. Alice opens the app. Her phone opens a WebSocket to a presence server.');
+    await travel(edges.ws); await glow(pres);
+    logTo('s1log', '2. Connection is up, so the presence server writes her row.');
+    await travel(edges.kv); await glow(kv);
+    const now = new Date().toLocaleTimeString('en-GB');
+    writeRow('online', now); meDot.setAttribute('fill', 'var(--good)');
+    logTo('s1log', `3. user:alice → status = online, last_active_at = ${now}. Green dot on.`, 'g');
+    pk.setAttribute('cx', -20);
+    loggedIn = true; busy = false; $('#logoutBtn').disabled = false;
+    if (checkGoal('#s1goals', 'login', goals)) maybeQuiz();
+  };
+  $('#logoutBtn').onclick = async () => {
+    if (busy || !loggedIn) return; busy = true; $('#logoutBtn').disabled = true;
+    logTo('s1log', '1. Alice taps "Log out". That\'s a normal HTTP request to the API servers.');
+    await travel(edges.http); await glow(api);
+    logTo('s1log', '2. The API servers pass it on to the presence servers.');
+    await travel(edges.down); await glow(pres);
+    await travel(edges.kv); await glow(kv);
+    writeRow('offline'); meDot.setAttribute('fill', 'var(--off)');
+    logTo('s1log', '3. user:alice → status = offline. The dot goes grey.', 'w');
+    pk.setAttribute('cx', -20);
+    loggedIn = false; busy = false; $('#loginBtn').disabled = false;
+    $('#s1note').style.display = 'block';
+    if (checkGoal('#s1goals', 'logout', goals)) maybeQuiz();
+  };
+  function maybeQuiz() {
+    if (quizShown || goals.size < 2) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s1quiz'), {
+      q: 'At login, which two fields does the book save in the key-value store?',
+      options: ['Online status and a last_active_at timestamp', 'Online status and the chat server’s address', 'A last_active_at timestamp and the friend list', 'The device type and a session token for the API'],
+      correct: 0,
+      good: 'Once the WebSocket is up, the presence server saves the user’s <b>online status</b> and a <b>last_active_at</b> timestamp. That’s all the dot needs.',
+      bad: 'The book stores just two things for presence: the <b>online status</b> and a <b>last_active_at</b> timestamp. Which chat server a user is on is a service-discovery question (Quest 12.2), not a presence one.',
+      onDone: () => setTimeout(() => Q.clearStage(1), 900),
+    }), 400);
+  }
+});
+
+/* ================= STAGE 2: the tunnel problem ================= */
+Q.onStage(2, () => {
+  const ride = makeRide($('#ride2'), { hbRow: false });
+  const sim = simulate('naive', 5, 30, RIDE);
+  let count = 0;
+  const reset = () => { count = 0; $('#r2count').textContent = '0'; setDot(1); ride.load(sim); };
+  function setDot(on) { const d = $('#r2dot'); d.className = 'fdot' + (on ? ' on' : ''); void d.offsetWidth; d.classList.add('blink'); $('#r2st').textContent = on ? 'online' : 'offline'; }
+  async function run() {
+    reset();
+    $('#r2log').innerHTML = '<div>Naive mode: a dropped connection means offline, right away.</div>';
+    await ride.play(sim, (k, i, v) => {
+      if (k === 'flip') {
+        count++; $('#r2count').textContent = count; setDot(v);
+        logTo('r2log', `t=${tStr(i)} ${v ? 'signal back → ONLINE pushed to friends' : 'connection dropped → OFFLINE pushed to friends'}`, v ? 'g' : 'w');
+      }
+    });
+    logTo('r2log', `Arrived. Bob's screen changed ${count} times in 2 minutes, and Alice never left the app.`);
+  }
+  ride.load(sim);
+  function round() {
+    predict($('#s2pred'), {
+      step: 'Predict, then ride',
+      title: 'With the naive rule, how many status changes get pushed to Alice\'s friends during the ride?',
+      options: ['0 changes', '3 changes', '6 changes'],
+      correct: 2,
+      act: run,
+      explain: 'Every tunnel costs two changes: <b>offline</b> going in, <b>online</b> coming out. Three tunnels, six changes, each one pushed to every friend. Bob watched the dot flicker, and Alice was in the app the whole time. Even the 4-second tunnel counted.',
+    }).then(({ row }) => {
+      const b = document.createElement('button'); b.className = 'btn'; b.textContent = '↻ Ride again'; b.onclick = () => { if (!$('#s2quiz .quiz')) return; run(); }; row.appendChild(b);
+      if (!$('#s2quiz .quiz')) setTimeout(() => Q.quiz($('#s2quiz'), {
+        q: 'What’s the real problem with marking a user offline on every disconnect?',
+        options: ['Short drops cause flapping: noisy, wasteful updates', 'The key-value store can’t hold an offline status', 'Friends never learn that the user went offline', 'Reconnecting forces the user to log in again'],
+        correct: 0,
+        good: 'Mobile connections drop and come back constantly (tunnels, lifts, weak Wi-Fi). Each blip becomes two status changes, fanned out to every friend. That’s <b>flapping</b>: noisy for friends, wasteful for servers, and it looks broken.',
+        bad: 'Storage and logins are fine. The problem is <b>flapping</b>: every short drop turns into an offline and an online event, each fanned out to every friend. Noisy, wasteful, and it looks broken.',
+        onDone: () => setTimeout(() => Q.clearStage(2), 900),
+      }), 300);
+    });
+  }
+  round();
+});
+
+/* ================= STAGE 3: heartbeat ================= */
+Q.onStage(3, () => {
+  const ride = makeRide($('#ride3'), { hbRow: true });
+  const H = 5, XT = 30;
+  const sim = simulate('hb', H, XT, RIDE);
+  const C = 2 * Math.PI * 40, arc = $('#cArc');
+  arc.setAttribute('stroke-dasharray', C.toFixed(1));
+  function ringTo(rem) {
+    arc.setAttribute('stroke-dashoffset', (C * (1 - rem / XT)).toFixed(1));
+    arc.classList.toggle('zero', rem <= 0);
+    $('#cNum').textContent = Math.ceil(rem);
+  }
+  ringTo(XT);
+  ride.load(sim);
+  // per-tunnel predictions
+  const TRUTH = TUN.map(u => { for (let i = u.a * 10; i < u.b * 10; i++) if (!sim.on[i]) return 'off'; return 'on'; });
+  const picks = [null, null, null];
+  $('#tpred').innerHTML = TUN.map((u, k) => `<div class="sort-item" data-k="${k}"><p><b>Tunnel ${k + 1}</b> · ${u.b - u.a} seconds without signal</p><div class="row"><button class="opt" data-v="on">Stays online</button><button class="opt" data-v="off">Goes offline</button></div><div class="explain"></div></div>`).join('');
+  $$('#tpred .sort-item').forEach(item => {
+    const k = +item.dataset.k;
+    $$('.opt', item).forEach(b => b.onclick = () => {
+      if (judged) return;
+      picks[k] = b.dataset.v;
+      $$('.opt', item).forEach(x => x.classList.toggle('picked', x === b));
+      const ready = picks.every(Boolean);
+      $('#r3run').disabled = !ready; $('#r3hint').textContent = ready ? 'Locked in? Ride.' : 'Make all three calls first.';
+    });
+  });
+  let judged = false, running = false, count = 0, quizShown = false;
+  const goals = new Set();
+  const WHY = [
+    'Last heartbeat at 10 s, next one at 16 s when the signal returns. A 6-second gap, nowhere near 30.',
+    'Heartbeats at 35 s and 40 s are lost, but 30 s → 44 s is only a 14-second gap. The timer never runs out.',
+    'Last heartbeat at 60 s. By 90 s, 30 seconds have passed in silence, so she\'s marked offline. She comes back online at 112 s.',
+  ];
+  async function run() {
+    if (running) return; running = true; $('#r3run').disabled = true;
+    count = 0; $('#r3count').textContent = '0';
+    $('#r3dot').className = 'fdot on'; $('#r3st').textContent = 'online'; ringTo(XT);
+    $('#r3log').innerHTML = '<div>Heartbeat mode: every 5 s, and x = 30 s.</div>';
+    let last = 0;
+    await ride.play(sim, (k, i, v) => {
+      if (k === 'hb') last = i;
+      if (k === 'in') logTo('r3log', `t=${tStr(i)} tunnel ${v + 1}: no signal, heartbeats stop`);
+      if (k === 'out') logTo('r3log', `t=${tStr(i)} signal back: heartbeat sent at once, timer refilled`, 'g');
+      if (k === 'flip') {
+        count++; $('#r3count').textContent = count;
+        const d = $('#r3dot'); d.className = 'fdot' + (v ? ' on' : ''); void d.offsetWidth; d.classList.add('blink'); $('#r3st').textContent = v ? 'online' : 'offline';
+        logTo('r3log', `t=${tStr(i)} ${v ? 'heartbeat arrives → ONLINE pushed to friends' : '30 s with no heartbeat → OFFLINE pushed to friends'}`, v ? 'g' : 'w');
+      }
+      if (k === 'tick') ringTo(Math.max(0, XT - (i - last) / 10));
+    }, 9000);
+    logTo('r3log', `Arrived. ${count} status changes instead of 6. The short tunnels were invisible to Bob.`);
+    running = false; $('#r3run').disabled = false; $('#r3run').textContent = '↻ Ride again';
+    if (!judged) judge();
+  }
+  function judge() {
+    judged = true;
+    $$('#tpred .sort-item').forEach(item => {
+      const k = +item.dataset.k, ok = picks[k] === TRUTH[k];
+      const mine = $(`.opt[data-v="${picks[k]}"]`, item);
+      $$('.opt', item).forEach(x => x.disabled = true);
+      mine.classList.add(ok ? 'right' : 'wrong');
+      if (!ok) $(`.opt[data-v="${TRUTH[k]}"]`, item).classList.add('right');
+      const ex = $('.explain', item); ex.className = 'explain show ' + (ok ? 'good' : 'bad'); ex.textContent = WHY[k];
+      ok ? Q.addXP(10, mine) : Q.loseHeart(mine);
+    });
+    $('#r3after').style.display = 'block';
+    setTimeout(() => $('#calcBox').scrollIntoView({ behavior: Q.reduced ? 'auto' : 'smooth', block: 'center' }), 500);
+  }
+  $('#r3run').onclick = run;
+
+  // calculate-and-check
+  let calcDone = false, calcMissed = false;
+  function parseNum(s) {
+    s = String(s).toLowerCase().replace(/[,\s_]/g, '').replace(/\/s$|persec(ond)?$/, '');
+    let m = 1;
+    if (/k$/.test(s)) { m = 1e3; s = s.slice(0, -1); } else if (/m$/.test(s)) { m = 1e6; s = s.slice(0, -1); }
+    const v = Number(s); return isFinite(v) && s !== '' ? v * m : NaN;
+  }
+  function check() {
+    if (calcDone) return;
+    const v = parseNum($('#calcIn').value), ex = $('#calcEx');
+    if (isNaN(v)) { ex.className = 'explain show bad'; ex.innerHTML = 'Type a number, like <code>12000</code> or <code>12k</code>.'; return; }
+    if (v === 200000) {
+      calcDone = true; $('#calcBtn').disabled = true; $('#calcIn').readOnly = true;
+      ex.className = 'explain show good';
+      ex.innerHTML = '<b>200,000 heartbeats per second.</b> 1,000,000 users ÷ 5 s = 200,000/s. Each one is tiny, but that is a real load, and every one resets a timer. That\'s why presence gets its own server tier.';
+      Q.addXP(calcMissed ? 10 : 20, $('#calcBtn'));
+      $('#labWrap').style.display = 'block'; lab();
+      return;
+    }
+    ex.className = 'explain show bad';
+    ex.innerHTML = calcMissed ? `Not ${fmt(v)}. Each user sends one heartbeat per 5 seconds, so per second that's 1/5 of a heartbeat per user. Multiply by 1,000,000.` :
+      `Not ${fmt(v)}. Hint: one user sends 1 heartbeat every 5 seconds, which is 0.2 per second. Now scale to a million users.`;
+    if (!calcMissed) { calcMissed = true; Q.loseHeart($('#calcBtn')); }
+  }
+  $('#calcBtn').onclick = check;
+  $('#calcIn').addEventListener('keydown', e => { if (e.key === 'Enter') check(); });
+
+  // tuning lab
+  const LX = t => 16 + t * 1.47;   // 0..250 s
+  const DEATH = RIDE, END = 250;
+  let labInit = false;
+  function lab() {
+    if (labInit) return; labInit = true;
+    $('#hIn').addEventListener('input', drawLab);
+    $('#xIn').addEventListener('input', drawLab);
+    drawLab();
+  }
+  function drawLab() {
+    const h = +$('#hIn').value, x = +$('#xIn').value;
+    $('#hVal').textContent = h; $('#xVal').textContent = x;
+    const s = simulate('hb', h, x, END, DEATH);
+    const flips = flipsIn(s.on, 0, RIDE * 10);
+    let off = -1; for (let i = DEATH * 10; i <= s.n; i++) if (!s.on[i]) { off = i; break; }
+    const ghost = off < 0 ? END - DEATH : (off - DEATH * 10) / 10;
+    const svg = $('#labSvg'); svg.innerHTML = '';
+    S('text', { class: 'deadl', x: 16, y: 11 }, svg).textContent = 'SIGNAL';
+    S('rect', { x: LX(0), y: 15, width: LX(DEATH) - LX(0), height: 10, rx: 2, fill: 'var(--teal-soft)' }, svg);
+    TUN.forEach(u => S('rect', { x: LX(u.a), y: 15, width: LX(u.b) - LX(u.a), height: 10, fill: 'var(--tunnel)' }, svg));
+    S('rect', { class: 'dead', x: LX(DEATH), y: 15, width: LX(END) - LX(DEATH), height: 10, rx: 2 }, svg);
+    S('text', { class: 'deadl', x: LX(DEATH) + 4, y: 11 }, svg).textContent = '🔋 battery dead';
+    S('text', { class: 'deadl', x: 16, y: 39 }, svg).textContent = 'HEARTBEATS';
+    s.hb.forEach(i => S('line', { class: 'hbl', x1: LX(i / 10), y1: 43, x2: LX(i / 10), y2: 53 }, svg));
+    S('text', { class: 'deadl', x: 16, y: 67 }, svg).textContent = 'WHAT BOB SEES';
+    let st = 0;
+    for (let i = 1; i <= s.n + 1; i++) if (i > s.n || s.on[i] !== s.on[st]) { S('rect', { class: s.on[st] ? 'ride-on' : 'ride-off', x: LX(st / 10), y: 71, width: LX(Math.min(i, s.n) / 10) - LX(st / 10), height: 12, fill: s.on[st] ? 'var(--good)' : 'var(--off)' }, svg); st = i; }
+    if (ghost > 0) {
+      S('rect', { class: 'ghost', x: LX(DEATH), y: 68, width: LX(DEATH + ghost) - LX(DEATH), height: 18, rx: 3 }, svg);
+      S('text', { class: 'ghostl', x: Math.min(LX(DEATH) + 3, 330), y: 96 }, svg).textContent = `👻 ${ghost} s ghost`;
+    }
+    [0, 60, 120, 180, 240].forEach(t => S('text', { x: LX(t), y: 112, fill: 'var(--muted)', 'font-size': 10, 'font-family': 'var(--mono)', 'text-anchor': 'middle' }, svg).textContent = t + 's');
+    $('#flipVal').textContent = flips; $('#ghostVal').textContent = ghost + ' s'; $('#loadVal').textContent = fmt(Math.round(1e6 / h));
+    $('#rdFlip').className = flips >= 4 ? 'badv' : '';
+    $('#rdGhost').className = ghost >= 60 ? 'warnv' : '';
+    $('#labWarn').textContent = x <= h ? `Timeout (${x} s) is no longer than the interval (${h} s): the dot drops between normal heartbeats, even with perfect signal.` : '';
+    if (flips >= 4) checkGoal('#s3goals', 'flicker', goals);
+    if (ghost >= 60) checkGoal('#s3goals', 'ghost', goals);
+    if (h === 5 && x === 30 && goals.has('flicker') && goals.has('ghost')) checkGoal('#s3goals', 'book', goals);
+    if (goals.size === 3) { $('#labNote').style.display = 'block'; maybeQuiz(); }
+  }
+  function maybeQuiz() {
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => Q.quiz($('#s3quiz'), {
+      q: 'In the book’s example (a heartbeat every 5 s, x = 30), when is the user marked offline?',
+      options: ['Once 30 seconds pass with no heartbeat', 'As soon as 3 heartbeats have been sent', 'The instant the WebSocket connection drops', 'Once 5 seconds pass with no heartbeat'],
+      correct: 0,
+      good: 'The client sends a few heartbeats, then goes silent. Nothing happens at the first missed beat. Only after <b>30 seconds with no heartbeat</b> does the presence server flip the status to offline.',
+      bad: 'In the book’s example the client sends 3 heartbeats and then disconnects, but that count isn’t the rule. The rule is the timeout: <b>30 seconds with no heartbeat</b> means offline.',
+      onDone: () => setTimeout(() => Q.clearStage(3), 900),
+    }), 400);
+  }
+});
+
+/* ================= STAGE 4: pub/sub fan-out ================= */
+Q.onStage(4, () => {
+  const svg = $('#ps');
+  const CX = 200, CY = 160;
+  const goals = new Set();
+  let size = 3, mode = 'push', aOn = true, total = 0, busy = false, predicted = false, staleFlip = false, quizShown = false;
+  let members = [], youIdx = 0;
+  const FR = [{ n: 'B', x: 200, y: 46 }, { n: 'C', x: 312, y: 232 }, { n: 'D', x: 88, y: 232 }];
+  function draw() {
+    svg.innerHTML = '';
+    members = [];
+    const chanG = S('g', {}, svg), memG = S('g', {}, svg);
+    if (size === 3) {
+      FR.forEach((f, k) => {
+        S('line', { class: 'chan', x1: CX, y1: CY, x2: f.x, y2: f.y }, chanG);
+        const mx = (CX + f.x) / 2, my = (CY + f.y) / 2;
+        S('rect', { class: 'pill-r', x: mx - 20, y: my - 10, width: 40, height: 20, rx: 10 }, chanG);
+        S('text', { class: 'pill-t', x: mx, y: my }, chanG).textContent = 'A-' + f.n;
+        const g = S('g', { class: 'fr' }, memG);
+        S('circle', { class: 'body', cx: f.x, cy: f.y, r: 24 }, g);
+        S('text', { x: f.x, y: f.y }, g).textContent = f.n;
+        const dot = S('circle', { class: 'mem' + (aOn ? ' on' : ''), cx: f.x + 17, cy: f.y - 17, r: 7 }, g);
+        members.push({ x: f.x, y: f.y, el: dot });
+      });
+      youIdx = 0;
+      S('text', { class: 'youl', x: FR[0].x + 44, y: FR[0].y + 4 }, svg).textContent = '(you)';
+    } else {
+      const drawN = size === 100000 ? 1400 : size, r0 = 46, r1 = 138, dr = size === 100 ? 4 : size === 500 ? 2.4 : 1.25;
+      for (let i = 0; i < drawN; i++) {
+        const rr = r0 + (r1 - r0) * Math.sqrt((i + .5) / drawN), th = i * 2.399963 - Math.PI / 2;
+        const x = CX + rr * Math.cos(th), y = CY + rr * Math.sin(th) * .98;
+        if (size !== 100000) S('line', { class: 'chan thin', x1: CX, y1: CY, x2: x.toFixed(1), y2: y.toFixed(1) }, chanG);
+        members.push({ x, y, d: rr, el: S('circle', { class: 'mem' + (aOn ? ' on' : ''), cx: x.toFixed(1), cy: y.toFixed(1), r: dr }, memG) });
+      }
+      youIdx = drawN - 1;
+      const yv = members[youIdx];
+      S('circle', { class: 'you', cx: yv.x.toFixed(1), cy: yv.y.toFixed(1), r: dr + 5 }, svg);
+      S('text', { class: 'youl', x: Math.min(370, Math.max(30, yv.x)).toFixed(1), y: (yv.y > CY ? yv.y + 22 : yv.y - 12).toFixed(1) }, svg).textContent = 'you';
+      S('text', { class: 'biglab', x: CX, y: 314 }, svg).textContent = size === 100000 ? '100,000 members (each dot ≈ 70 people)' : `${size} members, one channel each`;
+    }
+    const me = S('g', { class: 'me' }, svg);
+    S('circle', { class: 'halo', cx: CX, cy: CY, r: 31, stroke: aOn ? 'var(--good)' : 'var(--off)' }, me);
+    S('circle', { class: 'body', cx: CX, cy: CY, r: 25 }, me);
+    S('text', { x: CX, y: CY }, me).textContent = 'A';
+    tapable(me, "Flip A's status", flipA);
+    $('#evPer').textContent = mode === 'push' ? fmt(size) : '0';
+  }
+  function setMember(m, on, stale) { m.el.classList.toggle('on', on); m.el.classList.toggle('stale', !!stale); }
+  async function fanout() {
+    const wave = S('circle', { class: 'wave', cx: CX, cy: CY, r: 26 }, svg);
+    const pulses = size === 3 ? members.map(() => S('circle', { class: 'pulse', r: 6, cx: CX, cy: CY }, svg)) : [];
+    const maxD = size === 3 ? 1 : 140;
+    if (size !== 3 && !Q.reduced) members.forEach(m => { m.el.style.transitionDelay = (m.d / maxD * 550).toFixed(0) + 'ms'; });
+    await anim(Q.reduced ? 0 : 750, p => {
+      const e = ease(p);
+      wave.setAttribute('r', 26 + e * 120); wave.setAttribute('opacity', (1 - p).toFixed(2));
+      pulses.forEach((pl, k) => { pl.setAttribute('cx', CX + (members[k].x - CX) * e); pl.setAttribute('cy', CY + (members[k].y - CY) * e); });
+      if (p > .12 && size !== 3) members.forEach(m => setMember(m, aOn, false));
+    });
+    members.forEach(m => setMember(m, aOn, false));
+    wave.remove(); pulses.forEach(p => p.remove());
+    setTimeout(() => members.forEach(m => { m.el.style.transitionDelay = ''; }), 900);
+  }
+  async function flipA() {
+    if (busy) return; busy = true;
+    aOn = !aOn;
+    const halo = $('.me .halo', svg); halo.setAttribute('stroke', aOn ? 'var(--good)' : 'var(--off)');
+    if (mode === 'push') {
+      await fanout();
+      total += size; $('#evTot').textContent = fmt(total);
+      logTo('pslog', size === 3 ? `A is now ${aOn ? 'online' : 'offline'} → published to A-B, A-C, A-D → 3 events, 3 WebSocket pushes.` :
+        `A is now ${aOn ? 'online' : 'offline'} → ${fmt(size)} channels → <b>${fmt(size)} events</b> for one flip.`, size >= 100000 ? 'e' : size >= 500 ? 'w' : 'g');
+      if (size === 100000) logTo('pslog', 'If 1,000 members go on or offline in one minute, that’s 100 million events that minute, nearly all for dots nobody is looking at.', 'e');
+      if (size === 3 && checkGoal('#s4goals', 'flip', goals)) maybeQuiz();
+    } else {
+      members.forEach(m => setMember(m, m.el.classList.contains('on'), true));
+      logTo('pslog', `A is now ${aOn ? 'online' : 'offline'} → saved in the KV store. <b>0 events</b> pushed. Everyone's copy of A's dot is now stale.`, 'w');
+      staleFlip = true;
+    }
+    busy = false;
+  }
+  async function openGroup() {
+    if (busy) return; busy = true;
+    const y = members[youIdx];
+    const ring = S('circle', { class: 'wave', cx: y.x, cy: y.y, r: 4 }, svg);
+    await anim(Q.reduced ? 0 : 500, p => { ring.setAttribute('r', 4 + p * 26); ring.setAttribute('opacity', (1 - p).toFixed(2)); });
+    ring.remove();
+    setMember(y, aOn, false);
+    logTo('pslog', `You opened the group → <b>1 batch read</b> of members' statuses (in practice paged, just the ones on screen). Your dot for A is fresh. Everyone else's stays stale until they open or refresh.`, 'g');
+    if (size === 100000 && staleFlip && checkGoal('#s4goals', 'fetch', goals)) { $('#s4note').style.display = 'block'; maybeQuiz(); }
+    busy = false;
+  }
+  function setSize(n) {
+    size = n; staleFlip = false;
+    $$('#sizeSeg button').forEach(b => b.classList.toggle('on', +b.dataset.n === n));
+    draw();
+    logTo('pslog', n === 3 ? 'Back to A and 3 friends.' : `Group of ${fmt(n)}: one channel between A and each member.`);
+  }
+  function setMode(m) {
+    mode = m; staleFlip = false;
+    $$('#modeSeg button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
+    $('#openG').style.display = m === 'fetch' ? '' : 'none';
+    members.forEach(x => setMember(x, aOn, false));
+    $('#evPer').textContent = m === 'push' ? fmt(size) : '0';
+    logTo('pslog', m === 'push' ? 'Strategy: push every change down every channel.' : 'Strategy: no push. Status is read when someone opens the group or refreshes.');
+  }
+  $$('#sizeSeg button').forEach(b => b.onclick = () => { if (!busy && !b.disabled) setSize(+b.dataset.n); });
+  $$('#modeSeg button').forEach(b => b.onclick = () => { if (!busy) setMode(b.dataset.m); });
+  $('#flipA').onclick = flipA;
+  $('#openG').onclick = openGroup;
+  draw();
+
+  predict($('#s4pred'), {
+    step: 'Predict, then flip',
+    title: 'A is in a 100,000-member fan group, and every change is pushed. A goes offline once. How many events does that make?',
+    options: ['1 event, for the group', '500 events, then capped', '100,000 events, one each'],
+    correct: 2,
+    act: async () => {
+      if (mode !== 'push') setMode('push');
+      const b = $('#sizeSeg button[data-n="100000"]'); b.disabled = false; b.removeAttribute('title');
+      setSize(100000); if (!aOn) { aOn = true; draw(); }
+      await sleep(Q.reduced ? 0 : 300);
+      await flipA();
+    },
+    explain: 'One channel per member means one event per member: <b>100,000 events</b> for a single status change. That\'s the book\'s number. For a 3-friend group, pushing is cheap. At this size it\'s a flood. Now switch the strategy to <b>Fetch on entry / refresh</b>, flip A, and open the group.',
+  }).then(() => { predicted = true; checkGoal('#s4goals', 'big', goals); });
+
+  function maybeQuiz() {
+    if (quizShown || goals.size < 3) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s4quiz'), {
+      q: 'What does the book do about presence in a 100,000-member group?',
+      options: ['Fetch status when a user opens it or refreshes', 'Push every change, but batch them once a minute', 'Give the whole group one shared pub/sub channel', 'Show the green dot only to the group’s admins'],
+      correct: 0,
+      good: 'Pushing would cost 100,000 events per change. Instead, a member’s app <b>fetches</b> online status when they enter the group or refresh the list. Dots can be a bit stale, which is fine for a hint.',
+      bad: 'The book’s fix is simpler: stop pushing for big groups. A member’s app <b>fetches</b> online status when they enter the group or manually refresh. Dots may be a bit stale, which is fine for a hint.',
+      onDone: () => setTimeout(() => Q.clearStage(4), 900),
+    }), 400);
+  }
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss'), {
+  name: '👻 Flicker Phantom',
+  xp: 15,
+  choices: [
+    { k: 'hb', label: 'Heartbeat timeout', sub: 'silent 30 s → offline' },
+    { k: 'push', label: 'Push via pub/sub', sub: 'channel per friend pair' },
+    { k: 'fetch', label: 'Fetch on entry', sub: 'or manual refresh' },
+    { k: 'kv', label: 'Write to KV store', sub: 'status + last_active_at' },
+  ],
+  scenarios: [
+    { e: '🚆', t: 'The flickering commuter', d: 'A user\'s dot flickers grey and green every time their train goes under a bridge.', a: 'hb', why: 'Don\'t treat a dropped connection as offline. Let heartbeats decide: a few lost beats under a bridge are fine, and only 30 seconds of silence means offline.' },
+    { e: '👋', t: 'Bob is back', d: 'Bob\'s status just flipped to online. His 12 friends should see his dot turn green right away.', a: 'push', why: 'A small friend list is where push shines. Publish to the 12 friend-pair channels, and each friend gets the update over their WebSocket. 12 events is cheap.' },
+    { e: '🏟️', t: 'The giant fan club', d: 'A 100,000-member fan group wants to show who\'s online.', a: 'fetch', why: 'Pushing means 100,000 events for every single status change. Fetch status when a member opens the group or refreshes instead.' },
+    { e: '🔌', t: 'Fresh login', d: 'The WebSocket for a brand-new login was just established.', a: 'kv', why: 'Login: once the WebSocket is up, the presence server saves status = online and last_active_at in the key-value store.' },
+    { e: '🪫', t: 'Dead battery', d: 'A phone\'s battery died in the middle of a chat. No logout was ever sent.', a: 'hb', why: 'No logout request will ever arrive. The heartbeats simply stop, and after 30 seconds without one the presence server marks the user offline.' },
+    { e: '🔄', t: 'Conference roll call', d: 'Alice taps "refresh" on her 2,000-person conference attendee list.', a: 'fetch', why: 'A big list plus a manual refresh is exactly the book\'s fetch case. One read when she asks for it, not a push every time any of 2,000 people changes status.' },
+  ],
+  outro: 'Heartbeats decide who is really gone. Push to small friend lists. Fetch for big groups.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: interview drill ================= */
+Q.onStage(6, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"Your chat app shows a green dot next to friends who are online. How does that work, and what goes wrong at scale?"</i>',
+  placeholder: 'Presence servers hold a WebSocket to each client…',
+  model: '"Presence servers hold a WebSocket to each client. On login they write status = online and last_active_at to the key-value store. On logout, offline. I wouldn\'t mark someone offline the moment the connection drops, because mobile connections flap: tunnels, lifts, weak Wi-Fi. Instead the client sends a heartbeat every few seconds, say 5, and if none arrives for about 30 seconds they\'re marked offline. To fan out changes, each friend pair gets a pub/sub channel, and updates go out over WebSocket. That\'s fine for small friend lists, but a 100,000-member group would get 100,000 events per change. So for big groups I\'d fetch status only when someone opens the group or refreshes."',
+  checks: ['I explained why not to mark offline on every disconnect', 'I gave the heartbeat interval and the timeout idea (5 s / 30 s)', 'I covered pub/sub fan-out and the big-group fix'],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

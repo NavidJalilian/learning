@@ -18,6 +18,8 @@
 }
 :root[data-theme="dark"] { --tok: #8f82ff; --tok-copy: #31d3c8; --on-tok: #0e0f1d; --lost: #6f6c8c; --w1: #8f82ff; --w2: #31d3c8; --bar-ok: #43d98a; --bar-rej: #ff6d6a; }
 
+.sim svg { max-width: 620px; margin: 0 auto; }
+.chart-cap { font-size: 12px; font-weight: 600; color: var(--muted); padding: 10px 14px 0; }
 .challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
 .bignum { font-family: var(--mono); font-weight: 700; }
 .good-t { color: var(--good); } .bad-t { color: var(--bad); } .warn-t { color: var(--warn); }
@@ -103,7 +105,8 @@ table.score td.v { font-family: var(--mono); font-weight: 700; white-space: nowr
 .cl.right { background: rgba(67,217,138,.22); }
 .cl.wrong { background: rgba(255,109,106,.25); }
 .cl.hl { background: rgba(143,130,255,.18); }
-.cl .mks { margin-left: auto; display: flex; gap: 4px; padding-left: 12px; }
+.cl .mks { width: 30px; flex: none; display: flex; }
+@media (max-width: 560px) { .code { font-size: 12.5px; } .cl { padding: 8px 6px; gap: 6px; } }
 .mk { font: 700 11px var(--font); padding: 2px 7px; border-radius: 6px; color: #0e0f1d; }
 .mk.w1 { background: #8f82ff; } .mk.w2 { background: #31d3c8; }
 .wks { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 10px; }
@@ -287,6 +290,7 @@ table.score td.v { font-family: var(--mono); font-weight: 700; white-space: nowr
       <h3 style="margin:22px 0 6px;font-size:18px">The retry storm</h3>
       <p>"Retry" hides a trap. A provider has an outage, and <b>1,000 sends</b> fail at the same moment. It comes back up, but it can only take <b>60 calls per quarter-second</b>. With <b>exponential backoff</b>, each retry waits twice as long as the one before (1 s, 2 s, 4 s…). With <b>jitter</b>, each message picks a <i>random</i> wait between zero and that number.<a class="cite" href="https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/" target="_blank" rel="noopener">[5]</a> Run the storm both ways. Green bars got through, red bars were rejected, and the dashed line is the provider's limit.</p>
       <div class="sim bo">
+        <div class="chart-cap">Provider calls per ¼ second · green = accepted, red = rejected</div>
         <svg id="boSvg" viewBox="0 0 400 196" role="img" aria-label="Bar chart of retry calls per quarter second over 24 seconds"></svg>
         <div class="sim-bar">
           <div class="tog"><span class="small"><b>Base delay</b></span><span class="seg" id="baseSeg"><button data-v="0.5" aria-pressed="false">0.5 s</button><button data-v="1" class="on" aria-pressed="true">1 s</button><button data-v="2" aria-pressed="false">2 s</button></span></div>
@@ -558,7 +562,7 @@ Q.onStage(1, () => {
     wRect.setAttribute('class', 'bx fresh'); wLab.textContent = 'Worker 2'; wSub.textContent = 'recovering';
     let t2;
     if (a === 'after') {
-      logTo('s1log', '⏱ No ack came back, so after a timeout the queue makes #42 visible again. Worker 2 takes it.');
+      logTo('s1log', '⏳ No ack came back, so after a timeout the queue makes #42 visible again. Worker 2 takes it.');
       t2 = token('#42', P.slot[0]);
       await move(t2, P.hand);
     } else {
@@ -645,13 +649,13 @@ Q.onStage(2, () => {
   const ack = E('ok', 'W', 'Q', 'Worker acks. The queue deletes the message.');
   const RUNS = {
     A: { d: 'the worker crashes <b>before</b> it calls APNs',
-      L: [pull, E('crash', 'W', 0, '💥 Worker crashes before calling APNs.'), E('wait', 'Q', 0, '⏱ No ack arrives. After a timeout the queue redelivers.'), E('msg', 'Q', 'W', 'A fresh worker pulls the same message.'), send, bell, okR, ack],
+      L: [pull, E('crash', 'W', 0, '💥 Worker crashes before calling APNs.'), E('wait', 'Q', 0, '⏳ No ack arrives. After a timeout the queue redelivers.'), E('msg', 'Q', 'W', 'A fresh worker pulls the same message.'), send, bell, okR, ack],
       M: [...pullAck, E('crash', 'W', 0, '💥 Worker crashes before calling APNs.'), E('end', 0, 0, 'Nobody will retry: the message was already deleted. <b>Lost.</b>')] },
     B: { d: 'APNs delivers, but its <b>reply is lost</b> on the network',
-      L: [pull, send, bell, E('lost', 'A', 'W', 'APNs replies 200 OK… and the reply is lost on the network. ✗'), E('wait', 'W', 0, '⏱ The worker hears nothing, times out, and retries.'), E('msg', 'W', 'A', 'Worker sends it to APNs again.'), E('bell', 'A', 'P', 'APNs delivers again. 🔔 A second banner appears.'), okR, ack],
+      L: [pull, send, bell, E('lost', 'A', 'W', 'APNs replies 200 OK… and the reply is lost on the network. ✗'), E('wait', 'W', 0, '⏳ The worker hears nothing, times out, and retries.'), E('msg', 'W', 'A', 'Worker sends it to APNs again.'), E('bell', 'A', 'P', 'APNs delivers again. 🔔 A second banner appears.'), okR, ack],
       M: [...pullAck, send, bell, E('lost', 'A', 'W', 'The reply is lost on the network. ✗'), E('end', 0, 0, 'At-most-once never retries. One banner, and the worker can’t even be sure of that.')] },
     C: { d: 'APNs delivers, then the worker crashes <b>before it acks</b>',
-      L: [pull, send, bell, okR, E('crash', 'W', 0, '💥 Worker crashes before it acks or records success.'), E('wait', 'Q', 0, '⏱ No ack arrives. After a timeout the queue redelivers.'), E('msg', 'Q', 'W', 'A fresh worker pulls the same message.'), send, E('bell', 'A', 'P', 'APNs delivers again. 🔔 A second banner appears.'), okR, ack],
+      L: [pull, send, bell, okR, E('crash', 'W', 0, '💥 Worker crashes before it acks or records success.'), E('wait', 'Q', 0, '⏳ No ack arrives. After a timeout the queue redelivers.'), E('msg', 'Q', 'W', 'A fresh worker pulls the same message.'), send, E('bell', 'A', 'P', 'APNs delivers again. 🔔 A second banner appears.'), okR, ack],
       M: [...pullAck, send, bell, okR, E('crash', 'W', 0, '💥 Worker crashes. Nothing to retry: the message is gone from the queue.'), E('end', 0, 0, 'One banner.')] },
   };
   function setBells(n) { $('#bells').textContent = n ? '🔔'.repeat(n) : '0'; }
@@ -666,7 +670,7 @@ Q.onStage(2, () => {
       const cls = e.k === 'crash' || e.k === 'lost' ? 'e' : e.k === 'bell' ? 'g' : e.k === 'end' ? (bells ? 'w' : 'e') : '';
       logTo('s2log', e.t, cls);
       if (e.k === 'crash') S('text', { x: x + 9, y: LY.W, class: 'ico' }, layer).textContent = '💥';
-      else if (e.k === 'wait') S('text', { x: x + 9, y: LY[e.a] + (e.a === 'Q' ? 16 : -16), class: 'ico' }, layer).textContent = '⏱';
+      else if (e.k === 'wait') S('text', { x: x + 9, y: LY[e.a] + (e.a === 'Q' ? 16 : -16), class: 'ico' }, layer).textContent = '⏳';
       else if (e.k !== 'end') {
         const ya = LY[e.a], yb = LY[e.b], dn = yb > ya;
         const y1 = ya + (dn ? 5 : -5), y2 = yb + (dn ? -7 : 7);
@@ -793,21 +797,21 @@ Q.onStage(3, () => {
   /* part 2: the race */
   const BUGGY = [
     'def handle(event):',
-    '  if not seen.contains(event.id):',
+    '  if event.id not in seen:',
     '    send(event)',
     '    seen.add(event.id)',
   ];
   const FIXED = [
     'def handle(event):',
-    '  if seen.claim(event.id, lease=60):  <span class="cm"># SET id sending NX EX 60</span>',
+    '  if seen.claim(event.id):  <span class="cm"># atomic</span>',
     '    send(event)',
-    '    seen.mark_sent(event.id)  <span class="cm"># SET id sent EX 86400</span>',
+    '    seen.mark_sent(event.id)',
   ];
   let fixed = false, raceBusy = false, phase = 'idle';
   const picked = new Set();
   function renderCode() {
     const L = fixed ? FIXED : BUGGY;
-    $('#code').innerHTML = L.map((t, i) => `<button class="cl" data-l="${i + 1}" disabled aria-label="Line ${i + 1}"><span class="ln">${i + 1}</span><span>${t}</span><span class="mks"></span></button>`).join('');
+    $('#code').innerHTML = L.map((t, i) => `<button class="cl" data-l="${i + 1}" disabled aria-label="Line ${i + 1}"><span class="ln">${i + 1}</span><span class="mks"></span><span>${t}</span></button>`).join('');
     $$('#code .cl').forEach(b => b.onclick = () => {
       if (phase !== 'pick') return;
       const n = +b.dataset.l;
@@ -838,8 +842,8 @@ Q.onStage(3, () => {
       [1, 3, 'send(e5) → 📳', () => buzz++],
       [1, 4, 'mark_sent(e5)', () => { rs.delete('e5:sending'); rs.add('e5:sent'); }],
     ] : [
-      [1, 2, 'e5 in seen? no → go on', null],
-      [2, 2, 'e5 in seen? no → go on', null],
+      [1, 2, 'e5 not in seen → go on', null],
+      [2, 2, 'e5 not in seen → go on', null],
       [1, 3, 'send(e5) → 📳', () => buzz++],
       [2, 3, 'send(e5) → 📳', () => buzz++],
       [1, 4, 'seen.add(e5)', () => rs.add('e5')],
@@ -891,7 +895,7 @@ Q.onStage(3, () => {
       onDone: () => {
         fixed = true; phase = 'fixed'; renderCode();
         $('#raceBtn').disabled = false; $('#raceBtn').textContent = '▶ Re-run the race with the fix';
-        $('#rmsg').className = 'gmsg'; $('#rmsg').innerHTML = 'Code patched. Line 2 now <i>claims</i> the ID in one atomic step, with a 60-second lease in case the worker dies. Re-run the race.';
+        $('#rmsg').className = 'gmsg'; $('#rmsg').innerHTML = 'Code patched. Line 2 now <i>claims</i> the ID in one atomic step. In Redis: <code>SET notif:e5 sending NX EX 60</code>, a 60-second lease in case the worker dies. Line 4 then stores it as sent for a day. Re-run the race.';
       },
     });
   };
@@ -963,7 +967,7 @@ Q.onStage(4, () => {
     return { ok, rej, delivered, dlq, left: pend.length, last, peak: Math.max(...ok.map((o, i) => o + rej[i])) };
   }
   const svg = $('#boSvg');
-  const X0 = 34, X1 = 394, Y0 = 166, Y1 = 22, YMAX = 400, bw = (X1 - X0) / NB;
+  const X0 = 34, X1 = 394, Y0 = 166, Y1 = 28, YMAX = 400, bw = (X1 - X0) / NB;
   const yOf = v => Y0 - Math.min(v, YMAX) / YMAX * (Y0 - Y1);
   function axes() {
     svg.innerHTML = '';
@@ -974,7 +978,6 @@ Q.onStage(4, () => {
     const bars = S('g', {}, svg);
     S('line', { x1: X0, x2: X1, y1: yOf(C), y2: yOf(C), class: 'capl' }, svg);
     S('text', { x: X1, y: yOf(C) - 5, class: 'capt', 'text-anchor': 'end' }, svg).textContent = 'provider limit: 60 per ¼ s';
-    S('text', { x: X0 + 4, y: 12, class: 'axt' }, svg).textContent = 'calls per ¼ second';
     return bars;
   }
   let bars = axes();
