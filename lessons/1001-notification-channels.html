@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Three Roads to the Lock Screen</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: channel lanes (s1, s3), APNs request builder + phone mock (s2), signup flow + schema cards (s4) */
+:root { --c-ios: #5a48f0; --c-and: #1d9a52; --c-sms: #c27400; --c-mail: #2f7fd8; --c-bin: #8a8799; --on-c: #ffffff;
+  --ph-1: #4a3fb8; --ph-2: #0d7f9a; --ph-frame: #1c1a26; --pk: #f0b400; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --c-ios: #8f82ff; --c-and: #43d98a; --c-sms: #ffb547; --c-mail: #5aa9ff; --c-bin: #8f8da6; --on-c: #0e0f1d;
+    --ph-1: #2e2780; --ph-2: #0b4d5e; --ph-frame: #3a3d5c; --pk: #ffd23f; }
+}
+:root[data-theme="dark"] { --c-ios: #8f82ff; --c-and: #43d98a; --c-sms: #ffb547; --c-mail: #5aa9ff; --c-bin: #8f8da6; --on-c: #0e0f1d;
+  --ph-1: #2e2780; --ph-2: #0b4d5e; --ph-frame: #3a3d5c; --pk: #ffd23f; }
+
+/* ---------- lanes (stage 1 and 3) ---------- */
+.lanes { display: grid; gap: 10px; padding: 14px; }
+.lane { border: 1px solid var(--line); border-left: 5px solid var(--lc, var(--line)); border-radius: 14px; background: var(--panel); padding: 10px 12px; }
+.lane-h { font-weight: 700; font-size: 14px; display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.lane-h .cnt { font: 600 12px var(--mono); color: var(--muted); }
+.road { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; margin-top: 8px; }
+.road::before { content: ""; position: absolute; left: 10px; right: 10px; top: 50%; border-top: 2px dashed var(--line); z-index: 0; }
+.end { position: relative; z-index: 1; font-size: 12.5px; font-weight: 600; padding: 7px 9px; border-radius: 10px; background: var(--bg-2); border: 1px solid var(--line); white-space: nowrap; }
+.slot { position: relative; z-index: 1; min-height: 44px; border: 2px dashed var(--line); border-radius: 12px; background: var(--bg); display: flex; flex-wrap: wrap; gap: 4px; align-items: center; justify-content: center; padding: 4px 6px; font-size: 13px; color: var(--muted); min-width: 0; transition: border-color .2s, background .2s; }
+.slot.armed { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.slot.nope { animation: shake .4s; border-color: var(--bad); }
+.tag { font: 600 12px var(--mono); padding: 3px 7px; border-radius: 7px; background: var(--lc, var(--accent)); color: var(--on-c); white-space: nowrap; }
+.pkt { position: absolute; z-index: 2; top: 50%; left: 0; width: 14px; height: 14px; margin-top: -7px; border-radius: 50%; background: var(--pk); box-shadow: 0 0 0 3px color-mix(in srgb, var(--pk) 35%, transparent); opacity: 0; pointer-events: none; }
+.pkt.go { animation: fly 1s ease-in-out; }
+.pkt.bounce { animation: bounceBack 1.1s ease-in-out; }
+@keyframes fly { 0% { left: 0; opacity: 1; } 92% { left: calc(100% - 14px); opacity: 1; } 100% { left: calc(100% - 14px); opacity: 0; } }
+@keyframes bounceBack { 0% { left: 0; opacity: 1; } 45% { left: 46%; opacity: 1; background: var(--bad); } 100% { left: 0; opacity: 0; background: var(--bad); } }
+.tray { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 14px 14px; }
+.tchip { min-height: 42px; font: 600 13px var(--mono); padding: 8px 12px; border-radius: 10px; border: 2px solid var(--line); background: var(--panel); transition: border-color .2s, background .2s, transform .1s; }
+.tchip:hover { border-color: var(--accent); }
+.tchip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); transform: translateY(-2px); }
+.tchip.nope { animation: shake .4s; border-color: var(--bad); }
+.tray-h { padding: 0 14px 6px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.msg { min-height: 48px; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); font-size: 14px; }
+.msg.g { color: var(--good); } .msg.b { color: var(--bad); }
+
+/* ---------- stage 2: APNs request builder ---------- */
+.flight svg { max-width: 560px; margin: 0 auto; }
+.flight .nd rect, .flight .nd ellipse { fill: var(--panel); stroke: var(--muted); stroke-width: 2; }
+.flight .nd.apns ellipse { stroke: var(--c-ios); }
+.flight .nd text { fill: var(--ink); font: 700 13px var(--font); text-anchor: middle; dominant-baseline: central; }
+.flight .nd .sb { fill: var(--muted); font: 600 10.5px var(--mono); }
+.flight .wire { stroke: var(--line); stroke-width: 3; stroke-dasharray: 5 5; }
+.flight .envl rect { fill: var(--pk); stroke: var(--ink); stroke-width: 1.5; }
+.flight .envl polyline { fill: none; stroke: var(--ink); stroke-width: 1.5; }
+.flight .envl.bad rect { fill: var(--bad); }
+.flight .resp { fill: var(--bad); font: 700 13px var(--mono); text-anchor: middle; }
+.build { display: grid; grid-template-columns: minmax(0, 1fr) 190px; gap: 16px; padding: 14px; border-top: 1px solid var(--line); }
+@media (max-width: 620px) { .build { grid-template-columns: 1fr; } }
+.envbox { border: 2px solid var(--c-ios); border-radius: 14px; padding: 10px; background: var(--panel); }
+.envbox h3 { margin: 0 0 8px; font-size: 15px; }
+.eslot { display: flex; gap: 8px; align-items: center; min-height: 44px; border: 2px dashed var(--line); border-radius: 10px; padding: 6px 10px; margin-top: 6px; font-size: 13.5px; color: var(--muted); background: var(--bg); overflow: hidden; }
+.eslot.full { border-style: solid; border-color: var(--good); color: var(--ink); background: var(--good-soft); }
+.eslot .k { font-weight: 700; white-space: nowrap; }
+.eslot code { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.payed { margin-top: 12px; display: none; }
+.payed.on { display: block; animation: rise .35s; }
+.pf { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 6px 8px; align-items: center; font-size: 13px; font-weight: 600; }
+.pf input { width: 100%; min-height: 40px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); padding: 6px 10px; font: inherit; font-weight: 500; }
+.json { background: var(--code-bg); color: var(--code-ink); font: 12px/1.45 var(--mono); padding: 10px 12px; border-radius: 10px; overflow-x: auto; white-space: pre; margin: 10px 0 0; }
+.json .jk { color: #9fa8ff; } .json .js { color: #6ee7a8; } .json .jn { color: #ffb36b; }
+.phone { width: 176px; height: 330px; border-radius: 28px; border: 6px solid var(--ph-frame); background: linear-gradient(165deg, var(--ph-1), var(--ph-2)); position: relative; padding: 30px 9px 9px; margin: 0 auto; color: #fff; overflow: hidden; }
+.phone::before { content: ""; position: absolute; top: 7px; left: 50%; width: 54px; height: 14px; margin-left: -27px; border-radius: 10px; background: #000; }
+.phone .clock { text-align: center; font-size: 40px; font-weight: 600; line-height: 1; letter-spacing: -.02em; }
+.phone .date { text-align: center; font-size: 11.5px; opacity: .85; margin-top: 2px; }
+.nb { margin-top: 16px; background: rgba(255,255,255,.9); color: #1c1a26; border-radius: 14px; padding: 8px 9px; font-size: 11.5px; line-height: 1.3; display: none; }
+.nb.show { display: block; animation: drop .5s cubic-bezier(.3,1.4,.5,1); }
+.nb .ap { display: flex; justify-content: space-between; color: #6a6778; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; margin-bottom: 2px; }
+.nb b { display: block; font-size: 12.5px; }
+.nb .act { margin-top: 5px; font-size: 10px; font-weight: 700; color: #5a48f0; }
+@keyframes drop { from { opacity: 0; transform: translateY(-24px); } }
+.dock { position: absolute; bottom: 12px; left: 0; right: 0; display: flex; justify-content: center; gap: 10px; }
+.appic { width: 44px; height: 44px; border-radius: 12px; background: #fff; display: grid; place-items: center; font-size: 25px; position: relative; color: #1c1a26; }
+.appic .bdg { position: absolute; top: -7px; right: -7px; min-width: 22px; height: 22px; border-radius: 11px; background: #ff3b30; color: #fff; font: 700 12px var(--font); display: none; place-items: center; padding: 0 6px; border: 2px solid var(--ph-2); }
+.appic .bdg.show { display: grid; animation: pop2 .4s; }
+@keyframes pop2 { 50% { transform: scale(1.4); } }
+.phlab { text-align: center; font-size: 12px; color: var(--muted); margin-top: 6px; }
+.tblwrap { overflow-x: auto; margin-top: 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.tbl { border-collapse: collapse; width: 100%; font: 12px var(--mono); }
+.tbl caption { text-align: left; font: 700 12px var(--font); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: 8px 10px 4px; }
+.tbl th, .tbl td { padding: 6px 10px; text-align: left; white-space: nowrap; border-top: 1px solid var(--line); }
+.tbl th { color: var(--muted); font-weight: 600; }
+.tbl tr.new td { animation: rowIn .6s; background: var(--good-soft); }
+.tbl tr.hl td { background: var(--accent-soft); }
+.tbl tr.swept td { text-decoration: line-through; color: var(--muted); background: var(--bad-soft); transition: opacity .6s; }
+.tbl tr.gone { display: none; }
+@keyframes rowIn { from { opacity: 0; transform: translateX(-12px); } }
+.broom { display: inline-block; }
+.broom.go { animation: sweep .9s ease-in-out; }
+@keyframes sweep { 0% { transform: translateX(0) rotate(0); } 50% { transform: translateX(14px) rotate(-25deg); } 100% { transform: translateX(0) rotate(0); } }
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+
+/* ---------- stage 3: plug board ---------- */
+.regions { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 14px 0; align-items: center; }
+.regions .seg button { min-height: 40px; padding: 6px 14px; }
+.seg button.on { background: var(--accent); color: #fff; }
+.socket { position: relative; z-index: 1; min-height: 48px; border: 2px solid var(--c-and); border-radius: 12px; background: var(--bg); display: flex; align-items: center; justify-content: center; gap: 6px; font: 700 13px var(--mono); padding: 4px 8px; }
+.socket.broken { border-color: var(--bad); background: var(--bad-soft); color: var(--bad); text-decoration: line-through; }
+.socket.fixed { border-color: var(--good); background: var(--good-soft); }
+.socket .x { text-decoration: none; display: inline-block; }
+.drawer { display: none; padding: 0 14px 14px; }
+.drawer.on { display: block; animation: rise .35s; }
+.cfg { font: 12.5px var(--mono); padding: 8px 14px; border-top: 1px solid var(--line); background: var(--bg-2); color: var(--muted); overflow-x: auto; white-space: pre; }
+.files { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; padding: 14px; }
+@media (max-width: 620px) { .files { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.fbox { border: 1px solid var(--line); border-radius: 9px; padding: 6px; background: var(--panel); font: 11px var(--mono); min-width: 0; transition: background .3s, border-color .3s; }
+.fbox b { display: block; font: 700 11.5px var(--font); color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fbox span { color: var(--muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fbox.hit { background: var(--bad-soft); border-color: var(--bad); animation: blip .5s; }
+.fbox.adapter { grid-column: 1 / -1; border-style: dashed; border-color: var(--c-and); }
+.fbox.adapter.hit { background: var(--good-soft); border-color: var(--good); border-style: solid; }
+@keyframes blip { 45% { transform: scale(1.06); } }
+.bignum { font-family: var(--mono); font-weight: 700; }
+.bignum.bad { color: var(--bad); } .bignum.good { color: var(--good); }
+
+/* ---------- stage 4: signup flow + schema cards ---------- */
+.flow svg { max-width: 560px; margin: 0 auto; }
+.flow .nd rect { fill: var(--panel); stroke: var(--muted); stroke-width: 2; }
+.flow .nd.lit rect { stroke: var(--pk); stroke-width: 3.5; }
+.flow .nd text { fill: var(--ink); font: 700 12.5px var(--font); text-anchor: middle; dominant-baseline: central; }
+.flow .wire { stroke: var(--line); stroke-width: 3; }
+.flow .pk rect { fill: var(--pk); stroke: var(--ink); stroke-width: 1.2; }
+.flow .pk text { fill: #1c1a26; font: 700 10.5px var(--mono); text-anchor: middle; dominant-baseline: central; }
+.steps { display: grid; gap: 8px; padding: 0 14px 14px; }
+.steps .btn { text-align: left; min-height: 44px; }
+.steps .btn.done { border-color: var(--good); background: var(--good-soft); }
+.schemas { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+@media (max-width: 620px) { .schemas { grid-template-columns: 1fr; } }
+.schema { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); overflow: hidden; }
+.schema h3 { margin: 0; padding: 10px 12px; font: 700 14px var(--mono); background: var(--bg-2); border-bottom: 1px solid var(--line); }
+.fld { display: flex; width: 100%; justify-content: space-between; gap: 10px; align-items: center; min-height: 42px; padding: 8px 12px; border: 0; border-bottom: 1px solid var(--line); background: none; font: 13px var(--mono); text-align: left; transition: background .2s; }
+.fld:last-child { border-bottom: 0; }
+.fld:hover:not([disabled]) { background: var(--accent-soft); }
+.fld .ty { color: var(--muted); }
+.fld.bug { background: var(--good-soft); } .fld.bug .ty { color: var(--good); font-weight: 700; }
+.fld.minor { background: var(--warn-soft); }
+.fld.fine { background: var(--bad-soft); }
+.fld.link { background: var(--teal-soft); }
+.fld[disabled] { cursor: default; color: var(--ink); }
+.verdict { margin-top: 12px; font-size: 14.5px; padding: 12px 14px; border-radius: 12px; display: none; }
+.verdict.show { display: block; animation: rise .35s; }
+.verdict.g { background: var(--good-soft); } .verdict.b { background: var(--bad-soft); } .verdict.n { background: var(--teal-soft); } .verdict.w { background: var(--warn-soft); }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 10.1 · Design a Notification System</div>
+    <h1>Three Roads to the Lock Screen</h1>
+    <p class="lede">Your app needs to tap a user on the shoulder. There are three ways to do it, and on every one of them a company you don't own carries the message the last mile. Map the roads, build a real push request, and find out what you must collect before you can send anything.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can explain how one notification reaches an <b>iPhone</b>, an <b>Android phone</b>, a <b>phone number</b> and an <b>inbox</b>, name the third-party service on each road, and say what data you must have collected first (<b>device token</b>, <b>phone number</b>, <b>email</b>).</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Three roads, one ping</h2><div class="sub">Push, SMS, email, and who carries each</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>A <b>notification</b> tells a user something they care about: breaking news, a product update, an event, an offer. The book covers three kinds:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-notification-system" target="_blank" rel="noopener">[1]</a></p>
+      <ul>
+        <li><b>Mobile push</b>: the banner that slides onto a phone's screen, sent to an app installed on that phone.</li>
+        <li><b>SMS</b>: a plain text message to a phone number.</li>
+        <li><b>Email</b>: a message to an inbox.</li>
+      </ul>
+      <p>Here's the twist. Your servers never deliver any of these themselves. In the book your system is called the <b>provider</b>: it builds the message and hands it to a <b>third-party delivery service</b> (a company that runs the last mile for you). Every road has the same shape: <b>Provider → delivery service → user's device</b>.</p>
+      <p><b>Your move:</b> tap a service in the tray, then tap the road it belongs on. One chip isn't a real road at all.</p>
+      <div class="sim" id="laneSim">
+        <div class="lanes" id="lanes"></div>
+        <div class="tray-h">Delivery services (tap one, then tap a road)</div>
+        <div class="tray" id="tray"></div>
+        <div class="msg" id="m1" aria-live="polite">Pick a chip to start.</div>
+      </div>
+      <div class="callout tip" id="s1note" style="display:none"><b>Every road, same shape.</b> iOS push goes through <b>APNs</b> (Apple Push Notification service). Android push goes through <b>FCM</b> (Firebase Cloud Messaging, Google's service). SMS goes through services like <b>Twilio</b> or <b>Nexmo</b> (now called Vonage). Email goes through services like <b>SendGrid</b> or <b>Mailchimp</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-notification-system" target="_blank" rel="noopener">[1]</a> You <i>could</i> run your own mail servers, but the book says most companies buy a commercial service because it gets more mail delivered and comes with analytics. Fewer of your emails land in spam, and you can see what was opened.</div>
+      <div class="callout"><b>The book's scale, for later quests.</b> The interview in this chapter asks for about <b>10 million</b> push notifications, <b>1 million</b> SMS and <b>5 million</b> emails a day. It should be "soft real-time": delivered fast, but a small delay under heavy load is fine.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-notification-system" target="_blank" rel="noopener">[1]</a></div>
+      <div class="row" style="margin-top:12px"><button class="btn" id="laneReset">↻ Empty the roads</button></div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Anatomy of an iOS push</h2><div class="sub">Build the request APNs needs</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Let's follow the iOS road closely. Your provider builds a <b>notification request</b> and sends it to APNs, Apple's service that carries pushes to iPhones and iPads.<a class="cite" href="https://developer.apple.com/documentation/usernotifications" target="_blank" rel="noopener">[2]</a> The book says the request needs exactly two things:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-notification-system" target="_blank" rel="noopener">[1]</a></p>
+      <ul>
+        <li>A <b>device token</b>: a unique ID that APNs gives to one install of your app on one device. It's the "address" of that phone. You must have saved it earlier.</li>
+        <li>A <b>payload</b>: a small <b>JSON</b> object (text in <code>{"key": value}</code> form) that says what to show: a title, a body, a badge number.</li>
+      </ul>
+      <p><b>Your move:</b> pick the two right items from the tray to fill the envelope. Then edit the message and send it.</p>
+      <div class="sim flight">
+        <svg id="flightSvg" viewBox="0 0 400 124" role="img" aria-label="Provider sends a request to APNs, which delivers it to an iPhone">
+          <line class="wire" x1="96" y1="58" x2="150" y2="58"/>
+          <line class="wire" x1="250" y1="58" x2="320" y2="58"/>
+          <g class="nd"><rect x="8" y="34" width="88" height="48" rx="10"/><text x="52" y="58">Provider</text><text class="sb" x="52" y="98">your servers</text></g>
+          <g class="nd apns"><ellipse cx="200" cy="58" rx="50" ry="28"/><text x="200" y="58">APNs</text><text class="sb" x="200" y="100">Apple</text></g>
+          <g class="nd"><rect x="322" y="18" width="50" height="80" rx="11"/><text x="347" y="58">📱</text><text class="sb" x="347" y="112">iPhone</text></g>
+          <text class="resp" id="respTxt" x="200" y="16" style="display:none">410 Unregistered</text>
+          <g class="envl" id="envl" transform="translate(52 58)" style="display:none"><rect x="-13" y="-9" width="26" height="18" rx="2"/><polyline points="-13,-9 0,2 13,-9"/></g>
+        </svg>
+        <div class="build">
+          <div>
+            <div class="envbox">
+              <h3>✉️ Request to APNs</h3>
+              <div class="eslot" id="slotTok"><span class="k">slot 1</span><span>empty</span></div>
+              <div class="eslot" id="slotPay"><span class="k">slot 2</span><span>empty</span></div>
+            </div>
+            <div class="chips" id="dataTray" style="margin-top:12px"></div>
+            <div class="payed" id="payEd">
+              <div class="pf">
+                <label for="pTitle">title</label><input id="pTitle" maxlength="40" value="Game Request">
+                <label for="pBody">body</label><input id="pBody" maxlength="60" value="Bob wants to play chess">
+                <label for="pBadge">badge</label><input id="pBadge" type="number" min="0" max="99" value="5">
+              </div>
+              <pre class="json" id="pJson" aria-label="Payload JSON"></pre>
+            </div>
+            <div class="row" style="margin-top:12px"><button class="btn primary" id="sendBtn" disabled>Send to APNs ✈</button></div>
+          </div>
+          <div>
+            <div class="phone" aria-label="iPhone lock screen">
+              <div class="clock">9:41</div><div class="date">Monday 5 October</div>
+              <div class="nb" id="nb"><div class="ap"><span>♞ Chess</span><span>now</span></div><b id="nbT"></b><span id="nbB"></span><div class="act">PLAY</div></div>
+              <div class="dock"><div class="appic">♞<span class="bdg" id="bdg"></span></div></div>
+            </div>
+            <div class="phlab">Ana's iPhone</div>
+          </div>
+        </div>
+        <div class="simlog" id="r2log"><div>The payload starts as the book's example: a chess game invite with a badge of 5.</div></div>
+      </div>
+      <ul class="checklist" id="s2goals">
+        <li data-g="pack"><span class="box">✓</span><span>Fill both slots of the envelope</span></li>
+        <li data-g="send"><span class="box">✓</span><span>Send it and watch it land on the lock screen</span></li>
+      </ul>
+      <div class="challenge boxed" id="s2pred" style="display:none"></div>
+      <div class="tblwrap" id="devWrap" style="display:none">
+        <table class="tbl" id="devTbl"><caption>device table <span class="broom" id="broom">🧹</span></caption>
+          <tr><th>id</th><th>device_token</th><th>user_id</th><th>last_logged_in_at</th></tr>
+          <tr data-r="7"><td>7</td><td>5f0c…e1</td><td>42 (Bob)</td><td>2026-09-21</td></tr>
+          <tr data-r="9"><td>9</td><td>a1b2…f9</td><td>57 (Ana)</td><td>2026-10-05</td></tr>
+        </table>
+      </div>
+      <div class="callout warn" id="s2stale" style="display:none"><b>Beyond the book: tokens go stale.</b> Tokens die when the app is uninstalled, and they can also change. When that happens, APNs answers with status <code>410</code> and reason <code>Unregistered</code> (or <code>400 BadDeviceToken</code> for a token that was never valid).<a class="cite" href="https://developer.apple.com/documentation/usernotifications/handling-notification-responses-from-apns" target="_blank" rel="noopener">[4]</a> Don't retry those. Delete the token. Retrying a dead token just wastes work, and Apple may notice you keep sending to dead addresses. FCM's version of this error is called <code>UNREGISTERED</code>.<a class="cite" href="https://firebase.google.com/docs/cloud-messaging/manage-tokens" target="_blank" rel="noopener">[6]</a></div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Android, and when a road is closed</h2><div class="sub">FCM, and keeping providers pluggable</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Android follows the same shape: <b>Provider → FCM → Android device</b>. FCM (Firebase Cloud Messaging) is Google's push service, and like APNs it needs a token for the device plus a payload.<a class="cite" href="https://firebase.google.com/docs/cloud-messaging" target="_blank" rel="noopener">[5]</a></p>
+      <p>The book makes one big design point here: <b>extensibility</b>. A good notification system makes it easy to plug in or unplug a third-party service, because a service may not work in a new market, or may not be around in the future. Its example: <b>FCM is not available in China</b>, so apps there use other push services such as <b>JPush</b> or <b>Pushy</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-notification-system" target="_blank" rel="noopener">[1]</a></p>
+      <p><b>Your move:</b> send a ping in a working market. Then launch in China and fix the road.</p>
+      <div class="sim" id="plugSim">
+        <div class="regions"><span class="small muted">Market:</span><span class="seg" id="regSeg" role="group" aria-label="Choose a market"><button data-r="US" class="on">US</button><button data-r="EU">EU</button><button data-r="IN">India</button><button data-r="CN">China</button></span></div>
+        <div class="lanes">
+          <div class="lane" style="--lc:var(--c-and)">
+            <div class="lane-h"><span>🤖 Android push</span><span class="cnt" id="regName">US</span></div>
+            <div class="road" id="aRoad"><span class="end">🏢 Provider</span><div class="socket" id="socket">FCM</div><span class="end">📱 Pixel</span><span class="pkt" id="aPkt"></span></div>
+          </div>
+        </div>
+        <div class="row" style="padding:0 14px 14px"><button class="btn primary" id="pingBtn">Send a test ping 🔔</button></div>
+        <div class="drawer" id="drawer">
+          <div class="tray-h" style="padding:0 0 6px">Adapter drawer: tap one to plug it into the socket</div>
+          <div class="row" id="plugs"></div>
+        </div>
+        <div class="cfg" id="cfg"></div>
+        <div class="msg" id="m3" aria-live="polite">Market: US. The socket holds FCM.</div>
+      </div>
+      <p style="margin-top:18px">Now, <b>how hard is that swap in code?</b> It depends on how you wrote it. Below are 12 features that send Android pushes. Pick a code style, then press swap.</p>
+      <div class="sim">
+        <div class="regions"><span class="seg" id="styleSeg" role="group" aria-label="Code style"><button data-s="hard" class="on">FCM calls everywhere</button><button data-s="iface">One provider interface</button></span></div>
+        <div class="files" id="files"></div>
+        <div class="sim-bar"><button class="btn" id="swapBtn">Swap FCM → JPush</button><span>Files to change: <span class="bignum" id="swapN">—</span></span></div>
+      </div>
+      <ul class="checklist" id="s3goals">
+        <li data-g="ping"><span class="box">✓</span><span>Send a ping in a market where FCM works</span></li>
+        <li data-g="fix"><span class="box">✓</span><span>Launch in China and plug in a push service that works there</span></li>
+        <li data-g="swap"><span class="box">✓</span><span>Try the swap in <b>both</b> code styles</span></li>
+      </ul>
+      <div class="callout" id="s3note" style="display:none"><b>That's the point.</b> Hide each provider behind one small "send" interface per channel. Then a new market is a config change (<code>android.provider[CN] = "JPush"</code>), not a hunt through every feature. The book's later designs keep one worker per channel and talk to the outside world only through that worker, so this stays easy. Why FCM fails there: most Android phones sold in mainland China ship without Google Play services, and FCM depends on them.</div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Collect the addresses first</h2><div class="sub">Contact info gathering flow, then spot the bug</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>You can't send anything without an address: a <b>device token</b> for push, a <b>phone number</b> for SMS, an <b>email</b> for email. The book's flow: when a user installs the app or signs up for the first time, the <b>API servers</b> collect their contact info and store it in the database. The request passes through a <b>load balancer</b> on the way (a box that spreads requests across many API servers).<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-notification-system" target="_blank" rel="noopener">[1]</a></p>
+      <p><b>Your move:</b> play Bob's first day. Watch where each piece of data lands.</p>
+      <div class="sim flow">
+        <svg id="flowSvg" viewBox="0 0 400 110" role="img" aria-label="User to load balancer to API servers to database">
+          <line class="wire" x1="50" y1="62" x2="350" y2="62"/>
+          <g class="nd" data-n="0"><rect x="8" y="40" width="80" height="44" rx="10"/><text x="48" y="62">📱 Bob</text></g>
+          <g class="nd" data-n="1"><rect x="110" y="40" width="80" height="44" rx="10"/><text x="150" y="56">Load</text><text x="150" y="71">balancer</text></g>
+          <g class="nd" data-n="2"><rect x="212" y="40" width="80" height="44" rx="10"/><text x="252" y="56">API</text><text x="252" y="71">servers</text></g>
+          <g class="nd" data-n="3"><rect x="314" y="40" width="80" height="44" rx="10"/><text x="354" y="62">🗄️ DB</text></g>
+          <g class="pk" id="fPk" style="display:none"><rect x="-56" y="-12" width="112" height="24" rx="7"/><text x="0" y="0" id="fPkT"></text></g>
+        </svg>
+        <div class="steps">
+          <button class="btn" id="st1">1 · Bob installs the app and signs up</button>
+          <button class="btn" id="st2" disabled>2 · The app gets a device token from Apple</button>
+          <button class="btn" id="st3" disabled>3 · Bob logs in on his iPad too</button>
+        </div>
+        <div style="padding:0 14px 14px">
+          <div class="tblwrap"><table class="tbl" id="uTbl"><caption>user table</caption><tr><th>user_id</th><th>email</th><th>country_code</th><th>phone_number</th><th>created_at</th></tr></table></div>
+          <div class="tblwrap"><table class="tbl" id="dTbl"><caption>device table</caption><tr><th>id</th><th>device_token</th><th>user_id</th><th>last_logged_in_at</th></tr></table></div>
+        </div>
+        <div class="simlog" id="r4log"><div>The database is empty. Bob is about to download your app.</div></div>
+      </div>
+      <p style="margin-top:18px">These are the book's two tables, as simple sketches.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-notification-system" target="_blank" rel="noopener">[1]</a> <b>Spot the bug:</b> one column type will break on real phone numbers. Tap the field you'd challenge in a design review. Tapping a perfectly good field costs a heart.</p>
+      <div class="schemas">
+        <div class="schema" id="schU"><h3>user</h3></div>
+        <div class="schema" id="schD"><h3>device</h3></div>
+      </div>
+      <div class="verdict" id="verdict" aria-live="polite"></div>
+      <ul class="checklist" id="s4goals">
+        <li data-g="u"><span class="box">✓</span><span>Store Bob's email and phone number</span></li>
+        <li data-g="d1"><span class="box">✓</span><span>Store his iPhone's device token</span></li>
+        <li data-g="d2"><span class="box">✓</span><span>Add his iPad, and see why tokens get their own table</span></li>
+        <li data-g="bug"><span class="box">✓</span><span>Find the column that breaks on real phone numbers</span></li>
+      </ul>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Misrouted Mailbag</h2><div class="sub">Pick the right road for each message</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The mail room is a mess. Six messages, each with the user's device and the contact info you hold. Send each one down the right road: <b>APNs</b>, <b>FCM</b>, an <b>SMS</b> service or an <b>email</b> service.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">How does a ping reach a phone?</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> You know the roads. But who decides <i>when</i> to send, and what happens when 10 million pushes arrive at once on one server? Quest 10.2, <a href="1002-notification-high-level-design.html"><i>Shatter the Single Server</i></a>, breaks the first naive design apart into servers, queues and workers.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-notification-system" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 10 "Design a Notification System"</a>: the intro, then Step 2's "Different types of notifications" and "Contact info gathering flow". For the real thing, skim Apple's <a href="https://developer.apple.com/documentation/usernotifications/sending-notification-requests-to-apns" target="_blank" rel="noopener">Sending notification requests to APNs</a> and the <a href="https://firebase.google.com/docs/cloud-messaging" target="_blank" rel="noopener">Firebase Cloud Messaging docs</a>.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <ul style="margin:0;padding-left:20px">
+        <li><b>The book's payload is simplified.</b> A real APNs request goes over HTTP/2, and it also carries headers such as <code>apns-topic</code> (your app's ID), <code>apns-push-type</code> and <code>apns-priority</code>. The JSON body has a 4 KB limit for normal pushes.<a class="cite" href="https://developer.apple.com/documentation/usernotifications/sending-notification-requests-to-apns" target="_blank" rel="noopener">[3]</a></li>
+        <li><b>Prune tokens on purpose.</b> Delete a token when APNs says <code>410 Unregistered</code> or FCM says <code>UNREGISTERED</code>. Firebase also recommends dropping tokens that haven't been refreshed for a long time. Its guide uses one month as a cutoff. A <code>last_logged_in_at</code>-style timestamp is what makes that possible.<a class="cite" href="https://firebase.google.com/docs/cloud-messaging/manage-tokens" target="_blank" rel="noopener">[6]</a></li>
+        <li><b>Phone numbers are strings.</b> Store them in <b>E.164</b> form: a <code>+</code>, the country code, then the number, at most 15 digits in all (for example <code>+447911123456</code>).<a class="cite" href="https://en.wikipedia.org/wiki/E.164" target="_blank" rel="noopener">[10]</a> The book's <code>integer</code> column is a sketch, not advice.</li>
+        <li><b>Names change; roads don't.</b> Nexmo is now Vonage. In China, many Android phones also come with their maker's own push service. The book's provider names are examples, not endorsements. What matters in the interview is "a third-party service per channel, behind an interface".</li>
+      </ul>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"how does the app get its device token in the first place?"</i> or <i>"what about notifications on a laptop?"</i> Follow-up questions are part of the quest.
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 10 "Design a Notification System" (ByteByteGo).</li>
+        <li>Apple Developer, <a href="https://developer.apple.com/documentation/usernotifications" target="_blank" rel="noopener">User Notifications</a>.</li>
+        <li>Apple Developer, <a href="https://developer.apple.com/documentation/usernotifications/sending-notification-requests-to-apns" target="_blank" rel="noopener">Sending notification requests to APNs</a>.</li>
+        <li>Apple Developer, <a href="https://developer.apple.com/documentation/usernotifications/handling-notification-responses-from-apns" target="_blank" rel="noopener">Handling notification responses from APNs</a>.</li>
+        <li>Google, <a href="https://firebase.google.com/docs/cloud-messaging" target="_blank" rel="noopener">Firebase Cloud Messaging</a>.</li>
+        <li>Google, <a href="https://firebase.google.com/docs/cloud-messaging/manage-tokens" target="_blank" rel="noopener">Best practices for FCM registration token management</a>.</li>
+        <li>Twilio, <a href="https://www.twilio.com/docs/sms" target="_blank" rel="noopener">Programmable Messaging (SMS) docs</a> (book ref [1]).</li>
+        <li><a href="https://sendgrid.com/" target="_blank" rel="noopener">SendGrid</a> (book ref [3]).</li>
+        <li><a href="https://mailchimp.com/" target="_blank" rel="noopener">Mailchimp</a> (book ref [4]).</li>
+        <li>Wikipedia, <a href="https://en.wikipedia.org/wiki/E.164" target="_blank" rel="noopener">E.164</a>.</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '1001',
+  winTitle: 'Every road mapped!',
+  badge: '📮 Badge: Postmaster',
+  cheatsheet: '../reference/ch10-notification-cheatsheet.html',
+});
+const { sleep, shuffle, esc } = Q;
+
+/* ================= shared helpers ================= */
+function anim(dur, f) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 1) { f(1); return res(); }
+    const t0 = performance.now();
+    const fr = now => { const p = Math.min(1, (now - t0) / dur); f(p); p < 1 ? requestAnimationFrame(fr) : res(); };
+    requestAnimationFrame(fr);
+  });
+}
+const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); if (xp) Q.addXP(xp, li);
+  return true;
+}
+function shakeEl(el, cls = 'nope') { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); setTimeout(() => el.classList.remove(cls), 450); }
+function fire(pkt, cls = 'go') { if (Q.reduced) return; pkt.classList.remove('go', 'bounce'); void pkt.offsetWidth; pkt.classList.add(cls); }
+function setMsg(id, html, cls) { const m = $('#' + id); m.className = 'msg' + (cls ? ' ' + cls : ''); m.innerHTML = html; }
+// Predict-then-watch round (same pattern as the other quests).
+function predict(box, { step, title, options, correct, act, explain, xp = 20 }) {
+  box.innerHTML = `${step ? `<div class="step">${step}</div>` : ''}<h3>${title}</h3><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+  const opts = $('.opts', box);
+  let busy = false;
+  return new Promise(resolve => {
+    shuffle(options.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = async () => {
+        if (busy) return; busy = true;
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        b.classList.add('picked');
+        await act();
+        const ok = i === correct;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-i="${correct}"]`, opts).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + explain;
+        ok ? Q.addXP(xp, b) : Q.loseHeart(b);
+        resolve({ ok, row: $('.row', box) });
+      };
+      opts.appendChild(b);
+    });
+  });
+}
+
+/* ================= STAGE 1: sort services onto roads ================= */
+Q.onStage(1, () => {
+  const LANES = [
+    { k: 'ios', name: '🍏 iOS push', dev: '📱 iPhone', c: '--c-ios' },
+    { k: 'android', name: '🤖 Android push', dev: '📱 Pixel', c: '--c-and' },
+    { k: 'sms', name: '💬 SMS', dev: '☎️ Phone no.', c: '--c-sms' },
+    { k: 'email', name: '📧 Email', dev: '📥 Inbox', c: '--c-mail' },
+    { k: 'bin', name: '🚫 Not a real road', dev: '', c: '--c-bin' },
+  ];
+  const CHIPS = [
+    { id: 'apns', label: 'APNs', ok: 'ios', yes: 'APNs (Apple Push Notification service) is the only road onto an iPhone.', no: 'APNs is Apple’s service. It only delivers pushes to Apple devices.' },
+    { id: 'fcm', label: 'FCM', ok: 'android', yes: 'FCM (Firebase Cloud Messaging) is Google’s push road for Android.', no: 'In the book FCM is the Android road. iOS pushes go to APNs (even FCM hands iOS messages to APNs in the end).' },
+    { id: 'twilio', label: 'Twilio', ok: 'sms', yes: 'Twilio passes your text message to the mobile carriers for you.', no: 'Twilio is the book’s SMS example: it hands text messages to phone carriers.' },
+    { id: 'nexmo', label: 'Nexmo/Vonage', ok: 'sms', yes: 'Nexmo, now called Vonage, is the book’s other SMS service.', no: 'Nexmo (now Vonage) is an SMS service in the book.' },
+    { id: 'sendgrid', label: 'SendGrid', ok: 'email', yes: 'A commercial email service: better delivery rates, plus analytics.', no: 'SendGrid sends email. It can’t reach a lock screen or a phone number.' },
+    { id: 'mailchimp', label: 'Mailchimp', ok: 'email', yes: 'Another commercial email service from the book.', no: 'Mailchimp sends email, not pushes or texts.' },
+    { id: 'smtp', label: 'Our own SMTP server', ok: 'email', yes: 'Accepted! SMTP is the protocol mail servers speak, so you <i>can</i> run your own. Most teams still buy a service for deliverability and analytics.', no: 'SMTP (Simple Mail Transfer Protocol) is how email moves between servers. It only fits the email road.', binNo: 'It’s a real option: you can run your own mail servers. Most teams just choose not to.' },
+    { id: 'tower', label: 'Our own cell tower', ok: 'bin', yes: 'Right. Nobody builds a cell tower to send a text. You rent access to the carriers through an SMS provider.', no: 'Bounced. You don’t need a tower: SMS goes through mobile carriers, and you rent access through a provider like Twilio.' },
+  ];
+  let sel = null, placed = new Set(), quizShown = false;
+  const lanesEl = $('#lanes'), tray = $('#tray');
+  lanesEl.innerHTML = LANES.map(l => `<div class="lane" data-lane="${l.k}" style="--lc:var(${l.c})">
+      <div class="lane-h"><span>${l.name}</span><span class="cnt" data-cnt="${l.k}"></span></div>
+      <div class="road">${l.k === 'bin' ? '<span class="end">🗑️</span>' : '<span class="end">🏢 Provider</span>'}<button class="slot" data-lane="${l.k}" aria-label="${l.name.replace(/^\S+\s/, '')}: place the selected chip here">tap to place</button>${l.k === 'bin' ? '<span class="end">✋</span>' : `<span class="end">${l.dev}</span>`}<span class="pkt"></span></div>
+    </div>`).join('');
+  function renderTray() {
+    tray.innerHTML = CHIPS.filter(c => !placed.has(c.id)).map(c => `<button class="tchip" data-id="${c.id}" aria-pressed="${sel === c.id}">${c.label}</button>`).join('') || '<span class="small muted">Tray empty: every chip is on a road.</span>';
+    $$('.tchip', tray).forEach(b => b.onclick = () => {
+      sel = sel === b.dataset.id ? null : b.dataset.id;
+      $$('.tchip', tray).forEach(x => x.setAttribute('aria-pressed', x.dataset.id === sel));
+      $$('.slot', lanesEl).forEach(s => s.classList.toggle('armed', !!sel));
+      if (sel) setMsg('m1', `Where does <b>${CHIPS.find(c => c.id === sel).label}</b> go? Tap a road.`);
+    });
+  }
+  function renderSlots() {
+    LANES.forEach(l => {
+      const slot = $(`.slot[data-lane="${l.k}"]`, lanesEl);
+      const here = CHIPS.filter(c => placed.has(c.id) && c.ok === l.k);
+      slot.innerHTML = here.length ? here.map(c => `<span class="tag">${c.label}</span>`).join('') : 'tap to place';
+      slot.classList.toggle('armed', !!sel);
+    });
+  }
+  $$('.slot', lanesEl).forEach(slot => slot.onclick = () => {
+    if (!sel) { setMsg('m1', 'Pick a chip from the tray first, then tap a road.'); shakeEl(slot); return; }
+    const c = CHIPS.find(x => x.id === sel), lane = slot.dataset.lane;
+    if (c.ok === lane) {
+      placed.add(c.id); sel = null;
+      renderTray(); renderSlots();
+      if (lane !== 'bin') fire($('.pkt', slot.parentElement));
+      setMsg('m1', `✓ ${c.yes}`, 'g');
+      Q.addXP(5, slot);
+      if (placed.size === CHIPS.length) done();
+    } else {
+      const why = lane === 'bin' ? (c.binNo || `${c.label} is a real delivery service. Which road does it serve?`) : c.no;
+      setMsg('m1', `✗ ${why}`, 'b');
+      shakeEl(slot); const chip = $(`.tchip[data-id="${c.id}"]`, tray); if (chip) shakeEl(chip);
+      if (lane !== 'bin') fire($('.pkt', slot.parentElement), 'bounce');
+      Q.loseHeart(slot);
+    }
+  });
+  function done() {
+    $('#s1note').style.display = 'block';
+    LANES.forEach(l => { if (l.k !== 'bin') setTimeout(() => fire($(`.lane[data-lane="${l.k}"] .pkt`, lanesEl)), 150 * LANES.indexOf(l)); });
+    if (quizShown) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s1quiz'), {
+      q: 'Why do most companies use a service like SendGrid instead of running their own email servers?',
+      options: ['Better delivery rates and built-in analytics', 'You legally cannot run your own mail server', 'Self-hosted email only reaches a few domains', 'SendGrid uses a faster protocol than SMTP'],
+      correct: 0,
+      good: 'The book’s reason: commercial email services get more of your mail delivered (less of it ends up in spam) and give you analytics. Running your own mail servers is allowed and possible. It’s just hard to do well.',
+      bad: 'Self-hosting is legal and possible, and SendGrid speaks SMTP too. The book’s reason is <b>better delivery rates and data analytics</b>: more mail reaches the inbox, and you can see what happened to it.',
+      onDone: () => setTimeout(() => Q.clearStage(1), 900),
+    }), 500);
+  }
+  $('#laneReset').onclick = () => { placed = new Set(); sel = null; renderTray(); renderSlots(); setMsg('m1', 'Roads emptied. Pick a chip to start again.'); };
+  renderTray(); renderSlots();
+});
+
+/* ================= STAGE 2: build an APNs request ================= */
+Q.onStage(2, () => {
+  const DATA = [
+    { id: 'tok', label: '🔑 device token', ok: true, slot: 'slotTok', show: '<span class="k">device token</span><code>a1b2c3d4…e8f9</code>', yes: 'The device token: APNs’s address for Ana’s install of the chess app.' },
+    { id: 'pay', label: '{ } payload JSON', ok: true, slot: 'slotPay', show: '<span class="k">payload</span><code>{"aps": {…}}</code>', yes: 'The payload: what the banner should say. Edit it below.' },
+    { id: 'email', label: '📧 user’s email', ok: false, why: 'APNs delivers to app installs, not inboxes. An email address is for the email road.' },
+    { id: 'phone', label: '☎️ phone number', ok: false, why: 'Phone numbers are for SMS. APNs finds a device by its token, not its number.' },
+    { id: 'uid', label: '🆔 user_id', ok: false, why: 'APNs has never heard of your user_id. That’s your database’s ID, not Apple’s.' },
+    { id: 'pw', label: '🔒 user’s password', ok: false, why: 'Never send a password anywhere it isn’t needed. APNs doesn’t need to know who the user is at all.' },
+  ];
+  const goals = new Set();
+  let filled = new Set(), busy = false, predShown = false;
+  const tray = $('#dataTray');
+  const envl = $('#envl'), resp = $('#respTxt');
+  function renderTray() {
+    tray.innerHTML = shuffleOnce.filter(d => !filled.has(d.id)).map(d => `<button class="chip tchip" data-id="${d.id}">${d.label}</button>`).join('');
+    $$('.tchip', tray).forEach(b => b.onclick = () => pick(DATA.find(d => d.id === b.dataset.id), b));
+  }
+  const shuffleOnce = shuffle(DATA);
+  function pick(d, b) {
+    if (d.ok) {
+      filled.add(d.id);
+      const s = $('#' + d.slot); s.innerHTML = d.show; s.classList.add('full');
+      logTo('r2log', '✓ ' + d.yes, 'g');
+      Q.addXP(10, s);
+      if (d.id === 'pay') { $('#payEd').classList.add('on'); renderJson(); }
+      renderTray();
+      if (filled.size === 2) { $('#sendBtn').disabled = false; checkGoal('#s2goals', 'pack', goals); logTo('r2log', 'Envelope packed. Press <b>Send to APNs</b>.'); }
+    } else {
+      shakeEl(b);
+      logTo('r2log', '✗ ' + d.why, 'e');
+      Q.loseHeart(b);
+    }
+  }
+  function payload() {
+    const badge = Math.max(0, Math.min(99, parseInt($('#pBadge').value, 10) || 0));
+    return { aps: { alert: { title: $('#pTitle').value, body: $('#pBody').value, 'action-loc-key': 'PLAY' }, badge } };
+  }
+  function renderJson() {
+    const j = JSON.stringify(payload(), null, 2);
+    $('#pJson').innerHTML = esc(j)
+      .replace(/(&quot;[^&]*?&quot;)(\s*:)/g, '<span class="jk">$1</span>$2')
+      .replace(/(:\s*)(&quot;.*?&quot;)/g, '$1<span class="js">$2</span>')
+      .replace(/(:\s*)(\d+)/g, '$1<span class="jn">$2</span>');
+  }
+  ['pTitle', 'pBody', 'pBadge'].forEach(id => $('#' + id).addEventListener('input', renderJson));
+  const at = x => envl.setAttribute('transform', `translate(${x.toFixed(1)} 58)`);
+  async function fly(x0, x1, dur) { await anim(dur, p => at(x0 + (x1 - x0) * ease(p))); }
+  function phoneClear() { $('#nb').classList.remove('show'); $('#bdg').classList.remove('show'); }
+  $('#sendBtn').onclick = async () => {
+    if (busy) return; busy = true; $('#sendBtn').disabled = true;
+    const p = payload();
+    phoneClear(); resp.style.display = 'none'; envl.classList.remove('bad'); envl.style.display = '';
+    logTo('r2log', `→ POST to APNs with token a1b2…e8f9 and the payload`);
+    await fly(52, 200, 700); await sleep(Q.reduced ? 0 : 250);
+    logTo('r2log', 'APNs looks up the token and finds Ana’s iPhone');
+    await fly(200, 347, 700);
+    envl.style.display = 'none';
+    $('#nbT').textContent = p.aps.alert.title || '(no title)';
+    $('#nbB').textContent = p.aps.alert.body || '';
+    $('#nb').classList.add('show');
+    const bd = $('#bdg'); bd.textContent = p.aps.badge; if (p.aps.badge > 0) bd.classList.add('show');
+    logTo('r2log', `✓ delivered: banner “${esc(p.aps.alert.title)}”, badge ${p.aps.badge}${p.aps.badge === 0 ? ' (0 clears the badge)' : ''}`, 'g');
+    busy = false; $('#sendBtn').disabled = false; $('#sendBtn').textContent = 'Send again ✈';
+    if (checkGoal('#s2goals', 'send', goals, 10)) showPredict();
+  };
+  function showPredict() {
+    if (predShown) return; predShown = true;
+    const box = $('#s2pred'); box.style.display = 'block';
+    $('#devWrap').style.display = 'block';
+    predict(box, {
+      step: 'Predict, then watch',
+      title: 'Bob uninstalled the chess app last week. You send his invite to the old token still in your device table (row 7). What happens?',
+      options: ['It gets delivered to his phone anyway', 'APNs rejects it: the token is unregistered', 'APNs holds it until he reinstalls the app'],
+      correct: 1,
+      act: async () => {
+        phoneClear(); resp.style.display = 'none'; envl.classList.remove('bad'); envl.style.display = '';
+        $('#devTbl tr[data-r="7"]').classList.add('hl');
+        logTo('r2log', '→ POST to APNs with Bob’s old token 5f0c…e1');
+        await fly(52, 200, 700);
+        envl.classList.add('bad'); resp.style.display = '';
+        logTo('r2log', '✗ APNs → 410 Unregistered: this token is no longer active', 'e');
+        await sleep(Q.reduced ? 0 : 400);
+        await fly(200, 52, 600);
+        envl.style.display = 'none';
+        const br = $('#broom'); br.classList.remove('go'); void br.offsetWidth; br.classList.add('go');
+        const row = $('#devTbl tr[data-r="7"]'); row.classList.remove('hl'); row.classList.add('swept');
+        logTo('r2log', '🧹 Provider deletes row 7 instead of retrying', 'w');
+        await sleep(Q.reduced ? 50 : 900);
+      },
+      explain: 'Once the app is gone, its token is dead. APNs answers <code>410 Unregistered</code>, and the right move is to delete the token. If Bob reinstalls, the app gets a token again and sends it to you, so a held message would have nowhere to go. (Apple can take a little while to notice an uninstall, so it isn’t always instant.)',
+    }).then(({ row }) => {
+      $('#s2stale').style.display = 'block';
+      const b = document.createElement('button'); b.className = 'btn'; b.textContent = '↻ Put row 7 back';
+      b.onclick = () => { const r = $('#devTbl tr[data-r="7"]'); r.classList.remove('swept'); resp.style.display = 'none'; };
+      row.appendChild(b);
+      setTimeout(() => Q.quiz($('#s2quiz'), {
+        q: 'What are the two things a provider must give APNs?',
+        options: ['A device token and a JSON payload', 'The user’s Apple ID and message text', 'A phone number and an SMS body', 'The user_id and a template name'],
+        correct: 0,
+        good: 'The <b>device token</b> says where (one app install on one device), and the <b>payload</b> says what (title, body, badge). APNs never needs to know who your user is.',
+        bad: 'APNs addresses a device by its <b>device token</b>, and the <b>payload</b> is the JSON that says what to show. It never sees your user_id, a phone number or the user’s Apple ID.',
+        onDone: () => setTimeout(() => Q.clearStage(2), 900),
+      }), 400);
+    });
+  }
+  renderTray(); renderJson();
+});
+
+/* ================= STAGE 3: plug board ================= */
+Q.onStage(3, () => {
+  const REG = { US: 'US', EU: 'EU', IN: 'India', CN: 'mainland China' };
+  const conf = { US: 'FCM', EU: 'FCM', IN: 'FCM', CN: 'FCM' };
+  const PLUGS = [
+    { k: 'FCM', ok: false, why: 'That’s the plug that’s failing. FCM can’t reach phones in mainland China.' },
+    { k: 'JPush', ok: true },
+    { k: 'Pushy', ok: true },
+    { k: 'APNs', ok: false, why: 'Wrong channel. APNs only delivers to Apple devices, and this is an Android phone.' },
+    { k: 'SendGrid', ok: false, why: 'Wrong channel. SendGrid sends email. It can’t put a banner on a phone.' },
+  ];
+  const goals = new Set();
+  let reg = 'US', quizShown = false, styleTried = new Set(), style = 'hard';
+  const sock = $('#socket'), pkt = $('#aPkt');
+  const broken = () => reg === 'CN' && conf.CN === 'FCM';
+  function render() {
+    $$('#regSeg button').forEach(b => b.classList.toggle('on', b.dataset.r === reg));
+    $('#regName').textContent = REG[reg];
+    sock.className = 'socket' + (broken() ? ' broken' : reg === 'CN' ? ' fixed' : '');
+    sock.innerHTML = broken() ? 'FCM <span class="x">✕</span>' : conf[reg];
+    $('#drawer').classList.toggle('on', broken());
+    $('#cfg').textContent = Object.keys(conf).map(r => `android.provider[${r}] = "${conf[r]}"`).join('\n');
+  }
+  $('#plugs').innerHTML = PLUGS.map(p => `<button class="tchip" data-k="${p.k}">${p.k}</button>`).join('');
+  $$('#plugs .tchip').forEach(b => b.onclick = () => {
+    const p = PLUGS.find(x => x.k === b.dataset.k);
+    if (!broken()) return;
+    if (!p.ok) { shakeEl(b); setMsg('m3', '✗ ' + p.why, 'b'); Q.loseHeart(b); return; }
+    conf.CN = p.k; render();
+    fire(pkt);
+    setMsg('m3', `✓ ${p.k} plugged in for China. Pings flow again, and only the China line of config changed.`, 'g');
+    if (checkGoal('#s3goals', 'fix', goals, 10)) maybeQuiz();
+  });
+  $$('#regSeg button').forEach(b => b.onclick = () => {
+    reg = b.dataset.r; render();
+    if (broken()) { fire(pkt, 'bounce'); setMsg('m3', '✗ Launched in China and the pings bounce: FCM isn’t available there. Pick a replacement from the adapter drawer.', 'b'); }
+    else setMsg('m3', `Market: ${REG[reg]}. The socket holds ${conf[reg]}. Send a test ping.`);
+  });
+  $('#pingBtn').onclick = () => {
+    if (broken()) { fire(pkt, 'bounce'); setMsg('m3', '✗ Bounced. FCM can’t deliver in mainland China. Fix the socket first.', 'b'); return; }
+    fire(pkt);
+    setMsg('m3', `✓ Provider → ${conf[reg]} → phone. Delivered in ${REG[reg]}.`, 'g');
+    if (reg !== 'CN' && checkGoal('#s3goals', 'ping', goals, 10)) maybeQuiz();
+  };
+  // swap-cost demo
+  const FEAT = ['signup', 'orders', 'chat', 'likes', 'friends', 'billing', 'reminders', 'promos', 'news', 'security', 'games', 'admin'];
+  function renderFiles(hit) {
+    const call = style === 'hard' ? 'fcm.send(…)' : 'push.send(…)';
+    $('#files').innerHTML = FEAT.map(f => `<div class="fbox${hit && style === 'hard' ? ' hit' : ''}"><b>${f}.js</b><span>${call}</span></div>`).join('') +
+      (style === 'iface' ? `<div class="fbox adapter${hit ? ' hit' : ''}"><b>push/android-adapter.js</b><span>${hit ? 'jpush.send(…)  ← the only change' : 'fcm.send(…)  ← the only file that knows the provider'}</span></div>` : '');
+  }
+  $$('#styleSeg button').forEach(b => b.onclick = () => {
+    style = b.dataset.s;
+    $$('#styleSeg button').forEach(x => x.classList.toggle('on', x === b));
+    $('#swapN').textContent = '—'; $('#swapN').className = 'bignum';
+    renderFiles(false);
+  });
+  $('#swapBtn').onclick = () => {
+    renderFiles(true);
+    const n = style === 'hard' ? 12 : 1;
+    $('#swapN').textContent = n; $('#swapN').className = 'bignum ' + (n > 1 ? 'bad' : 'good');
+    styleTried.add(style);
+    if (styleTried.size === 2 && checkGoal('#s3goals', 'swap', goals, 10)) maybeQuiz();
+    else if (styleTried.size === 1) Q.toast(style === 'hard' ? 'now try the other style' : 'now try FCM-everywhere', $('#swapBtn'), 'practice');
+  };
+  function maybeQuiz() {
+    if (goals.size < 3) return;
+    $('#s3note').style.display = 'block';
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => Q.quiz($('#s3quiz'), {
+      q: 'Your app launches in mainland China and Android pushes stop arriving. What’s the book’s fix?',
+      options: ['Swap in a local service like JPush behind one interface', 'Send every Android notification as an email instead', 'Route the Android pushes through Apple’s APNs service', 'Keep retrying FCM until the messages get through'],
+      correct: 0,
+      good: 'FCM isn’t available in China, so the book plugs in an alternative such as JPush or Pushy. If every provider sits behind one interface, that’s a config change, not a rewrite.',
+      bad: 'Retrying won’t help, because FCM can’t reach those phones at all. APNs only serves Apple devices, and email is a different channel. The book’s fix is a local push service such as <b>JPush</b> or <b>Pushy</b>, plugged in behind the same interface.',
+      onDone: () => setTimeout(() => Q.clearStage(3), 900),
+    }), 500);
+  }
+  render(); renderFiles(false);
+});
+
+/* ================= STAGE 4: contact info flow + spot the bug ================= */
+Q.onStage(4, () => {
+  const goals = new Set();
+  let busy = false, quizShown = false;
+  const pk = $('#fPk'), pkT = $('#fPkT');
+  const XS = [48, 150, 252, 354];
+  function lit(n) { $$('#flowSvg .nd').forEach(g => g.classList.toggle('lit', +g.dataset.n === n)); }
+  async function travel(label) {
+    pkT.textContent = label; pk.style.display = '';
+    for (let i = 0; i < 3; i++) {
+      lit(i);
+      await anim(550, p => pk.setAttribute('transform', `translate(${(XS[i] + (XS[i + 1] - XS[i]) * ease(p)).toFixed(1)} 20)`));
+    }
+    lit(3); await sleep(Q.reduced ? 0 : 250);
+    pk.style.display = 'none'; lit(-1);
+  }
+  function addRow(tbl, cells) {
+    $$('#' + tbl + ' tr.hl').forEach(r => r.classList.remove('hl'));
+    const tr = document.createElement('tr'); tr.className = 'new';
+    tr.innerHTML = cells.map(c => `<td>${c}</td>`).join('');
+    $('#' + tbl).appendChild(tr);
+    return tr;
+  }
+  const today = '2026-10-05';
+  $('#st1').onclick = async () => {
+    if (busy) return; busy = true; $('#st1').disabled = true;
+    logTo('r4log', '📝 Bob signs up with bob@example.com and his UK mobile +44 7911 123456');
+    await travel('{email, phone}');
+    addRow('uTbl', ['42', 'bob@example.com', '44', '7911123456', today]);
+    logTo('r4log', '✓ API servers write Bob’s row to the <b>user</b> table. That’s the address book for SMS and email.', 'g');
+    $('#st1').classList.add('done'); $('#st2').disabled = false; busy = false;
+    checkGoal('#s4goals', 'u', goals, 10); maybeQuiz();
+  };
+  $('#st2').onclick = async () => {
+    if (busy) return; busy = true; $('#st2').disabled = true;
+    logTo('r4log', '📲 The app asks iOS for push permission. APNs hands it a device token, and the app sends that token to your API.');
+    await travel('{device_token}');
+    addRow('dTbl', ['1', '5f0c…e1', '42', today]);
+    logTo('r4log', '✓ A row in the <b>device</b> table links the iPhone’s token to user 42.', 'g');
+    $('#st2').classList.add('done'); $('#st3').disabled = false; busy = false;
+    checkGoal('#s4goals', 'd1', goals, 10); maybeQuiz();
+  };
+  $('#st3').onclick = async () => {
+    if (busy) return; busy = true; $('#st3').disabled = true;
+    logTo('r4log', '📟 Bob logs in on his iPad. It gets its own token from APNs.');
+    await travel('{device_token}');
+    const r = addRow('dTbl', ['2', 'c7d8…40', '42', today]);
+    $$('#dTbl tr').slice(1).forEach(x => x.classList.add('hl')); r.classList.remove('new');
+    logTo('r4log', '✓ Same user_id 42, second row. One user, many devices: a push to Bob now goes to <b>both</b> tokens.', 'g');
+    $('#st3').classList.add('done'); busy = false;
+    checkGoal('#s4goals', 'd2', goals, 10); maybeQuiz();
+  };
+  // spot the bug
+  const FIELDS = {
+    schU: [
+      { f: 'user_id', t: 'bigint', v: 'fine', why: '<b>Fine.</b> A 64-bit ID has room for billions of users.' },
+      { f: 'email', t: 'varchar', v: 'fine', why: '<b>Fine.</b> An email address is text, so a varchar (variable-length string) is right.' },
+      { f: 'country_code', t: 'integer', v: 'minor', why: '<b>Fair challenge, small one (+5).</b> Calling codes like 44 or 1 have no leading zeros, so an integer works. But most teams drop this column and keep the whole number as one E.164 string. Keep looking: one field really breaks.' },
+      { f: 'phone_number', t: 'integer', v: 'bug', why: '<b>Bug found.</b> Bob’s number 7911123456 doesn’t even fit: a standard 32-bit INTEGER stops at 2,147,483,647. A bigger number type would hold it, but you’d still lose the leading <code>+</code> and any leading zero (Rome numbers start with 0, even after +39), and you never do maths on a phone number. Store it as a string in <b>E.164</b> form: <code>+447911123456</code>.' },
+      { f: 'created_at', t: 'timestamp', v: 'fine', why: '<b>Fine.</b> When the account was made. A timestamp is the right type.' },
+    ],
+    schD: [
+      { f: 'id', t: 'bigint', v: 'fine', why: '<b>Fine.</b> The device row’s own ID.' },
+      { f: 'device_token', t: 'varchar', v: 'fine', why: '<b>Fine.</b> Tokens are opaque strings, and their length isn’t fixed. Store them as text.' },
+      { f: 'user_id', t: 'bigint', v: 'link', why: '<b>Not a bug: this is the key idea.</b> It links each device to its user, so one user can have many devices. No points, no heart lost.' },
+      { f: 'last_logged_in_at', t: 'timestamp', v: 'fine', why: '<b>Fine, and useful.</b> It tells you which devices haven’t been used in months, so you can clean out stale tokens.' },
+    ],
+  };
+  Object.entries(FIELDS).forEach(([id, fs]) => {
+    $('#' + id).insertAdjacentHTML('beforeend', fs.map((x, i) => `<button class="fld" data-i="${i}"><span>${x.f}</span><span class="ty">${x.t}</span></button>`).join(''));
+    $$('#' + id + ' .fld').forEach(b => b.onclick = () => {
+      const x = fs[+b.dataset.i], v = $('#verdict');
+      b.disabled = true; b.classList.add(x.v);
+      v.innerHTML = x.why;
+      v.className = 'verdict show ' + ({ bug: 'g', minor: 'w', link: 'n', fine: 'b' })[x.v];
+      if (x.v === 'bug') { checkGoal('#s4goals', 'bug', goals, 20); maybeQuiz(); }
+      else if (x.v === 'minor') Q.addXP(5, b);
+      else if (x.v === 'fine') Q.loseHeart(b);
+    });
+  });
+  function maybeQuiz() {
+    if (quizShown || goals.size < 4) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s4quiz'), {
+      q: 'Why is <code>device_token</code> in its own table instead of a column on the user table?',
+      options: ['One user can have many devices, each with its own token', 'Device tokens are too long to fit in the user table', 'APNs requires tokens to be kept in a separate table', 'It keeps the tokens hidden from the API servers'],
+      correct: 0,
+      good: 'Bob has an iPhone and an iPad, so two tokens. That’s a one-to-many link, so tokens get their own table with a <code>user_id</code> pointing back. A push to Bob goes to every device he has.',
+      bad: 'Length, secrecy and Apple’s rules have nothing to do with it. One user can have <b>many devices</b>, each with its own token. That one-to-many link is why the book gives tokens their own table.',
+      onDone: () => setTimeout(() => Q.clearStage(4), 900),
+    }), 500);
+  }
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss'), {
+  name: '📮 Misrouted Mailbag',
+  xp: 15,
+  choices: [
+    { k: 'apns', label: 'APNs', sub: 'Apple push' },
+    { k: 'fcm', label: 'FCM', sub: 'Android push' },
+    { k: 'sms', label: 'SMS', sub: 'via Twilio' },
+    { k: 'email', label: 'Email', sub: 'via SendGrid' },
+  ],
+  scenarios: [
+    { e: '♞', t: 'A chess game invite', d: 'Bob has the app on his iPhone. Ana just challenged him.', a: 'apns', why: 'An app install on an Apple device means push through APNs, using the device token you stored when he installed.' },
+    { e: '📦', t: 'Your order has shipped', d: 'The customer uses a Pixel phone with your app installed.', a: 'fcm', why: 'A Pixel runs Android, so the push goes through FCM.' },
+    { e: '🔐', t: 'A one-time login code', d: 'This user has never installed the app. All you have is their verified phone number.', a: 'sms', why: 'No app means no device token, so push is out. A phone number means SMS, through a provider like Twilio.' },
+    { e: '🧾', t: 'The monthly invoice', d: 'An itemised table of charges and a link to the PDF.', a: 'email', why: 'Long, detailed content you keep and come back to belongs in an inbox. A push banner or a text would cut it short.' },
+    { e: '💳', t: 'Payment due reminder', d: 'The billing service sends it. This user only ever gave you an email address.', a: 'email', why: 'You can only use the roads you have addresses for. The only address you hold is an email.' },
+    { e: '📰', t: 'Breaking news alert', d: 'Going to a Samsung Galaxy tablet with your news app installed.', a: 'fcm', why: 'Galaxy tablets run Android, so the push goes through FCM. A tablet is just another row in the device table.' },
+  ],
+  outro: 'The rule: Apple device → APNs, Android → FCM, phone number → SMS service, inbox → email service. And you can only use a road if you collected the address for it.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: interview drill ================= */
+Q.onStage(6, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"Walk me through how a push notification actually gets to a user\'s iPhone. And what changes for Android, SMS and email?"</i>',
+  placeholder: 'Our system is the provider. For iOS we…',
+  model: '"Our system is the provider. For iOS we build a request with two things: the device token we stored when the app was installed, and a JSON payload. We send it to Apple\'s APNs, which delivers it to the phone. Android has the same shape through Google\'s FCM. SMS and email go through commercial providers like Twilio and SendGrid, which give us good delivery rates and analytics. We collect contact info at install and signup. Email and phone go in the user table. Device tokens go in a separate table, because one user can have many devices. I\'d keep each provider behind an interface so we can swap it. For example, FCM isn\'t available in China. And when APNs says a token is unregistered, we delete it."',
+  checks: ['I named APNs and FCM, plus an SMS and an email provider', 'I said a push needs a device token and a payload', 'I explained where contact info comes from (install/signup) and that one user can have many devices'],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>
