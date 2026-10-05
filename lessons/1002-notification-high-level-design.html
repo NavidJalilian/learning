@@ -54,12 +54,14 @@ svg .nbox { fill: var(--panel); stroke: var(--line); stroke-width: 2; }
 .v1 .xfl { fill: var(--bad); font: 700 16px var(--font); text-anchor: middle; dominant-baseline: central; animation: fadeout .7s forwards; }
 @keyframes fadeout { to { opacity: 0; transform: translateY(-8px); } }
 .v1 .mk { cursor: pointer; }
+.v1 .mk .hit { fill: transparent; stroke: none; }
 .v1 .mk circle { fill: var(--mk); stroke: var(--ink); stroke-width: 2; }
 .v1 .mk circle.halo { fill: none; stroke: var(--mk); stroke-width: 3; pointer-events: none; transform-box: fill-box; transform-origin: center; animation: mkpulse 1.6s ease-out infinite; }
 .v1 .mk text { fill: var(--mk-ink); font: 700 16px var(--font); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
 .v1 .mk:focus { outline: none; }
 .v1 .mk:focus circle, .v1 .mk:hover circle { stroke-width: 4; }
 .v1 .mk.ok circle { fill: var(--good); }
+.v1 .mk.ok circle.hit { fill: transparent; }
 .v1 .mk.ok circle.halo { display: none; }
 .v1 .mk.ok text { fill: #fff; }
 @keyframes mkpulse { from { opacity: .9; transform: scale(1); } to { opacity: 0; transform: scale(1.9); } }
@@ -510,52 +512,95 @@ Q.onStage(1, () => {
   const st = { rate: 300, backlog: 0, dropped: 0, dead: false, bf: 0, lastProc: 0, dropFrac: 0, cpu: 0 };
   const goals = new Set();
   const svg = $('#box1');
-  const root = S('g', { class: 'v1' }, svg);
-  const lanesG = S('g', {}, root), pkG = S('g', {}, root);
   const SV = ['Billing', 'Shop', 'Cron job'];
   const TP = [{ k: 'ios', n: 'APNs', s: 'iOS push', dev: '📱', w: 5 }, { k: 'and', n: 'FCM', s: 'Android push', dev: '📱', w: 5 }, { k: 'sms', n: 'SMS', s: 'text message', dev: '💬', w: 1 }, { k: 'mail', n: 'Email', s: 'inbox', dev: '💻', w: 5 }];
-  const MID = [134, 182], OUT = [344, 182];
-  T(root, 52, 16, 'SERVICES', 'cap'); T(root, 424, 16, 'THIRD PARTIES', 'cap');
-  SV.forEach((n, i) => { const y = 34 + i * 112; S('rect', { class: 'nbox', x: 6, y, width: 92, height: 56, rx: 12 }, root); T(root, 52, y + 33, n, 'lbl'); S('line', { class: 'lane', x1: 98, y1: y + 28, x2: MID[0], y2: MID[1] }, lanesG); });
-  S('rect', { class: 'srvbox', x: 134, y: 24, width: 210, height: 316, rx: 16 }, root);
-  T(root, 239, 48, 'Notification server', 'lbl').style.fontSize = '15px';
-  const cells = S('g', { class: 'cells' }, root);
-  const CELLS = [['🗄️', 'Database'], ['⚡', 'Cache'], ['🎨', 'HTML render'], ['📤', 'Sender']];
-  CELLS.forEach(([e, l], i) => {
-    const x = 148 + (i % 2) * 94, y = 62 + Math.floor(i / 2) * 88;
-    S('rect', { class: 'cell', x, y, width: 88, height: 78, rx: 10 }, cells);
-    T(cells, x + 44, y + 38, e, 'emo'); T(cells, x + 44, y + 64, l, 'lbl s');
-  });
-  const spin = S('circle', { class: 'spin', cx: 318, cy: 168, r: 8, visibility: 'hidden' }, root);
-  T(root, 148, 258, 'CPU', 'mtxt');
-  const cpuTxt = T(root, 330, 258, '0%', 'mtxt r');
-  S('rect', { class: 'mtrack', x: 148, y: 266, width: 182, height: 16, rx: 8 }, root);
-  const cpuFill = S('rect', { class: 'mfill', x: 148, y: 266, width: 0, height: 16, rx: 8 }, root);
-  const pile = S('g', { class: 'pile' }, root);
-  T(root, 239, 190, '💀 DOWN', 'down');
-  TP.forEach((t, i) => {
-    const y = 26 + i * 80;
-    S('line', { class: 'lane', x1: OUT[0], y1: OUT[1], x2: 378, y2: y + 30 }, lanesG);
-    S('line', { class: 'lane', x1: 470, y1: y + 30, x2: 484, y2: y + 30 }, lanesG);
-    const g = S('g', { class: 'tpbox' }, root);
-    S('rect', { class: 'nbox', x: 378, y, width: 92, height: 60, rx: 12 }, g);
-    T(g, 424, y + 28, t.n, 'lbl'); T(g, 424, y + 46, t.s, 'lbl xs');
-    T(root, 500, y + 38, t.dev, 'emo dev');
-    t.path = poly([OUT, [378, y + 30], [490, y + 30]]);
-  });
-  const inPaths = SV.map((_, i) => poly([[98, 34 + i * 112 + 28], MID]));
-  // hotspot markers (hidden until the "name the cracks" round)
-  const mkG = S('g', { visibility: 'hidden' }, root);
   const MK = [
-    { id: 'A', x: 361, y: 182, a: 'spof', lab: 'the lanes out of the box' },
-    { id: 'B', x: 239, y: 147, a: 'scale', lab: 'everything packed inside the box' },
-    { id: 'C', x: 239, y: 274, a: 'perf', lab: 'the CPU meter and the slow sender' },
+    { id: 'A', a: 'spof', lab: 'the lanes out of the box' },
+    { id: 'B', a: 'scale', lab: 'everything packed inside the box' },
+    { id: 'C', a: 'perf', lab: 'the CPU meter and the slow sender' },
   ];
-  MK.forEach(m => {
-    const g = S('g', { class: 'mk', tabindex: -1, role: 'button', 'aria-label': `Marker ${m.id}: ${m.lab}` }, mkG);
-    S('circle', { cx: m.x, cy: m.y, r: 16, class: 'halo' }, g); S('circle', { cx: m.x, cy: m.y, r: 16 }, g); T(g, m.x, m.y, m.id);
-    m.el = g;
-  });
+  // Two layouts: wide (left → right) and narrow phones (top → bottom), so labels stay readable at 375px.
+  const LAY = {
+    wide: {
+      vb: [520, 352], capS: [52, 16], capT: [424, 16], svcH: 56,
+      svc: i => ({ x: 6, y: 34 + i * 112, w: 92 }), svcOut: b => [b.x + b.w, b.y + 28],
+      box: { x: 134, y: 24, w: 210, h: 316 }, title: [239, 48],
+      cell: i => ({ x: 148 + (i % 2) * 94, y: 62 + Math.floor(i / 2) * 88, w: 88, h: 78 }),
+      spin: [318, 168], cpu: { x: 148, y: 266, w: 182 }, pile: { x: 148, y: 296, per: 15 }, down: [239, 190],
+      MID: [134, 182], OUT: [344, 182],
+      tp: i => ({ x: 378, y: 26 + i * 80, w: 92, h: 60 }), tpIn: b => [b.x, b.y + 30],
+      devLane: b => [b.x + b.w, b.y + 30, b.x + b.w + 14, b.y + 30], dev: b => [b.x + b.w + 30, b.y + 38], tpEnd: b => [b.x + b.w + 20, b.y + 30],
+      mk: { A: [361, 182], B: [239, 147], C: [239, 274] },
+    },
+    tall: {
+      vb: [360, 536], capS: [180, 14], capT: [180, 424], svcH: 46,
+      svc: i => ({ x: 8 + i * 118, y: 22, w: 108 }), svcOut: b => [b.x + b.w / 2, b.y + 46],
+      box: { x: 14, y: 96, w: 332, h: 304 }, title: [180, 122],
+      cell: i => ({ x: 26 + (i % 2) * 160, y: 136 + Math.floor(i / 2) * 84, w: 148, h: 74 }),
+      spin: [318, 236], cpu: { x: 26, y: 324, w: 308 }, pile: { x: 26, y: 352, per: 24 }, down: [180, 270],
+      MID: [180, 96], OUT: [180, 400],
+      tp: i => ({ x: 8 + i * 88, y: 434, w: 80, h: 56 }), tpIn: b => [b.x + b.w / 2, b.y],
+      devLane: b => [b.x + 40, b.y + 56, b.x + 40, b.y + 66], dev: b => [b.x + 40, b.y + 92], tpEnd: b => [b.x + 40, b.y + 76],
+      mk: { A: [180, 416], B: [180, 215], C: [180, 332] },
+    },
+  };
+  const mq = matchMedia('(max-width: 560px)');
+  let L, root, pkG, mkG, cpuFill, cpuTxt, spin, pile, inPaths = [];
+  const okMarks = new Set();
+  function build() {
+    L = mq.matches ? LAY.tall : LAY.wide;
+    svg.setAttribute('viewBox', `0 0 ${L.vb[0]} ${L.vb[1]}`);
+    svg.innerHTML = '';
+    packets.length = 0;
+    root = S('g', { class: 'v1' }, svg);
+    const lanesG = S('g', {}, root); pkG = S('g', {}, root);
+    T(root, L.capS[0], L.capS[1], 'SERVICES', 'cap'); T(root, L.capT[0], L.capT[1], 'THIRD PARTIES', 'cap');
+    inPaths = SV.map((n, i) => {
+      const b = L.svc(i), o = L.svcOut(b);
+      S('rect', { class: 'nbox', x: b.x, y: b.y, width: b.w, height: L.svcH, rx: 12 }, root); T(root, b.x + b.w / 2, b.y + L.svcH / 2 + 5, n, 'lbl');
+      S('line', { class: 'lane', x1: o[0], y1: o[1], x2: L.MID[0], y2: L.MID[1] }, lanesG);
+      return poly([o, L.MID]);
+    });
+    const B = L.box;
+    S('rect', { class: 'srvbox', x: B.x, y: B.y, width: B.w, height: B.h, rx: 16 }, root);
+    T(root, L.title[0], L.title[1], 'Notification server', 'lbl').style.fontSize = '15px';
+    const cells = S('g', { class: 'cells' }, root);
+    [['🗄️', 'Database'], ['⚡', 'Cache'], ['🎨', 'HTML render'], ['📤', 'Sender']].forEach(([e, l], i) => {
+      const c = L.cell(i);
+      S('rect', { class: 'cell', x: c.x, y: c.y, width: c.w, height: c.h, rx: 10 }, cells);
+      T(cells, c.x + c.w / 2, c.y + c.h / 2, e, 'emo'); T(cells, c.x + c.w / 2, c.y + c.h - 12, l, 'lbl s');
+    });
+    spin = S('circle', { class: 'spin', cx: L.spin[0], cy: L.spin[1], r: 8, visibility: 'hidden' }, root);
+    T(root, L.cpu.x, L.cpu.y - 8, 'CPU', 'mtxt');
+    cpuTxt = T(root, L.cpu.x + L.cpu.w, L.cpu.y - 8, '0%', 'mtxt r');
+    S('rect', { class: 'mtrack', x: L.cpu.x, y: L.cpu.y, width: L.cpu.w, height: 16, rx: 8 }, root);
+    cpuFill = S('rect', { class: 'mfill', x: L.cpu.x, y: L.cpu.y, width: 0, height: 16, rx: 8 }, root);
+    pile = S('g', { class: 'pile' }, root);
+    T(root, L.down[0], L.down[1], '💀 DOWN', 'down');
+    TP.forEach((t, i) => {
+      const b = L.tp(i), inn = L.tpIn(b), dl = L.devLane(b), dv = L.dev(b);
+      S('line', { class: 'lane', x1: L.OUT[0], y1: L.OUT[1], x2: inn[0], y2: inn[1] }, lanesG);
+      S('line', { class: 'lane', x1: dl[0], y1: dl[1], x2: dl[2], y2: dl[3] }, lanesG);
+      const g = S('g', { class: 'tpbox' }, root);
+      S('rect', { class: 'nbox', x: b.x, y: b.y, width: b.w, height: b.h, rx: 12 }, g);
+      T(g, b.x + b.w / 2, b.y + 27, t.n, 'lbl'); T(g, b.x + b.w / 2, b.y + 45, t.s, 'lbl xs');
+      T(root, dv[0], dv[1], t.dev, 'emo dev');
+      t.path = poly([L.OUT, inn, L.tpEnd(b)]);
+    });
+    // hotspot markers (hidden until the "name the cracks" round); a big invisible circle is the tap target
+    mkG = S('g', { visibility: crackOn ? 'visible' : 'hidden' }, root);
+    MK.forEach(m => {
+      const [x, y] = L.mk[m.id];
+      const g = S('g', { class: 'mk' + (okMarks.has(m.id) ? ' ok' : ''), tabindex: crackOn ? 0 : -1, role: 'button', 'aria-label': `Marker ${m.id}: ${m.lab}` }, mkG);
+      S('circle', { cx: x, cy: y, r: 16, class: 'halo' }, g); S('circle', { cx: x, cy: y, r: 16 }, g); T(g, x, y, m.id);
+      S('circle', { cx: x, cy: y, r: 27, class: 'hit' }, g);
+      m.el = g;
+      keyActivate(g, () => markerTap(m));
+    });
+    if (st) render();
+  }
+  const packets = [];
+  let crackOn = false;
 
   /* --- model: one tick = 100 ms --- */
   const eff = () => st.bf > 0 ? 5000 : st.rate;
@@ -586,22 +631,23 @@ Q.onStage(1, () => {
   }
   function render() {
     const c = st.cpu;
-    cpuFill.setAttribute('width', (182 * c / 100).toFixed(1));
+    cpuFill.setAttribute('width', (L.cpu.w * c / 100).toFixed(1));
     cpuFill.style.fill = c >= 95 ? 'var(--bad)' : c >= 70 ? 'var(--warn)' : 'var(--good)';
     cpuTxt.textContent = st.dead ? 'off' : Math.round(c) + '%';
     spin.setAttribute('visibility', !st.dead && c >= 80 ? 'visible' : 'hidden');
     const n = Math.min(30, Math.ceil(st.backlog / 100));
-    if (pile.childElementCount !== n) { pile.innerHTML = ''; for (let i = 0; i < n; i++) S('rect', { x: 148 + (i % 15) * 12.4, y: 296 + Math.floor(i / 15) * 14, width: 10, height: 10, rx: 2 }, pile); }
+    if (pile.childElementCount !== n) { pile.innerHTML = ''; for (let i = 0; i < n; i++) S('rect', { x: L.pile.x + (i % L.pile.per) * 12.4, y: L.pile.y + Math.floor(i / L.pile.per) * 14, width: 10, height: 10, rx: 2 }, pile); }
     $('#stDel').textContent = fmt(st.lastProc) + '/s';
     const w = $('#stWait'); w.textContent = fmt(st.backlog); w.className = st.backlog > 1 ? 'warn' : '';
     const d = $('#stDrop'); d.textContent = fmt(st.dropped); d.className = st.dropped > 0 ? 'bad' : '';
     root.classList.toggle('dead', st.dead);
   }
+  build();
+  mq.addEventListener && mq.addEventListener('change', build);
   setInterval(tick, 100);
 
   /* --- packets (visual only) --- */
   let visible = true, last = 0, acc = 0;
-  const packets = [];
   if ('IntersectionObserver' in window) new IntersectionObserver(es => { visible = es[0].isIntersecting; }).observe(svg);
   const pickTP = () => { let r = Math.random() * 16; for (const t of TP) { if ((r -= t.w) < 0) return t; } return TP[0]; };
   function spawn(path, color, speed, onEnd) {
@@ -613,7 +659,7 @@ Q.onStage(1, () => {
   function spawnIn() {
     const t = pickTP();
     spawn(inPaths[Math.random() * 3 | 0], CHV[t.k], 190, () => {
-      if (st.dead || Math.random() < st.dropFrac) { flash(MID[0] + 2, MID[1] + (Math.random() * 40 - 20)); return; }
+      if (st.dead || Math.random() < st.dropFrac) { flash(L.MID[0] + (Math.random() * 30 - 15), L.MID[1] + 4); return; }
       spawn(t.path, CHV[t.k], st.cpu >= 100 ? 70 : 170);
     });
   }
@@ -658,7 +704,7 @@ Q.onStage(1, () => {
   };
 
   /* --- name the cracks --- */
-  let crackOn = false, sel = null, named = 0;
+  let sel = null, named = 0;
   const EXPLAIN = {
     spof: 'When the only box died, every lane went dark at once. Nothing else could take over. That\'s a <b>single point of failure</b>.',
     scale: 'Database, cache, renderer and sender all share one machine. If only the database needs more power, you still have to grow the whole box. That\'s <b>hard to scale</b>.',
@@ -670,6 +716,7 @@ Q.onStage(1, () => {
     $('#crack').style.display = 'block';
     mkG.setAttribute('visibility', 'visible');
     MK.forEach(m => m.el.setAttribute('tabindex', 0));
+    if (!Q.reduced) setTimeout(() => svg.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
     logTo('log1', 'Three cracks found. Name them below.', 'g');
   }
   $$('#lbls .lbl-btn').forEach(b => b.onclick = () => {
@@ -677,13 +724,13 @@ Q.onStage(1, () => {
     sel = b.dataset.k;
     $$('#lbls .lbl-btn').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
   });
-  MK.forEach(m => keyActivate(m.el, () => {
-    if (m.el.classList.contains('ok')) return;
+  function markerTap(m) {
+    if (!crackOn || m.el.classList.contains('ok')) return;
     const msg = $('#crackMsg');
     if (!sel) { msg.className = 'explain show bad'; msg.innerHTML = 'Pick a problem first (the buttons above), then tap a letter.'; return; }
     const btn = $(`#lbls .lbl-btn[data-k="${sel}"]`);
     if (sel === m.a) {
-      m.el.classList.add('ok'); m.el.setAttribute('aria-label', `Marker ${m.id}: ${btn.textContent}`);
+      m.el.classList.add('ok'); okMarks.add(m.id); m.el.setAttribute('aria-label', `Marker ${m.id}: ${btn.textContent}`);
       btn.classList.add('done'); btn.setAttribute('aria-pressed', 'false'); btn.disabled = true;
       msg.className = 'explain show good'; msg.innerHTML = `<b>${m.id} = ${btn.textContent}.</b> ${EXPLAIN[m.a]}`;
       Q.addXP(10, m.el); sel = null; named++;
@@ -692,7 +739,7 @@ Q.onStage(1, () => {
       msg.className = 'explain show bad'; msg.innerHTML = `<b>Not that one.</b> Letter ${m.id} points at ${m.lab}. Which problem did that show?`;
       Q.loseHeart(m.el);
     }
-  }));
+  }
   let quizShown = false;
   function finishCrack() {
     $('#s1note').style.display = 'block';
