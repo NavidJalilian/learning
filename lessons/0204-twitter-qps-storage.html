@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Tweet Math</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: s1 interviewer chat + sticky-note board, napkin strip, s2/s3 calc chains, s2 day chart, s3 disk stacks + year grid, s4 napkin calculator */
+:root { --note: #fff3b0; --note-ink: #4a3c00; --note-line: #e6d27a; --pin: #d4423f; --media: #0d9a96; --text: #5a48f0; --day: #0d9a96; --day-off: #e2ddd2; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --note: #3d3518; --note-ink: #ffefa6; --note-line: #645626; --pin: #ff6d6a; --media: #31d3c8; --text: #8f82ff; --day: #31d3c8; --day-off: #2a2d4a; }
+}
+:root[data-theme="dark"] { --note: #3d3518; --note-ink: #ffefa6; --note-line: #645626; --pin: #ff6d6a; --media: #31d3c8; --text: #8f82ff; --day: #31d3c8; --day-off: #2a2d4a; }
+
+/* interviewer chat */
+.chat { display: grid; gap: 10px; margin: 14px 0; }
+.msg { display: flex; gap: 10px; align-items: flex-end; max-width: 560px; animation: rise .35s; }
+.msg.me { margin-left: auto; flex-direction: row-reverse; }
+.msg .av { width: 36px; height: 36px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--bg-2); font-size: 19px; }
+.bub { padding: 10px 14px; border-radius: 16px 16px 16px 4px; background: var(--bg-2); font-size: 15px; }
+.bub b { display: block; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.msg.me .bub { border-radius: 16px 16px 4px 16px; background: var(--accent-soft); }
+.msg[hidden] { display: none; }
+
+/* sticky-note board */
+.board { border: 2px dashed var(--line); border-radius: 18px; padding: 12px; background: var(--bg); transition: border-color .3s; }
+.board.over { border-color: var(--accent); background: var(--accent-soft); }
+.board.full { border-style: solid; border-color: color-mix(in srgb, var(--good) 55%, var(--line)); }
+.board-h { font-weight: 700; font-size: 14px; display: flex; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.slots { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+@media (max-width: 640px) { .slots { grid-template-columns: repeat(2, 1fr); } }
+.slot { min-height: 82px; border-radius: 10px; border: 2px dashed var(--line); display: grid; place-items: center; color: var(--muted); font-weight: 700; font-size: 20px; }
+.note { position: relative; min-height: 82px; border-radius: 4px; padding: 14px 10px 8px; background: var(--note); color: var(--note-ink); border: 1px solid var(--note-line); font-size: 13.5px; font-weight: 600; line-height: 1.3; box-shadow: 0 3px 8px rgba(0,0,0,.12); transform: rotate(var(--r, -1.5deg)); animation: stick .45s cubic-bezier(.3,1.5,.5,1); }
+.note::before { content: ""; position: absolute; top: -5px; left: 50%; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: var(--pin); box-shadow: 0 2px 2px rgba(0,0,0,.25); }
+.note small { display: block; font-weight: 500; opacity: .8; margin-top: 4px; font-size: 12px; }
+@keyframes stick { from { transform: translateY(-14px) scale(1.12) rotate(4deg); opacity: 0; } }
+.deck { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 12px; }
+@media (max-width: 520px) { .deck { grid-template-columns: 1fr; } }
+.acard { text-align: left; min-height: 48px; border: 2px solid var(--line); background: var(--panel); border-radius: 12px; padding: 10px 12px; font-weight: 600; font-size: 15px; transition: border-color .2s, opacity .4s, transform .4s; touch-action: manipulation; }
+.acard:hover:not([disabled]) { border-color: var(--accent); }
+.acard[draggable="true"] { cursor: grab; }
+.acard.gone { opacity: 0; transform: scale(.85); pointer-events: none; }
+.acard.nope { border-color: var(--bad); background: var(--bad-soft); text-decoration: line-through; animation: slideoff .6s forwards; }
+.acard .why { display: block; text-decoration: none; font-weight: 500; font-size: 13px; color: var(--ink); margin-top: 4px; }
+@keyframes slideoff { 0% { transform: translateX(0); } 25% { transform: translateX(-6px); } 50% { transform: translateX(10px); } 100% { transform: translateX(0); opacity: .7; } }
+
+/* napkin strip (stages 2–4) */
+.napkin { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px; margin: 0 0 14px; border-radius: 12px; background: var(--note); color: var(--note-ink); border: 1px solid var(--note-line); font-size: 13px; font-weight: 600; }
+.napkin span { white-space: nowrap; }
+.napkin span + span::before { content: "·"; margin-right: 6px; opacity: .6; }
+.napkin .lbl { font-weight: 700; letter-spacing: .06em; text-transform: uppercase; font-size: 11px; align-self: center; }
+.napkin .lbl + span::before { content: ""; margin: 0; }
+
+/* calc chain */
+.chain { display: grid; gap: 10px; margin-top: 12px; }
+.crow { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--bg); transition: opacity .3s, border-color .3s; }
+.crow.off { opacity: .45; }
+.crow.ok { border-color: color-mix(in srgb, var(--good) 55%, var(--line)); }
+.crow .fx { font-family: var(--mono); font-size: 14px; margin-bottom: 8px; word-break: break-word; }
+.crow .fx .stp { font-family: var(--font); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 2px; }
+.crow .fx b { color: var(--accent); }
+.crow .in { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.crow input[type=text] { width: 150px; min-height: 44px; border-radius: 10px; border: 2px solid var(--line); background: var(--panel); color: var(--ink); font: 600 16px var(--mono); padding: 6px 10px; }
+.crow.ok input[type=text] { border-color: var(--good); }
+.crow .unit { font-weight: 600; color: var(--muted); font-size: 14px; }
+.crow .btn { min-height: 44px; }
+.crow .fb { font-size: 14px; margin-top: 8px; min-height: 0; }
+.crow .fb:empty { display: none; }
+.crow .fb.good { color: var(--good); font-weight: 600; }
+.crow .fb.bad { color: var(--bad); }
+.crow .fb.soft { color: var(--warn); }
+.pchip { display: inline-block; margin-top: 8px; padding: 6px 10px; border-radius: 99px; background: var(--warn-soft); font-size: 13.5px; font-weight: 600; animation: rise .35s; }
+details.tool { margin-top: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
+details.tool summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-size: 15px; min-height: 44px; display: flex; align-items: center; }
+details.tool .tb { padding: 0 14px 14px; font-size: 14.5px; }
+.ladder { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 6px; margin: 8px 0; }
+.ladder div { border-radius: 10px; background: var(--bg-2); padding: 6px 8px; text-align: center; font-family: var(--mono); font-size: 12.5px; }
+.ladder b { display: block; font-family: var(--font); font-size: 14px; }
+.conv { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.conv input, .conv select { min-height: 40px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: 600 15px var(--mono); padding: 4px 8px; }
+.conv input { width: 120px; }
+.conv-out { font-family: var(--mono); font-size: 13.5px; margin-top: 6px; color: var(--muted); }
+
+/* s2 day chart */
+.daychart text { fill: var(--muted); font: 600 11px var(--mono); }
+.daychart .axis { stroke: var(--line); stroke-width: 1; }
+.daychart .curve { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; }
+.daychart .area { fill: var(--accent); opacity: .12; }
+.daychart .avg { stroke: var(--teal); stroke-width: 2; stroke-dasharray: 6 5; }
+.daychart .pk { stroke: var(--bad); stroke-width: 2; stroke-dasharray: 2 4; }
+.daychart .avgl { fill: var(--teal); font-weight: 700; }
+.daychart .pkl { fill: var(--bad); font-weight: 700; }
+.daychart .cursor { stroke: var(--ink); stroke-width: 1.5; }
+.daychart .dotc { fill: var(--ink); }
+.meter { font-family: var(--mono); font-weight: 700; font-size: 20px; }
+.meter small { font-family: var(--font); font-size: 12px; color: var(--muted); font-weight: 600; margin-left: 4px; }
+
+/* s3 stacks + year grid */
+.stacks text { font: 600 12px var(--font); fill: var(--ink); text-anchor: middle; }
+.stacks .lab { font-weight: 700; font-size: 13px; }
+.stacks .val { font: 700 13px var(--mono); }
+.stacks .ground { stroke: var(--line); stroke-width: 2; }
+.stacks .disk { stroke: var(--bg); stroke-width: 1; }
+.stacks .mag { fill: var(--panel); stroke: var(--ink); stroke-width: 2; }
+.stacks .magh { stroke: var(--ink); stroke-width: 5; stroke-linecap: round; }
+.stacks .mtx { font: 700 11px var(--mono); }
+.yeargrid rect { fill: var(--day-off); transition: fill .3s; }
+.yeargrid rect.on { fill: var(--day); }
+.yeargrid text { fill: var(--muted); font: 600 9px var(--mono); }
+.pick { margin-top: 14px; }
+
+/* s4 napkin calculator */
+.calc { display: grid; grid-template-columns: 1.1fr 1fr; gap: 0; }
+@media (max-width: 720px) { .calc { grid-template-columns: 1fr; } }
+.knobs { padding: 10px 14px; display: grid; gap: 2px; }
+.knob label { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; font-weight: 600; }
+.knob label span:last-child { font-family: var(--mono); }
+.knob.moved label span:last-child { color: var(--accent); }
+.knob input { width: 100%; height: 32px; accent-color: var(--accent); margin: 0; }
+.outs { padding: 12px 14px; display: grid; gap: 8px; align-content: start; border-left: 1px solid var(--line); background: var(--panel); }
+@media (max-width: 720px) { .outs { border-left: 0; border-top: 1px solid var(--line); } }
+.out { border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; background: var(--bg); display: grid; grid-template-columns: 1fr auto; gap: 0 8px; align-items: baseline; }
+.out .k { font-size: 12.5px; color: var(--muted); font-weight: 600; grid-column: 1 / -1; }
+.out .v { font: 700 19px var(--mono); }
+.out .r { font: 700 12px var(--mono); padding: 2px 8px; border-radius: 99px; background: var(--bg-2); color: var(--muted); }
+.out .r.up { background: var(--accent-soft); color: var(--accent); }
+.out .r.dn { background: var(--warn-soft); color: var(--warn); }
+.out.flash { animation: flash .6s; }
+@keyframes flash { 40% { border-color: var(--accent); } }
+.out.big .v { font-size: 22px; }
+mark.hl { background: var(--warn-soft); color: inherit; padding: 0 .2em; border-radius: 4px; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 2.4 · Back-of-the-Envelope Estimation</div>
+    <h1>Tweet Math</h1>
+    <p class="lede">The book's worked example, done by your own hand. Pin five assumptions, then turn them into tweets per second and petabytes of storage. Then find out which knobs move the answer.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> from five written assumptions you can derive <b>~3,500 write QPS</b>, <b>~7,000 peak QPS</b>, <b>30 TB of media a day</b> and <b>~55 PB over five years</b>, out loud, in under two minutes.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Pin your assumptions</h2><div class="sub">Write them down before any math</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>An estimate is only as good as the numbers you feed it. So the book's first tip is simple: <b>write your assumptions down</b> where the interviewer can see them.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/back-of-the-envelope-estimation" target="_blank" rel="noopener">[1]</a> Then both of you can check the math against them, and change one if it looks wrong.</p>
+      <div class="chat" aria-live="polite">
+        <div class="msg them"><span class="av" aria-hidden="true">🧑‍💼</span><div class="bub"><b>Interviewer</b>Estimate Twitter's QPS and storage requirements.</div></div>
+        <div class="msg me" id="s1me" hidden><span class="av" aria-hidden="true">🙋</span><div class="bub"><b>You</b>Here's what I'll assume: 300 million monthly users, half of them on it daily, 2 tweets each per day, 10% with a photo or video, and we keep everything 5 years. Does that sound reasonable?</div></div>
+        <div class="msg them" id="s1ok" hidden><span class="av" aria-hidden="true">🧑‍💼</span><div class="bub"><b>Interviewer</b>Sounds reasonable. Go ahead.</div></div>
+      </div>
+      <p>Two terms you'll need. <b>MAU</b> (monthly active users) counts the different people who use the app at least once in a month. <b>DAU</b> (daily active users) counts them for one day. DAU is always a share of MAU.</p>
+      <p><b>Your move:</b> eight facts are on the table. Only five of them change how many tweets arrive or how many bytes you store. <b>Tap</b> (or drag) those five onto the board.</p>
+      <div class="board" id="board">
+        <div class="board-h"><span>📋 Assumptions</span><span class="muted" id="boardCount">0 / 5 pinned</span></div>
+        <div class="slots" id="slots"></div>
+      </div>
+      <div class="deck" id="deck"></div>
+      <div class="callout tip" id="s1tip" style="display:none"><b>In a real interview, you propose the numbers.</b> Don't wait to be handed them. Say a number, say why, and ask "does that sound reasonable?" The book notes its own numbers are for practice only, not Twitter's real figures.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/back-of-the-envelope-estimation" target="_blank" rel="noopener">[1]</a> What gets graded is the method, not a perfect guess.</div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Crunch the QPS</h2><div class="sub">Users → tweets per day → tweets per second → peak</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div class="napkin"><span class="lbl">📌 Pinned</span><span>300M MAU</span><span>50% daily</span><span>2 tweets/user/day</span><span>10% media</span><span>keep 5 years</span></div>
+      <p><b>QPS</b> means <i>queries per second</i>: how many requests hit the system each second. Here a "query" is one new tweet being written, so this is the <b>write QPS</b>. You get it in four small steps. Each step uses the answer from the one before.</p>
+      <p class="small muted">Type a number and press Check (or Enter). Plain numbers are fine, and so are things like <code>150m</code> or <code>3.5k</code>.</p>
+      <div class="chain" id="qpsChain"></div>
+      <details class="tool" id="secTool">
+        <summary>⏱️ Seconds in a day (open if you need it)</summary>
+        <div class="tb">
+          <p style="margin:0 0 6px"><code>24 hours × 60 minutes × 60 seconds = 86,400 seconds</code></p>
+          <p style="margin:0">That's close to <b>100,000 = 10<sup>5</sup></b>. Dividing by 10<sup>5</sup> is just "drop five zeros", so 300 million ÷ 10<sup>5</sup> = 3,000. That's within about 15% of the exact answer, which is plenty for a napkin.</p>
+        </div>
+      </details>
+      <div class="sim" id="daySim" style="display:none">
+        <svg class="daychart" id="dayChart" viewBox="0 0 360 180" role="img" aria-label="Tweets per second over one day: average about 3,500, evening peak about 7,000"></svg>
+        <div class="sim-bar">
+          <span class="meter" id="meter" aria-live="off">—<small>tweets/s</small></span>
+          <span class="small muted" id="meterAt">one made-up day</span>
+          <button class="btn" id="playDay" style="padding:8px 12px;font-size:14px">▶ Play the day</button>
+        </div>
+      </div>
+      <div class="callout" id="peakNote" style="display:none"><b>Why "× 2" for peak?</b> Traffic isn't flat. People tweet more in the evening and during big events. The book just doubles the average.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/back-of-the-envelope-estimation" target="_blank" rel="noopener">[1]</a> That 2 is an <i>assumption</i> you state, not a law. Real spikes can be much bigger: in August 2013 Twitter hit <b>143,199 tweets per second</b> during a TV broadcast in Japan, against a normal average of about 5,700.<a class="cite" href="https://blog.twitter.com/engineering/en_us/a/2013/new-tweets-per-second-record-and-how" target="_blank" rel="noopener">[2]</a> That's about 25×.</div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Weigh the storage</h2><div class="sub">Bytes per tweet → terabytes per day → petabytes</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div class="napkin"><span class="lbl">📌 Pinned</span><span>150M DAU</span><span>300M tweets/day</span><span>10% media</span><span>keep 5 years</span></div>
+      <p>The book sizes an average tweet like this:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/back-of-the-envelope-estimation" target="_blank" rel="noopener">[1]</a> a <code>tweet_id</code> of <b>64 bytes</b>, <b>140 bytes</b> of text, and <b>1 MB</b> of media (a photo or short video) when the tweet has one. One megabyte is about 5,000 times bigger than the text.</p>
+      <div class="challenge" id="s3predict"></div>
+      <div id="s3work" style="display:none">
+        <div class="sim">
+          <svg class="stacks" id="stacks" viewBox="0 0 360 250" role="img" aria-label="Two stacks of disks: daily text storage and daily media storage"></svg>
+          <div class="simlog" id="s3log"><div>Two piles: one day of tweet text, one day of media. Fill them in.</div></div>
+        </div>
+        <div class="chain" id="dayChain"></div>
+        <div class="callout" id="unitTip" style="display:none"><b>Book tip: label your units.</b> "30" is meaningless. "30 TB" is an answer. Writing the unit at every step is how you catch a slip of 1,000× before the interviewer does.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/back-of-the-envelope-estimation" target="_blank" rel="noopener">[1]</a></div>
+        <div id="s3years" style="display:none">
+          <p style="margin-top:18px">The book only keeps the big pile: <b>30 TB of media a day</b>. Now keep it for five years. Each square below is one day's 30 TB.</p>
+          <div class="sim">
+            <svg class="yeargrid" id="yearGrid" viewBox="0 0 400 150" role="img" aria-label="Grid of 1,825 days, five years of 365 days"></svg>
+          </div>
+          <div class="chain" id="yearChain"></div>
+        </div>
+        <details class="tool">
+          <summary>🔢 Zero tally (from <span style="margin-left:4px">Quest 2.1</span>)</summary>
+          <div class="tb">
+            <p style="margin:0">Each step up the ladder is ×1,000, which is three more zeros. Revisit <a href="0201-powers-of-two.html">2.1 The Byte Ladder</a> for the full drill.</p>
+            <div class="ladder"><div><b>KB</b>10³</div><div><b>MB</b>10⁶</div><div><b>GB</b>10⁹</div><div><b>TB</b>10¹²</div><div><b>PB</b>10¹⁵</div><div><b>EB</b>10¹⁸</div></div>
+            <div class="conv"><label for="convIn" class="small">Convert</label><input id="convIn" type="text" inputmode="decimal" value="1" aria-label="Amount to convert"><select id="convU" aria-label="Unit"><option>MB</option><option>GB</option><option selected>TB</option><option>PB</option></select></div>
+            <div class="conv-out" id="convOut"></div>
+            <p class="small muted" style="margin:8px 0 0">Mental-math trick: 365 × 5 is close to 2,000 (it's 1,825), so you can round first and fix up after.</p>
+          </div>
+        </details>
+      </div>
+      <div class="callout warn"><b>Honest caveats.</b> The book's 64-byte <code>tweet_id</code> is generous. Twitter's real IDs (Snowflake) are 64 <i>bits</i>, which is 8 bytes.<a class="cite" href="https://blog.twitter.com/engineering/en_us/a/2010/announcing-snowflake" target="_blank" rel="noopener">[3]</a> Tweets have allowed 280 characters since 2017, and in UTF-8 one character can take up to 4 bytes. None of that matters here: text stays tiny next to media.</div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Turn the knobs</h2><div class="sub">What the interviewer asks next</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div class="napkin"><span class="lbl">📌 Book defaults</span><span>300M MAU</span><span>50% daily</span><span>2 tweets</span><span>10% media</span><span>1 MB</span><span>5 years</span></div>
+      <p>The book lists the estimates interviewers ask for most: <b>QPS, peak QPS, storage, cache, and number of servers</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/back-of-the-envelope-estimation" target="_blank" rel="noopener">[1]</a> After you give a number, the next question is usually "what if…?". The good news: every formula here is a chain of multiplications. So each knob moves the answer <b>in proportion</b>. Double a factor and the result doubles. Leave a factor out of a formula and it can't move that result at all.</p>
+      <p>This napkin calculator starts at the book's numbers. Each result shows how far it is from the book (<code>×1</code> = unchanged).</p>
+      <div class="sim">
+        <div class="calc">
+          <div class="knobs" id="knobs"></div>
+          <div class="outs" id="outs"></div>
+        </div>
+        <div class="sim-bar"><span class="small muted" id="calcMsg">Move a slider. Watch which results move with it.</span><button class="btn" id="calcReset" style="padding:8px 12px;font-size:14px">↻ Reset to book</button></div>
+      </div>
+      <ul class="checklist" id="s4goals">
+        <li data-g="rep"><span class="box">✓</span><span>Make total storage about <b>165 PB</b> (3× the book) without touching the two user sliders</span></li>
+        <li data-g="dbl"><span class="box">✓</span><span><b>Double the write QPS</b> by moving only one slider away from the book value</span></li>
+        <li data-g="peak"><span class="box">✓</span><span>Find a slider that changes <b>peak QPS</b> but not storage</span></li>
+      </ul>
+      <div class="callout tip" id="s4senior" style="display:none"><b>What a senior adds that the book leaves out.</b> <b>Replication:</b> real storage keeps about 3 copies of each file, so 55 PB becomes about 165 PB. <b>Reads:</b> people read timelines far more often than they post, so read QPS is many times write QPS. That's where caching comes in. <b>Growth:</b> 300 million users today won't be 300 million in year five. Mention one of these and you sound like you've run a real system.</div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The What-If Wyvern</h2><div class="sub">How does the answer move?</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Seven follow-ups, each starting from the book's numbers. One assumption changes. Say how <b>one named result</b> moves: <b>×2</b>, <b>×10</b>, <b>÷2</b>, or <b>no change</b>. No calculator: look at which factors are in the formula.</p>
+      <div class="napkin" style="margin-top:4px"><span class="lbl">Formulas</span><span>QPS = DAU × tweets ÷ 86,400</span><span>peak = QPS × 2</span><span>media/day = DAU × tweets × 10% × 1 MB</span><span>total = media/day × 365 × years</span></div>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">The full Twitter estimate in 60 seconds</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next up: the chapter boss.</b> In <a href="0205-boss-estimation-gauntlet.html"><i>The Estimation Gauntlet</i></a> you'll run this whole estimate as a mock interview, then face the follow-ups: read traffic, cache size and server count.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/back-of-the-envelope-estimation" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 2: "Example: Estimate Twitter QPS and storage requirements"</a> and the "Tips" list after it. It's two short pages. Then read Twitter's own post on its <a href="https://blog.twitter.com/engineering/en_us/a/2013/new-tweets-per-second-record-and-how" target="_blank" rel="noopener">2013 tweets-per-second record</a> to see what a real peak looks like.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      The book's example is deliberately narrow: <b>writes and media only</b>. A fuller answer adds four things. (1) <b>Replication</b>: about 3 copies, so roughly 165 PB. (2) <b>Read traffic</b>: timelines are read far more than they're written, so the read side drives your cache and server counts. (3) <b>Metadata and indexes</b>: small per tweet, but not zero. (4) <b>Growth</b>: users and media sizes rise over five years. The 2× peak rule is also a simplification. Twitter's 2013 record was about 25× its average,<a class="cite" href="https://blog.twitter.com/engineering/en_us/a/2013/new-tweets-per-second-record-and-how" target="_blank" rel="noopener">[2]</a> so real systems plan for bursts with queues and spare capacity, not just a ×2 factor. The book points to the <a href="https://github.com/donnemartin/system-design-primer" target="_blank" rel="noopener">System Design Primer</a><a class="cite" href="https://github.com/donnemartin/system-design-primer" target="_blank" rel="noopener">[4]</a> for more practice estimates.
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"how would I estimate read QPS for the timeline?"</i> or <i>"how many servers would 7,000 writes per second need?"</i> Follow-up questions are part of the quest.
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 2 "Back-of-the-envelope Estimation": the Twitter example and the tips (ByteByteGo).</li>
+        <li>Twitter Engineering, "New Tweets per second record, and how!" (2013).</li>
+        <li>Twitter Engineering, "Announcing Snowflake" (2010): 64-bit tweet IDs.</li>
+        <li>Donne Martin, <i>The System Design Primer</i> (GitHub), cited in the book's chapter references.</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0204',
+  winTitle: 'Twitter, estimated',
+  badge: '🐦 Badge: Napkin Twitterer',
+  cheatsheet: '../reference/ch02-estimation-cheatsheet.html',
+});
+const { sleep, shuffle } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+const fmtInt = n => Math.round(n).toLocaleString('en-US');
+function sig3(x) {
+  if (x >= 100) return Math.round(x).toLocaleString('en-US');
+  if (x >= 10) return (Math.round(x * 10) / 10).toString();
+  return (Math.round(x * 100) / 100).toString();
+}
+function fmtCount(n) {
+  if (n >= 1e9) return sig3(n / 1e9) + ' billion';
+  if (n >= 1e6) return sig3(n / 1e6) + ' million';
+  return fmtInt(n);
+}
+const UNITS = ['bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB'];
+function fmtBytes(b) {
+  if (!(b > 0)) return '0 bytes';
+  let i = Math.floor(Math.log10(b) / 3 + 1e-9); i = Math.max(0, Math.min(UNITS.length - 1, i));
+  return sig3(b / Math.pow(1000, i)) + ' ' + UNITS[i];
+}
+// "150m", "150 million", "3.5k", "3,472.22", "~3500 tweets/s" → number (or NaN)
+function parseCount(str) {
+  const s = String(str).toLowerCase().replace(/[,_\s]+/g, ' ').replace(/[~≈]/g, '').trim().replace(/(\d) (?=\d)/g, '$1');
+  const m = s.match(/^(\d*\.?\d+(?:e[+-]?\d+)?)\s*([a-z]*)/);
+  if (!m) return NaN;
+  const MUL = { k: 1e3, thousand: 1e3, m: 1e6, mn: 1e6, mil: 1e6, million: 1e6, millions: 1e6, b: 1e9, bn: 1e9, billion: 1e9, billions: 1e9 };
+  return parseFloat(m[1]) * (MUL[m[2]] || 1);
+}
+// "61 GB", "61gb", "0.061 TB", "30000 GB", "55 PB" → bytes. No unit: the row's default unit (or raw bytes if huge).
+const BYTE_U = { b: 1, byte: 1, bytes: 1, k: 1e3, kb: 1e3, kib: 1024, m: 1e6, mb: 1e6, mib: 1048576, g: 1e9, gb: 1e9, gib: 2 ** 30, t: 1e12, tb: 1e12, tib: 2 ** 40, p: 1e15, pb: 1e15, pib: 2 ** 50, e: 1e18, eb: 1e18 };
+function parseBytes(str, defUnit) {
+  const s = String(str).toLowerCase().replace(/,/g, '').replace(/[~≈]/g, '').trim();
+  const m = s.match(/^(\d*\.?\d+(?:e[+-]?\d+)?)\s*([a-z]*)/);
+  if (!m) return { bytes: NaN };
+  const v = parseFloat(m[1]);
+  if (m[2]) { const u = BYTE_U[m[2]]; return { bytes: u ? v * u : NaN, unit: m[2] }; }
+  if (v >= 1e6) return { bytes: v, unit: '' };
+  return { bytes: v * BYTE_U[defUnit.toLowerCase()], unit: '' };
+}
+// off by a clean power of 1,000 → "right digits, wrong unit"
+function unitSlip(got, want) { if (!(got > 0)) return false; const r = Math.log10(got / want) / 3; return Math.abs(r) >= .9 && Math.abs(r - Math.round(r)) < .03; }
+function anim(dur, f) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 1) { f(1); return res(); }
+    const t0 = performance.now();
+    const fr = now => { const p = Math.min(1, (now - t0) / dur); f(p); p < 1 ? requestAnimationFrame(fr) : res(); };
+    requestAnimationFrame(fr);
+  });
+}
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); Q.addXP(xp || 10, li);
+  return true;
+}
+
+/* Calculate-and-check row. check(raw) → { ok, soft, msg, val }. First real miss per row costs a heart; unit slips are free. */
+function calcRow(mount, { step, fx, unit, placeholder, check, xp = 10, onOk, disabled }) {
+  const row = document.createElement('div');
+  row.className = 'crow' + (disabled ? ' off' : '');
+  const uid = 'in' + Math.random().toString(36).slice(2, 8);
+  row.innerHTML = `<div class="fx"><span class="stp">${step}</span><span class="fxt"></span></div>
+    <div class="in"><input type="text" id="${uid}" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="${placeholder || ''}" aria-label="${step} answer"${disabled ? ' disabled' : ''}><span class="unit">${unit}</span><button class="btn primary"${disabled ? ' disabled' : ''}>Check</button></div>
+    <div class="fb" aria-live="polite"></div>`;
+  const inp = $('input', row), btn = $('button', row), fb = $('.fb', row);
+  let missed = false, done = false;
+  const setFx = h => { $('.fxt', row).innerHTML = typeof h === 'function' ? h() : h; };
+  setFx(fx);
+  function go() {
+    if (done || inp.disabled) return;
+    if (!inp.value.trim()) { fb.className = 'fb soft'; fb.textContent = 'Type a number first.'; return; }
+    const r = check(inp.value);
+    if (r.ok) {
+      done = true; row.classList.add('ok'); inp.readOnly = true; btn.disabled = true;
+      fb.className = 'fb good'; fb.innerHTML = '✓ ' + r.msg;
+      Q.addXP(xp, btn);
+      onOk && onOk(r.val, row);
+    } else if (r.soft) {
+      fb.className = 'fb soft'; fb.innerHTML = r.msg;
+    } else {
+      fb.className = 'fb bad'; fb.innerHTML = r.msg;
+      if (!missed) { missed = true; Q.loseHeart(btn); }
+      row.animate && !Q.reduced && row.animate([{ transform: 'translateX(-5px)' }, { transform: 'translateX(5px)' }, { transform: 'none' }], { duration: 300 });
+    }
+  }
+  btn.onclick = go;
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); go(); } });
+  mount.appendChild(row);
+  return {
+    el: row, setFx,
+    enable() { row.classList.remove('off'); inp.disabled = false; btn.disabled = false; },
+    focus() { try { inp.focus({ preventScroll: true }); } catch (_) {} },
+  };
+}
+
+/* ================= STAGE 1: pin your assumptions ================= */
+Q.onStage(1, () => {
+  const CARDS = [
+    { k: 'mau', t: '300 million monthly active users', ok: true, note: '300M MAU', feeds: 'starts the user count' },
+    { k: 'daily', t: '50% of them use it every day', ok: true, note: '50% use it daily', feeds: 'MAU → DAU' },
+    { k: 'tw', t: 'Each daily user posts 2 tweets a day', ok: true, note: '2 tweets / user / day', feeds: 'DAU → tweets per day' },
+    { k: 'media', t: '10% of tweets carry a photo or video', ok: true, note: '10% of tweets have media', feeds: 'which tweets are big' },
+    { k: 'keep', t: 'All data is kept for 5 years', ok: true, note: 'keep data 5 years', feeds: 'one day → total' },
+    { k: 'scala', t: 'The backend is written in Scala', why: 'Doesn’t change QPS or storage. A language changes speed, not how many tweets arrive.' },
+    { k: 'eng', t: 'Twitter employs 2,000 engineers', why: 'Doesn’t change QPS or storage. Users create the traffic, not staff.' },
+    { k: 'sort', t: 'Timelines are sorted by time', why: 'Doesn’t change QPS or storage. It’s a rule for showing tweets, not a count.' },
+  ];
+  const ORDER = ['mau', 'daily', 'tw', 'media', 'keep'];
+  const pinned = new Set();
+  let quizShown = false;
+  const slots = $('#slots'), deck = $('#deck'), board = $('#board');
+  slots.innerHTML = ORDER.map(k => `<div class="slot" data-k="${k}">?</div>`).join('');
+  deck.innerHTML = shuffle(CARDS).map(c => `<button class="acard" draggable="true" data-k="${c.k}">${c.t}</button>`).join('');
+  const byK = k => CARDS.find(c => c.k === k);
+
+  function play(k, el) {
+    const c = byK(k);
+    if (!c || el.disabled) return;
+    el.disabled = true; el.draggable = false;
+    if (c.ok) {
+      el.classList.add('gone');
+      const slot = $(`.slot[data-k="${k}"]`, slots);
+      const rot = [-2, 1.5, -1, 2, -1.5][ORDER.indexOf(k)];
+      slot.outerHTML = `<div class="note" style="--r:${rot}deg">${c.note}<small>${c.feeds}</small></div>`;
+      pinned.add(k);
+      Q.addXP(10, board);
+      $('#boardCount').textContent = `${pinned.size} / 5 pinned`;
+      if (pinned.size === 5) allPinned();
+    } else {
+      el.classList.add('nope');
+      el.innerHTML = `${c.t}<span class="why">✗ ${c.why}</span>`;
+      Q.loseHeart(el);
+    }
+  }
+  $$('.acard', deck).forEach(b => {
+    b.onclick = () => play(b.dataset.k, b);
+    b.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', b.dataset.k); e.dataTransfer.effectAllowed = 'move'; });
+  });
+  board.addEventListener('dragover', e => { e.preventDefault(); board.classList.add('over'); });
+  board.addEventListener('dragleave', () => board.classList.remove('over'));
+  board.addEventListener('drop', e => {
+    e.preventDefault(); board.classList.remove('over');
+    const k = e.dataTransfer.getData('text/plain'), el = $(`.acard[data-k="${k}"]`, deck);
+    if (el) play(k, el);
+  });
+
+  async function allPinned() {
+    board.classList.add('full');
+    $$('.acard', deck).forEach(b => { if (!b.disabled) { b.disabled = true; b.draggable = false; b.style.opacity = '.5'; b.title = 'Not needed'; } });
+    await sleep(Q.reduced ? 0 : 400);
+    $('#s1me').hidden = false;
+    await sleep(Q.reduced ? 0 : 900);
+    $('#s1ok').hidden = false;
+    $('#s1tip').style.display = 'block';
+    if (quizShown) return; quizShown = true;
+    await sleep(Q.reduced ? 0 : 500);
+    Q.quiz($('#s1quiz'), {
+      q: 'Why write your assumptions on the board before doing any math?',
+      options: ['So you both can check the math against them later', 'Because interviewers grade how neat the board is', 'So you never need to ask a clarifying question'],
+      correct: 0,
+      good: 'The assumptions are the shared ground truth. If the interviewer disagrees with one ("make it 3 tweets a day"), you change that one number and redo the chain, instead of arguing about the final answer.',
+      bad: 'Written assumptions are what you and the interviewer check against. If one looks wrong, you fix that one number and rerun the chain. They also prompt questions, not replace them.',
+      onDone: () => setTimeout(() => Q.clearStage(1), 900),
+    });
+  }
+});
+
+/* ================= STAGE 2: crunch the QPS ================= */
+Q.onStage(2, () => {
+  const mount = $('#qpsChain');
+  const v = {};
+  let quizShown = false;
+  const r1 = calcRow(mount, {
+    step: 'Step 1 · daily active users', fx: 'DAU = 300 million MAU × 50% = ?', unit: 'million', placeholder: 'e.g. 120',
+    check: raw => {
+      let n = parseCount(raw); if (n < 1e5) n *= 1e6;
+      if (Math.abs(n - 150e6) / 150e6 < .02) return { ok: true, val: n, msg: '150 million people use it on a given day.' };
+      if (Math.abs(n - 300e6) / 300e6 < .02) return { msg: 'That’s still the monthly number. Only half of them show up each day.' };
+      return { msg: 'Not quite. Take 50% (half) of 300 million.' };
+    },
+    onOk: n => { v.dau = n; r2.setFx(`Tweets per day = <b>${fmtCount(n)}</b> DAU × 2 tweets = ?`); r2.enable(); r2.focus(); },
+  });
+  const r2 = calcRow(mount, {
+    step: 'Step 2 · tweets per day', fx: 'Tweets per day = DAU × 2 tweets = ?', unit: 'million', placeholder: 'e.g. 450', disabled: true,
+    check: raw => {
+      let n = parseCount(raw); if (n < 1e5) n *= 1e6;
+      if (Math.abs(n - 300e6) / 300e6 < .02) return { ok: true, val: n, msg: '300 million new tweets a day.' };
+      return { msg: 'Each of the 150 million daily users posts 2 tweets. Multiply.' };
+    },
+    onOk: n => { v.tpd = n; r3.setFx(`Write QPS = <b>${fmtCount(n)}</b> tweets ÷ 86,400 seconds = ?`); r3.enable(); r3.focus(); },
+  });
+  const r3 = calcRow(mount, {
+    step: 'Step 3 · tweets per second', fx: 'Write QPS = tweets per day ÷ 86,400 seconds = ?', unit: 'tweets/s', placeholder: 'e.g. 5,000', disabled: true, xp: 15,
+    check: raw => {
+      const n = parseCount(raw);
+      if (n >= 3000 && n <= 4000) {
+        let chip = '';
+        if (Math.abs(n - 3472.2) < 2 || n % 100 !== 0) chip = `<br><span class="pchip">🎯 Say “about 3,500”. Precision isn’t expected; the book rounds too.</span>`;
+        else if (n === 3000) chip = `<br><span class="pchip">⚡ That’s the 10⁵ shortcut. Same order of magnitude. The exact figure is 3,472, so say “about 3,500”.</span>`;
+        return { ok: true, val: n, msg: `300,000,000 ÷ 86,400 ≈ 3,472, so about <b>3,500 tweets per second</b>.${chip}` };
+      }
+      if ((n >= 3e4 && n <= 4e4) || (n >= 3e5 && n <= 4e5) || (n >= 300 && n <= 400)) return { soft: true, msg: 'Right digits, wrong size. Check the zeros: a day has 86,400 seconds (open the tool below).' };
+      return { msg: 'Divide 300 million by 86,400 (about 100,000). You should land in the low thousands.' };
+    },
+    onOk: n => { v.qps = n; r4.setFx(`Peak QPS = <b>${fmtInt(n)}</b> × 2 = ?`); r4.enable(); r4.focus(); },
+  });
+  const r4 = calcRow(mount, {
+    step: 'Step 4 · peak', fx: 'Peak QPS = write QPS × 2 = ?', unit: 'tweets/s', placeholder: 'e.g. 9,000', disabled: true,
+    check: raw => {
+      const n = parseCount(raw);
+      if ((n >= 6000 && n <= 8000) || (v.qps && Math.abs(n - 2 * v.qps) / (2 * v.qps) < .03)) return { ok: true, val: n, msg: `About <b>7,000 tweets per second</b> at peak.` };
+      return { msg: 'The book’s rule of thumb: peak is twice the average. Double your answer from step 3.' };
+    },
+    onOk: () => done(),
+  });
+
+  /* day chart */
+  const svg = $('#dayChart');
+  const X0 = 46, X1 = 348, Y0 = 150, Y1 = 14, YMAX = 8000;
+  const xh = h => X0 + (X1 - X0) * h / 24, yq = q => Y0 - (Y0 - Y1) * q / YMAX;
+  // a made-up daily shape: evening hump + a short spike, scaled so the mean is exactly 3,472/s
+  const base = h => 1 + .5 * Math.cos(2 * Math.PI * (h - 20) / 24);
+  const spike = h => Math.exp(-(((h - 21) / .5) ** 2));
+  const step = .05, hs = []; for (let h = 0; h <= 24 + 1e-9; h += step) hs.push(+h.toFixed(2));
+  const mb = 1, mg = .5 * Math.sqrt(Math.PI) / 24, b21 = base(21);
+  const A = (2 * mb - b21) / (1 - 2 * mg);
+  const raw = hs.map(h => base(h) + A * spike(h));
+  const mean = raw.slice(0, -1).reduce((s, x) => s + x, 0) / (raw.length - 1);
+  const AVG = 300e6 / 86400;
+  const vals = raw.map(x => x / mean * AVG);
+  const PEAK = Math.max(...vals);
+  function drawChart() {
+    svg.innerHTML = '';
+    [0, 2000, 4000, 6000, 8000].forEach(q => { S('line', { class: 'axis', x1: X0, x2: X1, y1: yq(q), y2: yq(q), opacity: q ? .5 : 1 }, svg); S('text', { x: X0 - 6, y: yq(q) + 4, 'text-anchor': 'end' }, svg).textContent = q ? (q / 1000) + 'k' : '0'; });
+    [0, 6, 12, 18, 24].forEach(h => { S('text', { x: xh(h), y: Y0 + 16, 'text-anchor': 'middle' }, svg).textContent = String(h).padStart(2, '0') + ':00'; });
+    S('path', { class: 'area', id: 'dayArea', d: '' }, svg);
+    S('path', { class: 'curve', id: 'dayCurve', d: '' }, svg);
+    S('line', { class: 'avg', x1: X0, x2: X1, y1: yq(AVG), y2: yq(AVG) }, svg);
+    S('text', { class: 'avgl', x: X0 + 4, y: yq(AVG) - 5 }, svg).textContent = `average ≈ ${fmtInt(Math.round(AVG / 100) * 100)}/s`;
+    S('line', { class: 'pk', x1: X0, x2: X1, y1: yq(PEAK), y2: yq(PEAK) }, svg);
+    S('text', { class: 'pkl', x: X0 + 4, y: yq(PEAK) - 5 }, svg).textContent = `plan for peak ≈ ${fmtInt(Math.round(PEAK / 100) * 100)}/s (2×)`;
+    S('line', { class: 'cursor', id: 'dayCur', x1: X0, x2: X0, y1: Y1, y2: Y0, opacity: 0 }, svg);
+    S('circle', { class: 'dotc', id: 'dayDot', r: 4, cx: X0, cy: Y0, opacity: 0 }, svg);
+  }
+  function drawTo(p) {
+    const n = Math.max(2, Math.round(p * (hs.length - 1)) + 1);
+    const pts = hs.slice(0, n).map((h, i) => `${xh(h).toFixed(1)},${yq(vals[i]).toFixed(1)}`);
+    $('#dayCurve').setAttribute('d', 'M' + pts.join('L'));
+    $('#dayArea').setAttribute('d', `M${X0},${Y0}L${pts.join('L')}L${xh(hs[n - 1]).toFixed(1)},${Y0}Z`);
+    const i = n - 1, h = hs[i];
+    $('#dayCur').setAttribute('x1', xh(h)); $('#dayCur').setAttribute('x2', xh(h)); $('#dayCur').setAttribute('opacity', p < 1 ? 1 : 0);
+    $('#dayDot').setAttribute('cx', xh(h)); $('#dayDot').setAttribute('cy', yq(vals[i])); $('#dayDot').setAttribute('opacity', p < 1 ? 1 : 0);
+    const jitter = p < 1 ? 1 + (Math.random() - .5) * .04 : 1;
+    const shown = p < 1 ? vals[i] * jitter : AVG;
+    $('#meter').innerHTML = `${fmtInt(shown)}<small>tweets/s</small>`;
+    const hh = Math.floor(h) % 24, mm = Math.floor((h % 1) * 60);
+    $('#meterAt').textContent = p < 1 ? `at ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}` : `day average · peak ${fmtInt(PEAK)}/s`;
+  }
+  let playing = false;
+  async function playDay() {
+    if (playing) return; playing = true; $('#playDay').disabled = true;
+    await anim(6000, drawTo);
+    playing = false; $('#playDay').disabled = false; $('#playDay').textContent = '↻ Replay the day';
+  }
+  $('#playDay').onclick = playDay;
+  drawChart(); drawTo(1);
+
+  function done() {
+    $('#daySim').style.display = 'block'; $('#peakNote').style.display = 'block';
+    playDay();
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => Q.quiz($('#s2quiz'), {
+      q: 'Why estimate peak QPS instead of stopping at the average?',
+      options: ['Servers must survive the busiest moments', 'Peak QPS is what sets the storage size', 'Average is always exactly half the peak'],
+      correct: 0,
+      good: 'Capacity is sized for the worst minute, not the typical one. If you build for 3,500/s, the evening rush at 7,000/s falls over.',
+      bad: 'Storage depends on how many bytes arrive per day, not how bursty they are. And “exactly half” is just the book’s simplifying assumption. The reason is capacity: servers must survive the busiest moments.',
+      onDone: () => setTimeout(() => Q.clearStage(2), 900),
+    }), Q.reduced ? 100 : 800);
+  }
+});
+
+/* ================= STAGE 3: weigh the storage ================= */
+Q.onStage(3, () => {
+  const TEXT = 300e6 * 204, MEDIA = 150e6 * 2 * .1 * 1e6, FIVE = MEDIA * 365 * 5;
+  let quizShown = false;
+  /* predict */
+  const box = $('#s3predict');
+  box.innerHTML = `<div class="step">Predict first</div><h3>Over one day, which takes more disk space: all the tweet text, or all the media?</h3><div class="opts"></div><div class="explain"></div>`;
+  const opts = $('.opts', box);
+  const P = ['Text: every tweet has some', 'Media: each file is ~1 MB', 'Roughly equal amounts'];
+  shuffle(P.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+    const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+    b.onclick = () => {
+      $$('.opt', opts).forEach(x => x.disabled = true);
+      const ok = i === 1;
+      b.classList.add(ok ? 'right' : 'wrong'); if (!ok) $('.opt[data-i="1"]', opts).classList.add('right');
+      const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+      ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + 'Only 1 tweet in 10 has media, but each media file is about 5,000× bigger than the text. Media wins by a mile. Check it yourself below.';
+      ok ? Q.addXP(15, b) : Q.loseHeart(b);
+      $('#s3work').style.display = 'block';
+    };
+    opts.appendChild(b);
+  });
+
+  /* stacks */
+  const svg = $('#stacks');
+  const GY = 205, H = 170, XT = 95, XM = 265, W = 92;
+  function drawStacks(textOn, mediaP) {
+    svg.innerHTML = '';
+    S('line', { class: 'ground', x1: 20, x2: 340, y1: GY, y2: GY }, svg);
+    S('text', { class: 'lab', x: XT, y: GY + 20 }, svg).textContent = '📝 Text, one day';
+    S('text', { class: 'lab', x: XM, y: GY + 20 }, svg).textContent = '🖼️ Media, one day';
+    // media pile: 30 disks, each = 1 TB
+    const nDisks = Math.round(30 * mediaP), dh = H / 30;
+    for (let i = 0; i < nDisks; i++) { const r = S('rect', { class: 'disk', x: XM - W / 2, y: GY - (i + 1) * dh, width: W, height: dh, rx: 3 }, svg); r.style.fill = 'var(--media)'; r.style.opacity = .55 + .45 * ((i % 2) ? 1 : .8); }
+    S('text', { class: 'val', x: XM, y: GY - nDisks * dh - 8 }, svg).textContent = mediaP ? fmtBytes(MEDIA * mediaP) : '? TB';
+    // text pile: drawn to the same scale = a sliver
+    if (textOn) {
+      const th = Math.max(1, H * TEXT / MEDIA);
+      const r = S('rect', { class: 'disk', x: XT - W / 2, y: GY - th, width: W, height: th }, svg); r.style.fill = 'var(--text)';
+      // magnifier
+      S('line', { class: 'magh', x1: XT + 22, y1: GY - 62, x2: XT + 8, y2: GY - 14 }, svg);
+      S('circle', { class: 'mag', cx: XT + 30, cy: GY - 92, r: 34 }, svg);
+      const z = S('rect', { x: XT + 6, y: GY - 98, width: 48, height: 14, rx: 2 }, svg); z.style.fill = 'var(--text)';
+      S('text', { class: 'mtx', x: XT + 30, y: GY - 108 }, svg).textContent = '×500 zoom';
+      S('text', { class: 'mtx', x: XT + 30, y: GY - 70 }, svg).textContent = fmtBytes(TEXT);
+    } else {
+      S('text', { class: 'val', x: XT, y: GY - 8 }, svg).textContent = '? GB';
+    }
+  }
+  let textOn = false, mediaP = 0;
+  drawStacks(false, 0);
+
+  const day = $('#dayChain');
+  calcRow(day, {
+    step: 'Text per day', fx: '300 million tweets × (64 + 140) bytes = ?', unit: 'GB', placeholder: 'e.g. 12',
+    check: raw => {
+      const { bytes } = parseBytes(raw, 'GB');
+      if (bytes >= 55e9 && bytes <= 66e9) return { ok: true, val: bytes, msg: `300 million × 204 bytes ≈ <b>61 GB</b> a day.` };
+      if (unitSlip(bytes, TEXT)) return { soft: true, msg: 'Right digits, wrong unit. 300 million × 204 bytes is about 61 billion bytes. How many GB is a billion bytes?' };
+      return { msg: '204 bytes per tweet × 300 million tweets. Tip: 300 million × 200 = 60 billion bytes.' };
+    },
+    onOk: () => { textOn = true; drawStacks(textOn, mediaP); logTo('s3log', '📝 text: 300 million × 204 bytes ≈ 61 GB'); after(); },
+  });
+  calcRow(day, {
+    step: 'Media per day', fx: '150 million DAU × 2 tweets × 10% × 1 MB = ?', unit: 'TB', placeholder: 'e.g. 4', xp: 15,
+    check: raw => {
+      const { bytes } = parseBytes(raw, 'TB');
+      if (bytes >= 28e12 && bytes <= 32e12) return { ok: true, val: bytes, msg: `30 million media files × 1 MB = <b>30 TB</b> a day.` };
+      if (unitSlip(bytes, MEDIA)) { $('#unitTip').style.display = 'block'; return { soft: true, msg: 'Right digits, wrong unit. 30 million files × 1 MB = 30 million MB. Count the zeros up to TB.' }; }
+      return { msg: '150 million × 2 = 300 million tweets. 10% of those = 30 million have media. Each is 1 MB.' };
+    },
+    onOk: async () => {
+      logTo('s3log', '🖼️ media: 30 million files × 1 MB = 30 TB');
+      await anim(1200, p => { mediaP = p; drawStacks(textOn, p); });
+      after();
+    },
+  });
+  function after() {
+    if (!textOn || mediaP < 1) return;
+    $('#unitTip').style.display = 'block';
+    logTo('s3log', `→ media is about ${Math.round(MEDIA / TEXT)}× the text. That’s why the book only counts media.`, 'g');
+    $('#s3years').style.display = 'block';
+  }
+
+  /* year grid: 5 years × 365 days, 73 columns × 5 rows per year */
+  const yg = $('#yearGrid'), CW = 4.4, GAP = .5, cells = [];
+  for (let y = 0; y < 5; y++) {
+    S('text', { x: 2, y: 10 + y * 28 + 13 }, yg).textContent = 'yr ' + (y + 1);
+    for (let d = 0; d < 365; d++) { const c = d % 73, r = Math.floor(d / 73); cells.push(S('rect', { x: 36 + c * (CW + GAP), y: 8 + y * 28 + r * (CW + GAP), width: CW, height: CW, rx: .8 }, yg)); }
+  }
+  calcRow($('#yearChain'), {
+    step: 'Five years of media', fx: '30 TB × 365 days × 5 years = ?', unit: 'PB', placeholder: 'e.g. 9', xp: 15,
+    check: raw => {
+      const { bytes } = parseBytes(raw, 'PB');
+      if (bytes >= 50e15 && bytes <= 60e15) return { ok: true, val: bytes, msg: `30 × 1,825 = 54,750 TB, which is about <b>55 PB</b>.` };
+      if (unitSlip(bytes, FIVE)) return { soft: true, msg: 'Right digits, wrong unit. 54,750 TB: how many PB is that? (1 PB = 1,000 TB)' };
+      return { msg: '365 × 5 = 1,825 days. 30 TB × 1,825 ≈ 55,000 TB. Then convert TB to PB.' };
+    },
+    onOk: async () => {
+      const chunk = 25;
+      for (let i = 0; i < cells.length; i += chunk) {
+        for (let j = i; j < Math.min(cells.length, i + chunk); j++) cells[j].classList.add('on');
+        if (!Q.reduced) await sleep(16);
+      }
+      if (quizShown) return; quizShown = true;
+      setTimeout(() => Q.quiz($('#s3quiz'), {
+        q: 'The book’s five-year estimate for media storage is about…',
+        options: ['55 PB', '55 TB', '5.5 EB'],
+        correct: 0,
+        good: '30 TB a day × 365 × 5 ≈ 54,750 TB ≈ <b>55 PB</b>. Bonus (not in the book): 30 TB a day is about 350 MB of new media every second, roughly 2.8 Gbps of upload bandwidth.',
+        bad: '30 TB × 365 × 5 ≈ 54,750 TB. A thousand TB is a PB, so that’s about <b>55 PB</b>. 55 TB is under two days of media; 5.5 EB is 100× too much.',
+        onDone: () => setTimeout(() => Q.clearStage(3), 900),
+      }), Q.reduced ? 100 : 500);
+    },
+  });
+
+  /* zero-tally converter */
+  function conv() {
+    const v = parseFloat(String($('#convIn').value).replace(/,/g, '')), u = $('#convU').value;
+    if (!isFinite(v)) { $('#convOut').textContent = 'type a number'; return; }
+    const b = v * BYTE_U[u.toLowerCase()];
+    $('#convOut').textContent = ['GB', 'TB', 'PB'].map(x => `${(b / BYTE_U[x.toLowerCase()]).toLocaleString('en-US', { maximumFractionDigits: 3 })} ${x}`).join(' = ');
+  }
+  $('#convIn').addEventListener('input', conv); $('#convU').addEventListener('change', conv); conv();
+});
+
+/* ================= STAGE 4: turn the knobs ================= */
+Q.onStage(4, () => {
+  const SIZES = [100e3, 200e3, 500e3, 1e6, 2e6, 5e6, 10e6];
+  const KN = [
+    { k: 'mau', label: 'Monthly active users', min: 100e6, max: 1e9, step: 50e6, def: 300e6, f: fmtCount },
+    { k: 'daily', label: 'Daily share of users', min: 10, max: 100, step: 5, def: 50, f: v => v + '%' },
+    { k: 'tpd', label: 'Tweets per user per day', min: .5, max: 10, step: .5, def: 2, f: v => String(v) },
+    { k: 'mpct', label: 'Tweets with media', min: 0, max: 50, step: 1, def: 10, f: v => v + '%' },
+    { k: 'msize', label: 'Average media size', min: 0, max: SIZES.length - 1, step: 1, def: 3, f: i => fmtBytes(SIZES[i]) },
+    { k: 'years', label: 'Keep data for', min: 1, max: 10, step: 1, def: 5, f: v => v + (v === 1 ? ' year' : ' years') },
+    { k: 'repl', label: 'Copies of each file (replication)', min: 1, max: 5, step: 1, def: 1, f: v => '×' + v },
+    { k: 'peak', label: 'Peak multiplier', min: 1, max: 10, step: .5, def: 2, f: v => '×' + v },
+  ];
+  const st = {}; KN.forEach(k => st[k.k] = k.def);
+  const goals = new Set();
+  let quizShown = false;
+  function calc(s) {
+    const dau = s.mau * s.daily / 100, tweets = dau * s.tpd, qps = tweets / 86400, peak = qps * s.peak;
+    const mday = tweets * s.mpct / 100 * SIZES[s.msize], total = mday * 365 * s.years * s.repl;
+    return { dau, qps, peak, mday, total };
+  }
+  const BASE = calc(Object.fromEntries(KN.map(k => [k.k, k.def])));
+  const OUTS = [
+    { k: 'dau', label: 'Daily active users', f: fmtCount },
+    { k: 'qps', label: 'Write QPS (tweets/s)', f: v => fmtInt(v) },
+    { k: 'peak', label: 'Peak QPS', f: v => fmtInt(v) },
+    { k: 'mday', label: 'Media storage per day', f: fmtBytes },
+    { k: 'total', label: 'Total storage (years × copies)', f: fmtBytes, big: true },
+  ];
+  $('#knobs').innerHTML = KN.map(k => `<div class="knob" data-k="${k.k}"><label for="kn-${k.k}"><span>${k.label}</span><span class="kv"></span></label><input type="range" id="kn-${k.k}" min="${k.min}" max="${k.max}" step="${k.step}" value="${k.def}"></div>`).join('');
+  $('#outs').innerHTML = OUTS.map(o => `<div class="out${o.big ? ' big' : ''}" data-o="${o.k}"><span class="k">${o.label}</span><span class="v"></span><span class="r"></span></div>`).join('');
+  let last = calc(st);
+  const same = (a, b) => Math.abs(a - b) <= Math.abs(b) * 1e-9;
+  function ratioTxt(r) {
+    if (Math.abs(r - 1) < 1e-9) return '×1';
+    if (r >= 1) return '×' + (Math.round(r * 100) / 100);
+    const inv = 1 / r; return Math.abs(inv - Math.round(inv)) < .02 ? '÷' + Math.round(inv) : '×' + (Math.round(r * 100) / 100);
+  }
+  function render(changedOuts) {
+    KN.forEach(k => { const el = $(`.knob[data-k="${k.k}"]`); $('.kv', el).textContent = k.f(st[k.k]); el.classList.toggle('moved', st[k.k] !== k.def); });
+    const c = calc(st);
+    OUTS.forEach(o => {
+      const el = $(`.out[data-o="${o.k}"]`), r = c[o.k] / BASE[o.k];
+      $('.v', el).textContent = o.f(c[o.k]);
+      const rt = $('.r', el); rt.textContent = ratioTxt(r) + ' book';
+      rt.className = 'r' + (Math.abs(r - 1) < 1e-9 ? '' : r > 1 ? ' up' : ' dn');
+      if (changedOuts && changedOuts.has(o.k) && !Q.reduced) { el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
+    });
+    return c;
+  }
+  function onMove(k, val) {
+    st[k] = val;
+    const prev = last, c = calc(st), changed = new Set(OUTS.map(o => o.k).filter(o => !same(c[o], prev[o])));
+    render(changed);
+    last = c;
+    const kn = KN.find(x => x.k === k);
+    const moved = OUTS.filter(o => changed.has(o.k)).map(o => o.label.toLowerCase().replace(/ \(.*\)/, ''));
+    $('#calcMsg').textContent = moved.length ? `${kn.label} → moves: ${moved.join(', ')}.` : `${kn.label}: nothing moved.`;
+    // goal 1: ~165 PB without touching users
+    if (st.mau === 300e6 && st.daily === 50 && c.total >= 150e15 && c.total <= 180e15 && !goals.has('rep')) {
+      checkGoal('#s4goals', 'rep', goals, 15);
+      $('#calcMsg').innerHTML = st.repl === 3
+        ? '✓ 3 copies × 55 PB ≈ 165 PB. Replication is exactly why real storage bills are ~3× the napkin number.'
+        : `✓ That works on paper (${kn.label.toLowerCase()}). In real life the usual reason for 3× is <b>replication</b>: try that slider too.`;
+      $('#s4senior').style.display = 'block';
+    }
+    // goal 2: exactly one slider off its default, write QPS ×2
+    const off = KN.filter(x => st[x.k] !== x.def);
+    if (off.length === 1 && Math.abs(c.qps / BASE.qps - 2) < .1 && !goals.has('dbl')) {
+      checkGoal('#s4goals', 'dbl', goals, 15);
+      $('#calcMsg').textContent = `✓ ${off[0].label} alone doubled write QPS: ${fmtInt(c.qps)}/s. QPS scales linearly with each factor in its formula.`;
+    }
+    // goal 3: a knob that moved peak QPS but left storage alone
+    if (changed.has('peak') && !changed.has('total') && !changed.has('mday') && !goals.has('peak')) {
+      checkGoal('#s4goals', 'peak', goals, 15);
+      $('#calcMsg').textContent = '✓ The peak multiplier changes how many servers you need at the busiest minute. It doesn’t add a single byte: the same tweets arrive, just bunched up.';
+    }
+    if (goals.size === 3 && !quizShown) {
+      quizShown = true;
+      $('#s4senior').style.display = 'block';
+      setTimeout(() => Q.quiz($('#s4quiz'), {
+        q: 'The interviewer says: “Store 3 copies of every file.” Your five-year number becomes…',
+        options: ['About 165 PB', 'About 55 PB', 'About 18 PB'],
+        correct: 0,
+        good: 'Replication multiplies storage by the number of copies: 3 × 55 PB ≈ 165 PB. It doesn’t change QPS from users, though each write now goes to 3 places.',
+        bad: 'Copies aren’t free: every one takes the same disk space. 3 copies × 55 PB ≈ <b>165 PB</b>.',
+        onDone: () => setTimeout(() => Q.clearStage(4), 900),
+      }), Q.reduced ? 100 : 600);
+    }
+  }
+  KN.forEach(k => $(`#kn-${k.k}`).addEventListener('input', e => onMove(k.k, +e.target.value)));
+  $('#calcReset').onclick = () => {
+    KN.forEach(k => { st[k.k] = k.def; $(`#kn-${k.k}`).value = k.def; });
+    last = calc(st); render(null);
+    $('#calcMsg').textContent = 'Back to the book’s numbers.';
+  };
+  render(null);
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss'), {
+  name: '🐉 What-If Wyvern',
+  xp: 15,
+  choices: [
+    { k: 'x2', label: '×2', sub: 'doubles' },
+    { k: 'x10', label: '×10', sub: 'ten times' },
+    { k: 'half', label: '÷2', sub: 'halves' },
+    { k: 'same', label: 'No change', sub: 'unchanged' },
+  ],
+  scenarios: [
+    { e: '👥', t: 'DAU doubles. Write QPS?', d: 'Twice as many people show up each day. Everything else stays at the book’s values.', a: 'x2',
+      why: 'QPS = <mark class="hl">DAU</mark> × 2 tweets ÷ 86,400. DAU is a factor, so QPS doubles: ~3,500 → ~7,000 tweets/s.' },
+    { e: '✍️', t: 'Tweet text grows from 140 to 280 characters. Daily media storage?', d: 'Longer tweets, same photos and videos.', a: 'same',
+      why: 'Media/day = DAU × 2 × 10% × 1 MB. Text size isn’t in that formula, so it stays 30 TB. (Text storage grows from about 61 GB to about 100 GB a day. Still tiny.)' },
+    { e: '😴', t: 'Users post 1 tweet a day instead of 2. Peak QPS?', d: 'Same users, half the posting.', a: 'half',
+      why: 'Peak = DAU × <mark class="hl">tweets per user</mark> ÷ 86,400 × 2. Tweets per user halves, so peak halves: ~7,000 → ~3,500 tweets/s.' },
+    { e: '📸', t: 'Media share goes from 10% to 20%. Daily media storage?', d: 'Twice as many tweets carry a photo or video.', a: 'x2',
+      why: 'Media/day = DAU × 2 × <mark class="hl">media share</mark> × 1 MB. 10% → 20% doubles it: 30 TB → 60 TB a day.' },
+    { e: '⚡', t: 'Peak multiplier goes from 2× to 4×. Five-year storage?', d: 'You plan for spikier traffic.', a: 'same',
+      why: 'Total = media/day × 365 × 5. The peak factor isn’t in it. Spikes bunch the same tweets into busier minutes. They don’t add bytes. Still ~55 PB.' },
+    { e: '🌍', t: 'MAU grows from 300 million to 3 billion, same daily %. Daily media storage?', d: 'Ten times the monthly users.', a: 'x10',
+      why: 'DAU = <mark class="hl">MAU</mark> × 50%, and media/day = DAU × 2 × 10% × 1 MB. MAU ×10 → DAU ×10 → 300 TB a day.' },
+    { e: '🗄️', t: 'Retention goes from 5 to 10 years. Total media storage?', d: 'Legal wants a decade of history.', a: 'x2',
+      why: 'Total = 30 TB × 365 × <mark class="hl">years</mark>. 5 → 10 doubles it: ~55 PB → ~110 PB. Daily storage doesn’t change at all.' },
+  ],
+  outro: 'The pattern: find the formula, check whether the changed factor is in it. If it is, the answer moves by the same ratio. If it isn’t, it doesn’t move.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: interview drill ================= */
+Q.onStage(6, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"Walk me through estimating Twitter’s QPS and storage."</i>',
+  placeholder: 'First, my assumptions: …',
+  model: '"Assumptions first: 300 million monthly users, half of them active daily, 2 tweets per user per day, 10% of tweets with media at about 1 MB, and we keep data for 5 years. That gives 150 million daily users and 300 million tweets a day. Divide by 86,400 seconds and it\'s about 3,500 tweets per second. I\'ll plan for a 2× peak, so about 7,000. For storage, media dominates: 150 million × 2 × 10% × 1 MB is 30 TB a day, and 30 TB × 365 × 5 is about 55 PB. Text is only about 60 GB a day, so I\'ll ignore it. With 3 copies for replication that\'s about 165 PB. Reads will be much higher than writes, so next I\'d estimate read QPS and a cache."',
+  checks: ['I stated my assumptions first', 'I got ~3,500 QPS and ~7,000 peak', 'I got 30 TB a day and ~55 PB over 5 years', 'I mentioned something the book leaves out (replication, reads, or growth)'],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

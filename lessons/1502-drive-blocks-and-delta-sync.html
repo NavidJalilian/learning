@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Chop It Into Blocks</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: architecture board (stage 1), pipeline + compression meter (stage 2), block strips (stage 3) */
+:root { --ice: #2f7fd8; --ice-soft: #e2eefc; --on-blk: #ffffff; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --ice: #5aa9ff; --ice-soft: #142742; --on-blk: #0e0f1d; }
+}
+:root[data-theme="dark"] { --ice: #5aa9ff; --ice-soft: #142742; --on-blk: #0e0f1d; }
+
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.bignum { font-family: var(--mono); font-weight: 700; }
+.bignum.bad { color: var(--bad); }
+.bignum.good { color: var(--good); }
+
+/* ---------- stage 1: architecture board ---------- */
+.board { padding: 12px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 8px; max-width: 720px; margin: 0 auto; }
+.ubox { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 10px; border-radius: 14px; background: var(--accent-soft); font-weight: 700; text-align: center; }
+.ubox small { display: block; font-weight: 500; color: var(--muted); font-size: 12px; }
+.lane { display: flex; flex-direction: column; min-width: 0; }
+.lane-h { text-align: center; font: 600 11px var(--mono); color: var(--muted); padding-bottom: 6px; min-height: 30px; display: flex; flex-direction: column; justify-content: flex-end; }
+.lane-h .ar { font-size: 16px; line-height: 1; color: var(--accent); }
+.lane-name { display: none; text-align: center; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--good); margin-top: 8px; }
+.board.done .lane-name { display: block; animation: rise .4s; }
+.conn { text-align: center; color: var(--muted); font-size: 11px; line-height: 1.1; padding: 3px 0; min-height: 22px; }
+.conn b { display: block; color: var(--accent); font-size: 15px; }
+.slot { min-height: 76px; border: 2px dashed var(--line); border-radius: 12px; background: var(--panel); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 6px 4px; font-size: 12px; line-height: 1.25; transition: border-color .2s, background .2s, transform .15s; width: 100%; }
+.slot .q { font: 700 16px var(--mono); color: var(--muted); }
+.slot .clue { color: var(--muted); font-size: 11.5px; overflow-wrap: anywhere; }
+.slot .ic { font-size: 20px; line-height: 1.1; }
+.slot .nm { font-weight: 700; font-size: 12.5px; overflow-wrap: anywhere; }
+.board.armed .slot:not(.filled) { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.slot.over { border-color: var(--accent) !important; background: var(--accent-soft); transform: scale(1.03); }
+.slot.filled { border-style: solid; border-color: var(--good); background: var(--good-soft); cursor: default; animation: snap .45s; }
+.slot.bounce { animation: shake .4s; border-color: var(--bad) !important; background: var(--bad-soft); }
+@keyframes snap { 0% { transform: scale(.9); box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 60%, transparent); } 60% { transform: scale(1.04); box-shadow: 0 0 0 8px transparent; } }
+.tray { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+.tile { display: inline-flex; align-items: center; gap: 6px; min-height: 42px; padding: 8px 12px; border-radius: 12px; border: 2px solid var(--line); background: var(--bg); font-weight: 600; font-size: 14px; touch-action: none; user-select: none; -webkit-user-select: none; }
+.tile:hover { border-color: var(--accent); }
+.tile.sel { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 3px 0 color-mix(in srgb, var(--accent) 40%, transparent); }
+.tile.ghost { position: fixed; z-index: 70; pointer-events: none; opacity: .92; box-shadow: var(--shadow); transform: translate(-50%, -60%) rotate(-3deg); }
+.tile.dragging { opacity: .35; }
+.tinfo { padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); font-size: 14px; min-height: 44px; }
+.tinfo.bad { color: var(--bad); }
+.tinfo.good { color: var(--good); }
+
+/* ---------- stage 2: pipeline order + compression meter ---------- */
+.pool { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.pool .opt { min-height: 44px; }
+.pipe { list-style: none; padding: 0; margin: 10px 0 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; counter-reset: p; }
+@media (max-width: 560px) { .pipe { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.pipe li { position: relative; border: 2px dashed var(--line); border-radius: 12px; min-height: 64px; padding: 8px; font-size: 13.5px; font-weight: 600; display: flex; flex-direction: column; justify-content: center; text-align: center; }
+.pipe li::before { counter-increment: p; content: counter(p); font: 700 11px var(--mono); color: var(--muted); }
+.pipe li.on { border-style: solid; border-color: var(--good); background: var(--good-soft); animation: snap .45s; }
+.code { background: var(--code-bg); color: var(--code-ink); border-radius: 14px; padding: 8px; font-family: var(--mono); font-size: 13px; margin-top: 12px; overflow-x: auto; }
+.cl { display: flex; width: 100%; text-align: left; background: none; border: 1px solid transparent; color: inherit; font: inherit; padding: 6px 8px; border-radius: 8px; min-height: 40px; align-items: center; white-space: pre; }
+.cl .ln { color: #6d7299; width: 2.2em; flex: none; }
+.cl:not([disabled]):hover { border-color: #8f82ff; background: rgba(143,130,255,.12); }
+.cl[disabled] { cursor: default; }
+.cl.bugline { background: rgba(255,109,106,.18); border-color: #ff6d6a; }
+.cl.okline { background: rgba(67,217,138,.15); border-color: #43d98a; }
+.cl .kw { color: #c7a6ff; } .cl .fn { color: #7fd6ff; } .cl .cm { color: #8a8fb5; } .cl .nu { color: #ffcf7a; }
+.meter { padding: 14px; display: grid; gap: 12px; }
+.mrow { display: grid; grid-template-columns: 1fr; gap: 4px; font-size: 14px; }
+.mrow .lab { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-weight: 600; }
+.mtrack { height: 22px; border-radius: 7px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; }
+.mfill { height: 100%; width: 100%; border-radius: 6px; transition: width 1.6s cubic-bezier(.2,.8,.2,1); }
+.mrow.good .mfill { background: linear-gradient(90deg, var(--good), var(--teal)); }
+.mrow.bug .mfill { background: linear-gradient(90deg, var(--warn), var(--bad)); }
+.hide { display: none; }
+
+/* ---------- stage 3: delta sync block strips ---------- */
+.dsim { padding: 12px 12px 14px; }
+.cloudbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border-radius: 14px; background: var(--ice-soft); font-size: 14px; }
+.cloudbar .cl-ic { font-size: 26px; line-height: 1; }
+.cloudbar .stat { font-family: var(--mono); font-weight: 700; }
+.cloudbar.hit { animation: cloudhit .5s; }
+@keyframes cloudhit { 40% { transform: scale(1.03); box-shadow: 0 0 0 4px color-mix(in srgb, var(--ice) 40%, transparent); } }
+.strip-lab { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 12px 0 5px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.strip-lab span:last-child { font-family: var(--mono); letter-spacing: 0; text-transform: none; font-weight: 600; }
+.strip { display: flex; gap: 3px; min-height: 56px; }
+.blk { flex: 1 1 0; min-width: 5px; border-radius: 7px; background: var(--bg-2); border: 2px solid var(--line); display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; padding: 4px 1px; transition: background .3s, border-color .3s, transform .3s; }
+.blk b { font: 700 12px var(--mono); }
+.blk span { font: 600 9.5px var(--mono); color: var(--muted); white-space: nowrap; }
+.blk.srv { background: var(--panel); }
+.blk.dirty { border-color: var(--warn); border-style: dashed; background: var(--warn-soft); }
+.blk.scan { border-color: var(--accent); transform: translateY(-3px); }
+.blk.same { border-color: var(--good); background: var(--good-soft); }
+.blk.diff { border-color: var(--warn); background: var(--warn); }
+.blk.diff b, .blk.diff span { color: var(--on-blk); }
+.blk.up { animation: blkup .7s; }
+@keyframes blkup { 50% { transform: translateY(-14px) scale(1.06); box-shadow: 0 8px 18px rgba(0,0,0,.18); } }
+.blk.newsrv { border-color: var(--ice); background: var(--ice-soft); }
+.blk.blank span { opacity: .5; }
+.r-in { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+.r-in input { width: 92px; min-height: 42px; border-radius: 10px; border: 2px solid var(--line); background: var(--bg); color: var(--ink); font: 700 17px var(--mono); padding: 6px 10px; }
+.modebar { display: none; margin-top: 12px; }
+.modebar.on { display: flex; }
+.seg button { min-height: 36px; }
+.seg button.on { background: var(--accent); color: #fff; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--muted); margin-top: 10px; }
+.legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; margin-right: 5px; vertical-align: -1px; border: 2px solid; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 15.2 · Design Google Drive</div>
+    <h1>Chop It Into Blocks</h1>
+    <p class="lede">In 15.1 you outgrew one server. Now draw the full map, then learn the trick that makes a cloud drive feel instant: never send a whole file when only a slice of it changed.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can sketch the full high-level design (block servers, cloud + cold storage, API servers, metadata DB + cache, notification service, offline backup queue) and explain how splitting files into blocks makes sync fast and cheap with <b>delta sync</b> and <b>compression</b>.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Build the map</h2><div class="sub">Step 2 · the high-level design, drag-to-place</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book's high-level design has ten boxes.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-google-drive" target="_blank" rel="noopener">[1]</a> You already know one: the <b>user</b>, on a browser or a phone app. Your job is to place the other nine.</p>
+      <p>Two words first. <b>Metadata</b> is data <i>about</i> files: name, owner, size, which version is newest. <b>Cloud storage</b> here means Amazon S3, an <i>object store</i>: you put a blob of bytes under a key and get it back by that key, nothing fancier.</p>
+      <p><b>Tap a tile</b> to read its job, then <b>tap the slot</b> where it belongs. You can also drag it. A wrong slot just bounces, no hearts lost here.</p>
+      <div class="sim" id="boardSim">
+        <div class="board" id="board">
+          <div class="ubox"><span style="font-size:26px">👤</span><div>User<small>browser or mobile app</small></div></div>
+          <div class="lane" data-lane="A">
+            <div class="lane-h"><span>file bytes</span><span class="ar">↓</span></div>
+            <button class="slot" data-k="block"></button>
+            <div class="conn"><b>↓</b>blocks</div>
+            <button class="slot" data-k="cloud"></button>
+            <div class="conn"><b>↓</b>inactive</div>
+            <button class="slot" data-k="cold"></button>
+            <div class="lane-name">File content</div>
+          </div>
+          <div class="lane" data-lane="B">
+            <div class="lane-h"><span>requests</span><span class="ar">↓</span></div>
+            <button class="slot" data-k="lb"></button>
+            <div class="conn"><b>↓</b></div>
+            <button class="slot" data-k="api"></button>
+            <div class="conn"><b>↓</b>read</div>
+            <button class="slot" data-k="mcache"></button>
+            <div class="conn"><b>↓</b>on a miss</div>
+            <button class="slot" data-k="mdb"></button>
+            <div class="lane-name">Metadata</div>
+          </div>
+          <div class="lane" data-lane="C">
+            <div class="lane-h"><span class="ar">↑</span><span>alerts</span></div>
+            <button class="slot" data-k="notif"></button>
+            <div class="conn"><b>↓</b>if offline</div>
+            <button class="slot" data-k="queue"></button>
+            <div class="lane-name">Keeping devices in sync</div>
+          </div>
+        </div>
+        <div class="tinfo" id="tinfo">Tap a tile below to read what it does.</div>
+        <div class="tray" id="tray" aria-label="Components to place"></div>
+        <div class="sim-bar"><span>Placed: <span class="bignum" id="placed">0 / 9</span></span><button class="btn" id="boardReset" style="padding:6px 12px;font-size:14px">↻ Reset board</button></div>
+      </div>
+      <div class="callout tip" id="boardNote" style="display:none"><b>Read the map in three lanes.</b> File <i>bytes</i> go left: block servers chop them and park them in S3, and old stuff drifts down to cold storage. Everything <i>about</i> files goes through the middle: load balancer, API servers, then the metadata cache in front of the metadata DB. The right lane keeps your other devices up to date. Two separate paths for bytes and metadata is the big idea of this design.</div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Split, squash, lock, ship</h2><div class="sub">The block-server pipeline, in order</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>When a new file arrives, a block server runs it through four steps.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-google-drive" target="_blank" rel="noopener">[1]</a> It <b>splits</b> the file into blocks of at most 4 MB (the book copies Dropbox's limit). Each block gets a <b>hash</b>: a short fingerprint computed from its bytes, so the same bytes always give the same fingerprint. The hash and the block's position go into the metadata DB. Each block is then <b>compressed</b> (squashed smaller), <b>encrypted</b> (scrambled so only key holders can read it), and <b>uploaded</b> to S3 as its own object.</p>
+      <p>Tap the four steps in the order a block server runs them.</p>
+      <div class="challenge boxed">
+        <div class="step">Tap in order</div>
+        <div class="pool" id="pool"></div>
+        <ol class="pipe" id="pipe"><li></li><li></li><li></li><li></li></ol>
+        <div class="explain" id="orderEx"></div>
+      </div>
+
+      <div id="bugWrap" class="hide">
+        <h3 style="margin:22px 0 6px">🐞 Spot the bug</h3>
+        <p>A teammate wrote their own version. It runs, nothing crashes, and the S3 bill comes in about five times higher than expected. First, run both pipelines on the same log file and watch the sizes.</p>
+        <div class="sim">
+          <div class="meter">
+            <div class="mrow good"><div class="lab"><span>✅ compress → encrypt</span><span class="bignum" id="mGood">40 MB</span></div><div class="mtrack"><div class="mfill" id="fGood"></div></div></div>
+            <div class="mrow bug"><div class="lab"><span>🐞 encrypt → compress (teammate)</span><span class="bignum" id="mBug">40 MB</span></div><div class="mtrack"><div class="mfill" id="fBug"></div></div></div>
+          </div>
+          <div class="sim-bar"><button class="btn primary" id="runMeter">▶ Run both on a 40 MB log</button><span class="small muted" id="meterNote">real gzip, run in your browser</span></div>
+        </div>
+        <p id="lineAsk" class="hide" style="margin-bottom:0"><b>Now tap the line in the teammate's code that runs at the wrong time.</b></p>
+        <div class="code" id="code" role="group" aria-label="Teammate's pipeline code"></div>
+        <div class="explain" id="lineEx"></div>
+        <div id="whyQuiz"></div>
+      </div>
+      <div class="callout" style="margin-top:18px"><b>Not one squasher for everything.</b> The book picks the compression algorithm by file type: gzip or bzip2 for text, and different algorithms for images and video.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-google-drive" target="_blank" rel="noopener">[1]</a> Many photo and video formats are already compressed, so squeezing them again gains almost nothing.</div>
+      <div class="callout warn"><b>Honest detail: what "unique hash" means.</b> The book just says each block has a unique hash value. In practice that's a <i>cryptographic</i> hash such as SHA-256. Dropbox hashes each 4 MB block with SHA-256.<a class="cite" href="https://www.dropbox.com/developers/reference/content-hash" target="_blank" rel="noopener">[5]</a> A weak hash could give two different blocks the same fingerprint, and the system would mix them up.</div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Only send what changed</h2><div class="sub">Delta sync, predict-then-watch</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Big files that change often are the bandwidth killer. Re-upload a whole 40 MB file to fix one typo and you burn the user's data plan. The book's first fix is <b>delta sync</b> ("delta" = the difference): when a file changes, send <b>only the blocks that changed</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-google-drive" target="_blank" rel="noopener">[1]</a> How do you know which ones changed? Hash each block again and compare with the hashes already stored. Same fingerprint means same bytes, so skip it.</p>
+      <p>Below is <code>thesis.docx</code>: 40 MB, so ten 4 MB blocks. <span class="muted small">(Toy scale: it's really 40 KB of text and every KB is drawn as a MB, but the hashes are real and computed live.)</span></p>
+      <div class="sim">
+        <div class="dsim">
+          <div class="cloudbar" id="cloudbar"><span class="cl-ic">☁️</span><span>Sent <span class="stat" id="dSent">0 MB</span></span><span>Saved <span class="stat" id="dSaved">—</span></span></div>
+          <div class="strip-lab"><span>Server's block list (metadata DB)</span><span id="srvMeta"></span></div>
+          <div class="strip" id="stripSrv"></div>
+          <div class="strip-lab"><span>Your laptop's copy</span><span id="locMeta"></span></div>
+          <div class="strip" id="stripLoc"></div>
+          <div class="legend"><span><i style="border-color:var(--warn);background:var(--warn-soft)"></i>edited</span><span><i style="border-color:var(--good);background:var(--good-soft)"></i>hash matches · skip</span><span><i style="border-color:var(--warn);background:var(--warn)"></i>new hash · upload</span></div>
+          <div class="modebar seg" id="modebar" role="group" aria-label="Chunking mode"><button data-m="fixed" class="on">Fixed 4 MB blocks</button><button data-m="cdc">Content-defined</button></div>
+        </div>
+        <div class="simlog" id="dlog"><div>10 blocks, each with a fingerprint. The server has the same list.</div></div>
+      </div>
+      <div class="challenge boxed" id="dbox"></div>
+      <div class="callout warn"><b>Honest caveat: who does the comparing?</b> In the book, block servers do the chunking. But delta sync only saves <i>upload</i> bandwidth if your device itself knows which blocks changed before sending anything. Real Dropbox clients chunk and hash locally, tell the server their list of hashes, and upload only the blocks the server says it's missing.<a class="cite" href="https://dropbox.tech/infrastructure/streaming-file-synchronization" target="_blank" rel="noopener">[3]</a> The book's wrap-up weighs this option too: faster, but the chunking and encryption code then has to live in every client app.</div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Lock it in</h2><div class="sub">Quick recall</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Three fast cards, straight from memory. No scrolling up: recalling is what makes it stick.</p>
+      <div id="r1"></div><div id="r2"></div><div id="r3"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Bandwidth Hog</h2><div class="sub">Interview scenarios</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The Hog eats bandwidth and storage bills. Four interview follow-ups. Pick the fix you'd defend out loud.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">Explain block storage in 45 seconds</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> You've been writing hashes and versions into the "metadata DB" box all quest. What exactly is in it, why must it be strongly consistent, and what happens when two people edit the same file at once? That's Quest 15.3, <i>The Metadata Ledger</i>.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-google-drive" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 15: Design Google Drive</a>: Step 2's high-level design (the component list) and Step 3's "Block servers" section. Then read Dropbox's <a href="https://dropbox.tech/infrastructure/streaming-file-synchronization" target="_blank" rel="noopener">Streaming File Synchronization</a> post to see how a real client uploads only the blocks the server lacks.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <p style="margin-top:0"><b>Fixed blocks are fragile.</b> You saw it in stage 3: insert one byte near the start and every boundary shifts. The rsync algorithm handles this with a <i>rolling</i> checksum that can find matching blocks at any offset.<a class="cite" href="https://rsync.samba.org/tech_report/" target="_blank" rel="noopener">[2]</a> Many backup and dedup tools instead cut blocks where the content says to (content-defined chunking). The book doesn't cover either.</p>
+      <p><b>4 MB is a dial, not a law.</b> It's Dropbox's choice. Bigger blocks mean fewer rows in the metadata DB but coarser deltas (a 1-byte edit re-sends a bigger block). Smaller blocks mean finer deltas but more metadata and more requests.</p>
+      <p style="margin-bottom:0"><b>Where chunking runs is a trade-off.</b> Chunking on the client saves upload bandwidth, but the book's wrap-up points out the cost: the logic must be written for every platform, and encrypting on a device you don't control is harder to trust. Dropbox's 2012 scaling talk is a good look at how this evolved in practice.<a class="cite" href="https://www.youtube.com/watch?v=PE4gwstWhmc" target="_blank" rel="noopener">[4]</a></p>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"if two files share a block, is it stored twice?"</i> (spoiler: Quest 15.5) or <i>"why not let the API servers accept uploads too?"</i>
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 15 "Design Google Drive", Step 2 high-level design and Step 3 block servers (ByteByteGo).</li>
+        <li>Andrew Tridgell &amp; Paul Mackerras, "The rsync algorithm", technical report.</li>
+        <li>Dropbox Tech Blog, "Streaming File Synchronization".</li>
+        <li>Kevin Modzelewski, "How We've Scaled Dropbox", 2012 talk.</li>
+        <li>Dropbox Developers, "Content hash" reference (4 MB blocks, SHA-256).</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '1502',
+  winTitle: 'Blocks forged!',
+  badge: '🧱 Badge: Block Smith',
+  cheatsheet: '../reference/ch15-google-drive-cheatsheet.html',
+});
+const { sleep, shuffle, esc } = Q;
+const wait = ms => sleep(Q.reduced ? Math.min(ms, 30) : ms);
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function btn(row, label, fn, primary = true) { const b = document.createElement('button'); b.className = 'btn' + (primary ? ' primary' : ''); b.textContent = label; b.onclick = fn; row.appendChild(b); return b; }
+function retrigger(el, cls) { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+
+// small deterministic helpers
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+// FNV-1a + murmur finaliser: a 32-bit stand-in for SHA-256 (fine for a demo, NOT for a real system)
+function hash32(s) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16;
+  return h >>> 0;
+}
+const hex3 = h => h.toString(16).padStart(8, '0').slice(0, 3);
+
+/* ================= STAGE 1: build the map ================= */
+Q.onStage(1, () => {
+  const C = {
+    block: { name: 'Block servers', ic: '🧱', job: 'Split each file into blocks, compress and encrypt them, and upload them to cloud storage.', clue: 'File bytes arrive here first' },
+    cloud: { name: 'Cloud storage', ic: '☁️', job: 'Holds every block as its own object (Amazon S3 in the book).', clue: 'Where the blocks live' },
+    cold: { name: 'Cold storage', ic: '🧊', job: 'Cheaper storage for inactive data that is rarely opened.', clue: 'Untouched for months' },
+    lb: { name: 'Load balancer', ic: '⚖️', job: 'Spreads incoming requests evenly across the API servers.', clue: 'First stop for every request' },
+    api: { name: 'API servers', ic: '🛎️', job: 'Everything except uploading blocks: sign-in, user profiles, updating file metadata.', clue: 'Sign-in, profiles, metadata edits' },
+    mcache: { name: 'Metadata cache', ic: '⚡', job: 'Keeps frequently read metadata in memory so lookups are fast.', clue: 'Checked first, very fast' },
+    mdb: { name: 'Metadata DB', ic: '🗂️', job: 'The record of users, files, blocks and versions. Not the file bytes themselves.', clue: 'Users, files, blocks, versions' },
+    notif: { name: 'Notification service', ic: '📣', job: 'Publish/subscribe: tells clients a file was added, edited or removed elsewhere, so they pull the change.', clue: 'Pings your other devices' },
+    queue: { name: 'Offline backup queue', ic: '📮', job: 'Holds changes for a client that is offline, so it can catch up when it reconnects.', clue: 'Waits for devices to come back' },
+  };
+  const KEYS = Object.keys(C);
+  const board = $('#board'), tray = $('#tray'), info = $('#tinfo');
+  let sel = null, placed = new Set(), wrong = 0, done = false, quizShown = false;
+  const ORDER = shuffle(KEYS);
+
+  function paintSlot(s) {
+    const k = s.dataset.k;
+    if (placed.has(k)) { s.innerHTML = `<span class="ic">${C[k].ic}</span><span class="nm">${C[k].name}</span>`; s.classList.add('filled'); s.setAttribute('aria-label', C[k].name + ' (placed)'); }
+    else { s.innerHTML = `<span class="q">?</span><span class="clue">${C[k].clue}</span>`; s.classList.remove('filled'); s.setAttribute('aria-label', 'Empty slot: ' + C[k].clue); }
+  }
+  function render() {
+    $$('.slot', board).forEach(paintSlot);
+    tray.innerHTML = '';
+    ORDER.filter(k => !placed.has(k)).forEach(k => {
+      const t = document.createElement('button');
+      t.className = 'tile' + (sel === k ? ' sel' : ''); t.dataset.k = k;
+      t.innerHTML = `<span>${C[k].ic}</span><span>${C[k].name}</span>`;
+      t.setAttribute('aria-label', `${C[k].name}. Select, then choose a slot.`);
+      wireTile(t);
+      tray.appendChild(t);
+    });
+    if (!tray.children.length) tray.innerHTML = '<span class="small muted">All nine placed.</span>';
+    $('#placed').textContent = `${placed.size} / 9`;
+    board.classList.toggle('armed', !!sel);
+    board.classList.toggle('done', placed.size === 9);
+  }
+  function select(k) {
+    sel = sel === k ? null : k;
+    $$('.tile', tray).forEach(t => t.classList.toggle('sel', t.dataset.k === sel));
+    board.classList.toggle('armed', !!sel);
+    info.className = 'tinfo';
+    info.innerHTML = sel ? `<b>${C[sel].ic} ${C[sel].name}:</b> ${C[sel].job} <span class="muted">Now tap its slot.</span>` : 'Tap a tile below to read what it does.';
+  }
+  function drop(k, slot) {
+    if (!k || !slot || slot.classList.contains('filled')) return;
+    const target = slot.dataset.k;
+    if (k === target) {
+      placed.add(k); sel = null;
+      info.className = 'tinfo good'; info.innerHTML = `<b>${C[k].ic} ${C[k].name}</b> snapped in. ${C[k].job}`;
+      render();
+      if (placed.size === 9) complete(slot);
+    } else {
+      wrong++;
+      retrigger(slot, 'bounce'); setTimeout(() => slot.classList.remove('bounce'), 450);
+      info.className = 'tinfo bad';
+      info.innerHTML = `Not there. <b>${C[k].name}</b>: ${C[k].job} That slot needs something that fits "<i>${C[target].clue.toLowerCase()}</i>".`;
+    }
+  }
+  function complete(el) {
+    if (done) return; done = true;
+    $('#boardNote').style.display = 'block';
+    Q.addXP(30, el);
+    logQuiz();
+  }
+  function logQuiz() {
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => Q.quiz($('#s1quiz'), {
+      q: 'A laptop was shut all weekend while a coworker edited 30 shared files. When it wakes up, which component makes sure it catches up on all 30 changes?',
+      options: ['Offline backup queue, which held the changes', 'Cold storage, which keeps the inactive files', 'Metadata cache, which keeps the hot metadata', 'Load balancer, which spreads out the requests'],
+      correct: 0,
+      good: 'The notification service can only ping devices that are listening. For a device that\'s offline, the <b>offline backup queue</b> keeps the pending changes so it can sync when it reconnects. Quest 15.4 walks through that flow.',
+      bad: 'Cold storage, the cache and the load balancer don\'t track who missed what. The <b>offline backup queue</b> holds changes for offline clients so they can catch up when they\'re back. The notification service handles the devices that are online.',
+      onDone: () => setTimeout(() => Q.clearStage(1), 900),
+    }), 500);
+  }
+
+  // tap + keyboard
+  $$('.slot', board).forEach(s => s.addEventListener('click', () => { if (sel) drop(sel, s); else if (!s.classList.contains('filled')) { info.className = 'tinfo'; info.textContent = 'Pick a tile from the tray first, then tap this slot.'; } }));
+  // pointer drag (mouse or touch); a short press counts as a tap
+  let drag = null;
+  function wireTile(t) {
+    t.addEventListener('click', () => { if (t._dragged) { t._dragged = false; return; } select(t.dataset.k); });
+    t.addEventListener('pointerdown', e => {
+      if (e.button !== 0) return;
+      drag = { t, k: t.dataset.k, x: e.clientX, y: e.clientY, ghost: null, over: null };
+    });
+  }
+  function slotAt(x, y) { const el = document.elementFromPoint(x, y); return el && el.closest && el.closest('#board .slot:not(.filled)'); }
+  document.addEventListener('pointermove', e => {
+    if (!drag) return;
+    if (!drag.ghost) {
+      if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 8) return;
+      drag.ghost = drag.t.cloneNode(true); drag.ghost.classList.add('ghost'); drag.ghost.classList.remove('sel'); document.body.appendChild(drag.ghost);
+      drag.t.classList.add('dragging'); select(drag.k); if (sel !== drag.k) select(drag.k);
+    }
+    drag.ghost.style.left = e.clientX + 'px'; drag.ghost.style.top = e.clientY + 'px';
+    const s = slotAt(e.clientX, e.clientY);
+    if (s !== drag.over) { drag.over && drag.over.classList.remove('over'); drag.over = s; s && s.classList.add('over'); }
+  });
+  function endDrag(e, cancel) {
+    if (!drag) return;
+    const d = drag; drag = null;
+    if (!d.ghost) return; // it was a tap; click handler takes it
+    d.ghost.remove(); d.t.classList.remove('dragging'); d.t._dragged = true;
+    setTimeout(() => { d.t._dragged = false; }, 50);
+    d.over && d.over.classList.remove('over');
+    if (!cancel) { const s = slotAt(e.clientX, e.clientY); if (s) drop(d.k, s); }
+  }
+  document.addEventListener('pointerup', e => endDrag(e, false));
+  document.addEventListener('pointercancel', e => endDrag(e, true));
+
+  $('#boardReset').onclick = () => {
+    placed = new Set(); sel = null; render(); info.className = 'tinfo'; info.textContent = 'Board cleared. Tap a tile below to read what it does.';
+  };
+  render();
+});
+
+/* ================= STAGE 2: the pipeline ================= */
+Q.onStage(2, () => {
+  const STEPS = [
+    { k: 'split', t: '✂️ Split into ≤4 MB blocks' },
+    { k: 'comp', t: '🗜️ Compress each block' },
+    { k: 'enc', t: '🔒 Encrypt each block' },
+    { k: 'up', t: '☁️ Upload to S3' },
+  ];
+  let nextI = 0, slipped = false, orderDone = false, meterRan = false, lineDone = false, whyDone = false, finalShown = false;
+  const pool = $('#pool'), pipe = $$('#pipe li');
+  function renderPool() {
+    pool.innerHTML = '';
+    shuffle(STEPS).forEach(s => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = s.t; b.dataset.k = s.k;
+      b.onclick = () => pick(b, s);
+      pool.appendChild(b);
+    });
+  }
+  function pick(b, s) {
+    if (orderDone) return;
+    if (s.k === STEPS[nextI].k) {
+      b.disabled = true; b.classList.add('right'); b.style.display = 'none';
+      pipe[nextI].textContent = s.t; pipe[nextI].classList.add('on');
+      nextI++;
+      if (nextI === STEPS.length) {
+        orderDone = true;
+        const ex = $('#orderEx'); ex.className = 'explain show good';
+        ex.innerHTML = '<b>That\'s the book\'s order.</b> Split first, so every later step works on small blocks that can be retried on their own. Then compress, then encrypt, then upload. The order of the middle two matters more than it looks. The bug hunt below shows why.';
+        Q.addXP(slipped ? 10 : 20, pipe[3]);
+        $('#bugWrap').classList.remove('hide');
+      }
+    } else {
+      retrigger(b, 'wrong'); setTimeout(() => b.classList.remove('wrong'), 450);
+      const ex = $('#orderEx'); ex.className = 'explain show bad';
+      ex.innerHTML = nextI === 0 ? 'Every other step works on <i>blocks</i>, so something has to make the blocks first.' : `Not next. Think about what each step needs from the one before it.`;
+      if (!slipped) { slipped = true; Q.loseHeart(b); }
+    }
+  }
+  renderPool();
+
+  // the teammate's code
+  const LINES = [
+    '<span class="fn">blocks</span> = <span class="fn">split</span>(file, max_size=<span class="nu">4</span>MB)',
+    '<span class="kw">for</span> i, block <span class="kw">in</span> <span class="fn">enumerate</span>(blocks):',
+    '    block = <span class="fn">encrypt</span>(block, key)',
+    '    block = <span class="fn">gzip</span>(block)',
+    '    <span class="fn">s3_put</span>(block_id(i), block)',
+  ];
+  const code = $('#code');
+  code.innerHTML = LINES.map((l, i) => `<button class="cl" data-i="${i}" disabled aria-label="Line ${i + 1}"><span class="ln">${i + 1}</span><span>${l}</span></button>`).join('');
+  $$('.cl', code).forEach(b => b.onclick = () => {
+    if (lineDone) return;
+    const i = +b.dataset.i, ex = $('#lineEx');
+    lineDone = true; $$('.cl', code).forEach(x => x.disabled = true);
+    const ok = i === 2 || i === 3;
+    $$('.cl', code)[2].classList.add('bugline'); $$('.cl', code)[3].classList.add('bugline');
+    ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+    ex.innerHTML = (ok ? '<b>Found it.</b> ' : '<b>Not that one.</b> ') + 'Lines 3 and 4 are swapped. The block gets encrypted <i>before</i> gzip sees it. Swap them: <code>gzip</code> first, then <code>encrypt</code>. Now, why does the order matter?';
+    ok ? Q.addXP(10, b) : Q.loseHeart(b);
+    Q.quiz($('#whyQuiz'), {
+      tag: 'Why?', xp: 15,
+      q: 'Why does gzip barely shrink a block that was already encrypted?',
+      options: ['Encrypted bytes look random, so there are no patterns', 'Gzip refuses to read any file protected by a key', 'Encryption already shrank it, so nothing is left'],
+      correct: 0,
+      good: 'Compression works by finding repeats ("ERROR" shows up 50,000 times in a log). Good encryption makes its output look like random noise, and random noise has no repeats to exploit. So: <b>compress, then encrypt</b>.',
+      bad: 'Gzip happily reads any bytes, and encryption doesn\'t shrink anything. The problem: compression needs repeated patterns, and good encryption makes output look random. Random data has no patterns, so compress <b>before</b> you encrypt.',
+      onDone: () => { whyDone = true; finalQuiz(); },
+    });
+  });
+
+  // live compression meter: real gzip (CompressionStream) on a synthetic log sample, toy XOR cipher for "encrypt"
+  function makeLog(bytes) {
+    const r = mulberry32(1502), lv = ['INFO ', 'INFO ', 'INFO ', 'WARN ', 'ERROR', 'DEBUG'], verbs = ['GET ', 'GET ', 'PUT ', 'POST'], paths = ['/v1/files/', '/v1/blocks/', '/v1/revisions/', '/v1/users/'];
+    let s = '', t = 1791190000000;
+    while (s.length < bytes) {
+      t += (r() * 900) | 0;
+      const d = new Date(t).toISOString();
+      s += `${d} ${lv[r() * lv.length | 0]} api-${r() * 12 | 0} ${verbs[r() * 4 | 0]} ${paths[r() * 4 | 0]}${(0x3a0f00 + (r() * 300 | 0)).toString(16)} ${r() < .93 ? 200 : 404} ${(r() * 180 | 0) + 3}ms user=u${1000 + (r() * 300 | 0)}\n`;
+    }
+    return new TextEncoder().encode(s.slice(0, bytes));
+  }
+  function toyEncrypt(u8) { const r = mulberry32(0xC0FFEE), o = new Uint8Array(u8.length); for (let i = 0; i < u8.length; i++) o[i] = u8[i] ^ ((r() * 256) | 0); return o; }
+  async function gzipLen(u8) {
+    const s = new Blob([u8]).stream().pipeThrough(new CompressionStream('gzip'));
+    return (await new Response(s).arrayBuffer()).byteLength;
+  }
+  $('#runMeter').onclick = async () => {
+    const b = $('#runMeter'); b.disabled = true; b.textContent = 'Running…';
+    let rGood = 0.18, rBug = 1.0004, real = false;
+    try {
+      if (typeof CompressionStream !== 'function') throw new Error('no CompressionStream');
+      const sample = makeLog(200 * 1024);
+      const g = await gzipLen(sample);              // compress → (encrypt keeps size)
+      const bg = await gzipLen(toyEncrypt(sample));  // encrypt → compress
+      rGood = g / sample.length; rBug = bg / sample.length; real = true;
+    } catch (_) { /* fall back to typical numbers */ }
+    $('#fGood').style.width = (rGood * 100).toFixed(1) + '%';
+    $('#fBug').style.width = Math.min(100, rBug * 100).toFixed(1) + '%';
+    await wait(900);
+    $('#mGood').textContent = `40 → ${(40 * rGood).toFixed(1)} MB`; $('#mGood').className = 'bignum good';
+    $('#mBug').textContent = `40 → ${(40 * rBug).toFixed(2)} MB`; $('#mBug').className = 'bignum bad';
+    $('#meterNote').textContent = real ? `Measured live: gzip on a 200 KB log sample, scaled to 40 MB. "Encrypt" is a toy cipher standing in for AES.` : 'Typical numbers (your browser lacks CompressionStream).';
+    b.textContent = '↻ Run again'; b.disabled = false; b.classList.remove('primary');
+    if (!meterRan) {
+      meterRan = true;
+      $('#lineAsk').classList.remove('hide');
+      $$('.cl', code).forEach(x => x.disabled = lineDone);
+    }
+  };
+
+  function finalQuiz() {
+    if (finalShown) return; finalShown = true;
+    setTimeout(() => Q.quiz($('#s2quiz'), {
+      q: 'Each of these files is 40 MB. Which one is <b>least</b> worth running through gzip?',
+      options: ['An .mp4 video of a team offsite', 'A .csv export of last year\'s sales', 'A .log file from a busy web server', 'A .json export of a user database'],
+      correct: 0,
+      good: 'MP4 video is already squeezed by a video codec, so gzip finds almost nothing left to remove. Text formats like CSV, logs and JSON are full of repeats and often shrink 5–10×. That\'s why the book picks the algorithm by file type.',
+      bad: 'CSV, log and JSON files are text full of repeated words and keys, so they compress very well. An MP4 video is already compressed by its codec, so gzip gains almost nothing. Pick the algorithm by file type.',
+      onDone: () => setTimeout(() => Q.clearStage(2), 900),
+    }), 400);
+  }
+});
+
+/* ================= STAGE 3: delta sync ================= */
+Q.onStage(3, () => {
+  const BS = 4096; // 4 KB on screen = "4 MB"
+  const WORDS = 'the of and to in is that for it as was with on by this data system block file sync server client cloud storage hash change version user device upload network latency bandwidth design metadata thesis chapter result method experiment table figure analysis model study evidence sample error rate value cost time'.split(' ');
+  function makeText(seed, len) {
+    const r = mulberry32(seed); let s = '';
+    while (s.length < len) { const n = 8 + (r() * 14 | 0), w = []; for (let i = 0; i < n; i++) w.push(WORDS[r() * WORDS.length | 0]); let t = w.join(' '); t = t[0].toUpperCase() + t.slice(1) + '. '; if (r() < .08) t += '\n\n'; s += t; }
+    return s.slice(0, len);
+  }
+  const TEXT = makeText(7, 10 * BS);
+  // content-defined chunking: a "gear" rolling hash over roughly the last 32 bytes; cut where its top 11 bits are 0
+  const rg = mulberry32(99), GEAR = Array.from({ length: 256 }, () => (rg() * 4294967296) >>> 0);
+  function cdc(t, MIN = 2048, MAX = 8192) {
+    const out = []; let st = 0, h = 0;
+    for (let i = 0; i < t.length; i++) {
+      h = ((h << 1) + GEAR[t.charCodeAt(i) & 255]) >>> 0;
+      const len = i - st + 1;
+      if ((len >= MIN && (h >>> 21) === 0) || len >= MAX) { out.push([st, i + 1]); st = i + 1; h = 0; }
+    }
+    if (st < t.length) out.push([st, t.length]);
+    return out;
+  }
+  const fixed = t => { const o = []; for (let i = 0; i < t.length; i += BS) o.push([i, Math.min(t.length, i + BS)]); return o; };
+  const chunk = (t, mode) => (mode === 'cdc' ? cdc(t) : fixed(t)).map(([a, b], i) => ({ n: i + 1, size: b - a, h: hash32(t.slice(a, b)) }));
+  const mb = bytes => { const v = bytes / 1024; return (Number.isInteger(v) ? v : v.toFixed(1)) + ' MB'; };
+  function editAt(t, blockIdx, label) { const at = blockIdx * BS + 1500; return t.slice(0, at) + label + t.slice(at + label.length); }
+
+  let srvText = TEXT, locText = TEXT, mode = 'fixed', srvBlocks = [], busy = false;
+  const dirty = new Set();
+  const stripSrv = $('#stripSrv'), stripLoc = $('#stripLoc');
+  function drawStrip(el, blocks, cls, hideHash) {
+    el.innerHTML = blocks.map((b, i) => `<div class="blk ${cls || ''}" data-i="${i}" style="flex-grow:${b.size}" title="block ${b.n}: ${mb(b.size)}"><b>${b.n}</b><span>${hideHash ? '?' : hex3(b.h)}</span></div>`).join('');
+    return $$('.blk', el);
+  }
+  function drawSrv(newSet) {
+    srvBlocks = chunk(srvText, mode);
+    const els = drawStrip(stripSrv, srvBlocks, 'srv');
+    if (newSet) els.forEach((e, i) => { if (newSet.has(srvBlocks[i].h)) e.classList.add('newsrv'); });
+    $('#srvMeta').textContent = `${srvBlocks.length} blocks · ${mb(srvText.length)}`;
+  }
+  function drawLocal(hidden) {
+    const lb = chunk(locText, mode);
+    const els = drawStrip(stripLoc, lb, '', hidden);
+    dirty.forEach(i => { if (els[i]) { els[i].classList.add('dirty'); els[i].querySelector('span').textContent = '✎'; } });
+    $('#locMeta').textContent = hidden ? `${mb(locText.length)} · not re-chunked yet` : `${lb.length} blocks · ${mb(locText.length)}`;
+    return { lb, els };
+  }
+  function counters(sent, total) {
+    $('#dSent').textContent = mb(sent);
+    $('#dSaved').textContent = total == null ? '—' : mb(Math.max(0, total - sent));
+  }
+  function resetSim(m) {
+    mode = m || 'fixed'; srvText = TEXT; locText = TEXT; dirty.clear();
+    $$('#modebar button').forEach(b => b.classList.toggle('on', b.dataset.m === mode));
+    drawSrv(); drawLocal(); counters(0, null);
+  }
+  // delta sync: re-chunk + hash the local copy, upload every block whose hash the server doesn't have yet
+  async function sync() {
+    const { lb, els } = drawLocal(true);
+    const have = new Set(srvBlocks.map(b => b.h));
+    let sent = 0; const uploaded = new Set();
+    logTo('dlog', `🔍 hashing ${lb.length} local blocks and checking them against the server's list…`);
+    for (let i = 0; i < lb.length; i++) {
+      const e = els[i];
+      e.classList.add('scan'); e.querySelector('span').textContent = hex3(lb[i].h); await wait(lb.length > 10 ? 110 : 160); e.classList.remove('scan', 'dirty');
+      if (have.has(lb[i].h)) e.classList.add('same');
+      else {
+        e.classList.add('diff', 'up'); sent += lb[i].size; uploaded.add(lb[i].h);
+        retrigger($('#cloudbar'), 'hit'); counters(sent, locText.length);
+      }
+    }
+    counters(sent, locText.length);
+    $('#locMeta').textContent = `${lb.length} blocks · ${mb(locText.length)}`;
+    await wait(400);
+    srvText = locText; dirty.clear(); drawSrv(uploaded);
+    return { sent, n: uploaded.size, total: lb.length };
+  }
+  $$('#modebar button').forEach(b => b.onclick = () => onMode && onMode(b.dataset.m));
+  let onMode = null;
+
+  const box = $('#dbox');
+  let quizShown = false;
+  function round1() {
+    resetSim('fixed'); $('#modebar').classList.remove('on'); onMode = null;
+    $('#dlog').innerHTML = '<div>10 blocks, each with a fingerprint. The server has the same list.</div>';
+    box.innerHTML = `<div class="step">Round 1 of 2 · edit, predict, sync</div>
+      <h3>Your advisor wants changes in chapters 2 and 5. Make both edits.</h3>
+      <div class="row"><button class="btn" id="e2">✏️ Edit chapter 2</button><button class="btn" id="e5">✏️ Edit chapter 5</button></div>
+      <div class="r-in"><label for="r1in"><b>Predict:</b> how much will delta sync upload?</label><span><input id="r1in" type="number" inputmode="numeric" min="0" max="40" aria-label="Megabytes uploaded"> MB</span><button class="btn primary" id="r1go" disabled>☁️ Sync</button></div>
+      <div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+    const inp = $('#r1in'), go = $('#r1go');
+    const ready = () => { go.disabled = busy || dirty.size < 2 || inp.value.trim() === ''; };
+    function edit(btnEl, idx, label) {
+      btnEl.disabled = true; locText = editAt(locText, idx, label); dirty.add(idx); drawLocal(false);
+      logTo('dlog', `✎ edited a paragraph in chapter ${idx + 1} (same length, so nothing else shifts)`, 'w'); ready();
+    }
+    $('#e2').onclick = e => edit(e.currentTarget, 1, 'REVISED: tighter claim.');
+    $('#e5').onclick = e => edit(e.currentTarget, 4, 'REVISED: added a table.');
+    inp.addEventListener('input', ready);
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter' && !go.disabled) go.click(); });
+    go.onclick = async () => {
+      if (busy) return; busy = true; go.disabled = true; inp.readOnly = true;
+      const guess = parseFloat(inp.value);
+      const r = await sync();
+      logTo('dlog', `☁️ uploaded ${r.n} of ${r.total} blocks: <b>${mb(r.sent)}</b> sent, ${mb(locText.length - r.sent)} saved`, 'g');
+      const ok = Math.abs(guess - r.sent / 1024) < 0.01;
+      const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+      ex.innerHTML = (ok ? '<b>Called it: 8 MB.</b> ' : `<b>It was 8 MB, not ${esc(inp.value)}.</b> `) + 'Two blocks changed, 2 × 4 MB = 8 MB, which is 20% of the file. The other eight hashes matched what the server already had, so they never left your laptop. That\'s the book\'s picture: only the edited blocks are synced. Both wins are Step 1 requirements: <b>less bandwidth</b> and <b>faster sync</b>.';
+      ok ? Q.addXP(25, go) : Q.loseHeart(go);
+      busy = false;
+      btn($('.row:last-child', box), 'Next round →', round2);
+    };
+  }
+  function round2() {
+    resetSim('fixed'); onMode = null;
+    logTo('dlog', '— round 2: fresh copy of thesis.docx, server in sync —');
+    box.innerHTML = `<div class="step">Round 2 of 2 · the honest catch</div>
+      <h3>Now insert <b>one single byte</b> at the very start of the file. With fixed 4 MB blocks, how many blocks get a new hash?</h3>
+      <div class="row"><button class="btn" id="ins">➕ Insert 1 byte at the start</button></div>
+      <div class="opts" style="margin-top:12px"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+    const opts = $('.opts', box);
+    $('#ins').onclick = e => {
+      e.currentTarget.disabled = true; locText = '!' + TEXT; drawLocal(true);
+      logTo('dlog', '➕ inserted 1 byte at position 0. Every later byte slides one place right.', 'w');
+      const OPTS = ['Only block 1 changes', 'Blocks 1 and 2 change', 'Every block changes'];
+      shuffle(OPTS.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+        const b = document.createElement('button'); b.className = 'opt'; b.textContent = o;
+        b.onclick = async () => {
+          if (busy) return; busy = true;
+          $$('.opt', opts).forEach(x => x.disabled = true); b.classList.add('picked');
+          const r = await sync();
+          logTo('dlog', `☁️ fixed blocks: ${r.n} of ${r.total} blocks had new hashes → <b>${mb(r.sent)}</b> sent`, 'e');
+          const ok = i === 2;
+          b.classList.add(ok ? 'right' : 'wrong'); if (!ok) $$('.opt', opts).find(x => x.textContent === OPTS[2]).classList.add('right');
+          const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+          ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + 'Fixed blocks are cut at byte 0, 4 MB, 8 MB… After the insert, every block starts one byte earlier in the text, so <b>every</b> fingerprint changes. Block 11 is the single byte pushed off the end. Delta sync just re-sent the whole file. The book doesn\'t mention this. Real sync tools do.';
+          ok ? Q.addXP(25, b) : Q.loseHeart(b);
+          busy = false;
+          $('#modebar').classList.add('on');
+          const row = $('.row:last-child', box);
+          row.innerHTML = '<span class="small"><b>Try the fix:</b> switch the mode above the log to <b>Content-defined</b>.</span>';
+          onMode = m => { if (m === 'cdc' && !busy) runCdc(); };
+        };
+        opts.appendChild(b);
+      });
+    };
+  }
+  let cdcRewarded = false, takeShown = false;
+  async function runCdc() {
+    busy = true; onMode = null;
+    mode = 'cdc'; srvText = TEXT; locText = '!' + TEXT; dirty.clear();
+    $$('#modebar button').forEach(b => b.classList.toggle('on', b.dataset.m === 'cdc'));
+    drawSrv(); drawLocal(true); counters(0, null);
+    logTo('dlog', `✂️ content-defined: cut wherever the last ~32 bytes hash to a special pattern. Same text → same cuts, wherever it sits. The server's copy splits into ${srvBlocks.length} blocks of different sizes.`);
+    await wait(700);
+    const r = await sync();
+    logTo('dlog', `☁️ content-defined: ${r.n} of ${r.total} blocks new → only <b>${mb(r.sent)}</b> sent`, 'g');
+    busy = false;
+    if (!cdcRewarded) { cdcRewarded = true; Q.addXP(10, $('#modebar')); }
+    const row = $('.row:last-child', box);
+    row.innerHTML = '';
+    btn(row, '↻ Replay both rounds', round1, false);
+    takeaway();
+  }
+  function takeaway() {
+    if (takeShown) return; takeShown = true;
+    const mount = document.createElement('div'); box.appendChild(mount);
+    Q.quiz(mount, {
+      tag: 'Takeaway', xp: 10,
+      q: 'One sentence to keep from round 2:',
+      options: ['Fixed blocks break on inserts; content-defined cuts fix it', 'Bigger fixed blocks would have stopped the whole re-upload', 'Compressing each block first would have hidden the insert'],
+      correct: 0,
+      good: 'The cuts now follow the <i>content</i>, so after the inserted byte the same cut points are found again and only the first block is new. The rsync algorithm solves the same problem a different way, with a rolling checksum.',
+      bad: 'Bigger blocks still all shift, and compression doesn\'t change which bytes moved. The fix is to cut where the <i>content</i> says, so the same cut points reappear after an insert and only the first block is new.',
+      onDone: () => setTimeout(stageQuiz, 500),
+    });
+  }
+  function stageQuiz() {
+    if (quizShown) return; quizShown = true;
+    Q.quiz($('#s3quiz'), {
+      q: 'A 40 MB file is stored as ten 4 MB blocks. You change some bytes inside blocks 3, 4 and 9, without changing the file\'s length. How much does delta sync upload?',
+      options: ['12 MB: the three changed blocks', '40 MB: the whole file again', '28 MB: block 3 through the end', '4 MB: one merged changed block'],
+      correct: 0,
+      good: 'Same length means no boundaries move. Three blocks get new hashes, 3 × 4 MB = 12 MB. The other seven match and stay put.',
+      bad: 'With the length unchanged, no boundary shifts, so only the three edited blocks get new hashes: 3 × 4 MB = <b>12 MB</b>. The "everything after" problem only happens when bytes are inserted or deleted.',
+      onDone: () => setTimeout(() => Q.clearStage(3), 900),
+    });
+  }
+  round1();
+});
+
+/* ================= STAGE 4: recall ================= */
+Q.onStage(4, () => {
+  let n = 0;
+  const done = () => { if (++n === 3) setTimeout(() => Q.clearStage(4), 900); };
+  const CARDS = [
+    { m: '#r1', tag: 'Recall 1 / 3', q: 'A user downloads a file. How does the system rebuild it?',
+      options: ['Fetch its blocks and join them in block order', 'Fetch the one full copy kept in cold storage', 'Read the whole file out of the metadata DB', 'Replay every past edit on top of version one'],
+      good: 'Each block is its own object in S3. The metadata DB says which blocks make up the file and in what order. Join them in that order and you have the file.',
+      bad: 'There\'s no single full copy anywhere. Each block is its own S3 object, the metadata DB records the order, and the file is rebuilt by <b>joining its blocks in order</b>.' },
+    { m: '#r2', tag: 'Recall 2 / 3', q: 'Where does the design keep each block\'s hash?',
+      options: ['In the metadata DB, with the block\'s order', 'Only in the metadata cache, never on disk', 'In cold storage, next to archived blocks', 'In the notification service\'s event list'],
+      good: 'The metadata DB is the record of users, files, blocks and versions, including each block\'s hash. The cache only holds a fast copy of some of it.',
+      bad: 'Block hashes belong to the <b>metadata DB</b>, the record of users, files, blocks and versions. A cache can lose its contents any time, so it\'s never the only copy.' },
+    { m: '#r3', tag: 'Recall 3 / 3', q: 'Which of these is <b>not</b> an API server job in this design?',
+      options: ['Upload file blocks to cloud storage', 'Authenticate users when they sign in', 'Manage each user\'s profile details', 'Update file metadata after a change'],
+      good: 'API servers do almost everything except the upload flow. Chopping, compressing, encrypting and uploading blocks is the block servers\' job.',
+      bad: 'Sign-in, profiles and metadata updates are all API server work. <b>Uploading blocks</b> is the one thing they don\'t do. That belongs to the block servers.' },
+  ];
+  function show(i) {
+    const c = CARDS[i];
+    Q.quiz($(c.m), { tag: c.tag, q: c.q, options: c.options, correct: 0, good: c.good, bad: c.bad,
+      onDone: () => { done(); if (i + 1 < CARDS.length) setTimeout(() => show(i + 1), 350); } });
+  }
+  show(0);
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss'), {
+  name: '👾 The Bandwidth Hog',
+  xp: 20,
+  scenarios: [
+    { e: '🎬', t: 'The 2 GB typo', d: 'A user fixes one typo in a 2 GB video project file, and the whole 2 GB uploads again. What\'s missing?', a: 'delta',
+      choices: [{ k: 'delta', label: 'Delta sync', sub: 'blocks + send only changed ones' }, { k: 'pipe', label: 'A bigger pipe', sub: 'buy more bandwidth' }, { k: 'cdn', label: 'A CDN', sub: 'cache files near users' }],
+      why: 'Split the file into blocks, hash them, and upload only blocks whose hash changed. A typo touches one block (as long as it doesn\'t insert bytes), so you send about 4 MB, not 2 GB. A bigger pipe just makes waste faster, and a CDN speeds up <i>downloads</i>, not uploads.' },
+    { e: '📱', t: 'Data-plan rage', d: 'Mobile users complain that sync eats their monthly data.', a: 'both',
+      choices: [{ k: 'both', label: 'Delta + compress', sub: 'send less, and smaller' }, { k: 'night', label: 'Night uploads', sub: 'only sync after 2 a.m.' }, { k: 'off', label: 'No mobile sync', sub: 'turn it off on phones' }],
+      why: 'These are exactly the book\'s two block-server optimisations: delta sync sends fewer blocks, compression makes each one smaller. Waiting until night still uses the same data, and turning sync off breaks the product.' },
+    { e: '🔐', t: 'Security vs. ops', d: 'Security says S3 must never see plaintext. Ops says compress everything. In what order?', a: 'ce',
+      choices: [{ k: 'ce', label: 'Compress → encrypt', sub: 'squash, then lock' }, { k: 'ec', label: 'Encrypt → compress', sub: 'lock, then squash' }, { k: 'any', label: 'Either order', sub: 'the result is the same' }],
+      why: 'Encrypted output looks random, and random data doesn\'t compress. Compress first so gzip can find patterns, then encrypt so S3 only ever sees ciphertext. Both teams get what they asked for.' },
+    { e: '🛎️', t: 'Why not the API servers?', d: 'The interviewer asks: why don\'t the API servers just accept the whole file upload?', a: 'split',
+      choices: [{ k: 'split', label: 'Separate jobs', sub: 'block logic in one place, API stays light' }, { k: 'tls', label: 'Body limits', sub: 'API servers can\'t take big bodies' }, { k: 's3', label: 'S3 rule', sub: 'S3 only accepts block servers' }],
+      why: 'Chunking, compressing and encrypting are heavy, byte-crunching work. Putting it on block servers keeps the API servers fast for metadata calls and lets each fleet scale on its own. Nothing in HTTP or S3 forces this; it\'s a design choice.' },
+  ],
+  outro: 'Blocks + hashes give you delta sync. Compress before you encrypt. Bytes go to block servers, metadata to API servers.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: interview drill ================= */
+Q.onStage(6, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"Walk me through how files get from the client into storage. And how do you keep sync fast?"</i>',
+  placeholder: 'Clients talk to two paths: block servers for bytes…',
+  model: '"Clients send metadata calls through a load balancer to API servers, and send file content to block servers. A block server splits each file into blocks of up to 4 MB, compresses each one, then encrypts it, and stores it as its own object in S3. Each block\'s hash and position go into the metadata DB, with a cache in front. When a file changes we re-hash the blocks and upload only the ones whose hash changed. That\'s delta sync, and it saves bandwidth and makes sync fast. Rarely used data moves to cold storage. A notification service tells other devices that something changed, and an offline backup queue holds changes for devices that are offline. One caveat: fixed blocks break on inserts, so real clients chunk and hash locally, often with content-defined boundaries."',
+  checks: ['I said files are split into blocks of about 4 MB', 'I said compress first, then encrypt', 'I put the block hashes (and order) in the metadata DB', 'I explained delta sync: upload only changed blocks', 'I mentioned the notification service', 'I mentioned the offline backup queue'],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>The Metadata Ledger</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: s1 cache/DB sim + code panel, s2 schema builder + trace, s3 conflict race + resolve card */
+:root { --u1: #2f7fd8; --u2: #c76a00; --u1-soft: #e3effc; --u2-soft: #fdeedb; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --u1: #5aa9ff; --u2: #ffb547; --u1-soft: #142a44; --u2-soft: #3a2a10; }
+}
+:root[data-theme="dark"] { --u1: #5aa9ff; --u2: #ffb547; --u1-soft: #142a44; --u2-soft: #3a2a10; }
+
+/* shared sim pieces */
+.sim svg.net { max-width: 560px; margin: 0 auto; }
+.wire { stroke: var(--line); stroke-width: 3; }
+.nd rect.nbox { fill: var(--panel); stroke: var(--line); stroke-width: 2; transition: stroke .3s, fill .3s; }
+.nd.stale rect.nbox { stroke: var(--bad); fill: var(--bad-soft); }
+.nd.fresh rect.nbox { stroke: var(--good); }
+.nd.warnb rect.nbox { stroke: var(--warn); }
+.nd .t { fill: var(--muted); font: 700 12px var(--font); letter-spacing: .04em; text-transform: uppercase; }
+.nd .v { fill: var(--ink); font: 700 17px var(--mono); }
+.nd .v.sm { font-size: 14px; }
+.nd .s { fill: var(--muted); font: 500 11.5px var(--font); }
+.nd.flash rect.nbox { animation: ndflash .6s; }
+@keyframes ndflash { 40% { stroke: var(--accent); stroke-width: 5; } }
+.pkt { fill: var(--accent); stroke: var(--bg); stroke-width: 2; }
+.pkt.del { fill: var(--bad); }
+.pkt.read { fill: var(--teal); }
+.pkt.note { fill: var(--warn); }
+.pkt.u1 { fill: var(--u1); }
+.pkt.u2 { fill: var(--u2); }
+.tt { margin: 0; padding: 10px 14px; font-weight: 700; font-size: 15px; text-align: center; border-bottom: 1px solid var(--line); background: var(--panel); min-height: 44px; transition: background .3s, color .3s; }
+.tt.split { background: var(--bad-soft); color: var(--bad); }
+.tt.agree { background: var(--good-soft); color: var(--good); }
+.tt.lag { background: var(--warn-soft); color: var(--warn); }
+.sim-bar .btn { padding: 8px 12px; font-size: 14px; min-height: 40px; }
+.seg button { min-height: 40px; }
+.seg button[disabled] { opacity: .45; cursor: not-allowed; }
+.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; margin-top: 16px; }
+.boxed h3 { margin: 4px 0 10px; font-size: 18px; }
+
+/* stage 1: code panel */
+.code { background: var(--code-bg); color: var(--code-ink); border-radius: 14px; padding: 10px 8px; font-family: var(--mono); font-size: clamp(11px, 3.1vw, 13.5px); overflow-x: auto; margin: 10px 0 4px; }
+.code .ln { display: block; width: 100%; text-align: left; white-space: pre; border: 0; background: none; color: inherit; font: inherit; padding: 3px 6px; border-radius: 6px; min-height: 26px; line-height: 1.5; }
+.code .cm { color: #8b93c9; }
+.code button.ln { cursor: pointer; outline: 1px dashed #3a3f6a; outline-offset: -1px; }
+.code button.ln:hover:not([disabled]) { background: #24284a; }
+.code button.ln[disabled] { cursor: default; outline: none; }
+.code .ln.bad { background: #4a1d24; color: #ffb4b4; }
+.code .ln.right { background: #163a2a; color: #9ff0c4; }
+.code .ln.added { background: #163a2a; color: #9ff0c4; animation: rise .4s; }
+
+/* stage 2: schema builder */
+.tray { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; min-height: 44px; }
+.fchip { font-family: var(--mono); font-size: 13px; padding: 8px 11px; border-radius: 10px; border: 2px solid var(--line); background: var(--bg-2); min-height: 40px; transition: border-color .2s, background .2s, transform .1s; }
+.fchip:hover { border-color: var(--accent); }
+.fchip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); transform: translateY(-2px); }
+.fchip.nope { animation: shake .4s; border-color: var(--bad); }
+.tgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
+@media (max-width: 640px) { .tgrid { grid-template-columns: 1fr 1fr; } }
+.tcard { border: 2px solid var(--line); border-radius: 14px; background: var(--panel); padding: 10px 10px 8px; cursor: pointer; min-height: 120px; transition: border-color .2s, background .2s, box-shadow .2s; position: relative; min-width: 0; }
+.tcard:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.tcard:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.tcard.sel { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.tcard.hit { border-color: var(--good); background: var(--good-soft); }
+.tcard.miss { animation: shake .4s; border-color: var(--bad); }
+.tcard.used { border-color: var(--good); }
+.tcard .th b { font-family: var(--mono); font-size: 15px; display: block; }
+.tcard .th span { font-size: 12px; color: var(--muted); display: block; line-height: 1.3; }
+.tcard ul { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 3px; }
+.tcard li { font-family: var(--mono); font-size: 12px; background: var(--bg-2); border-radius: 6px; padding: 2px 6px; overflow-wrap: anywhere; animation: rise .3s; }
+.tcard li.pk { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.tcard .rel { font-size: 11.5px; color: var(--teal); font-weight: 700; margin-top: 6px; }
+.tcard .step { position: absolute; top: 6px; right: 8px; width: 24px; height: 24px; border-radius: 50%; background: var(--good); color: #fff; font: 700 13px var(--font); display: none; place-items: center; }
+.tcard.used .step { display: grid; }
+.store { margin-top: 10px; width: 100%; border: 2px dashed var(--line); border-radius: 14px; padding: 12px; background: var(--bg); font-weight: 700; min-height: 48px; }
+.store:hover { border-color: var(--accent); }
+.store.hit { border-color: var(--good); background: var(--good-soft); }
+.store.miss { animation: shake .4s; border-color: var(--bad); }
+.instr { margin-top: 14px; padding: 10px 14px; border-radius: 12px; background: var(--accent-soft); font-size: 15px; }
+.instr b { color: var(--accent); }
+.hintline { min-height: 24px; font-size: 14px; margin-top: 8px; font-weight: 600; }
+.hintline.bad { color: var(--bad); }
+.hintline.good { color: var(--good); }
+.hintline.neutral { color: var(--muted); }
+.erchain { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; font-family: var(--mono); font-size: 13px; }
+.erchain .tb { padding: 5px 9px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); font-weight: 600; }
+.erchain .ar { color: var(--teal); font-weight: 700; }
+.er { display: none; margin-top: 14px; border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--bg); }
+.er.on { display: block; animation: rise .35s; }
+
+/* stage 3: conflict */
+.ckc { fill: var(--ink); font: 700 15px var(--mono); text-anchor: middle; }
+.nd.u1 rect.nbox { stroke: var(--u1); }
+.nd.u2 rect.nbox { stroke: var(--u2); }
+.nd.conf rect.nbox { stroke: var(--bad); fill: var(--bad-soft); }
+.nd .v.u1c { fill: var(--u1); }
+.nd .v.u2c { fill: var(--u2); }
+.resolve { display: none; margin-top: 14px; border: 2px solid var(--bad); border-radius: 16px; padding: 14px; background: var(--panel); }
+.resolve.on { display: block; animation: rise .35s; }
+.resolve h3 { margin: 0 0 4px; font-size: 17px; }
+.split2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
+.copy { border-radius: 12px; padding: 10px; font-size: 14px; border: 1px solid var(--line); background: var(--bg); min-width: 0; }
+.copy.mine { border-left: 5px solid var(--u2); }
+.copy.theirs { border-left: 5px solid var(--u1); }
+.copy b { display: block; font-size: 13px; margin-bottom: 4px; }
+.copy table { border-collapse: collapse; width: 100%; font-family: var(--mono); font-size: 12.5px; }
+.copy td { padding: 2px 0; }
+.copy td + td { text-align: right; }
+.copy .chg { font-weight: 700; color: var(--accent); }
+.vtable { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.vtable th { text-align: left; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.vtable td { padding: 6px; border-bottom: 1px solid var(--line); font-family: var(--mono); font-size: 12.5px; }
+.vtable tr.new td { animation: rise .4s; background: var(--good-soft); }
+.vwrap { padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+.vwrap .cap { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 15.3 · Design Google Drive</div>
+    <h1>The Metadata Ledger</h1>
+    <p class="lede">The file bytes live in cloud storage as blocks. Everything that says <i>which</i> blocks make up <i>which</i> version of <i>which</i> file lives in one ledger. Keep it honest, draw its tables, and settle a fight over the same spreadsheet.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can explain why Drive's metadata needs <b>strong consistency</b> (and a relational DB), sketch the <b>user / device / namespace / file / file_version / block</b> schema, and say exactly what happens when <b>two people edit the same file at once</b>.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>No two truths</h2><div class="sub">Strong consistency, spot-the-bug</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>In <a href="1502-drive-blocks-and-delta-sync.html">Quest 15.2</a> you chopped files into blocks. Those blocks are just bytes. The <b>metadata</b> (data <i>about</i> the data: file names, versions, which blocks belong to which version) sits in a separate <b>metadata database</b>, with a <b>cache</b> in front of it. A cache is a fast in-memory copy of hot rows, so most reads never touch the database.</p>
+      <p>The book's rule for this ledger is <b>strong consistency</b> by default: every client sees the same, latest version of a file. It is not acceptable for your laptop and your phone to show two different versions of the same file at the same moment.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-google-drive" target="_blank" rel="noopener">[1]</a> The catch: in-memory caches are <b>eventually consistent</b> by default. Their copies may lag behind for a while and only catch up "eventually".</p>
+      <p>Below, Alice edits <code>q3.pdf</code> on her laptop. Press <b>Save</b> and watch what her phone shows.</p>
+
+      <div class="sim">
+        <p class="tt" id="tt" aria-live="polite">Both screens show v1</p>
+        <svg class="net" id="net1" viewBox="0 0 400 290" role="img" aria-label="Laptop and phone talk to an API server, which uses a metadata cache and a metadata database"></svg>
+        <div class="sim-bar">
+          <button class="btn primary" id="saveBtn">💾 Save v2 on laptop</button>
+          <span class="seg" id="dbSeg" role="group" aria-label="Metadata store"><button data-m="sql" class="on" aria-pressed="true">Relational (ACID)</button><button data-m="nosql" aria-pressed="false" disabled>NoSQL (eventual)</button></span>
+        </div>
+        <div class="simlog" id="log1" aria-live="polite"><div>q3.pdf is at v1 everywhere. Cache and DB agree.</div></div>
+      </div>
+      <ul class="checklist" id="s1goals">
+        <li data-g="split"><span class="box">✓</span><span>Save v2 on the laptop. Do both screens agree?</span></li>
+        <li data-g="fix"><span class="box">✓</span><span>Find the line of code that leaves the cache stale, and pick a fix</span></li>
+        <li data-g="agree"><span class="box">✓</span><span>Save again with the fix: both screens agree</span></li>
+        <li data-g="nosql"><span class="box">✓</span><span>Switch the store to an eventually consistent NoSQL database and save once more</span></li>
+      </ul>
+
+      <div class="boxed" id="bugBox" style="display:none">
+        <div class="challenge"><div class="step">Spot the bug</div><h3>The API server's code. One line changes the truth but leaves an old copy behind. Tap it.</h3></div>
+        <div class="code" id="code1"></div>
+        <div class="explain" id="bugEx"></div>
+        <div id="fixBox"></div>
+      </div>
+
+      <div class="callout" id="whyNote" style="display:none"><b>Two rules from the book.</b> For strong consistency with a cache in the picture: (1) the cache's replicas and its master must hold the same data, and (2) the cache entry is <b>invalidated</b> (deleted) whenever the database is written, so the next read has to fetch the fresh row.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-google-drive" target="_blank" rel="noopener">[1]</a></div>
+      <div class="callout tip" id="acidNote" style="display:none"><b>Why the book picks a relational database.</b> Relational databases give you <b>ACID</b> out of the box. <b>A</b>tomicity: a write happens completely or not at all. <b>C</b>onsistency: rules like "a version must point at a real file" always hold. <b>I</b>solation: two writes at once don't trample each other. <b>D</b>urability: once it says "saved", it survives a crash. Many NoSQL stores don't give you these by default, so you'd have to write that safety into the sync logic yourself.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-google-drive" target="_blank" rel="noopener">[1]</a></div>
+      <div class="row" style="margin-top:12px"><button class="btn" id="reset1">↻ Reset to v1</button></div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Draw the tables</h2><div class="sub">The metadata schema, build-and-trace</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>A <b>schema</b> is the list of tables and their columns. The book shows a simplified one with just the six most important tables.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-google-drive" target="_blank" rel="noopener">[1]</a> Each table already has its <b>primary key</b> (🔑, the column that uniquely names a row). Your job: fill in the rest, link them, then use them.</p>
+      <ul class="small">
+        <li><b>user</b>: basic profile info (name, email, photo).</li>
+        <li><b>device</b>: each phone or laptop. One user has many devices. It stores a push ID for sending push notifications.</li>
+        <li><b>namespace</b>: a user's <b>root directory</b>, the top folder everything else hangs under.</li>
+        <li><b>file</b>: everything about the <i>latest</i> state of a file.</li>
+        <li><b>file_version</b>: the version history. Existing rows are <b>read-only</b>, so the history can't be rewritten.</li>
+        <li><b>block</b>: everything about one block of one version. Join a version's blocks in the right order and you get that version back.</li>
+      </ul>
+      <div class="instr" id="instr2"><b>Part A · Fields.</b> Tap a field below, then tap the table it belongs in.</div>
+      <div class="tray" id="tray"></div>
+      <div class="tgrid" id="tgrid"></div>
+      <button class="store" id="storeBtn" style="display:none" aria-label="Cloud storage: fetch blocks">☁️ Cloud storage (block bytes, e.g. S3)</button>
+      <div class="hintline" id="hint2" aria-live="polite"></div>
+      <div class="er" id="er2"><b class="small">Your schema: every arrow is one-to-many (1 → N)</b>
+        <div class="erchain"><span class="tb">user</span><span class="ar">1→N</span><span class="tb">device</span></div>
+        <div class="erchain"><span class="tb">user</span><span class="ar">1→N</span><span class="tb">namespace</span><span class="ar">1→N</span><span class="tb">file</span><span class="ar">1→N</span><span class="tb">file_version</span><span class="ar">1→N</span><span class="tb">block</span></div>
+      </div>
+      <div class="simlog" id="log2" style="display:none; border:1px solid var(--line); border-radius:12px; margin-top:12px" aria-live="polite"></div>
+      <ul class="checklist" id="s2goals">
+        <li data-g="fields"><span class="box">✓</span><span>Put all 12 fields in the right tables</span></li>
+        <li data-g="links"><span class="box">✓</span><span>Draw the 5 one-to-many links</span></li>
+        <li data-g="trace"><span class="box">✓</span><span>Trace a read of revision 3 through the tables</span></li>
+      </ul>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Two hands, one file</h2><div class="sub">Sync conflicts, predict-then-watch</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>With millions of users, two people <i>will</i> change the same file (or folder) at the same time. That's a <b>sync conflict</b>. Below, two coworkers both opened <code>budget.xlsx</code> at <b>v5</b> while offline. User 1 changed the travel budget, User 2 changed the hiring budget. Now both laptops come back online at the same moment.</p>
+      <div class="sim">
+        <svg class="net" id="net3" viewBox="0 0 400 250" role="img" aria-label="Two users send edits of the same file to the server"></svg>
+        <div class="vwrap"><div class="cap">file_version rows for budget.xlsx</div>
+          <table class="vtable"><thead><tr><th>ver</th><th>saved by</th><th>what</th></tr></thead><tbody id="vrows"></tbody></table>
+        </div>
+        <div class="simlog" id="log3" aria-live="polite"><div>Server has budget.xlsx v5. Both users edited v5 offline.</div></div>
+      </div>
+      <div class="challenge boxed" id="p3"></div>
+      <div class="resolve" id="resolve">
+        <h3>⚠️ Sync conflict on User 2's laptop</h3>
+        <p class="small muted" style="margin:0">Someone saved budget.xlsx before you. Here are both copies.</p>
+        <div class="split2">
+          <div class="copy mine"><b>Your local copy</b><table><tr><td>travel</td><td>$6k</td></tr><tr><td>hiring</td><td class="chg">$40k</td></tr></table></div>
+          <div class="copy theirs"><b>Server v6</b><table><tr><td>travel</td><td class="chg">$8k</td></tr><tr><td>hiring</td><td>$30k</td></tr></table></div>
+        </div>
+        <div class="row" id="resBtns">
+          <button class="btn" data-r="merge">🔀 Merge both</button>
+          <button class="btn" data-r="mine">Keep mine</button>
+          <button class="btn" data-r="theirs">Keep theirs</button>
+        </div>
+        <div class="explain" id="resEx"></div>
+      </div>
+      <div class="callout tip" id="realNote" style="display:none"><b>In real products.</b> Dropbox, for example, keeps the losing side as a separate "conflicted copy" file next to the original rather than overwriting anything. Live co-editing (several cursors in one doc) is a different, harder problem. The book points to Neil Fraser's <i>Differential Synchronization</i> for that.<a class="cite" href="https://neil.fraser.name/writing/sync/" target="_blank" rel="noopener">[2]</a></div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Boss: The Split-Brain Sprite</h2><div class="sub">Interview scenarios</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The Sprite loves it when two devices disagree. Four interview moments. Pick the answer you'd give out loud.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Say it like a senior</h2><div class="sub">Consistency + conflicts in 45 seconds</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> In stage 1 the phone "heard" about the change by magic. How does it really find out, and what does an upload look like end to end? That's <a href="1504-drive-upload-download-notify.html">Quest 15.4, <i>Ping When It Changes</i></a>: the upload and download flows, long polling and the offline backup queue.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-google-drive" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 15: Design Google Drive</a>. Read "Sync conflicts" in Step 2, then "High consistency requirement" and "Metadata database" in Step 3. For the multi-user editing rabbit hole, Neil Fraser's <a href="https://neil.fraser.name/writing/sync/" target="_blank" rel="noopener">Differential Synchronization</a> is short and readable. For a real sync engine, Dropbox's <a href="https://dropbox.tech/infrastructure/rewriting-the-heart-of-our-sync-engine" target="_blank" rel="noopener">post on rewriting theirs</a>.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <ul style="margin:0;padding-left:20px">
+        <li><b>"Relational because ACID" is the book's simplification.</b> At huge scale, teams run sharded MySQL with their own layers on top (Dropbox built one called Edgestore) or globally consistent stores like Google Spanner. Some NoSQL stores now offer transactions too. The real point: metadata needs transactions and strong consistency, whatever gives you them.</li>
+        <li><b>Invalidate-on-write still has a tiny race.</b> A reader can miss the cache, read the old row, and put it back into the cache just after the delete. Production systems add versioned cache entries or leases to close that gap.</li>
+        <li><b>The schema is deliberately small.</b> It has no sharing or permissions tables, even though sharing is in scope. If the interviewer asks about access control, say so and sketch one (e.g. a table of who can access which namespace or file).</li>
+        <li><b>"First processed wins" is not merging.</b> Real-time co-editing (Google Docs) uses operational transforms or CRDTs, which are out of scope here.</li>
+        <li>Even the block store got stricter: Amazon S3 has offered strong read-after-write consistency since December 2020.<a class="cite" href="https://aws.amazon.com/s3/consistency/" target="_blank" rel="noopener">[4]</a></li>
+      </ul>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"how would you shard the metadata DB?"</i> or <i>"how does the server know User 2's edit was based on an old version?"</i>
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 15 "Design Google Drive" (ByteByteGo).</li>
+        <li>Neil Fraser, "Differential Synchronization", 2009.</li>
+        <li>Dropbox Tech, "Rewriting the heart of our sync engine", 2020.</li>
+        <li>AWS, "Amazon S3 Strong Consistency".</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '1503',
+  winTitle: 'Ledger balanced!',
+  badge: '📒 Badge: Ledger Keeper',
+  cheatsheet: '../reference/ch15-google-drive-cheatsheet.html',
+});
+const { sleep, shuffle, esc } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function anim(dur, f) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 1) { f(1); return res(); }
+    const t0 = performance.now();
+    const fr = now => { const p = Math.min(1, (now - t0) / dur); f(p); p < 1 ? requestAnimationFrame(fr) : res(); };
+    requestAnimationFrame(fr);
+  });
+}
+const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+// a packet dot travelling a → b
+async function fly(layer, a, b, cls, dur = 420) {
+  if (Q.reduced) return;
+  const c = S('circle', { r: 7, class: 'pkt ' + (cls || ''), cx: a[0], cy: a[1] }, layer);
+  await anim(dur, p => { const e = ease(p); c.setAttribute('cx', a[0] + (b[0] - a[0]) * e); c.setAttribute('cy', a[1] + (b[1] - a[1]) * e); });
+  c.remove();
+}
+function node(parent, x, y, w, h, title) {
+  const g = S('g', { class: 'nd' }, parent);
+  S('rect', { class: 'nbox', x, y, width: w, height: h, rx: 12 }, g);
+  const t = S('text', { class: 't', x: x + 10, y: y + 20 }, g); t.textContent = title;
+  const v = S('text', { class: 'v', x: x + 10, y: y + 46 }, g);
+  const s = S('text', { class: 's', x: x + 10, y: y + 64 }, g);
+  return {
+    g, v, s,
+    set(val, sub, cls) { if (val !== undefined) v.textContent = val; if (sub !== undefined) s.textContent = sub; if (cls !== undefined) g.setAttribute('class', 'nd ' + cls); },
+    flash() { g.classList.remove('flash'); void g.getBBox(); g.classList.add('flash'); },
+  };
+}
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); Q.addXP(xp || 10, li);
+  return true;
+}
+const pause = ms => sleep(Q.reduced ? 0 : ms);
+// Predict-then-watch round (same pattern as 0002).
+function predict(box, { step, title, options, correct, act, explain, xp = 25 }) {
+  box.innerHTML = `${step ? `<div class="step">${step}</div>` : ''}<h3>${title}</h3><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+  const opts = $('.opts', box);
+  let busy = false;
+  return new Promise(resolve => {
+    shuffle(options.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = async () => {
+        if (busy) return; busy = true;
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        b.classList.add('picked');
+        await act();
+        const ok = i === correct;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-i="${correct}"]`, opts).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + explain;
+        ok ? Q.addXP(xp, b) : Q.loseHeart(b);
+        resolve({ ok, row: $('.row', box) });
+      };
+      opts.appendChild(b);
+    });
+  });
+}
+function keyTap(el, fn) {
+  el.addEventListener('click', fn);
+  el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(e); } });
+}
+
+/* ================= STAGE 1: no two truths ================= */
+Q.onStage(1, () => {
+  const svg = $('#net1');
+  svg.innerHTML = '';
+  // wires
+  const P = { lap: [118, 62], phone: [118, 228], apiA: [150, 128], apiB: [150, 162], apiC: [242, 128], apiD: [242, 162], cache: [276, 62], db: [276, 228] };
+  [['lap', 'apiA'], ['phone', 'apiB'], ['apiC', 'cache'], ['apiD', 'db']].forEach(([a, b]) => S('line', { class: 'wire', x1: P[a][0], y1: P[a][1], x2: P[b][0], y2: P[b][1] }, svg));
+  const N = {
+    lap: node(svg, 8, 24, 110, 76, 'Laptop'),
+    phone: node(svg, 8, 190, 110, 76, 'Phone'),
+    api: node(svg, 150, 112, 92, 66, 'API server'),
+    cache: node(svg, 276, 24, 116, 76, 'Meta cache'),
+    db: node(svg, 276, 190, 116, 86, 'Metadata DB'),
+  };
+  N.api.set('', '');
+  const dbB = S('text', { class: 'v sm', x: 286, y: 254 }, N.db.g);
+  const layer = S('g', {}, svg);
+  const st = { v: 1, lap: 1, phone: 1, cache: 1, dbA: 1, dbB: 1, fixed: false, nosql: false, busy: false };
+  const goals = new Set();
+  let bugShown = false, quizShown = false;
+
+  function draw() {
+    N.lap.set(`q3.pdf v${st.lap}`, 'shows', 'nd');
+    N.phone.set(`q3.pdf v${st.phone}`, 'shows', 'nd');
+    N.cache.set(st.cache === null ? '(empty)' : `f88: v${st.cache}`, st.cache === null ? 'next read = miss' : 'read first', st.cache !== null && st.cache < st.dbA ? 'nd stale' : 'nd');
+    if (st.nosql) {
+      N.db.v.setAttribute('class', 'v sm'); N.db.v.setAttribute('y', 234);
+      N.db.set(`A: f88 v${st.dbA}`, 'eventual', st.dbB < st.dbA ? 'nd warnb' : 'nd');
+      dbB.textContent = `B: f88 v${st.dbB}`; N.db.s.setAttribute('y', 270);
+      N.db.g.querySelector('.t').textContent = 'NoSQL store';
+    } else {
+      N.db.v.setAttribute('class', 'v'); N.db.v.setAttribute('y', 238);
+      N.db.set(`f88: v${st.dbA}`, 'relational · ACID', 'nd');
+      dbB.textContent = ''; N.db.s.setAttribute('y', 260);
+      N.db.g.querySelector('.t').textContent = 'Metadata DB';
+    }
+    const tt = $('#tt');
+    if (st.lap === st.phone) { tt.className = 'tt agree'; tt.textContent = `✓ Both screens show v${st.lap}`; }
+    else { tt.className = 'tt split'; tt.textContent = `⚠ TWO TRUTHS: laptop shows v${st.lap}, phone shows v${st.phone}`; }
+    $('#saveBtn').textContent = `💾 Save v${st.v + 1} on laptop`;
+  }
+
+  function code() {
+    const L = [
+      ['c', '// API server: write path'],
+      ['c', '<span>function saveMetadata(id, v) {</span>'],
+      ['A', '  db.commit(id, { latest: v });'],
+      ...(st.fixed ? [['+', '  cache.delete(id); <span class="cm">// invalidate</span>']] : []),
+      ['B', '  notifyOtherDevices(id);'],
+      ['c', '}'],
+      ['c', '// API server: read path'],
+      ['c', 'function readMetadata(id) {'],
+      ['C', '  return cache.get(id) ?? db.get(id);'],
+      ['c', '}'],
+    ];
+    $('#code1').innerHTML = L.map(([k, t]) => k === 'c' ? `<div class="ln${t.startsWith('//') ? ' cm' : ''}">${t}</div>`
+      : k === '+' ? `<div class="ln added">${t}</div>`
+      : `<button class="ln" data-k="${k}" ${bugPicked || st.fixed ? 'disabled' : ''} aria-label="Code line: ${esc(t.trim())}">${esc(t)}</button>`).join('');
+    $$('#code1 button.ln').forEach(b => b.onclick = () => pickLine(b));
+    if (bugPicked) { const r = $('#code1 button.ln[data-k="A"]'); if (r) r.classList.add('right'); if (bugPicked !== 'A') { const w = $(`#code1 button.ln[data-k="${bugPicked}"]`); if (w) w.classList.add('bad'); } }
+  }
+  let bugPicked = null;
+  const LINE_WHY = {
+    A: 'This line changes the truth in the database and moves on. The cache still holds the old row, and nothing ever tells it.',
+    B: 'Telling the other devices is right: the phone must hear about the change. The trouble is what it gets back when it comes to read.',
+    C: 'Reading the cache first is the whole point of a cache. It\'s only safe if every write keeps the cache honest.',
+  };
+  function pickLine(b) {
+    if (bugPicked) return;
+    bugPicked = b.dataset.k;
+    const ok = bugPicked === 'A';
+    const ex = $('#bugEx'); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+    ex.innerHTML = (ok ? '<b>Found it.</b> ' : '<b>Not that one.</b> ' + LINE_WHY[bugPicked] + ' <b>The culprit is the commit line.</b> ') + LINE_WHY.A;
+    ok ? Q.addXP(10, b) : Q.loseHeart(b);
+    code();
+    showFix();
+  }
+  function showFix() {
+    const box = $('#fixBox');
+    box.innerHTML = `<div class="challenge"><div class="step">Pick the fix</div><h3>What should the write path do right after the commit?</h3></div><div class="opts"></div><div class="explain"></div>`;
+    const OPTS = [
+      { t: 'Delete the file\'s cache entry on every DB write', ok: true },
+      { t: 'Give every cache entry a 59-second expiry (TTL)', why: 'A TTL (time to live) only shortens the lie. For up to 59 seconds the phone can still show v1, and the book wants no window at all.' },
+      { t: 'Add another cache replica, closer to the phone', why: 'Another replica is one more copy that can be stale. The book actually adds a rule for this: cache replicas and the master must stay in sync.' },
+    ];
+    const opts = $('.opts', box);
+    shuffle(OPTS).forEach(o => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o.t;
+      b.onclick = () => {
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        b.classList.add(o.ok ? 'right' : 'wrong');
+        if (!o.ok) $$('.opt', opts).find(x => x.textContent === OPTS[0].t).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (o.ok ? 'good' : 'bad');
+        ex.innerHTML = (o.ok ? '<b>Correct.</b> ' : `<b>Not quite.</b> ${o.why} `) + 'Invalidate on write: delete the cache entry whenever the DB row changes. The next read misses, goes to the DB, and refills the cache with the fresh row. The fix is now in the code above. <b>Save again.</b>';
+        o.ok ? Q.addXP(10, b) : Q.loseHeart(b);
+        st.fixed = true; code();
+        $('#whyNote').style.display = 'block';
+        checkGoal('#s1goals', 'fix', goals);
+        logTo('log1', '🔧 patched: cache.delete(id) after every commit', 'g');
+      };
+      opts.appendChild(b);
+    });
+  }
+
+  async function save() {
+    if (st.busy) return; st.busy = true; $('#saveBtn').disabled = true;
+    const n = st.v + 1;
+    st.lap = n; draw(); N.lap.flash();
+    logTo('log1', `laptop: upload metadata for q3.pdf v${n}`);
+    await fly(layer, P.lap, P.apiA);
+    await fly(layer, P.apiD, P.db);
+    st.dbA = n; if (!st.nosql) st.dbB = n; st.v = n; draw(); N.db.flash();
+    logTo('log1', st.nosql ? `DB node A: write v${n} ✓ (node B will copy it… eventually)` : `DB: commit f88 latest_version = ${n} ✓`, 'g');
+    if (st.fixed) {
+      await fly(layer, P.apiC, P.cache, 'del');
+      st.cache = null; draw(); N.cache.flash();
+      logTo('log1', 'cache.delete(f88) → entry gone');
+    }
+    await fly(layer, P.apiA, P.lap, 'note', 200);
+    await fly(layer, P.apiB, P.phone, 'note');
+    logTo('log1', 'notify phone: "q3.pdf changed, re-read it"', 'w');
+    await fly(layer, P.phone, P.apiB, 'read');
+    await fly(layer, P.apiC, P.cache, 'read');
+    let val;
+    if (st.cache !== null) {
+      val = st.cache;
+      await fly(layer, P.cache, P.apiC, 'read');
+      logTo('log1', `phone read: cache HIT → v${val}${val < n ? ' (stale!)' : ''}`, val < n ? 'e' : 'g');
+    } else {
+      logTo('log1', 'phone read: cache MISS → ask the DB');
+      await fly(layer, P.apiD, P.db, 'read');
+      val = st.nosql ? st.dbB : st.dbA;
+      await fly(layer, P.db, P.apiD, 'read');
+      st.cache = val;
+      logTo('log1', st.nosql ? `read landed on node B → v${val}${val < n ? ' (B hasn\'t caught up)' : ''}; cache refilled with v${val}` : `DB → v${val}; cache refilled with v${val}`, val < n ? 'e' : 'g');
+    }
+    await fly(layer, P.apiB, P.phone, 'read');
+    st.phone = val; draw(); N.phone.flash();
+    if (st.nosql && st.dbB < st.dbA) {
+      $('#tt').className = 'tt lag'; $('#tt').textContent = `⚠ TWO TRUTHS for a while: replica lag (laptop v${st.lap}, phone v${st.phone})`;
+      await pause(900);
+      st.dbB = st.dbA; draw(); $('#tt').className = 'tt lag'; $('#tt').textContent = `⚠ TWO TRUTHS: node B caught up, but the phone (and cache) still hold v${st.phone}`;
+      logTo('log1', `node B copies v${st.dbA}… eventually. The phone already showed v${st.phone}, and the cache was refilled with it. To prevent that you'd have to build consistency yourself.`, 'w');
+    }
+    st.busy = false; $('#saveBtn').disabled = false;
+    after();
+  }
+  function after() {
+    if (!st.fixed && st.phone < st.lap && checkGoal('#s1goals', 'split', goals)) {
+      logTo('log1', '💥 The DB says v' + st.lap + ', but the phone read the cache. Two truths.', 'e');
+      if (!bugShown) { bugShown = true; $('#bugBox').style.display = 'block'; code(); }
+    }
+    if (st.fixed && !st.nosql && st.phone === st.lap && checkGoal('#s1goals', 'agree', goals, 15)) {
+      logTo('log1', '✓ Write → invalidate → read misses → fresh row. One truth.', 'g');
+      $('#dbSeg button[data-m="nosql"]').disabled = false;
+      Q.toast('Now try the NoSQL switch', $('#dbSeg'), 'practice');
+    }
+    if (st.fixed && st.nosql && st.phone < st.lap && checkGoal('#s1goals', 'nosql', goals, 15)) {
+      $('#acidNote').style.display = 'block';
+    }
+    maybeQuiz();
+  }
+  $('#saveBtn').onclick = save;
+  $$('#dbSeg button').forEach(b => b.onclick = () => {
+    if (st.busy || b.disabled) return;
+    st.nosql = b.dataset.m === 'nosql';
+    $$('#dbSeg button').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); });
+    st.dbB = st.dbA; draw();
+    logTo('log1', st.nosql ? 'Swapped in an eventually consistent NoSQL store with two nodes, A and B. Writes land on A, and B copies later.' : 'Back to the relational DB: one committed truth.', 'w');
+  });
+  $('#reset1').onclick = () => {
+    if (st.busy) return;
+    Object.assign(st, { v: 1, lap: 1, phone: 1, cache: 1, dbA: 1, dbB: 1 });
+    draw(); $('#log1').innerHTML = '<div>Reset: q3.pdf is at v1 everywhere.</div>';
+  };
+  draw();
+
+  function maybeQuiz() {
+    if (quizShown || goals.size < 4) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s1quiz'), {
+      q: 'Why does the book pick a relational database for file metadata?',
+      options: ['It supports ACID natively, giving strong consistency', 'It is cheaper to run than any NoSQL store', 'It stores large file contents better than NoSQL', 'NoSQL databases cannot be sharded at all'],
+      correct: 0,
+      good: 'Relational databases give you ACID transactions out of the box, so "every client sees the same latest version" comes almost free. With most NoSQL stores you\'d have to program that into the sync logic yourself.',
+      bad: 'It\'s about guarantees, not cost or file size (file bytes live in block storage, not the DB). Relational databases support ACID natively, which makes strong consistency easy. NoSQL can shard fine.',
+      onDone: () => setTimeout(() => Q.clearStage(1), 900),
+    }), 500);
+  }
+});
+
+/* ================= STAGE 2: draw the tables ================= */
+Q.onStage(2, () => {
+  const TABLES = [
+    { k: 'user', pk: 'user_id', b: 'one row per person' },
+    { k: 'device', pk: 'device_id', b: 'each phone or laptop' },
+    { k: 'namespace', pk: 'id', b: 'a user\'s root folder' },
+    { k: 'file', pk: 'id', b: 'latest state of a file' },
+    { k: 'file_version', pk: 'id', b: 'one row per saved version' },
+    { k: 'block', pk: 'block_id', b: 'one block of one version' },
+  ];
+  const CHIPS = [
+    { f: 'user_name', t: 'user', h: 'A name belongs to the person, not to a phone or a file.' },
+    { f: 'push_id', t: 'device', h: 'Push notifications are sent to a specific phone or laptop.' },
+    { f: 'last_logged_in_at', t: 'device', h: 'Each phone or laptop logs in on its own schedule.' },
+    { f: 'owner_id', t: 'namespace', h: 'This says whose root folder it is.' },
+    { f: 'relative_path', t: 'file', h: 'A path like /reports/q3.pdf describes the file itself, not one version of it.' },
+    { f: 'is_directory', t: 'file', h: 'Folders are rows in the file table too. This flag tells them apart.' },
+    { f: 'latest_version', t: 'file', h: 'The file row points at its newest version, so "open the file" is one lookup.' },
+    { f: 'checksum', t: 'file', h: 'The checksum fingerprints the file\'s current content, so it sits with the file\'s latest state.' },
+    { f: 'file_id', t: 'file_version', h: 'Each version has to say which file it is a version of.' },
+    { f: 'version_number', t: 'file_version', h: 'Version 1, 2, 3… is what makes a row a version.' },
+    { f: 'file_version_id', t: 'block', h: 'Each block row says which version it is part of.' },
+    { f: 'block_order', t: 'block', h: 'Only blocks have a position inside a file: block 0, 1, 2…' },
+  ];
+  const LINKS = [['user', 'device'], ['user', 'namespace'], ['namespace', 'file'], ['file', 'file_version'], ['file_version', 'block']];
+  const TRACE = [
+    { t: 'namespace', r: 'namespace WHERE owner_id = 7 → Alice\'s root folder, id 12' },
+    { t: 'file', r: 'file WHERE namespace = 12 AND relative_path = \'/reports/q3.pdf\' → id 88 (latest_version = 5)' },
+    { t: 'file_version', r: 'file_version WHERE file_id = 88 AND version_number = 3 → id 4102' },
+    { t: 'block', r: 'block WHERE file_version_id = 4102 ORDER BY block_order → b17, b02, b44' },
+    { t: 'store', r: 'GET b17, b02, b44 from cloud storage and join them in order → q3.pdf as it was at revision 3 ✓' },
+  ];
+  const EARLY = {
+    file: 'file paths are relative to a namespace (a user\'s root folder). Find Alice\'s namespace first.',
+    file_version: 'file_version rows are found by file_id, and you don\'t know which file id /reports/q3.pdf has yet.',
+    block: 'block rows are found by file_version_id. You don\'t know which version row you need yet.',
+    store: 'cloud storage fetches blocks by id. You don\'t have the block ids yet.',
+    device: 'the device table knows about Alice\'s laptop and phone, nothing about where q3.pdf is.',
+    namespace: '',
+  };
+  const goals = new Set();
+  let mode = 'fields', chip = null, parent = null, linked = new Set(), ti = 0, quizShown = false, bonus = false;
+  const ORDER = shuffle(CHIPS);
+  const placed = {};
+  TABLES.forEach(t => placed[t.k] = []);
+
+  $('#tgrid').innerHTML = TABLES.map(t => `<div class="tcard" data-t="${t.k}" role="button" tabindex="0" aria-label="${t.k} table"><span class="step"></span><div class="th"><b>${t.k}</b><span>${t.b}</span></div><ul><li class="pk">🔑 ${t.pk}</li></ul><div class="rel"></div></div>`).join('');
+  const card = k => $(`#tgrid .tcard[data-t="${k}"]`);
+  function hint(text, cls) { const h = $('#hint2'); h.className = 'hintline ' + (cls || ''); h.innerHTML = text; }
+  function renderTray() {
+    const left = ORDER.filter(c => !placed[c.t].includes(c.f));
+    $('#tray').innerHTML = left.map(c => `<button class="fchip" data-f="${c.f}" aria-pressed="${chip === c.f}">${c.f}</button>`).join('');
+    $$('#tray .fchip').forEach(b => b.onclick = () => {
+      chip = chip === b.dataset.f ? null : b.dataset.f;
+      $$('#tray .fchip').forEach(x => x.setAttribute('aria-pressed', x.dataset.f === chip));
+      if (chip) hint(`Holding <code>${chip}</code>. Tap the table it belongs in.`, 'neutral');
+    });
+  }
+  function flashCard(el, cls) { el.classList.remove('hit', 'miss'); void el.offsetWidth; el.classList.add(cls); setTimeout(() => el.classList.remove(cls), 700); }
+
+  function onCard(k) {
+    const el = card(k);
+    if (mode === 'fields') {
+      if (!chip) { hint('Pick a field from the tray first.', 'neutral'); flashCard(el, 'miss'); return; }
+      const c = CHIPS.find(x => x.f === chip);
+      if (c.t !== k) {
+        hint(`<code>${c.f}</code> doesn't go in <b>${k}</b>. Hint: ${c.h}`, 'bad');
+        flashCard(el, 'miss');
+        const b = $(`#tray .fchip[data-f="${c.f}"]`); if (b) { b.classList.remove('nope'); void b.offsetWidth; b.classList.add('nope'); }
+        return;
+      }
+      placed[k].push(c.f);
+      $('ul', el).insertAdjacentHTML('beforeend', `<li>${c.f}</li>`);
+      flashCard(el, 'hit');
+      hint(`✓ <code>${c.f}</code> → <b>${k}</b>. ${c.h}`, 'good');
+      chip = null; renderTray();
+      if (CHIPS.every(x => placed[x.t].includes(x.f))) {
+        checkGoal('#s2goals', 'fields', goals, 20);
+        mode = 'links';
+        $('#instr2').innerHTML = '<b>Part A · Links.</b> One user has many devices. Draw each one-to-many link: tap the <b>1</b> side (the parent) first, then the <b>N</b> side (the child). There are 5 to find.';
+        hint('All fields placed. Now the links.', 'good');
+      }
+      return;
+    }
+    if (mode === 'links') {
+      if (!parent) { parent = k; el.classList.add('sel'); hint(`<b>${k}</b> is the parent. Now tap a table that has many rows per one ${k}.`, 'neutral'); return; }
+      const p = parent; parent = null; $$('#tgrid .tcard').forEach(c => c.classList.remove('sel'));
+      if (p === k) { hint('Deselected.', 'neutral'); return; }
+      const key = p + '>' + k;
+      if (linked.has(key)) { hint('Already linked.', 'neutral'); return; }
+      if (LINKS.some(([a, b]) => a === p && b === k)) {
+        linked.add(key);
+        $('.rel', el).insertAdjacentHTML('beforeend', `<div>N per 1 ${p}</div>`);
+        flashCard(el, 'hit');
+        hint(`✓ one <b>${p}</b> → many <b>${k}</b> rows. (${linked.size} of 5)`, 'good');
+        if (LINKS.every(([a, b]) => linked.has(a + '>' + b))) {
+          checkGoal('#s2goals', 'links', goals, 20);
+          $('#er2').classList.add('on');
+          startTrace();
+        }
+        return;
+      }
+      flashCard(el, 'miss');
+      if (LINKS.some(([a, b]) => a === k && b === p)) { hint(`Flip it: one <b>${k}</b> has many <b>${p}</b> rows, not the other way round. Tap the 1 side first.`, 'bad'); return; }
+      if (p === 'device' && k === 'file_version') {
+        if (!bonus) { bonus = true; Q.addXP(5, el); }
+        hint('Sharp! The book\'s file_version table also stores device_id (which device saved it). That\'s a real link, but a bonus one. Find the 5 main links.', 'good');
+        return;
+      }
+      if (p === 'file' && k === 'block') { hint('Close, but blocks don\'t hang off a file directly. They belong to one <i>version</i> of a file.', 'bad'); return; }
+      hint(`<b>${p}</b> and <b>${k}</b> aren't linked directly in this schema.`, 'bad');
+      return;
+    }
+    if (mode === 'trace') traceTap(k, el);
+  }
+  $$('#tgrid .tcard').forEach(el => keyTap(el, () => onCard(el.dataset.t)));
+
+  function startTrace() {
+    mode = 'trace'; ti = 0;
+    $$('#tgrid .tcard').forEach(c => c.classList.remove('used'));
+    $$('#tgrid .tcard .step').forEach(s => s.textContent = '');
+    $('#storeBtn').style.display = 'block'; $('#storeBtn').classList.remove('hit');
+    $('#log2').style.display = 'block'; $('#log2').innerHTML = '<div>Request: Alice (user_id 7, already known from her login) opens revision 3 of /reports/q3.pdf.</div>';
+    $('#instr2').innerHTML = '<b>Part B · Trace.</b> Alice opens <b>revision 3</b> of <code>/reports/q3.pdf</code>. Tap the tables in the order the server reads them, then fetch the bytes from cloud storage. A wrong tap costs a heart.';
+    hint('Where does the server start looking?', 'neutral');
+  }
+  function traceTap(k, el) {
+    const step = TRACE[ti];
+    if (!step) return;
+    if (k === step.t) {
+      if (el.classList.contains('tcard')) { el.classList.add('used'); $('.step', el).textContent = ti + 1; }
+      else el.classList.add('hit');
+      logTo('log2', `${ti + 1}. ${step.r}`, 'g');
+      Q.addXP(6, el);
+      ti++;
+      hint(ti < TRACE.length ? '✓ Next?' : '✓ Revision 3 rebuilt from its blocks, in order.', 'good');
+      if (ti === TRACE.length) {
+        checkGoal('#s2goals', 'trace', goals, 10);
+        $('#instr2').innerHTML = '<b>Done.</b> namespace → file → file_version → block → storage. Old versions survive because nobody edits their rows.';
+        maybeQuiz();
+      }
+      return;
+    }
+    if (k === 'user') { hint('Her login already gave us user_id 7. The user row doesn\'t say where q3.pdf lives. No penalty, keep going.', 'neutral'); return; }
+    if (el.classList.contains('used')) { hint('Already read that one.', 'neutral'); return; }
+    flashCard(el, 'miss');
+    hint(`Not yet: ${EARLY[k] || 'that comes later.'}`, 'bad');
+    Q.loseHeart(el);
+  }
+  $('#storeBtn').onclick = () => { if (mode === 'trace') traceTap('store', $('#storeBtn')); };
+  renderTray();
+  hint('Tap a field, then a table.', 'neutral');
+
+  function maybeQuiz() {
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => Q.quiz($('#s2quiz'), {
+      tag: 'Spot the bug',
+      q: 'A developer runs <code>UPDATE file_version SET last_modified = now() WHERE id = 42</code> to fix a timestamp. What rule did they break?',
+      options: ['Version rows are read-only; history must stay intact', 'Timestamps may only be set by the client device', 'UPDATEs are slow, so they must be batched nightly'],
+      correct: 0,
+      good: 'The book keeps existing file_version rows read-only so the revision history can be trusted. A change means a <b>new</b> version row, never an edit to an old one.',
+      bad: 'The rule is about history, not speed or who sets timestamps. Existing file_version rows are read-only, so the revision history stays intact. A change means a new version row.',
+      onDone: () => setTimeout(() => Q.clearStage(2), 900),
+    }), 500);
+  }
+});
+
+/* ================= STAGE 3: two hands, one file ================= */
+Q.onStage(3, () => {
+  const svg = $('#net3');
+  svg.innerHTML = '';
+  const P = { u1: [130, 54], u2: [130, 196], srvA: [240, 110], srvB: [240, 140] };
+  S('line', { class: 'wire', x1: P.u1[0], y1: P.u1[1], x2: P.srvA[0], y2: P.srvA[1] }, svg);
+  S('line', { class: 'wire', x1: P.u2[0], y1: P.u2[1], x2: P.srvB[0], y2: P.srvB[1] }, svg);
+  const U1 = node(svg, 8, 16, 122, 76, 'User 1');
+  const U2 = node(svg, 8, 158, 122, 76, 'User 2');
+  const SV = node(svg, 240, 78, 152, 96, 'Server');
+  const sv2 = S('text', { class: 's', x: 250, y: 162 }, SV.g);
+  const clock = S('text', { class: 'ckc', x: 200, y: 22 }, svg);
+  const layer = S('g', {}, svg);
+  let resolved = null, quizShown = false;
+
+  function rows(list) {
+    $('#vrows').innerHTML = list.map(r => `<tr class="${r.n ? 'new' : ''}"><td>v${r.v}</td><td>${r.by}</td><td>${r.w}${r.lock ? ' 🔒' : ''}</td></tr>`).join('');
+  }
+  let R = [];
+  function reset() {
+    resolved = null;
+    U1.set('travel→$8k', 'edited from v5', 'nd u1'); U1.v.setAttribute('class', 'v sm u1c');
+    U2.set('hiring→$40k', 'edited from v5', 'nd u2'); U2.v.setAttribute('class', 'v sm u2c');
+    SV.set('budget v5', '', 'nd'); sv2.textContent = '';
+    clock.textContent = 't = 0.00 s';
+    R = [{ v: 4, by: 'U1 laptop', w: 'earlier', lock: true }, { v: 5, by: 'U2 laptop', w: 'base copy', lock: true }];
+    rows(R);
+    $('#resolve').classList.remove('on'); $('#resEx').className = 'explain';
+    $$('#resBtns button').forEach(b => { b.disabled = false; b.classList.remove('primary'); });
+  }
+  async function race() {
+    const d1 = 1020, d2 = 1050, scale = 1.3;
+    const p1 = (async () => {
+      await fly(layer, P.u1, P.srvA, 'u1', d1 * scale);
+      SV.set('budget v6', '1.02 s · U1 → v6', 'nd fresh'); SV.flash();
+      R = R.map(r => ({ ...r, n: false })).concat({ v: 6, by: 'U1 laptop', w: 'travel $8k', lock: true, n: true }); rows(R);
+      logTo('log3', '1.02 s · User 1\'s save processed first → becomes v6', 'g');
+    })();
+    const p2 = (async () => {
+      await fly(layer, P.u2, P.srvB, 'u2', d2 * scale);
+      sv2.textContent = '1.05 s · U2 (from v5) → ?';
+      logTo('log3', '1.05 s · User 2\'s save arrives. It says "I started from v5", but the latest is now v6.', 'w');
+    })();
+    if (!Q.reduced) {
+      const t0 = performance.now();
+      const tick = () => { const t = Math.min(1.05, (performance.now() - t0) / (d2 * scale) * 1.05); clock.textContent = `t = ${t.toFixed(2)} s`; if (t < 1.05) requestAnimationFrame(tick); };
+      requestAnimationFrame(tick);
+    }
+    await Promise.all([p1, p2]);
+    clock.textContent = 't = 1.05 s';
+    await pause(300);
+  }
+  async function conflict() {
+    await fly(layer, P.srvB, P.u2, 'del', 600);
+    U2.set('CONFLICT', 'local copy kept', 'nd conf'); U2.v.setAttribute('class', 'v sm'); U2.flash();
+    sv2.textContent = '1.05 s · U2 → conflict';
+    logTo('log3', 'Server → User 2: sync conflict. Here\'s v6 next to your local copy.', 'e');
+    $('#resolve').classList.add('on');
+    await pause(400);
+  }
+  async function run() {
+    reset();
+    $('#log3').innerHTML = '<div>Server has budget.xlsx v5. Both users edited v5 offline.</div>';
+    await predict($('#p3'), {
+      step: 'Predict 1 of 2',
+      title: 'User 1\'s save reaches the server at <b>1.02 s</b>, User 2\'s at <b>1.05 s</b>. Which edit becomes <b>v6</b>?',
+      options: ['User 1\'s edit, processed first', 'User 2\'s edit, it was saved last', 'Neither: a blend of both edits'],
+      correct: 0,
+      act: race,
+      explain: 'The book\'s rule: <b>the first version processed wins</b>. User 1\'s save got there 30 ms earlier, so it became v6. Which laptop pressed save "last" doesn\'t matter.',
+    });
+    const { row } = await predict($('#p3'), {
+      step: 'Predict 2 of 2',
+      title: 'User 2\'s save was based on v5, but the server is now at v6. What happens to User 2\'s edit?',
+      options: ['It silently overwrites v6', 'User 2 gets a conflict and sees both copies', 'The server merges the two cell by cell'],
+      correct: 1,
+      act: conflict,
+      explain: 'The later save <b>receives a conflict</b>. The system shows User 2 both copies: their local copy and the latest version from the server. User 2 decides: merge them, or let one override the other.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-google-drive" target="_blank" rel="noopener">[1]</a> The sync system sees files as blocks of bytes, not spreadsheet cells, so it doesn\'t merge for you. Notice that User 2 edited a <i>different</i> cell and still got a conflict. Pick an option in the red card.',
+    });
+    row.innerHTML = '';
+  }
+  const RES = {
+    merge: { v: { v: 7, by: 'U2 laptop', w: 'merged: $8k + $40k', lock: true, n: true }, srv: 'budget v7', ex: 'User 2 combined both edits and saved <b>v7</b>. Look at the table: v6 is untouched. Versions only ever get <i>added</i>.' },
+    mine: { v: { v: 7, by: 'U2 laptop', w: 'U2 copy (travel back to $6k)', lock: true, n: true }, srv: 'budget v7', ex: 'User 2\'s copy became <b>v7</b>. That undoes User 1\'s travel change in the latest version, but v6 is still in the history, so nothing is truly lost.' },
+    theirs: { v: null, srv: 'budget v6', ex: 'User 2 dropped their local edit and took v6. No new row: v6 stays the latest. User 2 chose that knowingly, which is the whole point.' },
+  };
+  $$('#resBtns button').forEach(b => b.onclick = () => {
+    if (resolved) return;
+    resolved = b.dataset.r;
+    const r = RES[resolved];
+    $$('#resBtns button').forEach(x => x.disabled = true);
+    b.classList.add('primary');
+    if (r.v) { R = R.map(x => ({ ...x, n: false })).concat(r.v); rows(R); }
+    SV.set(r.srv, resolved === 'theirs' ? 'User 2 now matches v6' : 'v7 from User 2', 'nd fresh'); sv2.textContent = '';
+    U2.set(resolved === 'theirs' ? 'has v6' : 'saved v7', 'in sync', 'nd u2'); U2.v.setAttribute('class', 'v sm u2c');
+    U1.set(r.v ? 'pulls v7' : 'has v6', r.v ? 'notified of change' : 'already in sync', 'nd u1');
+    const ex = $('#resEx'); ex.className = 'explain show good'; ex.innerHTML = r.ex;
+    logTo('log3', `User 2 chose: ${b.textContent.replace('🔀 ', '')}`, 'g');
+    Q.addXP(10, b);
+    $('#realNote').style.display = 'block';
+    maybeQuiz();
+  });
+  function maybeQuiz() {
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => Q.quiz($('#s3quiz'), {
+      q: 'Why not just let the last write win, silently?',
+      options: ['The first user\'s edits would vanish without anyone knowing', 'The server would need twice as much disk for versions', 'It would make uploads noticeably slower for both users'],
+      correct: 0,
+      good: 'Silent last-write-wins throws away User 1\'s work with no warning. That\'s data loss, and reliability is the #1 requirement for a file store. A conflict makes the loss visible and lets a human decide.',
+      bad: 'It isn\'t about disk or speed. Silently overwriting would throw away the first user\'s edits with no warning. That\'s data loss, and reliability is the #1 requirement.',
+      onDone: () => setTimeout(() => {
+        Q.clearStage(3);
+        $('#p3').innerHTML = '<div class="row"><button class="btn" id="replay3">↻ Replay the race</button></div>';
+        $('#replay3').onclick = () => run();
+      }, 900),
+    }), 500);
+  }
+  run();
+});
+
+/* ================= STAGE 4: boss ================= */
+Q.onStage(4, () => Q.boss($('#boss'), {
+  name: '👾 The Split-Brain Sprite',
+  xp: 20,
+  scenarios: [
+    { e: '📱', t: 'The phone shows the old file name', d: 'After a rename, the phone shows the old name for a minute while the laptop shows the new one. What\'s wrong, and what do you change?', a: 'inv',
+      choices: [
+        { k: 'inv', label: 'Invalidate on write', sub: 'delete the cache entry when the DB row changes' },
+        { k: 'rep', label: 'More cache replicas', sub: 'spread the reads over more copies' },
+        { k: 'ttl', label: 'TTL of 59 seconds', sub: 'make stale entries expire a bit sooner' },
+      ],
+      why: 'A stale metadata cache. The book\'s fix: invalidate the cache on every database write (and keep cache replicas in sync with the master). A shorter TTL only shrinks the window; more replicas are more copies to go stale.' },
+    { e: '🗃️', t: '"Why not Cassandra, for scale?"', d: 'The interviewer pushes: why not keep the metadata in a NoSQL store like Cassandra?', a: 'acid',
+      choices: [
+        { k: 'acid', label: 'Possible, but no native ACID', sub: 'we\'d build strong consistency ourselves' },
+        { k: 'str', label: 'It can\'t store strings', sub: 'so file names and paths won\'t fit' },
+        { k: 'slow', label: 'NoSQL is always slower', sub: 'so it can\'t keep up with sync traffic' },
+      ],
+      why: 'It could work, but most NoSQL stores don\'t give ACID by default, so strong consistency would have to live in our sync logic. A relational DB has it natively, and we can still shard it (e.g. by user) to scale.' },
+    { e: '🕰️', t: 'Restore last week\'s revision', d: 'A user wants revision 3 of a file that is now at revision 8.', a: 'join',
+      choices: [
+        { k: 'join', label: 'Join v3\'s blocks in order', sub: 'file_version 3 → its block rows by block_order' },
+        { k: 'snap', label: 'Restore a bucket snapshot', sub: 'roll the whole S3 bucket back a week' },
+        { k: 'gone', label: 'Impossible once v4 exists', sub: 'newer versions replaced the old blocks' },
+      ],
+      why: 'Find the file_version row with version_number 3, read its block rows ordered by block_order, fetch those blocks and join them. Version rows are read-only and old blocks are kept, so any revision can be rebuilt.' },
+    { e: '⚔️', t: 'Two saves, 50 ms apart', d: 'Two coworkers save the same slide deck within 50 ms of each other.', a: 'first',
+      choices: [
+        { k: 'first', label: 'First processed wins', sub: 'the later save gets a conflict + both copies' },
+        { k: 'big', label: 'Keep the bigger file', sub: 'more bytes means more work was saved' },
+        { k: 'none', label: 'Reject both saves', sub: 'ask both people to try again later' },
+      ],
+      why: 'The first version processed wins and becomes the new version. The later one gets a sync conflict, and that user sees their local copy next to the server\'s latest and can merge or pick one.' },
+  ],
+  outro: 'One truth per file: invalidate caches on write, keep metadata in an ACID store, never edit old versions, and turn simultaneous edits into a visible conflict.',
+  onDone: () => Q.clearStage(4),
+}));
+
+/* ================= STAGE 5: interview drill ================= */
+Q.onStage(5, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"How do you make sure every device sees the same file, and what happens if two people edit it at once?"</i>',
+  placeholder: 'File metadata needs strong consistency, so…',
+  model: '"File metadata needs strong consistency: two clients must never see different versions of the same file. So I\'d keep metadata in a relational database for native ACID, shard it by user, and invalidate the metadata cache on every write so the cache never serves a stale version. The schema is user, device, namespace, file, file_version and block. Versions are append-only, and each version maps to an ordered list of blocks, so any revision can be rebuilt. For concurrent edits, the first change processed wins. The later one gets a conflict, the user sees both their local copy and the server\'s latest, and they can merge or pick one. Nothing is silently lost."',
+  checks: [
+    'I said metadata needs strong consistency (no two devices see different versions)',
+    'I chose a relational DB because ACID comes built in',
+    'I said the cache is invalidated on every write',
+    'I said file_version rows are append-only / read-only',
+    'I said a version is rebuilt from its blocks in order',
+    'I said the first processed edit wins and the other user sees both copies',
+  ],
+  onDone: () => Q.clearStage(5),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

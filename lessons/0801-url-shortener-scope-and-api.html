@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Specs for a Shrink Ray</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: s1 question deck + sticky note, s2 calculator + knobs, s3 request builder, s4 redirect sim, s5 hash table + RAM gauge */
+:root { --sticky: #fff3b0; --sticky-ink: #4d3d00; --sticky-line: #e9d77a; --bubble: #eef0ff; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --sticky: #3a3414; --sticky-ink: #ffe98a; --sticky-line: #5c5320; --bubble: #23264a; }
+}
+:root[data-theme="dark"] { --sticky: #3a3414; --sticky-ink: #ffe98a; --sticky-line: #5c5320; --bubble: #23264a; }
+
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.given { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 4px; }
+.given span { font-family: var(--mono); font-size: 12.5px; padding: 5px 9px; border-radius: 8px; background: var(--sticky); color: var(--sticky-ink); border: 1px solid var(--sticky-line); }
+
+/* stage 1: question deck */
+.deckwrap { display: grid; grid-template-columns: 1fr 230px; gap: 14px; align-items: start; margin-top: 14px; }
+@media (max-width: 700px) { .deckwrap { grid-template-columns: 1fr; } }
+.deck { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+@media (max-width: 560px) { .deck { grid-template-columns: repeat(2, 1fr); } }
+.qcard { perspective: 800px; border: 0; padding: 0; background: none; text-align: left; display: grid; }
+.qcard-in { display: grid; min-height: 96px; transform-style: preserve-3d; transition: transform .6s cubic-bezier(.3,.7,.2,1); }
+.qcard .qface { grid-area: 1 / 1; backface-visibility: hidden; -webkit-backface-visibility: hidden; border-radius: 12px; padding: 10px 11px; border: 2px solid var(--line); background: var(--panel); font-size: 14px; font-weight: 600; line-height: 1.3; display: flex; flex-direction: column; gap: 4px; }
+.qcard .qface small { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.qcard:hover .qface.qfront { border-color: var(--accent); }
+.qcard .qface.qback { transform: rotateY(180deg); background: var(--good-soft); border-color: var(--good); }
+.qcard .qface.qback small { color: var(--good); }
+.qcard .qface.qback span { font-family: var(--mono); font-size: 12.5px; font-weight: 600; word-break: break-word; }
+.qcard.flipped .qcard-in { transform: rotateY(180deg); }
+.qcard.flipped { cursor: default; }
+.qcard.struck .qface.qfront { opacity: .5; border-style: dashed; }
+.qcard.struck .qface.qfront b { text-decoration: line-through; }
+.qcard.nope .qcard-in { animation: shake .4s; }
+.bubble { position: relative; margin-top: 12px; background: var(--bubble); border-radius: 14px; padding: 12px 14px; font-size: 15px; min-height: 48px; }
+.bubble::before { content: ""; position: absolute; left: 22px; top: -8px; border: 8px solid transparent; border-top: 0; border-bottom-color: var(--bubble); }
+.bubble.bad { background: var(--bad-soft); }
+.bubble.bad::before { border-bottom-color: var(--bad-soft); }
+.bubble .who { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); display: block; }
+.bubble code { word-break: break-all; }
+.sticky { background: var(--sticky); color: var(--sticky-ink); border-radius: 4px 4px 14px 4px; padding: 14px 14px 12px; box-shadow: var(--shadow); transform: rotate(-1.2deg); }
+.sticky h3 { margin: 0 0 6px; font-size: 15px; letter-spacing: .04em; }
+.sticky ol { margin: 0; padding-left: 18px; font-size: 13.5px; font-family: var(--mono); }
+.sticky li { margin: 3px 0; border-bottom: 1px dashed var(--sticky-line); padding-bottom: 3px; animation: rise .35s; }
+.sticky .empty { font-size: 13px; opacity: .75; }
+.sticky .cnt { float: right; font-size: 12px; font-weight: 700; }
+
+/* stage 2: calculator */
+.calcs { display: grid; gap: 10px; margin-top: 12px; }
+.calc { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--bg); }
+.calc.ok { border-color: var(--good); background: var(--good-soft); }
+.calc .lbl { font-weight: 700; font-size: 15px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.calc .lbl span { font-weight: 500; color: var(--muted); font-size: 13px; }
+.calc .row { margin-top: 8px; gap: 8px; }
+.calc input { width: 130px; min-width: 0; flex: 1 1 110px; max-width: 180px; height: 42px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 0 10px; font: 600 16px var(--mono); }
+.calc select { height: 42px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 0 8px; font: 600 15px var(--mono); }
+.calc .btn { padding: 8px 12px; font-size: 14px; min-height: 42px; }
+.calc .hint { display: none; margin-top: 8px; font-size: 14px; color: var(--muted); }
+.calc .hint.show { display: block; animation: rise .3s; }
+.calc .msg { margin-top: 6px; font-size: 14px; font-weight: 600; min-height: 0; }
+.calc .msg.good { color: var(--good); }
+.calc .msg.bad { color: var(--bad); }
+.knobs { display: none; margin-top: 16px; }
+.knobs.on { display: block; animation: rise .4s; }
+.knob { padding: 8px 14px 0; display: grid; gap: 2px; }
+.knob label { display: flex; justify-content: space-between; font-weight: 600; font-size: 14px; gap: 8px; }
+.knob label b { font-family: var(--mono); }
+.knob input { width: 100%; accent-color: var(--accent); height: 30px; }
+.outs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 12px 14px; }
+@media (max-width: 620px) { .outs { grid-template-columns: repeat(2, 1fr); } }
+.out { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; text-align: center; }
+.out b { display: block; font: 700 19px var(--mono); line-height: 1.25; transition: color .3s; }
+.out span { font-size: 12px; color: var(--muted); }
+.out.hot b { color: var(--bad); }
+.reflect { display: none; }
+.reflect.show { display: block; animation: rise .35s; }
+
+/* stage 3: request builder */
+.reqs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+@media (max-width: 720px) { .reqs { grid-template-columns: 1fr; } }
+.req { border: 1px solid var(--line); border-radius: 16px; background: var(--bg); padding: 14px; min-width: 0; }
+.req.ok { border-color: var(--good); }
+.req h3 { margin: 0 0 2px; font-size: 17px; display: flex; justify-content: space-between; gap: 8px; }
+.req h3 .st { font-size: 12px; font-weight: 700; color: var(--muted); }
+.req.ok h3 .st { color: var(--good); }
+.req .goalline { font-size: 13.5px; color: var(--muted); margin: 0 0 6px; }
+.req .k { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-top: 10px; }
+.pick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.pick button { font-family: var(--mono); font-size: 13px; min-height: 40px; padding: 6px 10px; border-radius: 9px; border: 2px solid var(--line); background: var(--panel); }
+.pick button:hover { border-color: var(--accent); }
+.pick button.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.req .send { margin-top: 12px; }
+.resp { margin-top: 12px; border-radius: 12px; overflow: hidden; display: none; }
+.resp.show { display: block; animation: rise .3s; }
+.resp pre { margin: 0; background: var(--code-bg); color: var(--code-ink); font: 12.5px/1.5 var(--mono); padding: 10px 12px; white-space: pre-wrap; word-break: break-all; }
+.resp pre .s2 { color: #6ee7a8; font-weight: 700; }
+.resp pre .s3 { color: #9fd0ff; font-weight: 700; }
+.resp pre .s4 { color: #ff8a8a; font-weight: 700; }
+.resp pre .dim { color: #8b90b8; }
+.resp p { margin: 0; padding: 9px 12px; font-size: 14px; background: var(--bad-soft); }
+.resp.good p { background: var(--good-soft); }
+
+/* stage 4: redirect sim */
+.rsim svg { max-width: 560px; margin: 0 auto; }
+.rsim .nbox { fill: var(--panel); stroke: var(--line); stroke-width: 2; }
+.rsim .nbox.srv { stroke: var(--accent); }
+.rsim .nbox.dst { stroke: var(--teal); }
+.rsim .bar { fill: var(--bg-2); }
+.rsim .lbl { fill: var(--ink); font: 700 14.5px var(--font); text-anchor: middle; }
+.rsim .sm { fill: var(--muted); font: 600 13px var(--font); text-anchor: middle; }
+.rsim .bignum { fill: var(--accent); font: 700 22px var(--mono); text-anchor: middle; }
+.rsim .lane { fill: none; stroke: var(--line); stroke-width: 2.5; stroke-dasharray: 4 6; }
+.rsim .pkt rect { fill: var(--ink); }
+.rsim .pkt text { fill: var(--bg); font: 700 12px var(--mono); text-anchor: middle; dominant-baseline: central; }
+.rsim .pkt.ret rect { fill: var(--accent); }
+.rsim .pkt.ret text { fill: #fff; }
+.rsim .pkt.page rect { fill: var(--teal); }
+.rsim .pkt.page text { fill: #fff; }
+.rsim .cache { opacity: 0; transition: opacity .3s; }
+.rsim .cache.on { opacity: 1; }
+.rsim .cache rect { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 1.5; }
+.rsim .cache text { fill: var(--ink); font: 700 12px var(--mono); text-anchor: middle; dominant-baseline: central; }
+.rsim .pulse { animation: spulse .6s; transform-box: fill-box; transform-origin: center; }
+@keyframes spulse { 40% { transform: scale(1.12); } }
+.codesel { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.codesel .seg button { min-height: 40px; padding: 6px 14px; font-size: 14px; }
+.codesel .done-tag { font-size: 13px; font-weight: 700; color: var(--good); }
+.counters { display: flex; gap: 14px; flex-wrap: wrap; font-size: 14px; }
+.counters b { font-family: var(--mono); }
+
+/* stage 5: hash table */
+.htable { padding: 12px 14px; }
+.htable .row input { flex: 1 1 200px; min-width: 0; height: 42px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 0 10px; font: 14px var(--mono); }
+.htable .chips .chip { min-height: 40px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tbl { margin-top: 12px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--panel); }
+.tbl .th, .tbl .tr { display: grid; grid-template-columns: 110px 1fr; gap: 10px; align-items: center; padding: 7px 12px; font-family: var(--mono); font-size: 13px; }
+.tbl .th { background: var(--bg-2); font-weight: 700; color: var(--muted); font-size: 12px; }
+.tbl .tr { border-top: 1px solid var(--line); animation: rise .3s; }
+.tbl .tr.flash { background: var(--warn-soft); }
+.tbl .tr.hit { background: var(--good-soft); }
+.tbl .tr button { font: 700 13px var(--mono); color: var(--accent); background: var(--accent-soft); border: 0; border-radius: 8px; padding: 0 8px; min-height: 40px; text-align: left; }
+.tbl .tr span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.tbl .none { padding: 10px 12px; color: var(--muted); font-size: 13px; }
+.gauge { margin-top: 14px; }
+.gauge .gl { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 14px; font-weight: 600; }
+.gauge .gl b { font-family: var(--mono); }
+.gtrack { position: relative; margin-top: 6px; height: 26px; border-radius: 8px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; }
+.gfill { position: absolute; inset: 0 auto 0 0; width: 0; min-width: 2px; background: linear-gradient(90deg, var(--teal), var(--accent)); }
+.gauge.over .gfill { background: var(--bad); }
+.gauge.over .gtrack { border-color: var(--bad); animation: shake .4s 2; }
+#htLog { word-break: break-all; }
+.gmsg { margin-top: 8px; font-size: 14px; font-weight: 600; min-height: 22px; }
+.gauge.over .gmsg { color: var(--bad); }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 8.1 · Design a URL Shortener</div>
+    <h1>Specs for a Shrink Ray</h1>
+    <p class="lede">The interviewer says "Design TinyURL." Don't start drawing yet. First find out what you're building and how big it is, then sketch the two calls everyone will make.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> in the first five minutes you can ask the right scoping questions, work out about <b>1,160 writes/s</b>, <b>11,600 reads/s</b>, <b>365 billion records</b> and <b>36.5 TB</b>, name the two endpoints, and say when you'd use <b>301 vs 302</b>.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Ask before you draw</h2><div class="sub">Step 1 · scope the prompt</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>A <b>URL shortener</b> turns a long web address into a tiny one. Paste a long link in, get something like <code>tinyurl.com/y7keocwj</code> back. Anyone who clicks the tiny link lands on the original page.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-url-shortener" target="_blank" rel="noopener">[1]</a></p>
+      <p>The book's prompt is deliberately vague: <i>"design a URL shortener like TinyURL."</i> Step 1 of the interview framework is to ask questions until it isn't vague any more. Below are 9 questions you could ask. <b>Tap the 5 you'd ask first.</b> The interviewer answers the good ones, and each answer goes on your requirements note.</p>
+      <p class="small muted">Careful: a question about tools (languages, databases, platforms) is not a requirement. Asking one now costs a heart.</p>
+      <div class="deckwrap">
+        <div>
+          <div class="deck" id="deck"></div>
+          <div class="bubble" id="bubble" aria-live="polite"><span class="who">Interviewer</span>"Design a URL shortener like TinyURL. Go."</div>
+        </div>
+        <aside class="sticky" aria-label="Requirements note"><h3>📌 Requirements <span class="cnt" id="stickyCnt">0 / 5</span></h3><ol id="sticky"></ol><div class="empty" id="stickyEmpty">Nothing yet. Ask something!</div></aside>
+      </div>
+      <div class="callout tip" id="scopeNote" style="display:none"><b>What you now know.</b> Two <b>use cases</b> (things users do): <b>shortening</b> (long URL in, short URL out) and <b>redirecting</b> (short URL in, browser sent on to the long URL). Plus three <b>non-functional</b> needs, meaning qualities rather than features: <b>high availability</b> (it stays up), <b>scalability</b> (it grows by adding machines) and <b>fault tolerance</b> (it keeps working when a part breaks).<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-url-shortener" target="_blank" rel="noopener">[1]</a> Every one of these answers will matter in a later quest.</div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Napkin math</h2><div class="sub">Back-of-the-envelope, then play with the knobs</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>A <b>back-of-the-envelope estimate</b> is a rough calculation you do out loud in a minute. It tells you how big the system is, so you know which problems are real. The book works from four givens:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-url-shortener" target="_blank" rel="noopener">[1]</a></p>
+      <div class="given"><span>100M new URLs / day</span><span>reads : writes = 10 : 1</span><span>runs for 10 years</span><span>avg URL = 100 bytes</span></div>
+      <p>Work out the four numbers below. Anything within <b>±10%</b> counts, so round freely. Pick a unit (K = thousand, M = million, B = billion, T = trillion) or type the full number. Hints are free.</p>
+      <div class="calcs" id="calcs"></div>
+      <div class="callout tip"><b>Interview tip.</b> A day has 86,400 seconds. Call it ~100,000 and the math gets easy: 100 million ÷ 100,000 = 1,000 writes/s, "so a bit more, about 1,200." Say every assumption out loud. Interviewers grade the reasoning, not the decimals.</div>
+
+      <div class="knobs" id="knobs">
+        <p><b>All four correct.</b> Your boxes are now live formulas. Turn the knobs.</p>
+        <div class="sim">
+          <div class="knob"><label for="kUrls"><span>New URLs per day</span><b id="kUrlsV"></b></label><input type="range" id="kUrls" min="0" max="6" step="1" value="3" aria-label="New URLs per day"></div>
+          <div class="knob"><label for="kRatio"><span>Read : write ratio</span><b id="kRatioV"></b></label><input type="range" id="kRatio" min="1" max="100" step="1" value="10" aria-label="Read to write ratio"></div>
+          <div class="knob"><label for="kYears"><span>Years of data</span><b id="kYearsV"></b></label><input type="range" id="kYears" min="1" max="20" step="1" value="10" aria-label="Years"></div>
+          <div class="knob"><label for="kBytes"><span>Average URL size</span><b id="kBytesV"></b></label><input type="range" id="kBytes" min="50" max="500" step="10" value="100" aria-label="Average URL bytes"></div>
+          <div class="outs">
+            <div class="out"><b id="oW"></b><span>writes / s</span></div>
+            <div class="out"><b id="oR"></b><span>reads / s</span></div>
+            <div class="out"><b id="oN"></b><span>records</span></div>
+            <div class="out" id="oSbox"><b id="oS"></b><span>storage</span></div>
+          </div>
+        </div>
+        <div class="challenge boxed" style="margin-top:12px">
+          <div class="step">Mini-challenge · bonus</div>
+          <h3>Drag the knobs until storage passes 100 TB. Which knob moved it fastest?</h3>
+          <p class="small muted" style="margin:0">No wrong answer. Just notice.</p>
+          <div class="callout reflect" id="reflect"><b>💡 What you just saw.</b> Storage = URLs/day × 365 × years × bytes. Each of those three knobs multiplies storage directly, so the one with the widest range (URLs/day, 100× from end to end) moves it fastest. And the <b>read : write</b> knob didn't touch storage at all. Reads don't create rows; they drive QPS (queries per second) and caching, not disk.</div>
+        </div>
+        <div class="callout warn"><b>Honest caveat.</b> 36.5 TB counts only the long URLs. Real storage also holds the short codes, IDs, timestamps and indexes, and is usually copied about 3 times for safety. So expect a real number several times bigger. Also, 10:1 is the book's assumption. Popular shorteners are far more read-heavy, which makes caching even more valuable.</div>
+        <div id="s2quiz"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Two doors in</h2><div class="sub">Step 2 · the API endpoints</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>An <b>API endpoint</b> is one address the outside world can call. The book uses a <b>REST</b> style: each call is an HTTP <b>method</b> (the verb: GET reads, POST creates, PUT replaces, DELETE removes) sent to a <b>path</b> (the noun), sometimes with a <b>body</b> (data attached to the request).<a class="cite" href="https://www.restapitutorial.com/index.html" target="_blank" rel="noopener">[2]</a> Our two use cases need exactly two endpoints.</p>
+      <p>Build each request from the chips and press <b>Send</b>. The mock server answers like a real one. Error codes are free here: read them, they explain themselves.</p>
+      <div class="reqs" id="reqs"></div>
+      <div class="callout" id="apiNote" style="display:none"><b>The two endpoints, as the book writes them.</b><a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-url-shortener" target="_blank" rel="noopener">[1]</a><br>
+        <code>POST api/v1/data/shorten</code> with body <code>{longUrl: longURLString}</code> → returns the short URL.<br>
+        <code>GET api/v1/shortUrl</code> → returns the long URL inside an <b>HTTP redirect</b>.<br>
+        <span class="muted small">In practice the redirect lives at the root (<code>tinyurl.com/y7keocwj</code>, no <code>/api/v1/</code>) so the short URL stays short. Many APIs also answer a create with <code>201 Created</code> instead of <code>200 OK</code>.</span></div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>301 or 302?</h2><div class="sub">Predict, then watch the browser</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>When a short link is clicked, the shortener doesn't send back a page. It sends a <b>redirect</b>: a status code plus a <b>Location</b> header (a named line in the response) holding the long URL. The browser reads it and goes there by itself. Two codes are in play:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-url-shortener" target="_blank" rel="noopener">[1]</a></p>
+      <ul>
+        <li><b>301 Moved Permanently</b>: "this address has moved for good." Browsers <b>cache</b> it (remember it locally).<a class="cite" href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/301" target="_blank" rel="noopener">[3]</a></li>
+        <li><b>302 Found</b>: "it's over there for now." Nothing is remembered; ask again next time.<a class="cite" href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/302" target="_blank" rel="noopener">[4]</a></li>
+      </ul>
+      <p>Pick a code, predict, then click the same short link three times and watch who gets asked.</p>
+      <div class="codesel"><span class="seg" id="codeSeg" role="group" aria-label="Redirect status code"><button data-c="301" class="on" aria-pressed="true">301</button><button data-c="302" aria-pressed="false">302</button></span><span class="done-tag" id="codeDone"></span></div>
+      <div class="challenge boxed" id="r4predict"></div>
+      <div class="sim rsim">
+        <svg id="rsvg" viewBox="0 0 400 236" role="img" aria-label="Browser, shortener server and destination site, with requests travelling between them"></svg>
+        <div class="sim-bar">
+          <span class="row" style="gap:8px"><button class="btn primary" id="clickBtn" style="padding:8px 14px;font-size:14px" disabled>👆 Click the short link</button><button class="btn" id="cacheBtn" style="padding:8px 12px;font-size:14px">🧹 Clear browser cache</button></span>
+          <span class="counters"><span>Shortener saw: <b id="cSeen">0</b></span><span>Clicks logged: <b id="cLog">0</b></span><span>Link clicks: <b id="cClicks">0</b></span></span>
+        </div>
+        <div class="simlog" id="r4log"><div>Predict first, then click.</div></div>
+      </div>
+      <ul class="checklist" id="s4goals">
+        <li data-g="301"><span class="box">✓</span><span>Predict and run three clicks with <b>301</b></span></li>
+        <li data-g="302"><span class="box">✓</span><span>Predict and run three clicks with <b>302</b></span></li>
+      </ul>
+      <div class="callout" id="redirNote" style="display:none"><b>The interview line:</b> "301 if we want to cut server load, since the browser goes straight to the long URL next time. 302 if we want analytics, such as click rate and where clicks come from, since every click passes through us."<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-url-shortener" target="_blank" rel="noopener">[1]</a></div>
+      <div class="callout warn"><b>Honest caveat.</b> The book's "301 = no analytics" is a useful simplification, not a law. Popular shorteners such as Bitly answer with 301 and still count clicks, because each browser's first click is logged and browsers don't keep a 301 forever. There are also <b>307</b> and <b>308</b>: like 302 and 301, except the browser must repeat the same HTTP method.<a class="cite" href="https://www.rfc-editor.org/rfc/rfc9110.html#name-redirection-3xx" target="_blank" rel="noopener">[5]</a> For GET-only redirects, 301 vs 302 is the whole story; bring up 307/308 only if asked.</div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>The obvious version</h2><div class="sub">Step 2 · shortening with a hash table</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The simplest design the book starts from: keep a <b>hash table</b> (a lookup table from key to value, like a dictionary) of <code>&lt;shortURL, longURL&gt;</code> pairs. A <b>hash function</b> <code>fx(longURL) = hashValue</code> turns each long URL into a short value, and the short URL is <code>www.tinyurl.com/{hashValue}</code>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-url-shortener" target="_blank" rel="noopener">[1]</a></p>
+      <p>The function has two jobs: each long URL must map to <b>one</b> hashValue, and each hashValue must map <b>back</b> to its long URL. Try both below. (This toy function is a stand-in. Choosing a real one is the next quest.)</p>
+      <div class="sim">
+        <div class="htable">
+          <div class="row"><input id="htIn" type="url" placeholder="https://… paste or pick a long URL" aria-label="Long URL"><button class="btn primary" id="htGo" style="min-height:42px">Shorten</button></div>
+          <div class="chips" id="htChips"></div>
+          <div class="tbl" id="htTbl"><div class="th"><span>shortURL</span><span>longURL</span></div><div class="none" id="htNone">empty: shorten something</div></div>
+          <div class="gauge" id="gauge">
+            <div class="gl"><span>Server RAM</span><span><b id="gUsed">0 B</b> of <b>256 GB</b></span></div>
+            <div class="gtrack"><div class="gfill" id="gFill"></div></div>
+            <div class="gmsg" id="gMsg">Your table is tiny. But how big does it get?</div>
+          </div>
+        </div>
+        <div class="sim-bar"><button class="btn" id="ffBtn" style="padding:8px 14px;font-size:14px">⏩ Fast-forward 10 years</button><span class="small muted" id="ffDay">today</span></div>
+        <div class="simlog" id="htLog"><div>In-memory hash table on one server.</div></div>
+      </div>
+      <ul class="checklist" id="s5goals">
+        <li data-g="two"><span class="box">✓</span><span>Shorten two different long URLs</span></li>
+        <li data-g="same"><span class="box">✓</span><span>Shorten one of them again: do you get the same code?</span></li>
+        <li data-g="back"><span class="box">✓</span><span>Tap a short code to look it back up (that's a redirect)</span></li>
+        <li data-g="ff"><span class="box">✓</span><span>Fast-forward 10 years and watch the RAM</span></li>
+      </ul>
+      <div id="s5quiz"></div>
+      <div class="callout tip" style="margin-top:16px"><b>Cliff-hanger.</b> So the table goes in a database. But how do you make <code>fx</code> spit out something only 7 characters long, and what happens when two long URLs get the same code? That's Quest 8.2, <a href="0802-url-shortener-hash-and-collisions.html"><i>Seven Characters or Bust</i></a>.</div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Boss: The Redirect Riddler</h2><div class="sub">Pick the right status code for each client</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Six clients, six wishes. For each one, pick the redirect you'd send. Think <b>caching</b> (301, less load) versus <b>seeing every click</b> (302, analytics).</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 7 ================= -->
+  <section class="stage" data-stage="7" id="s7">
+    <div class="stage-h"><div class="num">7</div><div><h2>Say it like a senior</h2><div class="sub">The first five minutes, out loud</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>What's next in this world.</b> 8.2 picks the hash and handles collisions, 8.3 counts in base 62, 8.4 walks both flows and adds a cache, and the boss makes you do it all live in 45 minutes.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-url-shortener" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 8: Design a URL Shortener</a>. Read Step 1 (the requirements dialogue and the estimation) and the first half of Step 2 (API endpoints, URL redirecting, URL shortening). Then skim MDN's pages on <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/301" target="_blank" rel="noopener">301</a> and <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/302" target="_blank" rel="noopener">302</a>, and the <a href="https://www.rfc-editor.org/rfc/rfc9110.html#name-redirection-3xx" target="_blank" rel="noopener">redirection section of RFC 9110</a> if you want the official rules.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <ul style="margin:0;padding-left:20px">
+        <li>Real shorteners mostly send <b>301</b> and still have analytics: each browser's first click is logged, and a cached 301 doesn't live forever. Treat "301 = no stats" as the book's simplification.</li>
+        <li><b>307/308</b> are the method-preserving twins of 302/301. Mention them only if the interviewer asks.</li>
+        <li><b>36.5 TB is a floor.</b> Add short codes, IDs, timestamps, indexes and ×3 replication, and the real number is several times bigger.</li>
+        <li><b>10:1</b> is an assumption. Real shorteners are far more read-heavy, which strengthens the case for a cache (Quest 8.4).</li>
+        <li>The book writes the redirect as <code>GET api/v1/shortUrl</code>. In production it sits at the root of the domain so the link stays short.</li>
+      </ul>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"why is a GET with a body a bad idea?"</i> or <i>"how would I still count clicks if I used 301?"</i> Follow-up questions are part of the quest.
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 8 "Design a URL Shortener" (ByteByteGo).</li>
+        <li>REST API Tutorial, restapitutorial.com (the book's reference for REST conventions).</li>
+        <li>MDN Web Docs, "301 Moved Permanently".</li>
+        <li>MDN Web Docs, "302 Found".</li>
+        <li>RFC 9110, "HTTP Semantics", §15.4 Redirection 3xx.</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0801',
+  winTitle: 'Scoped, sized and redirected!',
+  badge: '📏 Badge: Napkin Mathematician',
+  cheatsheet: '../reference/ch08-url-shortener-cheatsheet.html',
+});
+const { sleep, shuffle, esc } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+const LONG = 'https://www.systeminterview.com/q=chatsystem&c=loggedin&v=v3&l=long';
+const CODE = 'y7keocwj';
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function anim(dur, f) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 1) { f(1); return res(); }
+    const t0 = performance.now();
+    const fr = now => { const p = Math.min(1, (now - t0) / dur); f(p); p < 1 ? requestAnimationFrame(fr) : res(); };
+    requestAnimationFrame(fr);
+  });
+}
+const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); if (xp !== 0) Q.addXP(xp || 10, li);
+  return true;
+}
+// A short run of Q.quiz questions in one mount; calls done() after the last one.
+function quizChain(mount, qs, done) {
+  let i = 0;
+  const next = () => {
+    if (i >= qs.length) { done && done(); return; }
+    const q = qs[i++];
+    Q.quiz(mount, { ...q, tag: q.tag || `Check ${i} of ${qs.length}`, onDone: () => setTimeout(next, 650) });
+  };
+  next();
+}
+function hash32(str) {
+  let h = 0x811c9dc5;
+  for (const c of str) { h ^= c.codePointAt(0); h = Math.imul(h, 0x01000193); }
+  h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16;
+  return h >>> 0;
+}
+const B62 = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+function fakeCode(url) { // toy 7-char base-62 code: 5 chars from one hash, 2 from another
+  let a = hash32(url), b = hash32('salt:' + url), s = '';
+  for (let i = 0; i < 5; i++) { s += B62[a % 62]; a = Math.floor(a / 62); }
+  for (let i = 0; i < 2; i++) { s += B62[b % 62]; b = Math.floor(b / 62); }
+  return s;
+}
+// compact number: 1,157 · 11.6K · 365B
+function nfmt(n) {
+  if (n < 10000) return Math.round(n).toLocaleString('en-US');
+  const u = [[1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'K']].find(([v]) => n >= v);
+  const x = n / u[0];
+  return (x >= 100 ? Math.round(x) : x >= 10 ? x.toFixed(1) : x.toFixed(2)).toString().replace(/\.0+$/, '') + u[1];
+}
+function bfmt(b) {
+  const u = [[1e15, 'PB'], [1e12, 'TB'], [1e9, 'GB'], [1e6, 'MB'], [1e3, 'KB']].find(([v]) => b >= v);
+  if (!u) return Math.round(b) + ' B';
+  const x = b / u[0];
+  return (x >= 100 ? Math.round(x) : x >= 10 ? x.toFixed(1) : x.toFixed(2)).toString().replace(/\.0+$/, '') + ' ' + u[1];
+}
+
+/* ================= STAGE 1: question deck ================= */
+Q.onStage(1, () => {
+  const CARDS = [
+    { q: 'Can you give an example?', good: true, a: 'long URL → tinyurl.com/y7keocwj', say: `Sure. <code>${LONG}</code> becomes <code>https://tinyurl.com/${CODE}</code>. Clicking the short one takes you to the original.`, note: 'long URL → tinyurl.com/y7keocwj, click = redirect' },
+    { q: 'What is the traffic volume?', good: true, a: '100 million URLs a day', say: '100 million new URLs are generated every day.', note: '100M new URLs / day' },
+    { q: 'How short must the short URL be?', good: true, a: 'as short as possible', say: 'As short as you can make it.', note: 'short code: as short as possible' },
+    { q: 'Which characters are allowed?', good: true, a: '0–9, a–z, A–Z', say: 'Digits 0 to 9 and letters a to z and A to Z. That\'s 10 + 26 + 26 = 62 characters.', note: 'chars: 0-9 a-z A-Z (62)' },
+    { q: 'Can short URLs be deleted or updated?', good: true, a: 'no, never', say: 'No. To keep it simple, once a short URL exists it can\'t be deleted or changed.', note: 'no deletes, no updates' },
+    { q: 'Which programming language should I use?', good: false, why: 'A tool choice, not a requirement. Nothing about the design depends on it, so leave it for later, if it comes up at all.' },
+    { q: 'Should I use Kubernetes?', good: false, why: 'A deployment tool, not a requirement. You can\'t pick tools before you know the load. Decide it later.' },
+    { q: 'What colour is the logo?', good: false, why: 'Product polish, not system design. It changes nothing in the architecture.' },
+    { q: 'Should we use MongoDB?', good: false, why: 'A storage choice, not a requirement. Pick a database after you know how much data there is (stage 2). Decide it later.' },
+  ];
+  const deck = $('#deck'), bubble = $('#bubble'), sticky = $('#sticky');
+  let found = 0, quizShown = false;
+  const struck = new Set(), flipped = new Set();
+  deck.innerHTML = shuffle(CARDS.map((c, i) => ({ c, i }))).map(({ c, i }) => `
+    <button class="qcard" data-i="${i}" aria-label="Ask: ${esc(c.q)}"><span class="qcard-in">
+      <span class="qface qfront"><small>Ask</small><b>${esc(c.q)}</b></span>
+      <span class="qface qback" aria-hidden="true"><small>✓ Answer</small><span>${c.good ? esc(c.a) : ''}</span></span>
+    </span></button>`).join('');
+  $$('.qcard', deck).forEach(b => b.onclick = () => {
+    const i = +b.dataset.i, c = CARDS[i];
+    if (c.good) {
+      if (flipped.has(i)) { bubble.className = 'bubble'; bubble.innerHTML = `<span class="who">Interviewer</span>${c.say}`; return; }
+      flipped.add(i); found++;
+      b.classList.add('flipped'); b.setAttribute('aria-label', `${c.q} Answer: ${c.a}`);
+      $('.qface.qback', b).removeAttribute('aria-hidden');
+      bubble.className = 'bubble'; bubble.innerHTML = `<span class="who">Interviewer</span>${c.say}`;
+      $('#stickyEmpty').style.display = 'none';
+      sticky.insertAdjacentHTML('beforeend', `<li>${esc(c.note)}</li>`);
+      $('#stickyCnt').textContent = `${found} / 5`;
+      Q.addXP(6, b);
+      if (found === 5) finishDeck();
+    } else {
+      b.classList.remove('nope'); void b.offsetWidth; b.classList.add('nope');
+      bubble.className = 'bubble bad'; bubble.innerHTML = `<span class="who">Hold on</span>${c.why}`;
+      if (!struck.has(i)) { struck.add(i); b.classList.add('struck'); Q.loseHeart(b); }
+    }
+  });
+  function finishDeck() {
+    $('#scopeNote').style.display = 'block';
+    bubble.className = 'bubble'; bubble.innerHTML = '<span class="who">Interviewer</span>"Good questions. You know what to build. Now, how big is it?"';
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => quizChain($('#s1quiz'), [
+      { q: 'Which two use cases make up the core of this system?', xp: 15,
+        options: ['Shortening and redirecting', 'Shortening and deleting', 'Redirecting and click analytics'], correct: 0,
+        good: 'Long URL in → short URL out, and short URL in → redirect to the long URL. Everything else in the chapter serves those two.',
+        bad: 'Deleting was ruled out by the interviewer, and analytics is a nice-to-have. The core is <b>shortening</b> (long in, short out) and <b>redirecting</b> (short in, sent to long).' },
+      { q: 'What did the interviewer say about deleting or updating short URLs?', xp: 15,
+        options: ['Not allowed, to keep it simple', 'Allowed, but only by the owner', 'Allowed after a 30-day expiry'], correct: 0,
+        good: 'No deletes, no updates. It\'s a simplification, and it makes later choices (like caching) much easier because a mapping never changes.',
+        bad: 'The answer was a flat no, to keep it simple. A mapping that never changes is easy to cache forever, which pays off later.' },
+      { q: 'How many different characters may appear in the short code?', xp: 15,
+        options: ['62: 0–9, a–z and A–Z', '36: 0–9 and a–z only', '64: letters, digits, + and /'], correct: 0,
+        good: '10 digits + 26 lowercase + 26 uppercase = 62. That number decides how long the code must be (Quest 8.2).',
+        bad: 'Digits and both cases of letters: 10 + 26 + 26 = <b>62</b>. No symbols. 64 is Base64, which adds + and /, and those are awkward inside URLs.' },
+    ], () => setTimeout(() => Q.clearStage(1), 700)), 500);
+  }
+});
+
+/* ================= STAGE 2: napkin math ================= */
+Q.onStage(2, () => {
+  const CNT = [['', 1], ['K', 1e3], ['M', 1e6], ['B', 1e9], ['T', 1e12]];
+  const STO = [['GB', 1e9], ['TB', 1e12], ['PB', 1e15]];
+  const BOXES = [
+    { k: 'w', t: 'Writes per second', s: 'new short URLs created', target: 1160, units: CNT, def: '',
+      hint: '100 million ÷ 86,400 seconds in a day. Or round the day to ~100,000 s: 10<sup>8</sup> ÷ 10<sup>5</sup> = 1,000, then nudge up a little.',
+      ok: '100,000,000 ÷ 86,400 ≈ <b>1,160 writes/s</b>.' },
+    { k: 'r', t: 'Reads per second', s: 'redirects served', target: 11600, units: CNT, def: '',
+      hint: 'Reads are 10 times the writes (10 : 1).',
+      ok: '1,160 × 10 ≈ <b>11,600 reads/s</b>.' },
+    { k: 'n', t: 'Records after 10 years', s: 'rows in the table', target: 365e9, units: CNT, def: 'B',
+      hint: '100 million a day × 365 days × 10 years.',
+      ok: '100M × 365 × 10 = <b>365 billion records</b>.' },
+    { k: 'st', t: 'Storage after 10 years', s: 'long URLs only', target: 36.5e12, units: STO, def: 'TB',
+      hint: 'Records × 100 bytes each. 10<sup>9</sup> bytes = 1 GB, 10<sup>12</sup> bytes = 1 TB.',
+      ok: '365 billion × 100 bytes = 36.5 × 10<sup>12</sup> bytes = <b>36.5 TB</b>.' },
+  ];
+  const done = new Set(), missed = new Set();
+  let quizShown = false, reflected = false;
+  $('#calcs').innerHTML = BOXES.map(b => `
+    <div class="calc" data-k="${b.k}">
+      <div class="lbl">${b.t} <span>${b.s}</span></div>
+      <div class="row">
+        <input type="text" inputmode="decimal" autocomplete="off" aria-label="${b.t}" placeholder="?">
+        <select aria-label="${b.t} unit">${b.units.map(([u]) => `<option value="${u}"${u === b.def ? ' selected' : ''}>${u || '×1'}</option>`).join('')}</select>
+        <button class="btn primary q-check">Check</button>
+        <button class="btn q-hint">Hint</button>
+      </div>
+      <div class="hint">${b.hint}</div>
+      <div class="msg" aria-live="polite"></div>
+    </div>`).join('');
+  BOXES.forEach(b => {
+    const el = $(`.calc[data-k="${b.k}"]`), inp = $('input', el), sel = $('select', el), msg = $('.msg', el);
+    $('.q-hint', el).onclick = () => $('.hint', el).classList.add('show');
+    const check = e => {
+      if (done.has(b.k)) return;
+      const raw = inp.value.replace(/[,\s_]/g, '');
+      const v = parseFloat(raw);
+      if (!raw || !isFinite(v)) { msg.className = 'msg bad'; msg.textContent = 'Type a number first.'; return; }
+      const mult = (b.units.find(([u]) => u === sel.value) || [0, 1])[1];
+      const val = v * mult, ratio = val / b.target;
+      if (Math.abs(ratio - 1) <= 0.10) {
+        done.add(b.k); el.classList.add('ok'); inp.readOnly = true; sel.disabled = true;
+        $('.q-check', el).disabled = true;
+        msg.className = 'msg good'; msg.innerHTML = '✓ ' + b.ok;
+        Q.addXP(10, $('.q-check', el));
+        if (done.size === BOXES.length) allDone();
+      } else {
+        const off = Math.round(Math.log10(ratio));
+        let tip = ratio > 1 ? 'Too high.' : 'Too low.';
+        if (Math.abs(off) >= 1) tip += ` You're off by about ×${Math.pow(10, Math.abs(off)).toLocaleString('en-US')}. Check the unit or a zero.`;
+        else tip += ' Close, but outside ±10%.';
+        msg.className = 'msg bad'; msg.textContent = tip;
+        if (!missed.has(b.k)) { missed.add(b.k); Q.loseHeart(e && e.currentTarget || el); }
+        else Q.toast('try again', el, 'practice');
+      }
+    };
+    $('.q-check', el).onclick = check;
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('.q-check', el).click(); } });
+  });
+
+  const URLS = [1e7, 2e7, 5e7, 1e8, 2e8, 5e8, 1e9];
+  function live() {
+    const u = URLS[+$('#kUrls').value], r = +$('#kRatio').value, y = +$('#kYears').value, by = +$('#kBytes').value;
+    $('#kUrlsV').textContent = nfmt(u); $('#kRatioV').textContent = `${r} : 1`; $('#kYearsV').textContent = `${y} yr`; $('#kBytesV').textContent = `${by} B`;
+    const w = u / 86400, rec = u * 365 * y, st = rec * by;
+    $('#oW').textContent = nfmt(w); $('#oR').textContent = nfmt(w * r); $('#oN').textContent = nfmt(rec); $('#oS').textContent = bfmt(st);
+    $('#oSbox').classList.toggle('hot', st > 100e12);
+    if (st > 100e12 && !reflected) {
+      reflected = true; $('#reflect').classList.add('show'); Q.addXP(10, $('#oSbox'));
+    }
+  }
+  ['kUrls', 'kRatio', 'kYears', 'kBytes'].forEach(id => $('#' + id).addEventListener('input', live));
+  function allDone() {
+    $('#knobs').classList.add('on'); live();
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => quizChain($('#s2quiz'), [
+      { q: 'Same 100M writes a day, but now reads : writes is <b>100 : 1</b>. About how many reads per second?', xp: 15,
+        options: ['About 11,600 reads/s', 'About 116,000 reads/s', 'About 1,160,000 reads/s'], correct: 1,
+        good: '1,160 writes/s × 100 ≈ <b>116,000 reads/s</b>. Try it on the ratio knob.',
+        bad: 'Reads = writes × ratio: 1,160 × 100 ≈ <b>116,000</b>. Try it on the ratio knob.' },
+      { q: 'Which of your four numbers tells you how long the short code has to be?', xp: 15,
+        options: ['The 365 billion records', 'The 11,600 reads per second', 'The 36.5 TB of storage'], correct: 0,
+        good: 'The code must be able to name every record. With 62 characters, how many positions do you need to cover 365 billion? That\'s the first puzzle of Quest 8.2.',
+        bad: 'The code has to give every record its own name, so it\'s the <b>365 billion records</b> that sets its length. Reads and storage size the servers, not the code.' },
+    ], () => setTimeout(() => Q.clearStage(2), 700)), 500);
+  }
+});
+
+/* ================= STAGE 3: request builder ================= */
+Q.onStage(3, () => {
+  const METHODS = ['GET', 'POST', 'PUT', 'DELETE'];
+  const PATHS = ['api/v1/data/shorten', 'api/v1/{shortUrl}', 'api/v1/urls/all'];
+  const BODIES = ['none', '{longUrl}', '{shortUrl}'];
+  const CARDS = [
+    { k: 'shorten', t: 'Shorten', g: 'Turn the long URL into a short one.' },
+    { k: 'redirect', t: 'Redirect', g: 'Someone clicked tinyurl.com/' + CODE + '. Send them on.' },
+  ];
+  const ok = new Set();
+  let quizShown = false;
+  $('#reqs').innerHTML = CARDS.map(c => `
+    <div class="req" data-k="${c.k}">
+      <h3>${c.t} <span class="st">not sent</span></h3>
+      <p class="goalline">${c.g}</p>
+      <div class="k">Method</div><div class="pick" data-f="m" role="group" aria-label="${c.t} method">${METHODS.map(m => `<button data-v="${m}" aria-pressed="false">${m}</button>`).join('')}</div>
+      <div class="k">Path</div><div class="pick" data-f="p" role="group" aria-label="${c.t} path">${PATHS.map(p => `<button data-v="${p}" aria-pressed="false">${esc(p)}</button>`).join('')}</div>
+      <div class="k">Body</div><div class="pick" data-f="b" role="group" aria-label="${c.t} body">${BODIES.map(b => `<button data-v="${b}" aria-pressed="false">${esc(b)}</button>`).join('')}</div>
+      <button class="btn primary send">Send ▶</button>
+      <div class="resp"></div>
+    </div>`).join('');
+
+  function server(m, p, b) {
+    const pathShown = p === 'api/v1/{shortUrl}' ? 'api/v1/' + CODE : p;
+    const bodyShown = b === '{longUrl}' ? `{"longUrl": "${LONG}"}` : b === '{shortUrl}' ? `{"shortUrl": "${CODE}"}` : '';
+    const req = `<span class="dim">→ ${m} /${esc(pathShown)}</span>${bodyShown ? `\n<span class="dim">  ${esc(bodyShown)}</span>` : ''}\n\n`;
+    const R = (code, head, body, why, kind) => ({ code, kind, html: req + `<span class="${code < 300 ? 's2' : code < 400 ? 's3' : 's4'}">HTTP/1.1 ${code} ${head}</span>${body ? '\n' + esc(body) : ''}`, why });
+    if (p === 'api/v1/urls/all') return R(404, 'Not Found', '', 'No such endpoint. Listing every URL isn\'t one of the two use cases, and it would be 365 billion rows.');
+    if (p === 'api/v1/data/shorten') {
+      if (m === 'GET') return R(405, 'Method Not Allowed', 'Allow: POST', 'GET should only ever <i>read</i>. Browsers, link previews and crawlers fire GETs freely, and each one would create a new short URL by accident.');
+      if (m === 'PUT') return R(405, 'Method Not Allowed', 'Allow: POST', 'PUT means "store this at the exact address I give you." But you don\'t know the short code yet; the server picks it. Creating something whose address the server chooses is a POST.');
+      if (m === 'DELETE') return R(405, 'Method Not Allowed', 'Allow: POST', 'DELETE removes something, and you\'re trying to create. (Also, the interviewer said links can never be deleted.)');
+      if (b === 'none') return R(400, 'Bad Request', '{"error": "missing longUrl"}', 'Right door, empty hands. The server needs the long URL in the body to shorten it.');
+      if (b === '{shortUrl}') return R(400, 'Bad Request', '{"error": "expected longUrl"}', 'You sent a short code to the shorten endpoint. Send the <i>long</i> URL; the short one is what comes back.');
+      return R(200, 'OK', `Content-Type: application/json\n\n{"shortUrl": "https://tinyurl.com/${CODE}"}`, 'Created a new mapping and returned the short URL. POST, because it creates something new on the server.', 'shorten');
+    }
+    // api/v1/{shortUrl}
+    if (m !== 'GET') return R(405, 'Method Not Allowed', 'Allow: GET', `A click on a link always makes the browser send a <b>GET</b>. Nobody can make a plain link send ${m}, so the redirect endpoint must answer GET.`);
+    if (b !== 'none') return R(400, 'Bad Request', '', 'A GET carries no body. Everything the server needs, the short code, is already in the path. (A browser following a link never sends a body anyway.)');
+    return R(302, 'Found', `Location: ${LONG}`, 'The server looked up the code and answered with a redirect. The long URL rides in the <b>Location</b> header, and the browser follows it automatically. (301 or 302? That\'s the next stage.)', 'redirect');
+  }
+
+  $$('.req').forEach(card => {
+    const sel = { m: null, p: null, b: null };
+    $$('.pick', card).forEach(g => $$('button', g).forEach(btn => btn.onclick = () => {
+      sel[g.dataset.f] = btn.dataset.v;
+      $$('button', g).forEach(x => { x.classList.toggle('on', x === btn); x.setAttribute('aria-pressed', x === btn); });
+    }));
+    const resp = $('.resp', card);
+    $('.send', card).onclick = e => {
+      if (!sel.m || !sel.p || !sel.b) { Q.toast('pick all three', e.currentTarget, 'practice'); return; }
+      const r = server(sel.m, sel.p, sel.b), k = card.dataset.k;
+      const success = r.kind === k;
+      let why = r.why;
+      if (r.kind && !success) why = `The server was happy, but that's the <b>${r.kind}</b> call. This card's job is to <b>${k}</b>.`;
+      resp.className = 'resp show' + (success ? ' good' : '');
+      resp.innerHTML = `<pre>${r.html}</pre><p>${success ? '✓ ' : ''}${why}</p>`;
+      if (success && !ok.has(k)) {
+        ok.add(k); card.classList.add('ok'); $('.st', card).textContent = '✓ works';
+        Q.addXP(10, e.currentTarget);
+        if (ok.size === 2) allDone();
+      } else if (!success && !ok.has(k)) $('.st', card).textContent = `${r.code} · try again`;
+    };
+  });
+  function allDone() {
+    $('#apiNote').style.display = 'block';
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => quizChain($('#s3quiz'), [
+      { q: 'Why is shortening a <b>POST</b> and not a GET?', xp: 15,
+        options: ['It creates a new mapping on the server', 'POST requests travel faster than GETs', 'A GET has no room to carry any URL'], correct: 0,
+        good: 'POST creates a new resource. GET is meant to be a safe read that can be repeated or prefetched without changing anything. Shortening changes the server\'s data, so it\'s a POST.',
+        bad: 'Speed and room aren\'t the issue. POST <b>creates</b> a new resource, while GET is meant to be a safe read with no side effects. Shortening adds a row, so it\'s a POST.' },
+      { q: 'What does <code>GET api/v1/{shortUrl}</code> send back to the browser?', xp: 15,
+        options: ['A redirect with the long URL inside', 'The full HTML of the destination page', 'A JSON list of every short URL saved'], correct: 0,
+        good: 'A 301 or 302 status with the long URL in the Location header. The shortener never serves the destination page itself; the browser fetches that from the real site.',
+        bad: 'The shortener never serves the destination\'s HTML. It answers with a <b>redirect</b> (301/302) and the long URL in the <b>Location</b> header, and the browser goes there.' },
+    ], () => setTimeout(() => Q.clearStage(3), 700)), 500);
+  }
+});
+
+/* ================= STAGE 4: 301 vs 302 sim ================= */
+Q.onStage(4, () => {
+  const svg = $('#rsvg');
+  svg.innerHTML = '';
+  // lanes
+  const pBS = S('path', { class: 'lane', d: 'M112 104 C 126 72, 128 52, 136 44' }, svg);
+  const pSB = S('path', { class: 'lane', d: 'M136 64 C 128 82, 122 104, 112 124' }, svg);
+  const pBD = S('path', { class: 'lane', d: 'M112 150 C 170 228, 230 228, 288 150' }, svg);
+  // browser
+  const gB = S('g', {}, svg);
+  S('rect', { class: 'nbox', x: 8, y: 86, width: 104, height: 82, rx: 10 }, gB);
+  S('rect', { class: 'bar', x: 9, y: 87, width: 102, height: 16, rx: 9 }, gB);
+  [20, 30, 40].forEach(x => S('circle', { cx: x, cy: 95, r: 3, fill: 'var(--muted)' }, gB));
+  const bPage = S('text', { class: 'lbl', x: 60, y: 140 }, gB); bPage.textContent = '🔗 ' + CODE;
+  S('text', { class: 'sm', x: 60, y: 184 }, svg).textContent = 'Your browser';
+  const cacheG = S('g', { class: 'cache' }, svg);
+  S('rect', { x: 6, y: 192, width: 108, height: 24, rx: 7 }, cacheG);
+  S('text', { x: 60, y: 204 }, cacheG).textContent = '💾 cached 301';
+  // shortener
+  const gS = S('g', {}, svg);
+  S('rect', { class: 'nbox srv', x: 136, y: 8, width: 128, height: 76, rx: 10 }, gS);
+  S('text', { class: 'lbl', x: 200, y: 28 }, gS).textContent = 'Shortener';
+  const sSeen = S('text', { class: 'bignum', x: 200, y: 56 }, gS); sSeen.textContent = '0';
+  S('text', { class: 'sm', x: 200, y: 74 }, gS).textContent = 'requests seen';
+  // destination
+  const gD = S('g', {}, svg);
+  S('rect', { class: 'nbox dst', x: 288, y: 86, width: 104, height: 82, rx: 10 }, gD);
+  S('text', { class: 'lbl', x: 340, y: 124 }, gD).textContent = '📄';
+  S('text', { class: 'sm', x: 340, y: 148 }, gD).textContent = 'the long URL';
+  S('text', { class: 'sm', x: 340, y: 184 }, svg).textContent = 'Destination site';
+  const fx = S('g', {}, svg);
+
+  function packet(label, cls) {
+    const g = S('g', { class: 'pkt ' + (cls || '') }, fx), w = label.length * 7.6 + 14;
+    S('rect', { x: -w / 2, y: -10, width: w, height: 20, rx: 10 }, g);
+    S('text', { x: 0, y: 0 }, g).textContent = label;
+    return g;
+  }
+  async function fly(path, label, cls, reverse) {
+    const g = packet(label, cls), L = path.getTotalLength();
+    const place = p => { const q = path.getPointAtLength((reverse ? 1 - ease(p) : ease(p)) * L); g.setAttribute('transform', `translate(${q.x.toFixed(1)} ${q.y.toFixed(1)})`); };
+    place(0);
+    await anim(900, place);
+    await sleep(Q.reduced ? 0 : 120);
+    g.remove();
+  }
+  function pulse(g) { g.classList.remove('pulse'); void g.getBBox(); g.classList.add('pulse'); }
+
+  const st = { code: '301', cached: false, seen: 0, logged: 0, clicks: 0, busy: false, pred: { 301: null, 302: null }, done: new Set() };
+  const goals = new Set();
+  let quizShown = false;
+  function counters() {
+    $('#cSeen').textContent = st.seen; $('#cLog').textContent = st.logged; $('#cClicks').textContent = st.clicks;
+    sSeen.textContent = st.seen;
+    cacheG.classList.toggle('on', st.cached);
+    $('#clickBtn').disabled = st.busy || st.pred[st.code] === null;
+    $('#codeDone').textContent = [...st.done].sort().map(c => `${c} ✓`).join(' · ');
+  }
+  function resetRun() { st.cached = false; st.seen = 0; st.logged = 0; st.clicks = 0; bPage.textContent = '🔗 ' + CODE; counters(); }
+  function showPredict() {
+    const box = $('#r4predict'), c = st.code;
+    if (st.pred[c] !== null) {
+      box.innerHTML = `<div class="step">${st.done.has(c) ? 'Free play' : 'Your prediction'} · ${c}</div><p style="margin:4px 0 0">${st.done.has(c) ? 'Keep clicking, clear the cache, or switch codes.' : `You said <b>${st.pred[c]}</b> request${st.pred[c] === 1 ? '' : 's'} after 3 clicks. Now click the link 3 times.`}</p>`;
+      return;
+    }
+    box.innerHTML = `<div class="step">Predict first · ${c}</div><h3>The server answers with <b>${c}</b>. After 3 clicks of the same short link, how many requests will the shortener see?</h3><div class="opts">${[0, 1, 3].map(n => `<button class="opt" data-n="${n}">${n} request${n === 1 ? '' : 's'}</button>`).join('')}</div>`;
+    $$('.opt', box).forEach(b => b.onclick = () => {
+      st.pred[c] = +b.dataset.n; resetRun();
+      logTo('r4log', `Prediction for ${c}: ${b.dataset.n}. Go click.`);
+      showPredict(); counters();
+    });
+  }
+  function setCode(c) {
+    if (st.busy || c === st.code) return;
+    st.code = c;
+    $$('#codeSeg button').forEach(b => { const on = b.dataset.c === c; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
+    resetRun();
+    logTo('r4log', `Switched to ${c}. Fresh browser, counters reset.`);
+    showPredict();
+  }
+  $$('#codeSeg button').forEach(b => b.onclick = () => setCode(b.dataset.c));
+  $('#cacheBtn').onclick = () => {
+    if (st.busy) return;
+    if (!st.cached) { Q.toast('nothing cached', $('#cacheBtn'), 'practice'); return; }
+    st.cached = false; counters();
+    logTo('r4log', '🧹 Browser cache cleared. The next click has to ask the shortener again.', 'w');
+  };
+  $('#clickBtn').onclick = async () => {
+    if (st.busy || st.pred[st.code] === null) return;
+    st.busy = true; st.clicks++; counters();
+    const c = st.code, n = st.clicks;
+    if (c === '301' && st.cached) {
+      logTo('r4log', `Click ${n}: browser remembers the 301 and skips the shortener.`, 'w');
+      await fly(pBD, 'GET long URL', '');
+    } else {
+      await fly(pBS, 'GET /' + CODE, '');
+      st.seen++; st.logged++; counters(); pulse(gS);
+      await fly(pSB, `${c} Location`, 'ret');
+      if (c === '301') { st.cached = true; counters(); }
+      logTo('r4log', `Click ${n}: shortener answered ${c} + Location${c === '301' ? ' (browser caches it)' : ' (nothing cached)'}. Click logged.`, c === '302' ? 'g' : '');
+      await fly(pBD, 'GET long URL', '');
+    }
+    await fly(pBD, '200 page', 'page', true);
+    pulse(gB); bPage.textContent = '✓ page loaded';
+    st.busy = false; counters();
+    if (n === 3 && !st.done.has(c)) reveal(c);
+  };
+  function reveal(c) {
+    st.done.add(c);
+    const answer = c === '301' ? 1 : 3, right = st.pred[c] === answer;
+    let why = c === '301'
+      ? 'With 301 the shortener sees <b>1</b> request. The first click got the 301, the browser cached it, and clicks 2 and 3 went straight to the long URL. Less load for us, but we only counted 1 of 3 clicks.'
+      : 'With 302 the shortener sees <b>3</b> requests. Nothing is cached, so every click comes through us first. More load, but every click gets logged.';
+    if (st.seen !== answer) why += ` <span class="muted">(You cleared the cache mid-run, so this run saw ${st.seen}. Each cleared cache costs one more trip.)</span>`;
+    logTo('r4log', right ? `✓ You predicted ${st.pred[c]}. Correct.` : `✗ You predicted ${st.pred[c]}; the answer is ${answer}.`, right ? 'g' : 'e');
+    const box = $('#r4predict');
+    box.insertAdjacentHTML('beforeend', `<div class="explain show ${right ? 'good' : 'bad'}">${right ? '<b>Called it.</b> ' : '<b>Surprise!</b> '}${why}</div>`);
+    if (right) Q.addXP(15, box); else Q.toast('no heart lost', box, 'practice');
+    checkGoal('#s4goals', c, goals, 0);
+    counters();
+    if (st.done.size === 2) allDone();
+    else logTo('r4log', `Now switch to ${c === '301' ? '302' : '301'} and do the same.`);
+  }
+  function allDone() {
+    $('#redirNote').style.display = 'block';
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => quizChain($('#s4quiz'), [
+      { q: 'Marketing wants stats on <b>every single click</b> of every link. Which redirect do you send?', xp: 15,
+        options: ['302 Found, so every click reaches us', '301 Moved, so the browser caches it', 'Either one, both log every click'], correct: 0,
+        good: '302 isn\'t cached, so each click passes through the shortener, where you can log the time, source and more.',
+        bad: 'A 301 gets cached, so repeat clicks skip you and go uncounted. <b>302</b> makes every click pass through the shortener.' },
+      { q: 'Which response header carries the long URL in a redirect?', xp: 15,
+        options: ['Location', 'Referer', 'Host'], correct: 0,
+        good: '<code>Location: https://…</code> tells the browser where to go next.',
+        bad: '<b>Location</b> holds the target. Referer is the page the user came <i>from</i>, and Host is the domain the request was sent to.' },
+    ], () => setTimeout(() => Q.clearStage(4), 700)), 500);
+  }
+  resetRun(); showPredict();
+});
+
+/* ================= STAGE 5: in-memory hash table ================= */
+Q.onStage(5, () => {
+  const SAMPLES = [LONG, 'https://en.wikipedia.org/wiki/URL_shortening', 'https://example.com/blog/2026/10/how-we-scaled-checkout?ref=newsletter&utm_source=mail'];
+  const RAM = 256e9, DAY = 100e6 * 100; // bytes added per day: 100M URLs × 100 B
+  const map = new Map(), goals = new Set(); // code → long
+  let bytes = 0, ffBusy = false, ffDone = false, quizShown = false;
+  $('#htChips').innerHTML = SAMPLES.map((u, i) => `<button class="chip" data-i="${i}" title="${esc(u)}">${esc(u.replace(/^https:\/\//, ''))}</button>`).join('');
+  $$('#htChips .chip').forEach(c => c.onclick = () => { $('#htIn').value = SAMPLES[+c.dataset.i]; add(); });
+  function gauge() {
+    $('#gUsed').textContent = bfmt(bytes);
+    $('#gFill').style.width = Math.min(100, bytes / RAM * 100) + '%';
+  }
+  function row(code) { return $(`#htTbl .tr[data-c="${code}"]`); }
+  function add() {
+    if (ffBusy) return;
+    const url = $('#htIn').value.trim();
+    if (!/^https?:\/\/\S+\.\S+/.test(url)) { Q.toast('needs http(s)://…', $('#htGo'), 'practice'); return; }
+    const code = fakeCode(url);
+    if (map.has(code)) {
+      const r = row(code); r.classList.remove('flash'); void r.offsetWidth; r.classList.add('flash');
+      logTo('htLog', `fx(same long URL) → <b>${code}</b> again. One long URL, one hashValue. No new row.`, 'g');
+      if (checkGoal('#s5goals', 'same', goals, 5)) maybeQuiz();
+    } else {
+      map.set(code, url); bytes += url.length + code.length;
+      $('#htNone').style.display = 'none';
+      $('#htTbl').insertAdjacentHTML('beforeend', `<div class="tr" data-c="${code}"><button aria-label="Look up ${code}">${code}</button><span title="${esc(url)}">${esc(url)}</span></div>`);
+      $(`button`, row(code)).onclick = () => lookup(code);
+      logTo('htLog', `fx(${esc(url.slice(0, 40))}${url.length > 40 ? '…' : ''}) = <b>${code}</b> → tinyurl.com/${code}`);
+      gauge();
+      if (map.size >= 2 && checkGoal('#s5goals', 'two', goals, 5)) maybeQuiz();
+    }
+    $('#htIn').value = '';
+  }
+  function lookup(code) {
+    $$('#htTbl .tr').forEach(r => r.classList.toggle('hit', r.dataset.c === code));
+    logTo('htLog', `GET /${code} → table[${code}] → 302 to ${esc(map.get(code).slice(0, 44))}${map.get(code).length > 44 ? '…' : ''}`, 'g');
+    if (checkGoal('#s5goals', 'back', goals, 5)) maybeQuiz();
+  }
+  $('#htGo').onclick = add;
+  $('#htIn').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+  let future = false;
+  const g = $('#gauge'), tableBytes = () => [...map].reduce((s, [c, u]) => s + c.length + u.length, 0);
+  $('#ffBtn').onclick = async () => {
+    if (ffBusy) return;
+    if (future) { // back to today
+      future = false; bytes = tableBytes(); g.classList.remove('over'); gauge();
+      $('#ffDay').textContent = 'today'; $('#gMsg').textContent = 'Back to today. Your table is tiny again.';
+      $('#ffBtn').textContent = '⏩ Fast-forward 10 years';
+      return;
+    }
+    ffBusy = true; $('#ffBtn').disabled = true;
+    g.classList.remove('over');
+    const start = tableBytes(), total = 3650, overDay = Math.ceil((RAM - start) / DAY); // 256 GB ÷ 10 GB a day → day 26
+    await anim(2600, p => {
+      const day = Math.round(total * (p * p)); // slow start so the overflow moment is visible
+      bytes = start + day * DAY;
+      g.classList.toggle('over', bytes > RAM);
+      $('#ffDay').textContent = `day ${day.toLocaleString('en-US')} · ${nfmt(Math.max(1, day * 1e8))} rows`;
+      gauge();
+      $('#gMsg').textContent = bytes > RAM ? `Out of memory since day ${overDay}.` : 'Adding 100 million URLs (about 10 GB) a day…';
+    });
+    g.classList.add('over');
+    const over = Math.round(bytes / RAM);
+    $('#gMsg').innerHTML = `💥 365 billion rows ≈ ${bfmt(bytes)}: about <b>${over}×</b> this server's RAM. It was full by <b>day ${overDay}</b>. An in-memory hash table won't hold it; we need a database.`;
+    logTo('htLog', `⏩ 10 years: ${bfmt(bytes)} needed, 256 GB available. RAM ran out on day ${overDay}. (And a restart would wipe it all.)`, 'e');
+    if (!ffDone) { ffDone = true; if (checkGoal('#s5goals', 'ff', goals, 5)) maybeQuiz(); }
+    $('#ffBtn').textContent = '↻ Back to today';
+    $('#ffBtn').disabled = false;
+    future = true; ffBusy = false;
+  };
+  gauge();
+  function maybeQuiz() {
+    if (quizShown || goals.size < 4) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s5quiz'), {
+      q: 'Why can\'t the whole mapping live in one server\'s in-memory hash table?',
+      options: ['10 years is ~36.5 TB, far past one box\'s RAM', 'Hash tables can\'t use strings as their keys', 'RAM lookups are too slow for 11,600 reads/s'], correct: 0,
+      good: 'At 100 million new URLs a day, a 256 GB server fills up in under a month, and 10 years needs ~36.5 TB. Memory is also wiped on restart. The table must live in a <b>database</b>, which is where Quest 8.2 starts.',
+      bad: 'Strings make fine keys, and RAM is the <i>fastest</i> place to look things up. The problem is size: ~36.5 TB over 10 years, against a few hundred GB of RAM, and memory is lost on restart.',
+      onDone: () => setTimeout(() => Q.clearStage(5), 800),
+    }), 400);
+  }
+});
+
+/* ================= STAGE 6: boss ================= */
+Q.onStage(6, () => Q.boss($('#boss'), {
+  name: '🎩 Redirect Riddler',
+  xp: 15,
+  choices: [
+    { k: '301', label: '301 Moved Permanently', sub: 'browser caches it' },
+    { k: '302', label: '302 Found', sub: 'every click hits us' },
+  ],
+  scenarios: [
+    { e: '📈', t: 'Campaign dashboards', d: 'The marketing team needs the click-through rate for each campaign link, updated live.', a: '302', why: 'Click-through rate means counting every click. A 302 isn\'t cached, so each click passes through the shortener and gets logged.' },
+    { e: '📚', t: 'Overloaded docs links', d: 'Short links to a static documentation site. The servers are overloaded, and nobody looks at the stats.', a: '301', why: 'No one needs analytics, and load is the problem. A 301 is cached, so repeat clicks go straight to the docs and never touch your servers.' },
+    { e: '🧪', t: 'A/B test', d: 'The destination of this link may switch to a different landing page next week.', a: '302', why: 'A 301 says "moved for good," and browsers may keep using the old target from their cache. A 302 is asked fresh every time, so a destination change takes effect at once.' },
+    { e: '🪧', t: 'Printed QR posters', d: 'Ten thousand posters point to a page that will never move. You want it as cheap to run as possible.', a: '301', why: 'The target is truly permanent and cost matters most. A 301 lets browsers cache the redirect and skip you on repeat scans.' },
+    { e: '🕵️', t: 'Fraud team', d: 'They want to see the referrer and country of every single click.', a: '302', why: 'Per-click detail means every click must reach you, where you can read headers such as Referer and the client IP. That\'s a 302.' },
+    { e: '🤖', t: 'The link checker bill', d: 'A link checker crawls the same short URL thousands of times a day, and you want to stop paying for it.', a: '301', why: 'Let the repeat visitor cache it. With a 301, a client that respects caching stops coming back to you, so the repeated hits stop costing you.' },
+  ],
+  outro: 'The rule: 301 to save load, 302 to see every click.',
+  onDone: () => Q.clearStage(6),
+}));
+
+/* ================= STAGE 7: drill ================= */
+Q.onStage(7, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"Design a URL shortener like TinyURL. Go."</i> Give your first five minutes: scoping questions, the numbers, the API, and the redirect choice.',
+  placeholder: 'Before I draw anything, I\'d like to ask…',
+  model: '"First I\'d scope it. Can you give an example? What\'s the traffic? Say 100 million new URLs a day. How short must the URL be? Which characters, 0-9, a-z and A-Z? Can links be deleted? No. Then quick math: about 1,160 writes a second, and with 10:1 reads, about 11,600 reads a second. Over 10 years that\'s 365 billion records, about 36.5 TB at 100 bytes each. Two endpoints: POST /api/v1/data/shorten with the long URL, which returns the short one, and GET /api/v1/{shortUrl}, which redirects. I\'d use 302 if we care about click analytics, or 301 if we\'d rather the browser cache it to save load."',
+  checks: ['I asked about traffic, length, characters and deletes before designing', 'I gave writes/s, reads/s, record count and storage', 'I named both endpoints and the 301-vs-302 trade-off'],
+  onDone: () => Q.clearStage(7),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

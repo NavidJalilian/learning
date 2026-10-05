@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>The Byte Ladder</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: unit colours, s1 ladder, s2 drift meter + drive, s3 zero cards, s4 sprint + whiteboard */
+:root { --u1: #2f7fd8; --u2: #0d9a96; --u3: #5a48f0; --u4: #c27400; --u5: #b8409a; --board: #fbfaf6; --board-line: #e7e3d8; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --u1: #5aa9ff; --u2: #31d3c8; --u3: #8f82ff; --u4: #ffb547; --u5: #f07ad0; --board: #12142a; --board-line: #23264a; }
+}
+:root[data-theme="dark"] { --u1: #5aa9ff; --u2: #31d3c8; --u3: #8f82ff; --u4: #ffb547; --u5: #f07ad0; --board: #12142a; --board-line: #23264a; }
+
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.bignum { font-family: var(--mono); font-weight: 700; }
+sup { line-height: 0; }
+
+/* ---------- stage 1: the ladder ---------- */
+.ladwrap { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 16px; align-items: start; margin-top: 14px; }
+@media (max-width: 680px) { .ladwrap { grid-template-columns: minmax(0, 1fr); } }
+.counter { text-align: center; padding: 10px 12px; border-bottom: 1px solid var(--line); background: var(--panel); font-size: 14px; color: var(--muted); min-height: 46px; word-break: break-word; }
+.counter b { font-family: var(--mono); color: var(--ink); font-size: 16px; }
+.ladder { position: relative; padding: 14px 18px; }
+.ladder::before, .ladder::after { content: ""; position: absolute; top: 8px; bottom: 8px; width: 7px; border-radius: 6px; background: linear-gradient(var(--u5), var(--u4), var(--u3), var(--u2), var(--u1)); opacity: .55; }
+.ladder::before { left: 6px; } .ladder::after { right: 6px; }
+.rung { position: relative; z-index: 1; display: grid; grid-template-columns: 58px minmax(0, 1fr) minmax(0, .7fr) 62px; grid-template-areas: "exp w u pow"; gap: 6px; align-items: center; width: 100%; min-height: 54px; border: 2px solid var(--line); border-radius: 12px; background: var(--panel); padding: 6px 8px; text-align: left; transition: border-color .3s, background .3s, transform .2s; }
+.rung:hover { border-color: var(--accent); }
+.rung .exp { grid-area: exp; font: 700 17px var(--mono); }
+.rung .sw { grid-area: w; } .rung .su { grid-area: u; }
+.rung .pow { grid-area: pow; font: 700 13px var(--mono); color: var(--good); text-align: right; opacity: 0; transition: opacity .4s; white-space: nowrap; }
+.rung.lit { border-color: var(--good); }
+.rung.lit .pow { opacity: 1; }
+.rung.shake { animation: shake .4s; border-color: var(--bad); }
+.rung.glow { box-shadow: 0 0 0 3px color-mix(in srgb, var(--xp) 70%, transparent); }
+@media (max-width: 480px) {
+  .rung { grid-template-columns: minmax(0, 1fr) minmax(0, .8fr); grid-template-areas: "exp pow" "w u"; }
+}
+.slot { min-height: 36px; border: 2px dashed var(--line); border-radius: 8px; display: grid; place-items: center; font-size: 13.5px; font-weight: 600; color: var(--muted); padding: 2px 4px; text-align: center; overflow-wrap: anywhere; }
+.slot.f { border-style: solid; color: var(--ink); background: var(--good-soft); border-color: transparent; animation: rise .3s; }
+.x1000 { position: relative; z-index: 1; text-align: center; font: 700 12px var(--mono); color: var(--accent); height: 22px; line-height: 22px; opacity: 0; transition: opacity .4s; }
+.ladder.done .x1000 { opacity: 1; }
+.trays { padding: 12px 14px; border-top: 1px solid var(--line); background: var(--panel); display: grid; gap: 10px; }
+.trays .lab { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.tray { display: flex; flex-wrap: wrap; gap: 8px; min-height: 44px; }
+.pchip { min-height: 44px; padding: 8px 13px; border-radius: 10px; border: 2px solid var(--line); background: var(--bg); font-weight: 600; font-size: 15px; transition: border-color .2s, background .2s, transform .15s; }
+.pchip.unit { font-family: var(--mono); }
+.pchip:hover { border-color: var(--accent); }
+.pchip.sel { border-color: var(--accent); background: var(--accent-soft); transform: translateY(-2px); }
+.pchip.shake { animation: shake .4s; border-color: var(--bad); }
+.bytecard { border: 1px solid var(--line); border-radius: 16px; background: var(--bg); padding: 14px; font-size: 14px; }
+.bytecard .big { font: 700 26px var(--mono); line-height: 1.1; }
+.bytecard input { width: 100%; margin-top: 8px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 10px; font: 600 15px var(--mono); }
+.bytecard .out { margin-top: 8px; font-family: var(--mono); font-size: 13px; }
+.bytecard .out b { color: var(--accent); }
+.bits { display: flex; gap: 3px; margin: 8px 0 4px; }
+.bits span { flex: 1; height: 22px; border-radius: 4px; display: grid; place-items: center; font: 700 11px var(--mono); background: var(--accent-soft); color: var(--accent); }
+
+/* ---------- stage 2: drift meter ---------- */
+.dslider { padding: 12px 14px 4px; }
+.dslider label { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-weight: 600; font-size: 15px; }
+.dslider input { width: 100%; accent-color: var(--accent); height: 30px; margin-top: 4px; }
+.dticks { display: flex; justify-content: space-between; font: 600 12px var(--mono); color: var(--muted); padding: 0 2px; }
+.dticks span.seen { color: var(--good); }
+.dbars { padding: 6px 14px 4px; display: grid; gap: 10px; }
+.dbar .nm { font-size: 13px; font-weight: 600; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.dbar .val { font: 600 12.5px var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.dbar .track { height: 18px; border-radius: 6px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; margin-top: 3px; }
+.dbar .fill { height: 100%; width: 0; border-radius: 5px; transition: width .6s cubic-bezier(.2,.8,.2,1); }
+.dbar.ex .fill { background: var(--accent); }
+.dbar.rd .fill { background: var(--teal); }
+.gauge svg { display: block; width: 100%; max-width: 460px; margin: 0 auto; height: auto; }
+.gauge .band-ok { fill: var(--good-soft); }
+.gauge .band-meh { fill: var(--warn-soft); }
+.gauge .tk { stroke: var(--muted); stroke-width: 1.5; }
+.gauge .tl { fill: var(--muted); font: 600 11px var(--mono); text-anchor: middle; }
+.gauge .bl { font: 700 11.5px var(--font); text-anchor: middle; }
+.gauge .bl.ok { fill: var(--good); } .gauge .bl.meh { fill: var(--warn); }
+.gauge .needle { transition: transform .6s cubic-bezier(.2,.8,.2,1); }
+.gauge .needle path { fill: var(--ink); }
+.gauge .needle text { fill: var(--ink); font: 700 15px var(--mono); text-anchor: middle; }
+.drive { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; align-items: center; margin-top: 16px; border: 1px solid var(--line); border-radius: 18px; background: var(--bg); padding: 14px; }
+@media (max-width: 520px) { .drive { grid-template-columns: minmax(0, 1fr); } .drive svg { max-width: 150px; margin: 0 auto; } }
+.drive svg { width: 100%; height: auto; display: block; }
+.drive .case { fill: var(--panel); stroke: var(--ink); stroke-width: 3; }
+.drive .lbl { fill: var(--accent); font: 700 22px var(--font); text-anchor: middle; }
+.drive .sm { fill: var(--muted); font: 600 11px var(--font); text-anchor: middle; }
+.drive .led { fill: var(--good); }
+.osbox { font-family: var(--mono); font-size: 13.5px; }
+.osbox .scr { margin-top: 10px; background: var(--code-bg); color: var(--code-ink); border-radius: 12px; padding: 10px 12px; min-height: 70px; }
+.osbox .scr .gb { font-size: 26px; font-weight: 700; color: #6ee7a8; }
+.osbox .scr .ln { opacity: 0; transition: opacity .4s; }
+.osbox .scr .ln.on { opacity: 1; }
+
+/* ---------- stage 3: zero cards ---------- */
+.zcard { border: 1px solid var(--line); border-radius: 18px; background: var(--bg); padding: 16px; animation: rise .35s; }
+.zcard .step { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.zcard h3 { margin: 4px 0 10px; font-size: 18px; font-weight: 600; }
+.fchips { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 12px; }
+.fchip { min-height: 42px; border: 2px solid var(--line); background: var(--panel); border-radius: 10px; padding: 6px 12px; font-size: 14.5px; font-weight: 600; }
+.fchip:hover { border-color: var(--accent); }
+.fchip .sci { display: none; font-family: var(--mono); }
+.fchip.on { border-color: var(--accent); background: var(--accent-soft); }
+.fchip.on .plain { display: none; } .fchip.on .sci { display: inline; }
+.fchip .ex { color: var(--accent); font-weight: 700; }
+.tally { font: 600 13px var(--mono); color: var(--muted); min-height: 20px; margin-bottom: 10px; }
+.ans { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.ans input, .ans select { min-height: 44px; border-radius: 10px; border: 2px solid var(--line); background: var(--panel); color: var(--ink); font: 600 16px var(--mono); padding: 6px 10px; }
+.ans input { width: 130px; }
+.ans input:focus, .ans select:focus { border-color: var(--accent); outline: none; }
+.worked { display: none; margin-top: 14px; border-radius: 14px; padding: 12px 14px; }
+.worked.show { display: block; }
+.worked.good { background: var(--good-soft); } .worked.bad { background: var(--bad-soft); }
+.wk { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 520px) { .wk { grid-template-columns: minmax(0, 1fr); } }
+.wk > div, .wk3 { border-radius: 10px; background: var(--panel); padding: 8px 10px; opacity: 0; transform: translateY(6px); transition: opacity .4s, transform .4s; }
+.wk > div.on, .wk3.on { opacity: 1; transform: none; }
+.wk .h, .wk3 .h { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.wk .m { font: 700 16px var(--mono); overflow-wrap: anywhere; }
+.wk3 { margin-top: 10px; }
+.wk3 .m { font: 700 16px var(--mono); overflow-wrap: anywhere; }
+.uladder { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; margin-top: 8px; }
+.uladder span { border-radius: 8px; border: 1px solid var(--line); background: var(--bg); text-align: center; padding: 4px 0; font: 700 12px var(--mono); color: var(--muted); transition: background .3s, color .3s, transform .3s; }
+.uladder span small { display: block; font-size: 10px; font-weight: 600; }
+.uladder span.hit { background: var(--accent); color: #fff; border-color: transparent; transform: translateY(-3px); }
+
+/* ---------- stage 4: sprint + whiteboard ---------- */
+.sprint { border: 1px solid var(--line); border-radius: 18px; background: var(--bg); padding: 16px; }
+.sprint .top { display: flex; justify-content: space-between; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sprint .ugly { font: 700 clamp(22px, 6vw, 30px) var(--mono); margin: 6px 0 12px; }
+.watch { font: 700 14px var(--mono); color: var(--muted); }
+.cmp { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+@media (max-width: 520px) { .cmp { grid-template-columns: 1fr 1fr; } .cmp > div:last-child { grid-column: span 2; } }
+.cmp > div { background: var(--panel); border-radius: 10px; padding: 8px 10px; border: 1px solid var(--line); }
+.cmp .h { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.cmp b { font: 700 16px var(--mono); overflow-wrap: anywhere; }
+.board { margin-top: 14px; border-radius: 18px; border: 2px solid var(--line); background: var(--board); padding: 10px 12px 14px; }
+.board .wline + .wline { border-top: 1px solid var(--board-line); border-radius: 0; }
+.board .cap { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+.wline { display: block; width: 100%; text-align: left; border: 0; background: none; min-height: 48px; padding: 8px 6px; border-radius: 10px; font: 600 17px var(--mono); color: var(--ink); }
+.wline:hover:not([disabled]) { background: var(--accent-soft); }
+.wline[disabled] { cursor: default; }
+.wline .code { text-decoration-thickness: 2px; text-underline-offset: 5px; }
+.wline.bug .code { text-decoration-line: underline; text-decoration-style: wavy; text-decoration-color: var(--bad); }
+.wline.fine { color: var(--muted); }
+.wline.miss { animation: shake .4s; }
+.wline .note { display: block; font: 500 13.5px var(--font); color: var(--muted); margin-top: 10px; }
+.wline .fix { color: var(--good); font-weight: 700; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 2.1 · Back-of-the-Envelope Estimation</div>
+    <h1>The Byte Ladder</h1>
+    <p class="lede">Every storage estimate in a system design interview uses five units and one trick. Climb from kilobytes to petabytes, then multiply hundreds of millions of anything in your head.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can say <i>"2 to the 30 is about a billion, so a gigabyte"</i>, work out <i>"300 million users × 1 KB"</i> in your head (300 GB), and you never write a number on the whiteboard without its unit.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Climb the byte ladder</h2><div class="sub">Five rungs that cover every estimate you'll ever do</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Chapter 2 opens with an idea from Jeff Dean, a Senior Fellow at Google. A <b>back-of-the-envelope estimate</b> is a rough number you build from a thought experiment plus a few well-known performance figures. You use it to get a feel for which designs could meet your requirements before you build anything.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/back-of-the-envelope-estimation" target="_blank" rel="noopener">[1]</a><a class="cite" href="http://highscalability.com/blog/2011/1/26/google-pro-tip-use-back-of-the-envelope-calculations-to-choo.html" target="_blank" rel="noopener">[2]</a> In an interview, the point is to show you can reason about scale. Nobody expects precision.</p>
+      <p>Data sizes get huge, but the maths stays simple if you know the units. Computers count in powers of two, and the book's Table 2-1 gives five that matter. Each one is <i>roughly</i> a round power of ten.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/back-of-the-envelope-estimation" target="_blank" rel="noopener">[1]</a></p>
+      <p><b>Build the ladder.</b> Tap a chip, then tap the rung it belongs on. Each rung needs a <i>word</i> (how many bytes, roughly) and a <i>unit</i>. Wrong guesses just bounce back. This part is practice.</p>
+      <div class="ladwrap">
+        <div class="sim">
+          <div class="counter" id="ctr">2<sup>10</sup> means 2 multiplied by itself 10 times</div>
+          <div class="ladder" id="ladder"></div>
+          <div class="trays">
+            <div><div class="lab">Words</div><div class="tray" id="trayW"></div></div>
+            <div><div class="lab">Units</div><div class="tray" id="trayU"></div></div>
+          </div>
+        </div>
+        <div class="bytecard">
+          <div class="big">A</div>
+          <div><b>1 ASCII character = 1 byte.</b> ASCII covers plain English letters, digits and punctuation.</div>
+          <div class="bits" aria-hidden="true"><span>0</span><span>1</span><span>0</span><span>0</span><span>0</span><span>0</span><span>0</span><span>1</span></div>
+          <div class="small muted">"A" is 01000001 · <b>1 byte = 8 bits</b></div>
+          <label class="small" for="asciiIn" style="display:block;margin-top:10px;font-weight:600">Type something:</label>
+          <input id="asciiIn" value="hello world" maxlength="60" autocomplete="off" spellcheck="false">
+          <div class="out" id="asciiOut"></div>
+        </div>
+      </div>
+      <div class="callout tip" id="ladNote" style="display:none"><b>The pattern.</b> Every <b>+10</b> on the exponent multiplies by about <b>1,000</b>, adds <b>three zeros</b>, and moves you <b>one unit up</b>: 10 → KB, 20 → MB, 30 → GB, 40 → TB, 50 → PB. Memorise that and you never need the table.</div>
+      <div class="row" style="margin-top:12px"><button class="btn" id="ladReset">↻ Shuffle and climb again</button></div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>The 2.4% white lie</h2><div class="sub">Why 1,024 ≈ 1,000 is fine, and where it starts to drift</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The ladder cheats a little. 2<sup>10</sup> is really <b>1,024</b>, not 1,000. Each rung multiplies that small error again, so the gap grows as you climb. Is that a problem?</p>
+      <div class="challenge boxed" id="dPredict"></div>
+      <div class="sim gauge" style="margin-top:14px">
+        <div class="dslider"><label for="dSlider"><span>Exponent: 2<sup id="dExp">10</sup> vs 10<sup id="dPow">3</sup></span><span class="muted small" id="dHint">predict first</span></label>
+          <input type="range" id="dSlider" min="1" max="5" step="1" value="1" disabled aria-label="Exponent stop: 10, 20, 30, 40 or 50">
+          <div class="dticks" id="dTicks"><span>10</span><span>20</span><span>30</span><span>40</span><span>50</span></div>
+        </div>
+        <div class="dbars">
+          <div class="dbar ex"><div class="nm"><span>Exact: 2<sup id="dE2">10</sup></span><span class="val" id="dExV"></span></div><div class="track"><div class="fill" id="dExF"></div></div></div>
+          <div class="dbar rd"><div class="nm"><span>Round: one <span id="dWord">thousand</span></span><span class="val" id="dRdV"></span></div><div class="track"><div class="fill" id="dRdF"></div></div></div>
+        </div>
+        <svg id="gauge" viewBox="0 0 300 100" role="img" aria-label="Gap between the exact and round number, in percent"></svg>
+        <div class="simlog" id="dLog"><div>Make a prediction, then drag the slider through all five rungs.</div></div>
+      </div>
+      <ul class="checklist" id="s2goals">
+        <li data-g="pred"><span class="box">✓</span><span>Predict the gap at 2<sup>40</sup></span></li>
+        <li data-g="stops"><span class="box">✓</span><span>Visit all five stops on the drift meter</span></li>
+        <li data-g="drive"><span class="box">✓</span><span>Find out what your laptop says about a "1 TB" drive</span></li>
+      </ul>
+      <div class="drive">
+        <svg viewBox="0 0 150 110" aria-hidden="true">
+          <rect class="case" x="8" y="10" width="134" height="88" rx="12"/>
+          <circle cx="104" cy="52" r="24" fill="none" stroke="var(--line)" stroke-width="3"/>
+          <circle cx="104" cy="52" r="5" fill="var(--muted)"/>
+          <text class="lbl" x="46" y="60">1 TB</text>
+          <text class="sm" x="75" y="90">10¹² bytes</text>
+          <circle class="led" cx="128" cy="22" r="4"/>
+        </svg>
+        <div class="osbox">
+          <div style="font-family:var(--font);font-size:15px">Drive makers count in powers of <b>ten</b>: their "1 TB" is exactly 1,000,000,000,000 bytes. Many operating systems count in powers of <b>two</b>.</div>
+          <div class="row" style="margin-top:10px"><button class="btn primary" id="osBtn">What does the OS show? 💻</button></div>
+          <div class="scr" id="osScr"><div class="small" style="color:#9fa8ff">Disk Utility</div><div class="gb" id="osGB">? GB</div><div class="ln" id="osL1">1,000,000,000,000 ÷ 1,073,741,824 (= 1024³)</div><div class="ln" id="osL2">= 931.3 "GB", really GiB</div></div>
+        </div>
+      </div>
+      <div class="callout"><b>KB or KiB?</b> Strictly, <b>KB, MB, GB</b> are decimal (10<sup>3</sup>, 10<sup>6</sup>, 10<sup>9</sup>). The binary versions have their own names: <b>KiB, MiB, GiB</b> (kibibyte, mebibyte, gibibyte) mean exactly 2<sup>10</sup>, 2<sup>20</sup>, 2<sup>30</sup>.<a class="cite" href="https://en.wikipedia.org/wiki/Binary_prefix" target="_blank" rel="noopener">[4]</a> The book, like most engineers in conversation, blurs the two. In an interview, just say <i>"I'll treat 2<sup>10</sup> as 1,000"</i> and move on.</div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Count the zeros</h2><div class="sub">Big multiplications without a calculator</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Here is the one trick. Write every number as <b>a small number × 10<sup>something</sup></b> (that's <i>scientific notation</i>; the small number is called the <i>mantissa</i>). Then:</p>
+      <ol>
+        <li><b>Multiply the small numbers.</b> 3 × 1 = 3.</li>
+        <li><b>Add the exponents.</b> 10<sup>8</sup> × 10<sup>3</sup> = 10<sup>11</sup>.</li>
+        <li><b>Map the exponent to a unit</b> with the ladder: 3 → K, 6 → M, 9 → G, 12 → T, 15 → P. 10<sup>11</sup> is 100 × 10<sup>9</sup>, so 3 × 10<sup>11</sup> bytes = <b>300 GB</b>.</li>
+      </ol>
+      <p>Percentages are just small numbers too: 10% is × 0.1, which is 10<sup>−1</sup>. Four cards. Tap a factor chip to see it in powers of ten, then type your answer <b>and pick a unit</b>. Anything within 10% counts.</p>
+      <div id="zbox"></div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Round like a pro</h2><div class="sub">The book's tips: approximate, and label every unit</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The chapter ends with tips. Two of them are about arithmetic hygiene.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/back-of-the-envelope-estimation" target="_blank" rel="noopener">[1]</a></p>
+      <p><b>Tip 1: round and approximate.</b> Working out 99,987 ÷ 9.1 by hand burns interview minutes for no gain. Round it to 100,000 ÷ 10 and you have 10,000 in a second. Precision isn't expected.</p>
+      <div class="sprint" id="sprint"></div>
+      <p style="margin-top:18px"><b>Tip 2: label your units.</b> If you write "5" on the board, is it 5 KB or 5 MB? Twenty minutes later you won't remember either, and one slipped unit is a 1,000× error. Write <b>5 MB</b>.</p>
+      <p class="small">Here's a whiteboard from a Twitter-sized estimate. <b>Tap every line that is missing its unit.</b> Careful: a wrong tap costs a heart.</p>
+      <div class="board" id="board"><div class="cap">Whiteboard · Twitter estimate</div></div>
+      <div class="small muted" id="boardMsg" style="margin-top:6px">0 of 2 missing units found</div>
+      <div class="callout tip"><b>Handy constant (not from the book, but standard).</b> A day has 86,400 seconds, which is about <b>10<sup>5</sup></b>. So <b>1 million</b> events a day is about <b>10 per second</b> (exactly 11.6), and <b>1 billion</b> a day is about <b>10,000 per second</b> (exactly 11,574). It runs about 14% low, which is why the book's Twitter example gets ~3,500 QPS where this shortcut gives ~3,000. Quest 2.4 does that maths properly.</div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Unit Gremlin</h2><div class="sub">Grade the whiteboard before the interviewer does</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>A gremlin has been editing your whiteboard. Seven lines. For each, decide: is it <b>right</b>, <b>off by about 1,000×</b> (a rung slipped), <b>missing its unit</b>, or showing <b>fake precision</b> (decimals nobody can defend)?</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">The 30-second unit talk</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> You can size data now. But how <i>fast</i> can you read it? A memory read takes about 100 nanoseconds and a packet from California to the Netherlands and back takes 150 milliseconds. That's Quest 2.2, <a href="0202-latency-numbers.html"><i>Nanoseconds to Netherlands</i></a>.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/back-of-the-envelope-estimation" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 2: Back-of-the-envelope Estimation</a>: the intro, the "Power of two" table and the "Tips" list. Then read the <a href="http://highscalability.com/blog/2011/1/26/google-pro-tip-use-back-of-the-envelope-calculations-to-choo.html" target="_blank" rel="noopener">High Scalability write-up of Jeff Dean's talk</a>, where the idea comes from, and the powers-of-two table in the <a href="https://github.com/donnemartin/system-design-primer" target="_blank" rel="noopener">System Design Primer</a> (the book's own reference).
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <ul style="margin:0;padding-left:20px">
+        <li><b>The drift is real.</b> 2<sup>10</sup> ≈ 1,000 is off by 2.4% per rung, about 10% at TB and 12.6% at PB. Fine for estimates. Not fine for billing, capacity contracts or "will this exactly fit in RAM" questions.</li>
+        <li><b>KB vs KiB.</b> Standards bodies say KB/MB/GB are decimal and KiB/MiB/GiB are binary. Linux tools, Windows and macOS don't all agree on which they show, which is why drive sizes look "wrong".<a class="cite" href="https://en.wikipedia.org/wiki/Binary_prefix" target="_blank" rel="noopener">[4]</a></li>
+        <li><b>1 character = 1 byte</b> only holds for plain English text. Real text is usually UTF-8, where accented and non-Latin characters take 2–3 bytes and emoji take 4. A chat app in Japanese stores about 3× the bytes per character.</li>
+        <li><b>86,400 ≈ 10<sup>5</sup></b> is a common shortcut, not the book's. It makes per-second rates about 14% too low. Say so if you use it.</li>
+      </ul>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"why do computers count in powers of two at all?"</i> or <i>"how much RAM would 300 GB of profiles need if I cache 20% of them?"</i>
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 2 "Back-of-the-envelope Estimation" (ByteByteGo).</li>
+        <li>High Scalability, "Google Pro Tip: Use Back-of-the-Envelope Calculations to Choose the Best Design" (2011), on Jeff Dean's talk.</li>
+        <li>Donne Martin, <i>The System Design Primer</i>, "Powers of two table" (GitHub).</li>
+        <li>Wikipedia, "Binary prefix".</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0201',
+  winTitle: 'Ladder climbed',
+  badge: '🪜 Badge: Byte Climber',
+  cheatsheet: '../reference/ch02-estimation-cheatsheet.html',
+});
+const { sleep, shuffle } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ================= shared helpers ================= */
+const RUNGS = [
+  { k: 1, e: 10, p: 3, w: 'thousand', u: 'KB', c: 'var(--u1)' },
+  { k: 2, e: 20, p: 6, w: 'million', u: 'MB', c: 'var(--u2)' },
+  { k: 3, e: 30, p: 9, w: 'billion', u: 'GB', c: 'var(--u3)' },
+  { k: 4, e: 40, p: 12, w: 'trillion', u: 'TB', c: 'var(--u4)' },
+  { k: 5, e: 50, p: 15, w: 'quadrillion', u: 'PB', c: 'var(--u5)' },
+];
+const commas = s => String(s).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+const sup = n => `10<sup>${n}</sup>`;
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); if (xp) Q.addXP(xp, li);
+  return true;
+}
+function anim(dur, f) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 1) { f(1); return res(); }
+    const t0 = performance.now();
+    const fr = now => { const p = Math.min(1, (now - t0) / dur); f(p); p < 1 ? requestAnimationFrame(fr) : res(); };
+    requestAnimationFrame(fr);
+  });
+}
+const ease = p => 1 - Math.pow(1 - p, 3);
+function nextBtn(row, label, fn, primary = true) {
+  const b = document.createElement('button'); b.className = 'btn' + (primary ? ' primary' : ''); b.textContent = label; b.onclick = fn; row.appendChild(b); return b;
+}
+// Predict-then-watch: learner picks, the action plays, then right/wrong is revealed.
+function predict(box, { step, title, options, correct, act, explain, xp = 15 }) {
+  box.innerHTML = `${step ? `<div class="step">${step}</div>` : ''}<h3>${title}</h3><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+  const opts = $('.opts', box);
+  let busy = false;
+  return new Promise(resolve => {
+    shuffle(options.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = async () => {
+        if (busy) return; busy = true;
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        b.classList.add('picked');
+        await act();
+        const ok = i === correct;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-i="${correct}"]`, opts).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + explain;
+        ok ? Q.addXP(xp, b) : Q.loseHeart(b);
+        resolve({ ok, row: $('.row', box) });
+      };
+      opts.appendChild(b);
+    });
+  });
+}
+
+/* ================= STAGE 1: the ladder ================= */
+Q.onStage(1, () => {
+  const lad = $('#ladder'), trayW = $('#trayW'), trayU = $('#trayU'), ctr = $('#ctr');
+  let sel = null, placed = 0, awarded = false, quizShown = false, rolling = false;
+  const rungEl = k => $(`.rung[data-k="${k}"]`, lad);
+  function build() {
+    sel = null; placed = 0;
+    lad.classList.remove('done');
+    lad.innerHTML = RUNGS.slice().reverse().map((r, i) => `${i ? `<div class="x1000" style="transition-delay:${(4 - i) * 220}ms">⇡ ×1000</div>` : ''}<button class="rung" data-k="${r.k}" aria-label="Rung 2 to the ${r.e}"><span class="exp" style="color:${r.c}">2<sup>${r.e}</sup></span><span class="slot sw">word?</span><span class="slot su">unit?</span><span class="pow">≈ ${sup(r.p)}</span></button>`).join('');
+    trayW.innerHTML = shuffle(RUNGS).map(r => `<button class="pchip" data-t="w" data-v="${r.w}" aria-pressed="false">${r.w}</button>`).join('');
+    trayU.innerHTML = shuffle(RUNGS).map(r => `<button class="pchip unit" data-t="u" data-v="${r.u}" aria-pressed="false">${r.u}</button>`).join('');
+    ctr.innerHTML = '2<sup>10</sup> means 2 multiplied by itself 10 times';
+    $$('.pchip').forEach(c => c.onclick = () => pick(c));
+    $$('.rung', lad).forEach(rg => rg.onclick = () => drop(rg));
+  }
+  function pick(c) {
+    if (sel === c) { c.classList.remove('sel'); c.setAttribute('aria-pressed', 'false'); sel = null; return; }
+    if (sel) { sel.classList.remove('sel'); sel.setAttribute('aria-pressed', 'false'); }
+    sel = c; c.classList.add('sel'); c.setAttribute('aria-pressed', 'true');
+  }
+  function drop(rg) {
+    if (rolling) return;
+    if (!sel) { Q.toast('pick a chip first', rg, 'practice'); return; }
+    const r = RUNGS[+rg.dataset.k - 1], t = sel.dataset.t, v = sel.dataset.v;
+    if (r[t] === v) {
+      const slot = $(t === 'w' ? '.sw' : '.su', rg);
+      slot.textContent = v; slot.classList.add('f');
+      sel.remove(); sel = null; placed++;
+      if ($$('.slot.f', rg).length === 2) {
+        rg.classList.add('lit');
+        rg.setAttribute('aria-label', `2 to the ${r.e} is about one ${r.w}, ${r.u}`);
+        ctr.innerHTML = `2<sup>${r.e}</sup> ≈ one <b>${r.w}</b> bytes = <b>1 ${r.u}</b>`;
+      }
+      if (placed === 10) complete();
+    } else {
+      const chip = sel;
+      rg.classList.remove('shake'); chip.classList.remove('shake'); void rg.offsetWidth;
+      rg.classList.add('shake'); chip.classList.add('shake');
+      setTimeout(() => { rg.classList.remove('shake'); chip.classList.remove('shake'); }, 450);
+      Q.toast(`not 2^${r.e}`, rg, 'practice');
+      chip.classList.remove('sel'); chip.setAttribute('aria-pressed', 'false'); sel = null;
+    }
+  }
+  async function complete() {
+    rolling = true;
+    lad.classList.add('done');
+    $('#ladNote').style.display = 'block';
+    for (const r of RUNGS) {
+      const rg = rungEl(r.k); rg.classList.add('glow');
+      ctr.innerHTML = `<b>1${',000'.repeat(r.k)}</b> bytes ≈ <b>1 ${r.u}</b>`;
+      await sleep(Q.reduced ? 0 : 520);
+      rg.classList.remove('glow');
+    }
+    ctr.innerHTML = `KB → MB → GB → TB → PB: each rung <b>×1000</b>`;
+    rolling = false;
+    if (!awarded) { awarded = true; Q.addXP(20, lad); }
+    if (!quizShown) {
+      quizShown = true;
+      Q.quiz($('#s1quiz'), {
+        q: '2<sup>30</sup> bytes is about…',
+        options: ['1 billion bytes, which is 1 GB', '1 million bytes, which is 1 MB', '1 trillion bytes, which is 1 TB'],
+        correct: 0,
+        good: 'Every +10 on the exponent is ×1,000 and one unit up: 10 → KB, 20 → MB, <b>30 → GB</b>.',
+        bad: 'Count the rungs: every +10 on the exponent is ×1,000 and one unit up. 10 → KB, 20 → MB, <b>30 → GB</b>, so 2<sup>30</sup> is about a billion bytes.',
+        onDone: () => setTimeout(() => Q.clearStage(1), 900),
+      });
+    }
+  }
+  $('#ladReset').onclick = () => { if (!rolling) build(); };
+  build();
+
+  // ASCII byte counter
+  const enc = new TextEncoder(), inp = $('#asciiIn'), out = $('#asciiOut');
+  function count() {
+    const s = inp.value, chars = [...s].length, bytes = enc.encode(s).length;
+    out.innerHTML = `${chars} character${chars === 1 ? '' : 's'} → <b>${bytes} byte${bytes === 1 ? '' : 's'}</b> → ${bytes * 8} bits` +
+      (bytes > chars ? `<div class="small" style="font-family:var(--font);color:var(--warn);margin-top:4px">Non-ASCII spotted: in UTF-8, accented letters and emoji take 2–4 bytes each.</div>` : '');
+  }
+  inp.addEventListener('input', count); count();
+});
+
+/* ================= STAGE 2: the drift meter ================= */
+Q.onStage(2, () => {
+  const STOPS = RUNGS.map(r => {
+    const ex = 2n ** BigInt(r.e), rd = 10n ** BigInt(r.p);
+    return { ...r, ex, rd, gap: Number(ex - rd) / Number(rd) * 100 };
+  });
+  const goals = new Set(), seen = new Set();
+  let predicted = false, quizShown = false, osDone = false;
+  const sl = $('#dSlider');
+
+  // gauge: 0–50% across x = 20..380
+  const g = $('#gauge');
+  const X = pct => 14 + Math.min(50, pct) / 50 * 272;
+  S('rect', { class: 'band-ok', x: 14, y: 46, width: X(25) - 14, height: 24, rx: 6 }, g);
+  S('rect', { class: 'band-meh', x: X(25), y: 46, width: 286 - X(25), height: 24, rx: 6 }, g);
+  S('text', { class: 'bl ok', x: (14 + X(25)) / 2, y: 62 }, g).textContent = 'fine for napkin math';
+  S('text', { class: 'bl meh', x: (X(25) + 286) / 2, y: 62 }, g).textContent = 'getting sloppy';
+  [0, 10, 20, 30, 40, 50].forEach(v => { S('line', { class: 'tk', x1: X(v), x2: X(v), y1: 70, y2: 76 }, g); S('text', { class: 'tl', x: X(v), y: 92 }, g).textContent = v + '%'; });
+  const needle = S('g', { class: 'needle' }, g);
+  S('path', { d: 'M0 44 L-7 32 L7 32 Z' }, needle);
+  const ntext = S('text', { x: 0, y: 26 }, needle);
+
+  function render(k) {
+    const s = STOPS[k - 1];
+    $('#dExp').textContent = s.e; $('#dE2').textContent = s.e; $('#dPow').textContent = s.p; $('#dWord').textContent = s.w;
+    $('#dExV').textContent = commas(s.ex.toString());
+    $('#dRdV').textContent = commas(s.rd.toString());
+    const max = 1.13;
+    $('#dExF').style.width = (Number(s.ex) / Number(s.rd) / max * 100) + '%';
+    $('#dRdF').style.width = (1 / max * 100) + '%';
+    needle.style.transform = `translateX(${X(s.gap)}px)`;
+    ntext.textContent = s.gap.toFixed(1) + '%';
+    sl.value = k;
+    sl.setAttribute('aria-valuetext', `2 to the ${s.e}: ${s.gap.toFixed(1)} percent bigger than one ${s.w}`);
+  }
+  function visit(k) {
+    render(k);
+    if (!predicted) return;
+    const s = STOPS[k - 1];
+    if (!seen.has(k)) {
+      seen.add(k);
+      $$('#dTicks span')[k - 1].classList.add('seen');
+      logTo('dLog', `2^${s.e} = ${commas(s.ex.toString())} → ${s.gap.toFixed(1)}% over one ${s.w} (${s.u})`, s.gap > 9 ? 'w' : 'g');
+    }
+    $('#dHint').textContent = `${seen.size} / 5 stops`;
+    if (seen.size === 5 && checkGoal('#s2goals', 'stops', goals, 10)) {
+      logTo('dLog', 'Even at the top rung the ladder is only 12.6% off. Well inside "right order of magnitude".', 'g');
+      maybeQuiz();
+    }
+  }
+  sl.addEventListener('input', () => visit(+sl.value));
+  render(1);
+
+  predict($('#dPredict'), {
+    step: 'Predict first',
+    title: 'How far off is 2<sup>40</sup> (the exact number) from 10<sup>12</sup> (one trillion)?',
+    options: ['About 0.1%', 'About 2.4%', 'About 10%', 'About 50%'],
+    correct: 2,
+    act: async () => {
+      // sweep the meter up to rung 4
+      for (let k = 1; k <= 4; k++) { render(k); await sleep(Q.reduced ? 0 : 420); }
+    },
+    explain: '2<sup>40</sup> = 1,099,511,627,776, about <b>10%</b> more than a trillion. The 2.4% error at the bottom rung compounds: 1.024<sup>4</sup> ≈ 1.10. Now drag the slider through all five stops.',
+  }).then(() => {
+    predicted = true; sl.disabled = false;
+    checkGoal('#s2goals', 'pred', goals);
+    $('#dHint').textContent = 'drag me';
+    visit(4);
+    maybeQuiz();
+  });
+
+  $('#osBtn').onclick = async () => {
+    if (osDone) return;
+    osDone = true; $('#osBtn').disabled = true;
+    const gb = $('#osGB');
+    $('#osL1').classList.add('on');
+    await anim(1300, p => { gb.textContent = (1000 - 68.7 * ease(p)).toFixed(1) + ' GB'; });
+    gb.textContent = '931.3 GB';
+    $('#osL2').classList.add('on');
+    if (checkGoal('#s2goals', 'drive', goals, 10)) maybeQuiz();
+    $('#osBtn').disabled = false; $('#osBtn').textContent = '↻ Show it again';
+    $('#osBtn').onclick = async () => { $('#osL2').classList.remove('on'); await anim(900, p => { gb.textContent = (1000 - 68.7 * ease(p)).toFixed(1) + ' GB'; }); gb.textContent = '931.3 GB'; $('#osL2').classList.add('on'); };
+  };
+
+  function maybeQuiz() {
+    if (quizShown || !predicted || !goals.has('stops') || !goals.has('drive')) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s2quiz'), {
+      q: 'Your interviewer says: "2<sup>40</sup> is 1.1 trillion, not 1 trillion." Best reply?',
+      options: ['True, about 10% off; fine for an estimate', 'Good catch, so I’ll redo every number exactly', 'No, 2^40 bytes is exactly one trillion bytes'],
+      correct: 0,
+      good: 'Agree, size the error, move on. A 10% error doesn’t change which design you pick. Being off by 10× would.',
+      bad: 'The interviewer is right, and it doesn’t matter. Agree, say it’s about 10% off, and keep going. Estimates need the right order of magnitude, not exact digits.',
+      onDone: () => setTimeout(() => Q.clearStage(2), 900),
+    }), 500);
+  }
+});
+
+/* ================= STAGE 3: count the zeros ================= */
+Q.onStage(3, () => {
+  const UNITS = [['B', 0], ['KB', 3], ['MB', 6], ['GB', 9], ['TB', 12], ['PB', 15]];
+  const CARDS = [
+    { q: 'Your app has <b>300 million</b> users. Each profile is about <b>1 KB</b>. How much storage for all profiles?',
+      f: [{ t: '300 million users', m: 3, e: 8 }, { t: '1 KB', m: 1, e: 3 }], ans: 3e11 },
+    { q: 'A photo service stores <b>2 billion</b> photos at about <b>500 KB</b> each. Total storage?',
+      f: [{ t: '2 billion photos', m: 2, e: 9 }, { t: '500 KB', m: 5, e: 5 }], ans: 1e15 },
+    { q: '<b>10 million</b> users each keep <b>2 KB</b> of settings. Total?',
+      f: [{ t: '10 million users', m: 1, e: 7 }, { t: '2 KB', m: 2, e: 3 }], ans: 2e10 },
+    { q: '<b>150 million</b> daily users post <b>2 tweets</b> a day. <b>10%</b> of tweets carry a <b>1 MB</b> photo or video. New media per day?',
+      f: [{ t: '150 million users', m: 1.5, e: 8 }, { t: '2 tweets each', m: 2, e: 0 }, { t: '10% have media', m: 1, e: -1 }, { t: '1 MB', m: 1, e: 6 }], ans: 3e13 },
+  ];
+  const nice = x => +(+x.toPrecision(6)).toString();
+  let ci = 0, firstTry = 0;
+  function solve(c) {
+    let M = c.f.reduce((a, x) => a * x.m, 1), E = c.f.reduce((a, x) => a + x.e, 0);
+    M = nice(M);
+    let Mn = M, En = E;
+    while (Mn >= 10) { Mn = nice(Mn / 10); En++; }
+    const ue = Math.max(0, Math.min(15, Math.floor(En / 3) * 3));
+    const val = nice(Mn * Math.pow(10, En - ue));
+    const unit = UNITS.find(u => u[1] === ue)[0];
+    return { M, E, Mn, En, ue, val, unit };
+  }
+  function show() {
+    const c = CARDS[ci], box = $('#zbox');
+    box.innerHTML = `<div class="zcard">
+      <div class="step">Card ${ci + 1} of ${CARDS.length}</div>
+      <h3>${c.q}</h3>
+      <div class="small muted">Zero tally: tap each factor</div>
+      <div class="fchips">${c.f.map((x, i) => `<button class="fchip" data-i="${i}" aria-pressed="false"><span class="plain">${x.t}</span><span class="sci">${x.m} × 10<sup class="ex">${x.e}</sup>${i === c.f.length - 1 ? ' B' : ''}</span></button>`).join('')}</div>
+      <div class="tally" id="ztally"></div>
+      <div class="ans"><input id="zNum" inputmode="decimal" autocomplete="off" placeholder="number" aria-label="Your answer, number"><select id="zUnit" aria-label="Unit"><option value="">unit?</option>${UNITS.map(u => `<option value="${u[0]}">${u[0]}</option>`).join('')}</select><button class="btn primary" id="zCheck">Check</button></div>
+      <div class="worked" id="zWorked"></div>
+      <div class="row" style="margin-top:12px" id="zRow"></div>
+    </div>`;
+    const flipped = new Set();
+    $$('.fchip', box).forEach(b => b.onclick = () => {
+      const on = b.classList.toggle('on'); b.setAttribute('aria-pressed', on);
+      on ? flipped.add(+b.dataset.i) : flipped.delete(+b.dataset.i);
+      $('#ztally').innerHTML = flipped.size ? 'exponents so far: ' + [...flipped].sort().map(i => c.f[i].e < 0 ? `(${c.f[i].e})` : c.f[i].e).join(' + ') + (flipped.size === c.f.length ? ` = ${c.f.reduce((a, x) => a + x.e, 0)}` : ' + …') : '';
+    });
+    $('#zNum').addEventListener('keydown', e => { if (e.key === 'Enter') $('#zCheck').click(); });
+    $('#zCheck').onclick = () => check(c);
+  }
+  async function check(c) {
+    const raw = $('#zNum').value.replace(/[,\s_]/g, ''), unit = $('#zUnit').value, btn = $('#zCheck');
+    const v = Number(raw);
+    if (!raw || !isFinite(v)) { Q.toast('type a number', btn, 'practice'); $('#zNum').focus(); return; }
+    if (!unit) { Q.toast('a bare number? pick a unit!', btn, 'practice'); $('#zUnit').focus(); return; }
+    const mult = Math.pow(10, UNITS.find(u => u[0] === unit)[1]);
+    const ok = Math.abs(v * mult / c.ans - 1) <= 0.10;
+    $('#zNum').readOnly = true; $('#zUnit').disabled = true; btn.disabled = true;
+    if (ok) { firstTry++; Q.addXP(15, btn); } else Q.loseHeart(btn);
+    await worked(c, ok, `${commas(raw)} ${unit}`);
+    nextBtn($('#zRow'), ci < CARDS.length - 1 ? 'Next card →' : 'Finish the cards →', () => {
+      ci++;
+      if (ci < CARDS.length) return show();
+      $('#zbox').innerHTML = `<div class="callout tip" style="margin:0"><b>${firstTry} of ${CARDS.length} on the first try.</b> Same three moves every time: small numbers multiply, exponents add, exponent picks the unit. Card 4 is exactly the book's Twitter media estimate. You'll meet it again in Quest 2.4.</div><div class="row" style="margin-top:12px"><button class="btn" id="zReplay">↻ Replay the cards</button></div>`;
+      $('#zReplay').onclick = () => { ci = 0; firstTry = 0; show(); };
+      quiz();
+    });
+  }
+  async function worked(c, ok, yours) {
+    const s = solve(c), w = $('#zWorked');
+    const ms = c.f.map(x => x.m).join(' × ');
+    const es = c.f.map(x => x.e < 0 ? `(${x.e})` : x.e).join(' + ');
+    const norm = s.M !== s.Mn ? ` = ${s.Mn} × ${sup(s.En)}` : '';
+    const lead = s.En - s.ue;
+    w.className = 'worked show ' + (ok ? 'good' : 'bad');
+    w.innerHTML = `<div style="margin-bottom:8px"><b>${ok ? 'Correct.' : 'Not quite.'}</b> You said ${Q.esc(yours)}. ${ok ? 'Here’s the tally:' : 'Watch the tally:'}</div>
+      <div class="wk"><div><div class="h">① Multiply the small numbers</div><div class="m">${ms} = ${s.M}</div></div>
+      <div><div class="h">② Add the exponents</div><div class="m">${es} = ${s.E}</div></div></div>
+      <div class="wk3"><div class="h">③ Snap the exponent to a unit</div><div class="m">${s.M} × ${sup(s.E)} B${norm}${lead ? ` = ${s.val} × ${sup(s.ue)} B` : ''} = <span style="color:var(--accent)">${s.val} ${s.unit}</span></div>
+        <div class="uladder">${UNITS.map(u => `<span data-e="${u[1]}">${u[0]}<small>10<sup>${u[1]}</sup></small></span>`).join('')}</div></div>`;
+    const steps = [...$$('.wk > div', w), $('.wk3', w)];
+    for (const el of steps) { el.classList.add('on'); await sleep(Q.reduced ? 0 : 450); }
+    $(`.uladder span[data-e="${s.ue}"]`, w).classList.add('hit');
+  }
+  function quiz() {
+    $('#s3quiz').innerHTML = '';
+    Q.quiz($('#s3quiz'), {
+      q: 'Quick, no calculator: 50 million users × 200 bytes of text each is about…',
+      options: ['About 10 GB', 'About 10 TB', 'About 10 MB'],
+      correct: 0,
+      good: '5 × 10<sup>7</sup> × 2 × 10<sup>2</sup>: small numbers 5 × 2 = 10, exponents 7 + 2 = 9. That’s 10 × 10<sup>9</sup> bytes = <b>10 GB</b>.',
+      bad: '5 × 10<sup>7</sup> × 2 × 10<sup>2</sup>: small numbers 5 × 2 = 10, exponents 7 + 2 = 9. 10 × 10<sup>9</sup> bytes is <b>10 GB</b>. 10 TB or 10 MB means a rung slipped.',
+      onDone: () => setTimeout(() => Q.clearStage(3), 900),
+    });
+  }
+  show();
+});
+
+/* ================= STAGE 4: rounding sprint + unit bug hunt ================= */
+Q.onStage(4, () => {
+  const SPRINT = [
+    { ex: '99,987 ÷ 9.1', exact: 99987 / 9.1, r: 10000,
+      opts: [['100,000 ÷ 10', 'good'], ['99,990 ÷ 9.1', 'slow'], ['10,000 ÷ 10', 'zero']] },
+    { ex: '86,400 × 3', exact: 259200, r: 270000,
+      opts: [['90,000 × 3', 'good'], ['86,000 × 3', 'slow'], ['9,000 × 3', 'zero']] },
+    { ex: '1,000,000 ÷ 86,400', exact: 1e6 / 86400, r: 10,
+      opts: [['1,000,000 ÷ 100,000', 'good'], ['1,000,000 ÷ 86,000', 'slow'], ['1,000,000 ÷ 10,000', 'zero']] },
+    { ex: '47 × 2,100', exact: 98700, r: 100000,
+      opts: [['50 × 2,000', 'good'], ['47 × 2,000', 'slow'], ['50 × 200', 'zero']] },
+    { ex: '3.65 × 300', exact: 1095, r: 1200,
+      opts: [['4 × 300', 'good'], ['3.6 × 300', 'slow'], ['4 × 30', 'zero']] },
+  ];
+  const WHY = {
+    good: 'Easy numbers, and still close.',
+    slow: 'Closer, but you still have ugly mental arithmetic to do. Round harder.',
+    zero: 'Easy, but a zero went missing, so the answer is off by 10×. That’s worse than any rounding error.',
+  };
+  const fmt = x => x >= 100 ? commas(Math.round(x)) : (+x.toFixed(2)).toString();
+  let si = 0, total = 0, sprintDone = false, boardDone = false, quizShown = false;
+  function showSprint() {
+    const it = SPRINT[si], box = $('#sprint');
+    box.innerHTML = `<div class="top"><span class="small muted"><b>Rounding sprint</b> · ${si + 1} of ${SPRINT.length}</span><span class="watch" id="watch">⏱ 0.0 s</span></div>
+      <div class="ugly">${it.ex}</div><div class="small" style="margin-bottom:8px">Pick the best way to round it:</div>
+      <div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+    const t0 = performance.now(), wEl = $('#watch');
+    const timer = setInterval(() => { wEl.textContent = `⏱ ${((performance.now() - t0) / 1000).toFixed(1)} s`; }, 100);
+    const opts = $('.opts', box);
+    shuffle(it.opts.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o[0]; b.dataset.i = i;
+      b.onclick = () => {
+        clearInterval(timer);
+        const secs = (performance.now() - t0) / 1000; total += secs;
+        wEl.textContent = `⏱ ${secs.toFixed(1)} s`;
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        const ok = o[1] === 'good';
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $('.opt[data-i="0"]', opts).classList.add('right');
+        const gap = Math.abs(it.r - it.exact) / it.exact * 100;
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = `<b>${ok ? 'Fast and close.' : 'Not that one.'}</b> ${WHY[o[1]]}${ok ? '' : ` Best: <b>${it.opts[0][0]}</b>.`}
+          <div class="cmp"><div><div class="h">Exact</div><b>${fmt(it.exact)}</b></div><div><div class="h">Rounded</div><b>${fmt(it.r)}</b></div><div><div class="h">Off by</div><b>${gap.toFixed(1)}%</b></div></div>`;
+        ok ? Q.addXP(5, b) : Q.loseHeart(b);
+        nextBtn($('.row', box), si < SPRINT.length - 1 ? 'Next →' : 'Finish the sprint →', () => {
+          si++;
+          if (si < SPRINT.length) return showSprint();
+          box.innerHTML = `<div class="top"><span class="small muted"><b>Rounding sprint</b> · done</span><span class="watch">⏱ ${total.toFixed(1)} s total</span></div>
+            <p style="margin:8px 0 0">Five ugly sums in ${total.toFixed(0)} seconds, and the rounded answers all land within about 15% of exact. That's the deal: a little accuracy for a lot of speed.</p>
+            <div class="row" style="margin-top:12px"><button class="btn" id="spAgain">↻ Sprint again</button></div>`;
+          $('#spAgain').onclick = () => { si = 0; total = 0; showSprint(); };
+          sprintDone = true; maybeQuiz();
+        });
+      };
+      opts.appendChild(b);
+    });
+  }
+  showSprint();
+
+  const WB = [
+    { t: 'DAU = 150 million', bug: false, why: 'Fine. DAU means daily active users, so the unit is in the name.' },
+    { t: 'Media size = 1', bug: true, fix: '1 MB', why: '1 what? 1 KB and 1 MB are 1,000× apart.' },
+    { t: 'Media/day = 30 TB', bug: false, why: 'Fine. A number with its unit.' },
+    { t: 'QPS ≈ 3,500', bug: false, why: 'Fine. QPS is queries per second, so the unit is in the name.' },
+    { t: 'Storage/5 yrs = 55', bug: true, fix: '55 PB', why: '55 GB? TB? PB? Those differ by a million.' },
+  ];
+  let found = 0;
+  const board = $('#board');
+  WB.forEach((l, i) => {
+    const b = document.createElement('button');
+    b.className = 'wline'; b.innerHTML = `<span class="code">${l.t}</span>`;
+    b.setAttribute('aria-label', `Whiteboard line: ${l.t}`);
+    b.onclick = () => {
+      if (boardDone) return;
+      b.disabled = true;
+      if (l.bug) {
+        b.classList.add('bug'); found++;
+        b.insertAdjacentHTML('beforeend', `<span class="note">${l.why} Write <span class="fix">${l.fix}</span>.</span>`);
+        Q.addXP(10, b);
+        $('#boardMsg').textContent = `${found} of 2 missing units found`;
+        if (found === 2) {
+          boardDone = true;
+          $$('.wline', board).forEach(x => x.disabled = true);
+          $('#boardMsg').innerHTML = '<b style="color:var(--good)">Both found.</b> The lines that looked bare but were fine had their unit in the name (DAU, QPS).';
+          maybeQuiz();
+        }
+      } else {
+        b.classList.add('fine', 'miss');
+        b.insertAdjacentHTML('beforeend', `<span class="note">${l.why}</span>`);
+        Q.loseHeart(b);
+      }
+    };
+    board.appendChild(b);
+  });
+
+  function maybeQuiz() {
+    if (quizShown || !sprintDone || !boardDone) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s4quiz'), {
+      q: 'Why does the book tell you to write the unit next to every number?',
+      options: ['So you don’t mix up 5 KB and 5 MB halfway through', 'Interviewers grade you on formal SI notation style', 'Because units make your final numbers more precise'],
+      correct: 0,
+      good: 'It’s for you. Mid-estimate, a bare "5" is easy to misread, and a slipped unit is a 1,000× error.',
+      bad: 'It’s for you, not for style points. Mid-estimate a bare "5" is easy to misread as the wrong unit, and that’s a 1,000× error.',
+      onDone: () => setTimeout(() => Q.clearStage(4), 900),
+    }), 500);
+  }
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss'), {
+  name: '👹 Unit Gremlin',
+  xp: 15,
+  choices: [
+    { k: 'ok', label: '✅ Looks right', sub: 'no change needed' },
+    { k: 'k', label: '🔢 Off by 1000×', sub: 'a rung slipped' },
+    { k: 'unit', label: '📏 Unit missing', sub: 'bare number' },
+    { k: 'fake', label: '🎯 Fake precision', sub: 'round it' },
+  ],
+  scenarios: [
+    { e: '🧮', t: '<code>1 million users × 1 KB = 1 GB</code>', d: 'Storage for one small record per user.', a: 'ok',
+      why: '10<sup>6</sup> × 10<sup>3</sup> = 10<sup>9</sup> bytes, which is 1 GB. Leave it.' },
+    { e: '🪜', t: '<code>2^40 bytes ≈ 1 PB</code>', d: 'Someone was quoting the powers-of-two table from memory.', a: 'k',
+      why: '40 → TB, 50 → PB. Corrected: <code>2^40 bytes ≈ 1 TB</code>.' },
+    { e: '📟', t: '<code>Write QPS = 3,472.2222</code>', d: 'Straight off a calculator.', a: 'fake',
+      why: 'Four decimals on an estimate that started from "about 150 million users". Corrected: <code>Write QPS ≈ 3,500</code>.' },
+    { e: '💾', t: '<code>Daily media storage: 30</code>', d: 'The candidate meant the book’s Twitter number.', a: 'unit',
+      why: 'Thirty of what? Corrected: <code>Daily media storage: 30 TB</code>.' },
+    { e: '🎞️', t: '<code>5 million users × 2 MB = 10 GB</code>', d: 'One profile photo per user.', a: 'k',
+      why: '5 × 10<sup>6</sup> × 2 × 10<sup>6</sup> = 10 × 10<sup>12</sup> = 10<sup>13</sup> bytes. Corrected: <code>= 10 TB</code>.' },
+    { e: '🔤', t: '<code>1 billion ASCII characters ≈ 1 GB</code>', d: 'Plain English text.', a: 'ok',
+      why: 'One ASCII character is one byte, so 10<sup>9</sup> characters is 10<sup>9</sup> bytes = 1 GB. (In UTF-8 with non-Latin text it would be more.)' },
+    { e: '📈', t: '<code>Peak QPS = 6,944.44 per second</code>', d: 'Twice the average, to cover busy hours.', a: 'fake',
+      why: 'Peak is a rough 2× multiplier on a rough average. Corrected: <code>Peak QPS ≈ 7,000</code>, the number the book uses.' },
+  ],
+  outro: 'Three bugs to hunt on every board: a slipped rung (1000×), a bare number, and decimals you can’t defend.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: interview drill ================= */
+Q.onStage(6, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"You have 300 million users and each profile is about 1 KB. How much storage is that, and how did you get there so fast?"</i>',
+  placeholder: '300 million is 3 × 10^8…',
+  model: '"300 million is 3 × 10<sup>8</sup>, and 1 KB is 10<sup>3</sup> bytes. Multiply the small numbers, add the exponents: 3 × 10<sup>11</sup> bytes, which is 300 GB. I\'m treating 2<sup>10</sup> as 1,000. That\'s about 2.4% off per step and around 10% by terabytes, which is fine for an estimate. I\'ll write it as 300 GB, with the unit, and keep rounding as I go, because precision isn\'t the point here."',
+  checks: ['I converted to powers of ten and added the exponents', 'I got 300 GB, and said the unit', 'I said 2^10 ≈ 1,000 and that the error is small', 'I mentioned rounding, or that precision isn’t expected'],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

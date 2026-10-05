@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Count the Nines</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: nines dial + year strip (s1), calc cards + staircase (s2), chain sandbox (s3), SLx bins + error budget (s4) */
+:root { --cell: #cdeedb; --cell-line: #b5dcc4; --down: #e5484d; --rack: #8a6d3b; --rack-soft: #f6eedd; --on-accent: #ffffff; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --cell: #1d3b2b; --cell-line: #285239; --down: #ff6d6a; --rack: #d6b37a; --rack-soft: #2e2617; --on-accent: #0e0f1d; }
+}
+:root[data-theme="dark"] { --cell: #1d3b2b; --cell-line: #285239; --down: #ff6d6a; --rack: #d6b37a; --rack-soft: #2e2617; --on-accent: #0e0f1d; }
+
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.bignum { font-family: var(--mono); font-weight: 700; }
+
+/* ---------- stage 1: the nines dial ---------- */
+.dialwrap { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 8px 18px; align-items: center; padding: 12px 14px 4px; }
+@media (max-width: 680px) { .dialwrap { grid-template-columns: minmax(0, 1fr); } }
+#dial { max-width: 340px; width: 100%; margin: 0 auto; display: block; }
+#dial .track { fill: none; stroke: var(--line); stroke-width: 8; stroke-linecap: round; }
+#dial .trackon { fill: none; stroke: var(--accent); stroke-width: 8; stroke-linecap: round; transition: d .5s; }
+#dial .notch { cursor: pointer; }
+#dial .notch:focus { outline: none; }
+#dial .notch circle { fill: var(--panel); stroke: var(--line); stroke-width: 3; transition: fill .3s, stroke .3s; }
+#dial .notch:hover circle, #dial .notch:focus-visible circle { stroke: var(--accent); }
+#dial .notch.on circle { fill: var(--accent); stroke: var(--accent); }
+#dial .notch text { fill: var(--ink); font: 700 17px var(--font); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+#dial .notch.on text { fill: var(--on-accent); }
+#dial .notch .pct { fill: var(--muted); font: 600 11px var(--mono); }
+#dial .notch.on .pct { fill: var(--accent); }
+#dial .knob { fill: var(--bg-2); stroke: var(--line); stroke-width: 2; }
+#dial .needle { transform-box: view-box; transform-origin: 170px 170px; transition: transform .55s cubic-bezier(.3,1.4,.5,1); }
+#dial .needle path { fill: var(--accent); }
+#dial .kbig { fill: var(--ink); font: 700 24px var(--mono); text-anchor: middle; }
+#dial .ksmall { fill: var(--muted); font: 600 13px var(--font); text-anchor: middle; }
+#dial.off .notch { cursor: not-allowed; opacity: .55; }
+.dialbtns { display: flex; justify-content: center; gap: 10px; padding: 0 0 6px; }
+.dialbtns .btn { min-width: 48px; min-height: 42px; padding: 6px 14px; font-size: 18px; line-height: 1; }
+.readouts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.ro { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.ro small { display: block; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.ro b { font-family: var(--mono); font-size: 20px; color: var(--bad); }
+.caption { margin-top: 10px; font-weight: 600; font-size: 15px; min-height: 46px; }
+.caption span { color: var(--accent); }
+.yearwrap { padding: 8px 14px 12px; }
+.yearhead { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: 4px; gap: 8px; }
+.year { display: grid; grid-template-columns: repeat(73, minmax(0, 1fr)); gap: 2px; }
+@media (max-width: 680px) { .year { grid-template-columns: repeat(37, minmax(0, 1fr)); } }
+.year i { display: block; aspect-ratio: 1; border-radius: 2px; background: var(--cell); transition: background .35s; }
+.year i.dn { background: var(--down); }
+.year i.part { background: linear-gradient(to left, var(--down) var(--f), var(--cell) var(--f)); box-shadow: 0 0 0 1.5px var(--down); }
+.mag { display: none; margin: 10px 14px 4px; border: 2px solid var(--down); border-radius: 14px; padding: 10px 12px; background: var(--panel); position: relative; }
+.mag.show { display: block; animation: rise .35s; }
+.mag .mt { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.mag .mbar { position: relative; height: 26px; border-radius: 8px; background: var(--cell); border: 1px solid var(--cell-line); overflow: hidden; }
+.mag .mfill { position: absolute; inset: 0 0 0 auto; width: 0; background: var(--down); transition: width .6s cubic-bezier(.2,.8,.2,1); }
+.mag .mticks { position: absolute; inset: 0; display: flex; }
+.mag .mticks span { flex: 1; border-right: 1px solid color-mix(in srgb, var(--ink) 18%, transparent); }
+.mag .mticks span:last-child { border-right: 0; }
+.mag .mscale { display: flex; justify-content: space-between; font: 600 11px var(--mono); color: var(--muted); margin-top: 3px; }
+
+/* ---------- stage 2: calc cards ---------- */
+.periods { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 4px; }
+.calcs { display: grid; gap: 12px; margin-top: 14px; }
+.calc { border: 1px solid var(--line); border-radius: 14px; padding: 14px; background: var(--bg); }
+.calc.ok { border-color: var(--good); }
+.calc.miss { border-color: var(--bad); }
+.calc-h { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; align-items: baseline; }
+.calc-h .tt { font-size: 17px; }
+.calc-h .tt b { font-family: var(--mono); color: var(--accent); }
+.calc-h .st { font-size: 13px; color: var(--muted); font-weight: 600; }
+.fstrip { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-family: var(--mono); font-size: 15px; }
+.fstrip input { width: 96px; min-height: 42px; border-radius: 10px; border: 2px solid var(--line); background: var(--panel); color: var(--ink); font: 600 16px var(--mono); padding: 6px 10px; }
+.fstrip input:focus { border-color: var(--accent); outline: none; }
+.units { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--panel); }
+.units button { min-height: 42px; min-width: 44px; padding: 4px 10px; border: 0; background: none; font: 700 14px var(--font); color: var(--muted); }
+.units button + button { border-left: 1px solid var(--line); }
+.units button.on { background: var(--accent); color: #fff; }
+.units button:disabled { cursor: default; }
+.fstrip .btn { min-height: 42px; padding: 6px 14px; font-size: 14px; }
+.calc .explain { font-size: 14.5px; }
+.worked { font-family: var(--mono); font-size: 13.5px; }
+.stairs { display: none; margin-top: 16px; border: 1px solid var(--line); border-radius: 14px; padding: 14px 12px 10px; background: var(--bg); }
+.stairs.show { display: block; animation: rise .35s; }
+.stairs h4 { margin: 0 0 10px; font-size: 15px; }
+.steps { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; align-items: end; height: 180px; }
+.stp { display: flex; flex-direction: column; justify-content: flex-end; height: 100%; text-align: center; position: relative; }
+.stp .bar { background: linear-gradient(180deg, var(--down), color-mix(in srgb, var(--down) 55%, var(--panel))); border-radius: 8px 8px 3px 3px; }
+.stp .v { font: 700 13px var(--mono); line-height: 1.15; margin-bottom: 4px; }
+.stp .v small { display: block; font: 600 11px var(--font); color: var(--muted); }
+.steplabels { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin-top: 6px; text-align: center; font: 600 12px var(--mono); color: var(--muted); }
+.stairs .note { font-size: 13.5px; color: var(--muted); margin: 10px 0 0; }
+
+/* ---------- stage 3: chain sandbox ---------- */
+.palette { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 14px 0; }
+.palette .btn { min-height: 42px; padding: 6px 12px; font-size: 14px; }
+.chain { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 14px; min-height: 120px; position: relative; }
+.endpt { font-weight: 700; font-size: 14px; padding: 8px 12px; border-radius: 99px; background: var(--bg-2); border: 1px solid var(--line); white-space: nowrap; }
+.wire { color: var(--muted); font-weight: 700; }
+.grp { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: 14px; border: 2px solid transparent; position: relative; background: transparent; transition: border-color .3s, background .3s; }
+.grp.par { border-color: color-mix(in srgb, var(--teal) 55%, transparent); background: var(--teal-soft); }
+.grp.rack { border: 2px dashed var(--rack); background: var(--rack-soft); }
+.grp .glabel { font-size: 11px; font-weight: 700; color: var(--muted); text-align: center; letter-spacing: .04em; }
+.grp.rack .glabel { color: var(--rack); }
+.blk { display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 12px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow); font-size: 14px; transition: opacity .3s, filter .3s; }
+.blk span { white-space: nowrap; }
+.blk b { font-family: var(--mono); font-size: 13px; color: var(--accent); }
+.blk .x { width: 40px; height: 40px; border: 0; background: none; border-radius: 8px; color: var(--muted); font-size: 18px; flex: none; }
+.blk .x:hover { background: var(--bad-soft); color: var(--bad); }
+.blk.dead { opacity: .45; filter: grayscale(1); text-decoration: line-through; }
+.grp .spare { min-height: 40px; border: 1px dashed var(--line); background: none; border-radius: 10px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.grp .spare:hover { border-color: var(--teal); color: var(--teal); }
+.bolt { position: absolute; left: 50%; top: -24px; font-size: 40px; transform: translateX(-50%); pointer-events: none; animation: strike .9s ease-out forwards; z-index: 3; }
+@keyframes strike { 0% { opacity: 0; transform: translate(-50%, -30px) scale(.6); } 25% { opacity: 1; transform: translate(-50%, 6px) scale(1.25); } 60% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, 10px) scale(1); } }
+.grp.zap { animation: zap .6s; }
+@keyframes zap { 20%, 60% { background: color-mix(in srgb, var(--xp) 60%, transparent); } }
+.emptyhint { color: var(--muted); font-size: 14px; font-style: italic; }
+.readout { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; align-items: center; padding: 12px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+.readout .big { font: 700 28px var(--mono); color: var(--ink); grid-row: span 2; }
+.readout .big.downnow { color: var(--bad); }
+.readout .dt { font-size: 14px; font-weight: 600; }
+.readout .fx { font: 12.5px var(--mono); color: var(--muted); word-break: break-word; }
+@media (max-width: 560px) { .readout { grid-template-columns: 1fr; } .readout .big { grid-row: auto; } }
+.ctabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 8px; }
+.ctabs .btn { min-height: 42px; padding: 6px 12px; font-size: 14px; }
+.ctabs .btn.on { border-color: var(--accent); background: var(--accent-soft); }
+.ctabs .btn.done::after { content: " ✓"; color: var(--good); }
+.cbox { border: 2px dashed var(--line); border-radius: 16px; padding: 14px 16px; }
+.cbox h3 { margin: 2px 0 6px; font-size: 17px; }
+.cbox p { margin: 0; font-size: 15px; }
+.cbox .cres { margin-top: 10px; }
+.rackbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; padding: 12px 14px; border-radius: 14px; background: var(--rack-soft); border: 1px solid color-mix(in srgb, var(--rack) 40%, transparent); }
+.rackbar .btn { min-height: 42px; padding: 6px 12px; font-size: 14px; }
+.rackbar .grow { flex: 1 1 200px; font-size: 14px; }
+
+/* ---------- stage 4: bins + error budget ---------- */
+.bins { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.bin { border: 2px solid var(--line); border-radius: 14px; padding: 10px; background: var(--bg); min-height: 108px; transition: border-color .3s, transform .2s; }
+.bin.hit { border-color: var(--good); transform: scale(1.03); }
+.bin h4 { margin: 0; font: 700 18px var(--mono); color: var(--accent); }
+.bin p { margin: 2px 0 6px; font-size: 12.5px; color: var(--muted); line-height: 1.3; }
+.bin .dots { display: flex; flex-wrap: wrap; gap: 4px; }
+.bin .dots i { width: 12px; height: 12px; border-radius: 4px; background: var(--teal); display: block; animation: rise .3s; }
+.sortcard { margin-top: 12px; border: 1px solid var(--line); border-radius: 14px; padding: 14px; background: var(--bg); }
+.sortcard .step { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.sortcard .stmt { font-size: 17px; font-weight: 600; margin: 6px 0 12px; }
+.sortcard .opts3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.sortcard .opts3 .opt { text-align: center; font: 700 16px var(--mono); min-height: 44px; }
+.budget { margin-top: 14px; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: var(--bg); }
+.budget-top { padding: 12px 14px 4px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 14px; font-weight: 600; }
+.bmeter { margin: 6px 14px 10px; height: 26px; border-radius: 8px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; position: relative; }
+.bmeter .bfill { position: absolute; inset: 0 auto 0 0; width: 100%; background: linear-gradient(90deg, var(--good), var(--teal)); transition: width .6s cubic-bezier(.2,.8,.2,1), background .4s; }
+.bmeter .bfill.low { background: linear-gradient(90deg, var(--bad), var(--warn)); }
+.bmeter .btxt { position: absolute; inset: 0; display: grid; place-items: center; font: 700 13px var(--mono); color: var(--ink); text-shadow: 0 0 4px var(--panel); }
+.freeze { display: none; margin: 0 14px 12px; }
+.freeze.show { display: block; animation: rise .35s; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 2.3 · Back-of-the-Envelope Estimation</div>
+    <h1>Count the Nines</h1>
+    <p class="lede">"99.9% uptime" sounds like "never down". It isn't. Turn the dial, do the maths, chain some services together, and see how much downtime each nine really allows.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can turn "99.9%" into <b>"about 9 hours of downtime a year, 43 minutes a month"</b>, explain what an <b>SLA</b> is, and say why chaining services <b>lowers</b> availability.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>What a nine buys you</h2><div class="sub">From 99% to 99.9999%, on a calendar</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p><b>High availability</b> means a system stays up and working for a long, unbroken stretch of time. You measure it as the <b>percentage of time the system is up</b>. 100% would mean it is never down. Real services land somewhere between 99% and 100%.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/back-of-the-envelope-estimation" target="_blank" rel="noopener">[1]</a></p>
+      <p>A <b>service level agreement (SLA)</b> is the deal between a provider and its customers that writes down how much uptime the service will deliver. Amazon, Google and Microsoft set their cloud SLAs at <b>99.9% or higher</b>.<a class="cite" href="https://aws.amazon.com/compute/sla/" target="_blank" rel="noopener">[2]</a><a class="cite" href="https://cloud.google.com/compute/sla" target="_blank" rel="noopener">[3]</a><a class="cite" href="https://azure.microsoft.com/en-us/support/legal/sla/summary/" target="_blank" rel="noopener">[4]</a> People count uptime in <b>nines</b>: 99.9% is "three nines", 99.99% is "four nines". More nines, less downtime.</p>
+
+      <div class="challenge boxed" id="p1"></div>
+
+      <div class="sim" id="dialSim">
+        <div class="dialwrap">
+          <div>
+            <svg id="dial" class="off" viewBox="0 0 340 236" role="group" aria-label="Nines dial: pick 2 to 6 nines"></svg>
+            <div class="dialbtns"><button class="btn" id="dMinus" aria-label="One nine fewer" disabled>−</button><button class="btn" id="dPlus" aria-label="One nine more" disabled>+</button></div>
+          </div>
+          <div>
+            <div class="readouts">
+              <div class="ro"><small>per day</small><b id="ro-day">—</b></div>
+              <div class="ro"><small>per week</small><b id="ro-week">—</b></div>
+              <div class="ro"><small>per month</small><b id="ro-month">—</b></div>
+              <div class="ro"><small>per year</small><b id="ro-year">—</b></div>
+            </div>
+            <div class="caption" id="caption">Make your prediction above, then turn the dial.</div>
+          </div>
+        </div>
+        <div class="yearwrap">
+          <div class="yearhead"><span>📅 One year · one square per day</span><span id="yearNote">red = allowed downtime</span></div>
+          <div class="year" id="year" aria-hidden="true"></div>
+        </div>
+        <div class="mag" id="mag" aria-live="polite">
+          <div class="mt" id="magT"></div>
+          <div class="mbar"><div class="mfill" id="magF"></div><div class="mticks" id="magTicks"></div></div>
+          <div class="mscale"><span>0</span><span id="magEnd"></span></div>
+        </div>
+        <div class="simlog" id="d1log"><div>Readouts are the book's Table 2-3 values (it uses a 365.25-day year).</div></div>
+      </div>
+      <ul class="checklist" id="s1goals">
+        <li data-g="all"><span class="box">✓</span><span>Turn the dial to every setting, 2 to 6 nines (<span id="seenCount">0</span>/5)</span></li>
+      </ul>
+      <div class="callout tip"><b>Read the table like a ladder.</b> Each step down the dial divides every readout by exactly 10. 3.65 days → 8.77 hours → 52.6 minutes → 5.26 minutes → 31.6 seconds a year.</div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Do the math yourself</h2><div class="sub">Downtime = (1 − availability) × period</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>You don't need to memorise the table. One line rebuilds any cell of it:</p>
+      <p style="text-align:center;font-family:var(--mono);font-weight:700;font-size:18px">allowed downtime = (1 − availability) × period</p>
+      <p>The part after "1 −" is the fraction of time you're <i>allowed</i> to be down. 99.9% up means 0.1% down, which is 0.001. The book's table uses a 365.25-day year, and a month that is 1/12 of that (about 30.44 days).<a class="cite" href="https://bytebytego.com/courses/system-design-interview/back-of-the-envelope-estimation" target="_blank" rel="noopener">[1]</a> Handy period sizes:</p>
+      <div class="periods">
+        <span class="chip">1 year = 8,766 h = 525,960 min</span>
+        <span class="chip">1 month ≈ 730.5 h ≈ 43,830 min</span>
+        <span class="chip">1 day = 1,440 min = 86,400 s</span>
+      </div>
+      <p class="small muted">Fill in each answer, pick a unit, and press Check. Within 10% counts, in any unit you like (52.6 min or 0.88 h are both fine). A right answer earns XP. A wrong one costs a heart and shows the working.</p>
+      <div class="calcs" id="calcs"></div>
+      <div class="stairs" id="stairs">
+        <h4>The "divide by 10" staircase (downtime per year)</h4>
+        <div class="steps" id="steps"></div>
+        <div class="steplabels"><span>99%</span><span>99.9%</span><span>99.99%</span><span>99.999%</span><span>99.9999%</span></div>
+        <p class="note">Each extra nine makes the "down" fraction 10 times smaller: 0.01 → 0.001 → 0.0001… So each step is a tenth of the one before. Odd targets sit in between. 99.95% allows half of 99.9%'s downtime: 0.0005 instead of 0.001.</p>
+      </div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Chains and spares</h2><div class="sub">Dependencies multiply; redundancy adds nines</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>This part isn't in the book chapter, but interviewers love to ask it.<a class="cite" href="https://sre.google/sre-book/embracing-risk/" target="_blank" rel="noopener">[6]</a> Two rules cover almost every case:</p>
+      <ul>
+        <li><b>In a row (series):</b> if a request needs A <i>and</i> B <i>and</i> C to all work, multiply: <code>A × B × C</code>. Every extra hard dependency (something you can't work without) pulls the total <b>down</b>.</li>
+        <li><b>Side by side (parallel):</b> if <i>any one</i> of two copies can serve the request, you're only down when both are down at once: <code>1 − (1 − A)²</code>. Spares (also called <i>redundancy</i>) push the total <b>up</b>.</li>
+      </ul>
+      <p>Build pipelines below. Tap a block in the palette to add it as the next step in the row. Tap <b>+ spare</b> to stack a copy beside a step. Tap <b>×</b> to remove a block. The readout recalculates every time.</p>
+
+      <div class="ctabs" id="ctabs" role="group" aria-label="Challenges">
+        <button class="btn on" data-c="0">Challenge 1</button>
+        <button class="btn" data-c="1">Challenge 2</button>
+        <button class="btn" data-c="2">Challenge 3</button>
+      </div>
+      <div class="cbox" id="cbox"></div>
+
+      <div class="sim">
+        <div class="palette" id="palette"></div>
+        <div class="chain" id="chain"></div>
+        <div class="readout" id="readout">
+          <div class="big" id="rBig">—</div>
+          <div class="dt" id="rDt">Add a block to start.</div>
+          <div class="fx" id="rFx"></div>
+        </div>
+        <div class="simlog" id="c3log"><div>Suggested order: challenge 1, 2, 3. Any order works.</div></div>
+      </div>
+
+      <div class="rackbar">
+        <span class="grow"><b>🗄️ Correlated-failure test.</b> Put each set of spares in one rack (one shared power supply and network switch), then strike it.</span>
+        <button class="btn" id="rackBtn" aria-pressed="false">Same rack: off</button>
+        <button class="btn" id="strikeBtn">⚡ Strike the rack</button>
+      </div>
+      <div class="callout warn" id="corrNote" style="display:none"><b>The formula assumed independence.</b> <code>1 − (1 − A)²</code> only holds when the two copies fail for <i>unrelated</i> reasons. Spares in one rack, one zone or one region, or running the same bad deploy, fail <b>together</b>. Then the real availability is close to a single box, not four nines. Spread spares across racks and availability zones so their failures stay independent.</div>
+
+      <ul class="checklist" id="s3goals">
+        <li data-g="c1"><span class="box">✓</span><span>Challenge 1: chain three 99.9% services</span></li>
+        <li data-g="c2"><span class="box">✓</span><span>Challenge 2: reach 99.99% using only 99% servers</span></li>
+        <li data-g="c3"><span class="box">✓</span><span>Challenge 3: lift API + database to 99.95% or better</span></li>
+        <li data-g="rack"><span class="box">✓</span><span>Strike a rack full of spares</span></li>
+      </ul>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Read the fine print</h2><div class="sub">SLA vs SLO vs SLI, and what an SLA really promises</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book defines only the SLA. Google's SRE book adds two more terms you'll hear in senior conversations:<a class="cite" href="https://sre.google/sre-book/service-level-objectives/" target="_blank" rel="noopener">[5]</a></p>
+      <ul>
+        <li><b>SLI (service level indicator)</b>: a number you <i>measure</i>. For example, "the share of requests that succeeded over the last 30 days".</li>
+        <li><b>SLO (service level objective)</b>: your own <i>target</i> for that number. For example, "99.9% of requests succeed".</li>
+        <li><b>SLA (service level agreement)</b>: the <i>contract</i> with customers, with a consequence if you miss it. Cloud SLAs usually pay <b>service credits</b> (a partial refund on your bill). They don't promise the service will actually be up.<a class="cite" href="https://aws.amazon.com/compute/sla/" target="_blank" rel="noopener">[2]</a></li>
+      </ul>
+      <p>Teams set the SLO <b>tighter</b> than the SLA, so they notice trouble before it costs money. Tap the right bin for each card.</p>
+
+      <div class="bins" id="bins">
+        <div class="bin" data-b="SLI"><h4>SLI</h4><p>what you measure</p><div class="dots"></div></div>
+        <div class="bin" data-b="SLO"><h4>SLO</h4><p>the target you aim for</p><div class="dots"></div></div>
+        <div class="bin" data-b="SLA"><h4>SLA</h4><p>the contract, with a penalty</p><div class="dots"></div></div>
+      </div>
+      <div class="sortcard" id="sortcard"></div>
+
+      <h3 style="margin:22px 0 4px;font-size:18px">The error budget</h3>
+      <p><b>Error budget = 1 − SLO.</b> At a 99.9% SLO, about <b>43.8 minutes a month</b> may fail. That's a budget you can <i>spend</i> on risky things like deploys and experiments. When it runs out, the SRE book's rule is to halt risky launches until it recovers.<a class="cite" href="https://sre.google/sre-book/embracing-risk/" target="_blank" rel="noopener">[6]</a> Ship some releases and watch it drain.</p>
+      <div class="budget">
+        <div class="budget-top"><span>📆 This month · SLO 99.9%</span><span id="bDay">Day 1 of 30</span></div>
+        <div class="bmeter"><div class="bfill" id="bFill"></div><div class="btxt" id="bTxt">43.8 of 43.8 min left</div></div>
+        <div class="sim-bar"><span class="row" style="gap:8px"><button class="btn primary" id="deployBtn">🚀 Ship a release</button><button class="btn" id="bReset">↻ New month</button></span><span class="small muted">each release burns 2–8 min of errors</span></div>
+        <div class="simlog" id="blog"><div>Budget: (1 − 0.999) × 43,830 min ≈ 43.8 min of errors this month.</div></div>
+        <div class="callout warn freeze" id="freeze"><b>🧊 Budget spent: launch freeze.</b> No more risky releases this month. The team spends the time on reliability work until the budget recovers. The budget turns "how reliable should we be?" into a number that product and engineering can both agree on.</div>
+      </div>
+      <ul class="checklist" id="s4goals">
+        <li data-g="sort"><span class="box">✓</span><span>Sort all 8 cards into SLI / SLO / SLA</span></li>
+        <li data-g="burn"><span class="box">✓</span><span>Spend a whole month's error budget</span></li>
+      </ul>
+      <div class="callout"><b>Check the real pages.</b> Provider SLA numbers differ per product (one VM vs a group of VMs across zones, for example) and change over time. The book points to the AWS, Google Cloud and Azure SLA pages.<a class="cite" href="https://aws.amazon.com/compute/sla/" target="_blank" rel="noopener">[2]</a><a class="cite" href="https://cloud.google.com/compute/sla" target="_blank" rel="noopener">[3]</a><a class="cite" href="https://azure.microsoft.com/en-us/support/legal/sla/summary/" target="_blank" rel="noopener">[4]</a></div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Nines Merchant</h2><div class="sub">Right-size the target</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The Nines Merchant sells nines, and every nine costs more than the last: more spares, more regions, more people on call at 3 a.m. Your job is to buy the right number. That means enough to match what an hour of downtime really costs, and no more. Five deals.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">Talk nines in 30 seconds</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> You now have the units (2.1), the latencies (2.2) and the nines (2.3). Quest 2.4, <i>Tweet Math</i>, puts them to work on the book's worked example: Twitter's queries per second and storage, step by step.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/back-of-the-envelope-estimation" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 2: "Availability numbers"</a>. It's half a page plus Table 2-3. Then skim the cloud SLA pages the book cites: <a href="https://aws.amazon.com/compute/sla/" target="_blank" rel="noopener">AWS Compute</a>, <a href="https://cloud.google.com/compute/sla" target="_blank" rel="noopener">Google Compute Engine</a> and the <a href="https://azure.microsoft.com/en-us/support/legal/sla/summary/" target="_blank" rel="noopener">Azure SLA summary</a>. Notice that every one of them is a list of service credits. For SLOs and error budgets, read the SRE book chapters <a href="https://sre.google/sre-book/service-level-objectives/" target="_blank" rel="noopener">Service Level Objectives</a> and <a href="https://sre.google/sre-book/embracing-risk/" target="_blank" rel="noopener">Embracing Risk</a>.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <ul style="margin:0;padding-left:20px">
+        <li><b>365 vs 365.25 days.</b> Table 2-3 uses a 365.25-day year. With 365 days the yearly numbers shift by under 0.1% (8.76 h instead of 8.77 h). That doesn't matter in an interview.</li>
+        <li><b>Not in the book.</b> The series and parallel maths, SLO, SLI and error budgets come from Google's SRE book. They are common senior-level follow-ups.<a class="cite" href="https://sre.google/sre-book/service-level-objectives/" target="_blank" rel="noopener">[5]</a></li>
+        <li><b>Independence is the big lie.</b> Redundancy maths assumes failures are independent. Real outages are often correlated: a shared region, power feed, config push or bad deploy takes out every copy at once. Real availability ends up below what the formula says.</li>
+        <li><b>Time-based vs request-based.</b> The nines table counts <i>minutes</i> down. Many teams measure <i>requests</i> instead ("99.9% of requests succeed"), because a 10-minute blip at 3 a.m. hurts fewer users than one at noon.<a class="cite" href="https://sre.google/sre-book/embracing-risk/" target="_blank" rel="noopener">[6]</a></li>
+        <li><b>An SLA is a refund policy.</b> A provider SLA is a contract with service credits. It is not a promise that the service will be up. The exact percentages differ by product and change over time.</li>
+      </ul>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"If my load balancer is 99.99% and sits in front of two 99.9% servers, what's the total?"</i> or <i>"What's a sensible SLO for an internal tool?"</i> Follow-up questions are part of the quest.
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 2 "Back-of-the-envelope Estimation", Availability numbers and Table 2-3 (ByteByteGo).</li>
+        <li><a href="https://aws.amazon.com/compute/sla/" target="_blank" rel="noopener">Amazon Compute Service Level Agreement</a> (book reference [4]).</li>
+        <li><a href="https://cloud.google.com/compute/sla" target="_blank" rel="noopener">Google Compute Engine SLA</a> (book reference [5]).</li>
+        <li><a href="https://azure.microsoft.com/en-us/support/legal/sla/summary/" target="_blank" rel="noopener">SLA summary for Azure services</a> (book reference [6]).</li>
+        <li>Beyer et al., <a href="https://sre.google/sre-book/service-level-objectives/" target="_blank" rel="noopener"><i>Site Reliability Engineering</i>, Ch. 4 "Service Level Objectives"</a> (Google, 2016).</li>
+        <li>Beyer et al., <a href="https://sre.google/sre-book/embracing-risk/" target="_blank" rel="noopener"><i>Site Reliability Engineering</i>, Ch. 3 "Embracing Risk"</a> (error budgets).</li>
+        <li><a href="https://en.wikipedia.org/wiki/High_availability" target="_blank" rel="noopener">High availability</a> on Wikipedia (the same nines table, computed independently).</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0203',
+  winTitle: 'Every nine accounted for',
+  badge: '9️⃣ Badge: Nine Counter',
+  cheatsheet: '../reference/ch02-estimation-cheatsheet.html',
+});
+const { sleep, shuffle, esc } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ================= shared helpers ================= */
+const YEAR_S = 365.25 * 86400, MONTH_S = YEAR_S / 12;
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); if (xp) Q.addXP(xp, li);
+  return true;
+}
+function fmtDur(sec) {
+  if (sec >= 1.5 * 86400) return (sec / 86400).toFixed(2) + ' days';
+  if (sec >= 3600) return (sec / 3600).toFixed(sec >= 36000 ? 1 : 2) + ' h';
+  if (sec >= 60) return (sec / 60).toFixed(sec >= 600 ? 1 : 2) + ' min';
+  if (sec >= 1) return sec.toFixed(1) + ' s';
+  return Math.round(sec * 1000) + ' ms';
+}
+function fmtPct(a) {
+  const n9 = Math.floor(-Math.log10(Math.max(1e-12, 1 - a)) + 1e-9);
+  return (a * 100).toFixed(Math.min(6, Math.max(2, n9))) + '%';
+}
+const f2 = n => n.toFixed(2);
+function pt(cx, cy, r, deg) { const a = deg * Math.PI / 180; return [cx + r * Math.sin(a), cy - r * Math.cos(a)]; }
+function arcD(cx, cy, r, a0, a1) { const [x0, y0] = pt(cx, cy, r, a0), [x1, y1] = pt(cx, cy, r, a1); return `M${f2(x0)} ${f2(y0)}A${r} ${r} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${f2(x1)} ${f2(y1)}`; }
+// Predict-then-watch round (same pattern as quest 6.2). Resolves after the pick and the action has played.
+function predict(box, { step, title, options, correct, act, explain, xp = 20 }) {
+  box.innerHTML = `${step ? `<div class="step">${step}</div>` : ''}<h3>${title}</h3><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+  const opts = $('.opts', box);
+  let busy = false;
+  return new Promise(resolve => {
+    shuffle(options.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = async () => {
+        if (busy) return; busy = true;
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        b.classList.add('picked');
+        await act();
+        const ok = i === correct;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-i="${correct}"]`, opts).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + explain;
+        ok ? Q.addXP(xp, b) : Q.loseHeart(b);
+        resolve({ ok, row: $('.row', box) });
+      };
+      opts.appendChild(b);
+    });
+  });
+}
+function nextBtn(row, label, fn, primary = true) {
+  const b = document.createElement('button'); b.className = 'btn' + (primary ? ' primary' : ''); b.textContent = label; b.onclick = fn; row.appendChild(b); return b;
+}
+// Count a readout up to a table value like "8.77" (keeps the decimals as written).
+function countUp(el, str, unit) {
+  const target = parseFloat(str), dec = (str.split('.')[1] || '').length;
+  if (Q.reduced) { el.textContent = `${str} ${unit}`; return; }
+  const t0 = performance.now(), dur = 600;
+  const fr = now => {
+    const p = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - p, 3);
+    el.textContent = `${p < 1 ? (target * e).toFixed(dec) : str} ${unit}`;
+    if (p < 1) requestAnimationFrame(fr);
+  };
+  requestAnimationFrame(fr);
+}
+
+/* ================= STAGE 1: the nines dial ================= */
+Q.onStage(1, () => {
+  // Table 2-3, exactly as the book prints it
+  const T = {
+    2: { pct: '99%', day: ['14.40', 'min'], week: ['1.68', 'h'], month: ['7.31', 'h'], year: ['3.65', 'days'], cap: '<span>2 nines:</span> a bad long weekend, every single year.' },
+    3: { pct: '99.9%', day: ['1.44', 'min'], week: ['10.08', 'min'], month: ['43.83', 'min'], year: ['8.77', 'h'], cap: '<span>3 nines:</span> one long evening a year, or a coffee break every month.' },
+    4: { pct: '99.99%', day: ['8.64', 's'], week: ['1.01', 'min'], month: ['4.38', 'min'], year: ['52.60', 'min'], cap: '<span>4 nines:</span> one lunch break a year. A slow deploy can eat that.' },
+    5: { pct: '99.999%', day: ['864', 'ms'], week: ['6.05', 's'], month: ['26.30', 's'], year: ['5.26', 'min'], cap: '<span>5 nines:</span> a coffee break a year. No human can react that fast, so failover must be automatic.' },
+    6: { pct: '99.9999%', day: ['86.40', 'ms'], week: ['604.80', 'ms'], month: ['2.63', 's'], year: ['31.56', 's'], cap: '<span>6 nines:</span> half a minute a year, about one page reload.' },
+  };
+  // zoom level for the magnifier: [seconds in the zoomed window, label, tick count, end label]
+  const ZOOM = { 3: [86400, 'one day (24 h)', 24, '24 h'], 4: [3600, 'one hour', 6, '60 min'], 5: [600, 'ten minutes', 10, '10 min'], 6: [60, 'one minute', 6, '60 s'] };
+  const ANG = { 2: -72, 3: -36, 4: 0, 5: 36, 6: 72 };
+  const CX = 170, CY = 170;
+  let cur = 2, predicted = false, quizShown = false;
+  const seen = new Set(), goals = new Set();
+
+  // dial
+  const svg = $('#dial');
+  S('path', { class: 'track', d: arcD(CX, CY, 118, -84, 84) }, svg);
+  const on = S('path', { class: 'trackon', d: arcD(CX, CY, 118, -84, -72) }, svg);
+  S('circle', { class: 'knob', cx: CX, cy: CY, r: 56 }, svg);
+  const needle = S('g', { class: 'needle' }, svg);
+  S('path', { d: `M${CX - 9} ${CY - 54} L${CX} ${CY - 74} L${CX + 9} ${CY - 54} Z` }, needle);
+  const kBig = S('text', { class: 'kbig', x: CX, y: CY + 4 }, svg), kSmall = S('text', { class: 'ksmall', x: CX, y: CY + 26 }, svg);
+  const notches = {};
+  [2, 3, 4, 5, 6].forEach(n => {
+    const [x, y] = pt(CX, CY, 118, ANG[n]), [px, py] = pt(CX, CY, 148, ANG[n]);
+    const g = S('g', { class: 'notch', tabindex: 0, role: 'button', 'aria-label': `${n} nines, ${T[n].pct}` }, svg);
+    S('circle', { cx: f2(x), cy: f2(y), r: 21 }, g);
+    S('text', { x: f2(x), y: f2(y) }, g).textContent = n;
+    S('text', { class: 'pct', x: f2(px), y: f2(py) }, g).textContent = T[n].pct;
+    g.addEventListener('click', () => tryTurn(n, g));
+    g.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tryTurn(n, g); }
+      else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { e.preventDefault(); if (cur < 6) { tryTurn(cur + 1, g); notches[cur].focus(); } }
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { e.preventDefault(); if (cur > 2) { tryTurn(cur - 1, g); notches[cur].focus(); } }
+    });
+    notches[n] = g;
+  });
+  $('#dMinus').onclick = () => { if (cur > 2) tryTurn(cur - 1, $('#dMinus')); };
+  $('#dPlus').onclick = () => { if (cur < 6) tryTurn(cur + 1, $('#dPlus')); };
+
+  // year strip
+  $('#year').innerHTML = '<i></i>'.repeat(365);
+  const cells = $$('#year i');
+  // magnifier ticks
+  function ticks(n) { $('#magTicks').innerHTML = '<span></span>'.repeat(n); }
+
+  function tryTurn(n, el) {
+    if (!predicted) { Q.toast('predict first ↑', el, 'practice'); return; }
+    setNines(n);
+  }
+  function setNines(n, quiet) {
+    cur = n;
+    const t = T[n];
+    Object.values(notches).forEach(g => g.classList.remove('on')); notches[n].classList.add('on');
+    needle.style.transform = `rotate(${ANG[n]}deg)`;
+    on.setAttribute('d', arcD(CX, CY, 118, -84, ANG[n] + 0.01));
+    kBig.textContent = t.pct; kSmall.textContent = `${n} nines`;
+    $('#dMinus').disabled = !predicted || n <= 2; $('#dPlus').disabled = !predicted || n >= 6;
+    if (!quiet) { countUp($('#ro-day'), ...t.day); countUp($('#ro-week'), ...t.week); countUp($('#ro-month'), ...t.month); countUp($('#ro-year'), ...t.year); }
+    $('#caption').innerHTML = t.cap;
+    // year strip: downtime in days, painted from the end of the year
+    const D = Math.pow(10, -n) * 365.25, full = Math.floor(D), frac = D - full;
+    cells.forEach((c, i) => {
+      c.className = ''; c.style.removeProperty('--f');
+      const fromEnd = 364 - i;
+      if (fromEnd < full) c.className = 'dn';
+      else if (fromEnd === full && frac > 0) { c.className = 'part'; c.style.setProperty('--f', Math.max(frac * 100, 0.5).toFixed(2) + '%'); }
+    });
+    $('#yearNote').textContent = n === 2 ? `${D.toFixed(2)} red squares` : `${(frac * 100).toFixed(n >= 4 ? 3 : 1)}% of one square`;
+    const mag = $('#mag');
+    if (n === 2) mag.classList.remove('show');
+    else {
+      const [win, label, tk, end] = ZOOM[n], down = Math.pow(10, -n) * YEAR_S;
+      mag.classList.add('show');
+      $('#magT').innerHTML = `🔍 Too thin to see? Here's a whole year's downtime, poured into <b>${label}</b>: ${t.year[0]} ${t.year[1]}.`;
+      ticks(tk); $('#magEnd').textContent = end;
+      const f = $('#magF'); f.style.width = '0';
+      requestAnimationFrame(() => requestAnimationFrame(() => { f.style.width = Math.min(100, down / win * 100).toFixed(1) + '%'; }));
+    }
+    if (quiet) return;
+    logTo('d1log', `${t.pct} → ${t.year[0]} ${t.year[1]} a year, ${t.month[0]} ${t.month[1]} a month`, n >= 4 ? 'g' : n === 3 ? 'w' : 'e');
+    if (!seen.has(n)) {
+      seen.add(n); $('#seenCount').textContent = seen.size;
+      if (seen.size === 5 && checkGoal('#s1goals', 'all', goals, 15)) maybeQuiz();
+    }
+  }
+  setNines(2, true);
+  ['day', 'week', 'month', 'year'].forEach(k => $('#ro-' + k).textContent = '?');
+
+  function maybeQuiz() {
+    if (quizShown || !predicted || goals.size < 1) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s1quiz'), {
+      q: 'A cloud SLA promises 99.99%. About how much downtime is that per month?',
+      options: ['About 4.4 minutes', 'About 44 minutes', 'About 26 seconds'],
+      correct: 0,
+      good: 'Four nines = 4.38 minutes a month (52.6 minutes a year). 44 minutes is three nines, and 26 seconds is five.',
+      bad: 'Four nines = <b>4.38 minutes a month</b>. 44 minutes a month is three nines (99.9%), and 26 seconds is five nines (99.999%). Each nine is ten times less.',
+      onDone: () => setTimeout(() => Q.clearStage(1), 900),
+    }), 500);
+  }
+  function runPredict() {
+    predict($('#p1'), {
+      step: 'Predict first',
+      title: '99.9% uptime allows how much downtime per <b>year</b>?',
+      options: ['About 8.77 hours', 'About 3.65 days', 'About 52 minutes'],
+      correct: 0,
+      act: async () => { predicted = true; $('#dial').classList.remove('off'); setNines(3); await sleep(Q.reduced ? 50 : 700); },
+      explain: '0.1% of a year is 8.77 hours. It sounds tiny as a percentage, but it\'s a full working day. 3.65 days is two nines (99%), and 52 minutes is four nines. Now turn the dial through every setting.',
+    }).then(({ row }) => {
+      nextBtn(row, '↻ Predict again', () => runPredict(), false);
+      maybeQuiz();
+    });
+  }
+  runPredict();
+  if (Q.isCleared(1)) { predicted = true; $('#dial').classList.remove('off'); setNines(2); }
+});
+
+/* ================= STAGE 2: calculate and check ================= */
+Q.onStage(2, () => {
+  const UNIT = { s: 1, min: 60, h: 3600, days: 86400 };
+  const CARDS = [
+    { a: '99.9%', f: '0.001', per: 'month', p: '43,830 min', truth: 0.001 * MONTH_S, ans: '0.001 × 43,830 min = <b>43.8 min</b>' },
+    { a: '99.99%', f: '0.0001', per: 'year', p: '525,960 min', truth: 0.0001 * YEAR_S, ans: '0.0001 × 525,960 min = <b>52.6 min</b>' },
+    { a: '99.95%', f: '0.0005', per: 'month', p: '43,830 min', truth: 0.0005 * MONTH_S, ans: '0.0005 × 43,830 min = <b>21.9 min</b>' },
+    { a: '99.5%', f: '0.005', per: 'year', p: '8,766 h', truth: 0.005 * YEAR_S, ans: '0.005 × 8,766 h = <b>43.8 h</b> (1.83 days)' },
+  ];
+  const WHY = [
+    'That\'s the table\'s 43.83 min/month for three nines.',
+    'Matches the table: four nines is 52.60 min a year.',
+    'Halfway between three and four nines on a log scale: half of 99.9%\'s 43.8 minutes.',
+    'Between 99% (3.65 days) and 99.9% (8.77 h). Half a percent of a year is almost two days.',
+  ];
+  let done = 0, quizShown = false;
+  $('#calcs').innerHTML = CARDS.map((c, i) => `
+    <div class="calc" data-i="${i}">
+      <div class="calc-h"><span class="tt">Card ${i + 1}: <b>${c.a}</b> per <b>${c.per}</b></span><span class="st">not checked</span></div>
+      <div class="fstrip"><span>(1 − ${(1 - parseFloat(c.f)).toFixed(c.f.length - 2)}) × ${c.p} =</span>
+        <input type="text" inputmode="decimal" autocomplete="off" aria-label="Your answer for card ${i + 1}" placeholder="?">
+        <span class="units" role="group" aria-label="Unit">${Object.keys(UNIT).map(u => `<button data-u="${u}" aria-pressed="false">${u}</button>`).join('')}</span>
+        <button class="btn primary q-check">Check</button></div>
+      <div class="explain"></div>
+    </div>`).join('');
+  // staircase (yearly downtime, log-scaled bar heights)
+  const STEPS = [['3.65', 'days'], ['8.77', 'hours'], ['52.6', 'min'], ['5.26', 'min'], ['31.6', 's']];
+  $('#steps').innerHTML = STEPS.map((s, i) => `<div class="stp"><div class="v">${s[0]}<small>${s[1]}</small></div><div class="bar" style="height:${100 - i * 19}%"></div></div>`).join('');
+
+  $$('#calcs .calc').forEach(card => {
+    const c = CARDS[+card.dataset.i], inp = $('input', card);
+    let unit = null, locked = false;
+    $$('.units button', card).forEach(b => b.onclick = () => {
+      if (locked) return;
+      unit = b.dataset.u;
+      $$('.units button', card).forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); });
+    });
+    const check = () => {
+      if (locked) return;
+      const v = parseFloat(inp.value.replace(/[, ]/g, ''));
+      if (!isFinite(v)) { Q.toast('type a number', inp, 'practice'); inp.focus(); return; }
+      if (!unit) { Q.toast('pick a unit', $('.units', card), 'practice'); return; }
+      locked = true; inp.readOnly = true; $$('.units button, .q-check', card).forEach(x => x.disabled = true);
+      const sec = v * UNIT[unit], ok = Math.abs(sec / c.truth - 1) <= 0.10;
+      card.classList.add(ok ? 'ok' : 'miss');
+      $('.st', card).textContent = ok ? '✓ correct' : '✗ see the working';
+      const ex = $('.explain', card); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+      ex.innerHTML = `${ok ? '<b>Correct.</b>' : `<b>Not quite.</b> You said ${esc(v)} ${unit} (= ${fmtDur(sec)}).`} <span class="worked">(1 − ${(1 - parseFloat(c.f)).toFixed(c.f.length - 2)}) = ${c.f} → ${c.ans}</span>. ${WHY[+card.dataset.i]}`;
+      ok ? Q.addXP(15, $('.q-check', card)) : (Q.loseHeart($('.q-check', card)), $('#stairs').classList.add('show'));
+      if (++done === CARDS.length) finish();
+    };
+    $('.q-check', card).onclick = check;
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') check(); });
+  });
+  function finish() {
+    $('#stairs').classList.add('show');
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => Q.quiz($('#s2quiz'), {
+      q: 'Going from 99.9% to 99.99% changes yearly downtime from 8.77 hours to…',
+      options: ['about 52.6 minutes, ten times less', 'about 4.4 hours, half as much', 'about 5.3 minutes, a hundred times less'],
+      correct: 0,
+      good: 'One extra nine shrinks the "down" fraction from 0.001 to 0.0001, so downtime drops tenfold: 8.77 h → 52.6 min.',
+      bad: 'One extra nine = <b>ten times</b> less downtime. The "down" fraction goes from 0.001 to 0.0001, so 8.77 h becomes 52.6 min. A hundred times less would take two extra nines.',
+      onDone: () => setTimeout(() => Q.clearStage(2), 900),
+    }), 500);
+  }
+});
+
+/* ================= STAGE 3: chains and spares ================= */
+Q.onStage(3, () => {
+  const KINDS = [{ name: 'Server', a: 0.99 }, { name: 'Service', a: 0.999 }, { name: 'Service', a: 0.9999 }];
+  const CH = [
+    { t: 'Chain three 99.9% services. What do you get?', d: 'A request needs all three to work, one after another. Before you look at the readout, guess: still 99.9%, or lower?', setup: [],
+      ok: g => g.length === 3 && g.every(x => x.length === 1 && x[0].a === 0.999),
+      win: '0.999 × 0.999 × 0.999 ≈ 0.997, so <b>about 99.7%</b>. That\'s roughly 26 hours down a year, three times worse than any single service (8.77 h). Every hard dependency takes its cut.' },
+    { t: 'Reach at least 99.99% using only 99% servers.', d: 'Each server is down 3.65 days a year. Make the whole thing four nines without using any better hardware.', setup: [[{ name: 'Server', a: 0.99 }]],
+      ok: (g, A) => g.length > 0 && g.every(x => x.every(b => b.a === 0.99)) && A >= 0.9999 - 1e-9,
+      win: '1 − (1 − 0.99)² = 1 − 0.01 × 0.01 = <b>99.99%</b>. You\'re only down when <i>both</i> are down at once, and 1% × 1% = 0.01%. Two so-so boxes give four nines, <i>if</i> they fail independently.' },
+    { t: 'Your API (99.99%) depends on a 99.9% database. Reach at least 99.95% end to end.', d: 'Right now it\'s 0.9999 × 0.999 ≈ 99.89%. Find the change that buys the most.', setup: [[{ name: 'API', a: 0.9999 }], [{ name: 'DB', a: 0.999 }]],
+      ok: (g, A) => g.some(x => x[0].name === 'API') && g.some(x => x[0].name === 'DB') && A >= 0.9995,
+      win: '0.9999 × (1 − 0.001²) ≈ <b>99.99%</b>. The database was the weakest link, so a spare there bought the most. A spare API alone would leave you stuck near 99.9%. Fix the weakest link first.' },
+  ];
+  let groups = [], ci = 0, rack = false, struck = false, quizShown = false, uid = 0;
+  const goals = new Set();
+  const clone = s => s.map(g => g.map(b => ({ ...b, id: ++uid })));
+  const avail = g => g.length ? g.reduce((p, x) => p * (1 - x.reduce((q, b) => q * (1 - b.a), 1)), 1) : NaN;
+  const pctS = a => (a * 100).toFixed(a >= 0.9999 ? 2 : a >= 0.999 ? 1 : 0) + '%';
+  function fx(g) {
+    if (!g.length) return '';
+    const parts = g.map(x => x.length === 1 ? String(x[0].a) : `[1 − (1 − ${x[0].a})${x.length === 2 ? '²' : '³'}]`);
+    return parts.join(' × ') + ` = ${avail(g).toFixed(6)}`;
+  }
+
+  $('#palette').innerHTML = KINDS.map((k, i) => `<button class="btn" data-k="${i}">+ ${k.name} <b class="mono">${pctS(k.a)}</b></button>`).join('');
+  $$('#palette .btn').forEach(b => b.onclick = () => {
+    if (groups.length >= 6) { Q.toast('max 6 steps', b, 'practice'); return; }
+    const k = KINDS[+b.dataset.k]; groups.push([{ ...k, id: ++uid }]);
+    logTo('c3log', `+ ${k.name} ${pctS(k.a)} added in a row`); render();
+  });
+
+  function render() {
+    const ch = $('#chain');
+    let html = '<span class="endpt">👤 User</span>';
+    if (!groups.length) html += '<span class="wire">→</span><span class="emptyhint">tap a block above to add a step</span>';
+    groups.forEach((g, gi) => {
+      const par = g.length > 1;
+      html += `<span class="wire">→</span><div class="grp${par ? ' par' : ''}${par && rack ? ' rack' : ''}" data-g="${gi}">`;
+      g.forEach((b, bi) => { html += `<div class="blk" data-b="${bi}"><span>${b.name}</span><b>${pctS(b.a)}</b><button class="x" aria-label="Remove ${b.name} ${pctS(b.a)}">×</button></div>`; });
+      if (g.length < 3) html += `<button class="spare" aria-label="Add a spare ${g[0].name} beside this step">+ spare</button>`;
+      if (par) html += `<div class="glabel">${rack ? '🗄️ ONE RACK · ' : ''}ANY 1 OF ${g.length}</div>`;
+      html += '</div>';
+    });
+    html += '<span class="wire">→</span><span class="endpt">✅ Done</span>';
+    ch.innerHTML = html;
+    $$('.grp', ch).forEach(el => {
+      const gi = +el.dataset.g;
+      $$('.blk .x', el).forEach(x => x.onclick = () => {
+        const bi = +x.closest('.blk').dataset.b, b = groups[gi][bi];
+        groups[gi].splice(bi, 1); if (!groups[gi].length) groups.splice(gi, 1);
+        logTo('c3log', `− removed ${b.name} ${pctS(b.a)}`); render();
+      });
+      const sp = $('.spare', el);
+      if (sp) sp.onclick = () => { const b = groups[gi][0]; groups[gi].push({ ...b, id: ++uid }); logTo('c3log', `+ spare ${b.name} ${pctS(b.a)} stacked beside step ${gi + 1}`, 'g'); render(); };
+    });
+    readout();
+    checkChallenges();
+  }
+  function readout(downNow) {
+    const A = avail(groups), big = $('#rBig');
+    big.classList.toggle('downnow', !!downNow);
+    if (!groups.length) { big.textContent = '—'; $('#rDt').textContent = 'Add a block to start.'; $('#rFx').textContent = ''; return; }
+    if (downNow) { big.textContent = 'DOWN'; $('#rDt').innerHTML = `The formula still says ${fmtPct(A)}. Reality: every spare in that rack died at once.`; return; }
+    big.textContent = fmtPct(A);
+    $('#rDt').textContent = `≈ ${fmtDur((1 - A) * YEAR_S)} down a year · ${fmtDur((1 - A) * MONTH_S)} a month`;
+    $('#rFx').textContent = fx(groups);
+  }
+  function loadChallenge(i) {
+    ci = i; groups = clone(CH[i].setup); struck = false;
+    $$('#ctabs .btn').forEach(b => b.classList.toggle('on', +b.dataset.c === i));
+    const c = CH[i];
+    $('#cbox').innerHTML = `<div class="challenge" style="margin:0"><div class="step">Challenge ${i + 1} of 3</div><h3>${c.t}</h3><p>${c.d}</p><div class="cres"></div></div>`;
+    if (goals.has('c' + (i + 1))) showWin(i, false);
+    logTo('c3log', `— challenge ${i + 1} loaded`);
+    render();
+  }
+  function showWin(i, fresh) {
+    const res = $('#cbox .cres');
+    res.innerHTML = `<div class="explain show good">✓ ${CH[i].win}</div>`;
+    const todo = [0, 1, 2].filter(k => !goals.has('c' + (k + 1)));
+    if (fresh && todo.length) {
+      const nx = todo.find(k => k > i) ?? todo[0];
+      const row = document.createElement('div'); row.className = 'row'; row.style.marginTop = '10px'; res.appendChild(row);
+      nextBtn(row, `Next: challenge ${nx + 1} →`, () => loadChallenge(nx));
+    } else if (fresh && !goals.has('rack')) {
+      res.insertAdjacentHTML('beforeend', '<p class="small" style="margin-top:8px">All three done. One more thing to try: the correlated-failure test below.</p>');
+    }
+  }
+  function checkChallenges() {
+    const A = avail(groups);
+    CH.forEach((c, i) => {
+      const g = 'c' + (i + 1);
+      if (!goals.has(g) && i === ci && c.ok(groups, A)) {
+        checkGoal('#s3goals', g, goals, 15);
+        $(`#ctabs .btn[data-c="${i}"]`).classList.add('done');
+        logTo('c3log', `✓ challenge ${i + 1}: ${fmtPct(A)}`, 'g');
+        showWin(i, true);
+        maybeQuiz();
+      }
+    });
+  }
+  $$('#ctabs .btn').forEach(b => b.onclick = () => loadChallenge(+b.dataset.c));
+
+  $('#rackBtn').onclick = () => {
+    rack = !rack;
+    $('#rackBtn').textContent = `Same rack: ${rack ? 'on' : 'off'}`; $('#rackBtn').setAttribute('aria-pressed', rack);
+    logTo('c3log', rack ? '🗄️ every set of spares now shares one rack' : '🗄️ spares spread across racks again');
+    render();
+  };
+  $('#strikeBtn').onclick = async () => {
+    const btn = $('#strikeBtn');
+    const gi = groups.findIndex(g => g.length > 1);
+    if (gi < 0) { Q.toast('add a spare first', btn, 'practice'); logTo('c3log', 'No spares yet. Tap “+ spare” on a step (challenge 2 is a good setup).', 'w'); return; }
+    if (!rack) { Q.toast('turn “same rack” on', btn, 'practice'); logTo('c3log', 'Spares in different racks shrug off one rack failing. Turn “Same rack” on first.', 'w'); return; }
+    if (struck) return;
+    struck = true; btn.disabled = true;
+    const el = $(`#chain .grp[data-g="${gi}"]`);
+    el.insertAdjacentHTML('beforeend', '<span class="bolt" aria-hidden="true">⚡</span>');
+    el.classList.add('zap');
+    await sleep(Q.reduced ? 50 : 450);
+    $$('.blk', el).forEach(b => b.classList.add('dead'));
+    readout(true);
+    logTo('c3log', `⚡ the rack lost power: all ${groups[gi].length} spares of step ${gi + 1} died together`, 'e');
+    $('#corrNote').style.display = 'block';
+    if (checkGoal('#s3goals', 'rack', goals, 15)) maybeQuiz();
+    await sleep(Q.reduced ? 600 : 2600);
+    struck = false; btn.disabled = false;
+    render(); logTo('c3log', '↻ power restored');
+  };
+
+  function maybeQuiz() {
+    if (quizShown || goals.size < 4) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s3quiz'), {
+      q: 'Your feature calls 4 services, each 99.9% available, one after another. Best estimate of end-to-end availability?',
+      options: ['About 99.6%, the product of all four', 'Still 99.9%, the same as each one', 'About 99.99%, four layers of safety'],
+      correct: 0,
+      good: '0.999⁴ ≈ 0.996, so about 99.6%: roughly 35 hours down a year instead of 8.77. Rule of thumb: for small numbers, the downtimes add up (4 × 0.1% = 0.4%).',
+      bad: 'In a row, availabilities <b>multiply</b>: 0.999⁴ ≈ 0.996, so about 99.6%. Shortcut: the "down" percentages roughly add, 4 × 0.1% = 0.4% down. Only spares side by side add nines.',
+      onDone: () => setTimeout(() => Q.clearStage(3), 900),
+    }), 500);
+  }
+  loadChallenge(0);
+});
+
+/* ================= STAGE 4: SLI / SLO / SLA + error budget ================= */
+Q.onStage(4, () => {
+  const CARDS = [
+    { t: 'p99 latency, measured over the last 28 days', a: 'SLI', why: 'A measured number. (p99 latency = the time that 99% of requests beat.)' },
+    { t: '"We aim for 99.9% of requests to succeed."', a: 'SLO', why: 'A target the team sets for itself. No customer penalty is attached.' },
+    { t: '"If monthly uptime drops below 99.99%, you get a 10% service credit."', a: 'SLA', why: 'A promise to customers with a consequence attached: a credit on the bill.' },
+    { t: 'The fraction of health checks that passed', a: 'SLI', why: 'Something you measure. It becomes an SLO only when you set a target for it.' },
+    { t: 'Internal target: 99.95% availability', a: 'SLO', why: 'Internal + target = objective. Usually set tighter than any SLA you sign.' },
+    { t: 'A contract with the customer, with refunds if it\'s missed', a: 'SLA', why: 'Contract + consequences = agreement.' },
+    { t: 'Error rate over the last hour', a: 'SLI', why: 'A raw measurement of how the service is doing right now.' },
+    { t: 'Alert us when this month\'s error budget is burning too fast', a: 'SLO', why: 'The error budget is 1 − SLO, so alerting on how fast you spend it is SLO-based. The target defines the budget.' },
+  ];
+  const goals = new Set();
+  let order = [], k = 0, quizShown = false, left = 43.83, day = 1, n = 0;
+  const REASONS = ['a config typo', 'a slow database migration', 'a memory leak', 'a missing feature flag', 'a cache that started cold', 'a bad dependency bump', 'a timeout set too low', 'a schema mismatch', 'a noisy canary'];
+
+  function startSort() {
+    order = shuffle(CARDS); k = 0;
+    $$('#bins .dots').forEach(d => d.innerHTML = '');
+    showCard();
+  }
+  function showCard() {
+    const box = $('#sortcard');
+    if (k >= order.length) {
+      box.innerHTML = '<div class="row"><span class="small"><b>All 8 sorted.</b></span><button class="btn" id="sortAgain">↻ Sort them again</button></div>';
+      $('#sortAgain').onclick = startSort;
+      if (checkGoal('#s4goals', 'sort', goals)) maybeQuiz();
+      return;
+    }
+    const c = order[k];
+    box.innerHTML = `<div class="step">Card ${k + 1} of ${order.length}</div><p class="stmt">${c.t}</p><div class="opts3">${['SLI', 'SLO', 'SLA'].map(b => `<button class="opt" data-b="${b}">${b}</button>`).join('')}</div><div class="explain"></div><div class="row" style="margin-top:10px"></div>`;
+    $$('.opts3 .opt', box).forEach(b => b.onclick = () => {
+      $$('.opts3 .opt', box).forEach(x => x.disabled = true);
+      const ok = b.dataset.b === c.a;
+      b.classList.add(ok ? 'right' : 'wrong');
+      if (!ok) $(`.opts3 .opt[data-b="${c.a}"]`, box).classList.add('right');
+      const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+      ex.innerHTML = `<b>${c.a}.</b> ${c.why}`;
+      ok ? Q.addXP(5, b) : Q.loseHeart(b);
+      const bin = $(`#bins .bin[data-b="${c.a}"]`);
+      $('.dots', bin).insertAdjacentHTML('beforeend', `<i title="${esc(c.t)}"></i>`);
+      bin.classList.add('hit'); setTimeout(() => bin.classList.remove('hit'), 450);
+      nextBtn($('.row', box), k < order.length - 1 ? 'Next card →' : 'Finish sorting →', () => { k++; showCard(); });
+    });
+  }
+
+  function paintBudget() {
+    const f = $('#bFill'), pct = Math.max(0, left) / 43.83 * 100;
+    f.style.width = pct.toFixed(1) + '%';
+    f.classList.toggle('low', pct < 30);
+    $('#bTxt').textContent = `${Math.max(0, left).toFixed(1)} of 43.8 min left`;
+    $('#bDay').textContent = `Day ${Math.min(30, day)} of 30`;
+  }
+  $('#deployBtn').onclick = () => {
+    if (left <= 0) return;
+    n++;
+    const cost = Math.round((2 + Math.random() * 6) * 10) / 10;
+    left = Math.round((left - cost) * 10) / 10; day = Math.min(30, day + 3);
+    logTo('blog', `🚀 Release #${n}: ${REASONS[(n - 1) % REASONS.length]} caused ${cost.toFixed(1)} min of errors`, left <= 10 ? 'e' : 'w');
+    if (left <= 0) {
+      left = 0;
+      $('#deployBtn').disabled = true;
+      $('#freeze').classList.add('show');
+      logTo('blog', '🧊 Error budget gone. Launch freeze until it recovers.', 'e');
+      if (checkGoal('#s4goals', 'burn', goals, 15)) maybeQuiz();
+    }
+    paintBudget();
+  };
+  $('#bReset').onclick = () => {
+    left = 43.83; day = 1; n = 0;
+    $('#deployBtn').disabled = false; $('#freeze').classList.remove('show');
+    $('#blog').innerHTML = '<div>New month. Budget: (1 − 0.999) × 43,830 min ≈ 43.8 min of errors.</div>';
+    paintBudget();
+  };
+
+  function maybeQuiz() {
+    if (quizShown || goals.size < 2) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s4quiz'), {
+      q: 'A cloud provider misses its 99.99% SLA one month. What usually happens?',
+      options: ['Customers can claim service credits, a partial refund', 'The provider must pay for all customer losses', 'Nothing, because the SLA is only an internal goal'],
+      correct: 0,
+      good: 'Cloud SLAs pay out as <b>service credits</b>, a percentage off that service\'s bill, usually only if you claim them. They don\'t cover your lost revenue. Plan your own redundancy.',
+      bad: 'Cloud SLAs pay out as <b>service credits</b>: a partial refund on that service\'s bill, usually only if you claim them. They don\'t cover your business losses. And an internal goal would be an SLO, not an SLA.',
+      onDone: () => setTimeout(() => Q.clearStage(4), 900),
+    }), 500);
+  }
+  startSort(); paintBudget();
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss'), {
+  name: '🧙 The Nines Merchant',
+  xp: 18,
+  scenarios: [
+    { e: '📊', t: 'Five nines for a report page', d: 'Product wants 99.999% for an internal dashboard that people open once a month to read reports.',
+      choices: [{ k: 'over', label: 'Overkill', sub: '99.9% or less is plenty' }, { k: 'right', label: 'Right target', sub: 'reports deserve five nines' }, { k: 'low', label: 'Too low', sub: 'push it to six nines' }],
+      a: 'over', why: 'Five nines leaves about <b>5.26 minutes a year</b> (Table 2-3). That needs automatic failover, multiple zones and a tight on-call rota. Nobody is hurt if a monthly report is down for an hour, so 99.9% (8.77 h a year) or even less is plenty.' },
+    { e: '⛓️', t: 'Five dependencies, one promise', d: 'Your service calls 5 dependencies one after another, each at 99.9%. You promised customers 99.9%.',
+      choices: [{ k: 'ok', label: 'It holds', sub: 'each one meets 99.9%' }, { k: 'cant', label: 'It breaks', sub: 'chained it\'s about 99.5%' }, { k: 'row', label: 'Fixable', sub: 'add more servers in a row' }],
+      a: 'cant', why: 'In a row, availabilities multiply: 0.999⁵ ≈ <b>99.5%</b>, about 44 hours down a year against the 8.77 h you promised. Adding more steps in a row only multiplies in more terms. Fix it with spares (parallel replicas), caching, or making some calls optional so a failure degrades the feature instead of breaking it.' },
+    { e: '🗄️', t: 'Two replicas, one rack', d: 'Two copies of a 99% service share one rack and one power supply. The design doc claims 99.99%.',
+      choices: [{ k: 'right', label: 'Correct', sub: 'it\'s just 1 − 0.01²' }, { k: 'pess', label: 'Pessimistic', sub: 'the real number is higher' }, { k: 'opt', label: 'Optimistic', sub: 'they can fail together' }],
+      a: 'opt', why: '1 − (1 − 0.99)² = 99.99% only if the two copies fail <b>independently</b>. A shared rack and power supply means one event kills both. Real availability is somewhere between 99% and 99.99%, and it\'s closer to 99% the more they share. Put them in different racks or zones.' },
+    { e: '🗓️', t: 'The monthly myth', d: 'An engineer says: "99.9% means we can be down 8.77 hours a month."',
+      choices: [{ k: 'yes', label: 'Right', sub: '8.77 hours each month' }, { k: 'year', label: 'Wrong', sub: '8.77 h is the yearly total' }, { k: 'min', label: 'Wrong', sub: 'it\'s 8.77 minutes a month' }],
+      a: 'year', why: '8.77 hours is the <b>yearly</b> allowance for three nines. Per month it\'s about <b>43.8 minutes</b> (Table 2-3: 43.83 min). Mixing up the period is the most common nines mistake.' },
+    { e: '💳', t: 'Payments at two nines', d: 'A team designs its payments API for 99% availability.',
+      choices: [{ k: 'low', label: 'Too low', sub: 'days of failed payments' }, { k: 'right', label: 'Right target', sub: 'two nines is normal' }, { k: 'over', label: 'Overkill', sub: 'payments can just retry' }],
+      a: 'low', why: '99% allows <b>3.65 days</b> of downtime a year, about 7.3 hours a month. For payments, every minute down is lost money and angry customers. Aim for three to four nines (8.77 h down to 52.6 min a year), with redundancy across zones.' },
+  ],
+  outro: 'The rule: price a nine by what an hour of downtime really costs, remember that chains multiply, and only count spares that fail independently.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: interview drill ================= */
+Q.onStage(6, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"What availability would you target here, and what does it mean in practice?"</i>',
+  placeholder: 'I\'d target three to four nines, which means…',
+  model: '"I\'d target three to four nines. 99.9% allows about 43 minutes of downtime a month, 8.8 hours a year. 99.99% allows about 4.4 minutes a month, 53 minutes a year. Every extra nine means ten times less downtime, and usually a lot more cost. Our availability can\'t beat the product of our hard dependencies: three 99.9% services in a row give about 99.7%. So I\'d add redundancy where it counts and keep the failures independent, for example replicas in different zones. Internally I\'d set an SLO a bit tighter than any SLA we sign."',
+  checks: ['I converted a percentage to downtime (e.g. 99.9% ≈ 43 min a month)', 'I said each nine = 10× less downtime (and more cost)', 'I mentioned that chained dependencies multiply', 'I mentioned redundancy with independent failures (or SLO vs SLA)'],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Dice or the Ticket Booth</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: s1 UUID roller + bit meter + column game + sort race, s2 birthday gauge, s3 ticket-server sim, s4 scorecard */
+:root { --tA: #5a48f0; --tB: #c27400; --wire: #cfc9bb; --over: #d4423f; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --tA: #8f82ff; --tB: #ffb547; --wire: #33375a; --over: #ff6d6a; }
+}
+:root[data-theme="dark"] { --tA: #8f82ff; --tB: #ffb547; --wire: #33375a; --over: #ff6d6a; }
+
+@media (max-width: 560px) { .stage-b { padding: 18px 14px 22px; } .stage-h { padding: 16px 14px; } }
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.challenge.boxed:empty { display: none; }
+.reqchips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 4px; }
+.reqchips span { font-size: 13px; font-weight: 600; padding: 5px 10px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); }
+.bignum { font-family: var(--mono); font-weight: 700; }
+
+/* stage 1: UUID roller */
+.uulist { padding: 12px 14px 4px; display: grid; gap: 4px; min-height: 86px; }
+.uulist:empty::before { content: "No UUIDs yet. Roll one."; color: var(--muted); font-size: 14px; }
+.uu { font-family: var(--mono); font-size: 14px; word-break: break-all; padding: 4px 8px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); animation: rise .3s; }
+.uu .v { color: var(--accent); font-weight: 700; }
+.uu .n { color: var(--muted); font-size: 12px; margin-right: 6px; }
+@media (max-width: 420px) { .uu { font-size: 12px; } }
+.bitm { padding: 10px 14px 14px; }
+.bitm-lab { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 6px; flex-wrap: wrap; }
+.bitm-lab b { color: var(--over); }
+.bitm-track { position: relative; height: 30px; border-radius: 8px; background: var(--bg-2); border: 1px solid var(--line); }
+.bitm-fill { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 7px; background: linear-gradient(90deg, var(--teal) 0 50%, var(--over) 50% 100%); transition: width 1s cubic-bezier(.2,.8,.2,1); }
+.bitm-budget { position: absolute; inset: -5px auto -5px 0; width: 50%; border: 2.5px dashed var(--ink); border-radius: 9px; z-index: 1; display: grid; place-items: center; font: 700 12px var(--mono); color: var(--ink); pointer-events: none; }
+.bitm-budget span { background: color-mix(in srgb, var(--panel) 85%, transparent); padding: 0 6px; border-radius: 4px; }
+.bitm-over { position: absolute; left: 50%; right: 0; top: 0; bottom: 0; display: grid; place-items: center; font: 700 12px var(--mono); color: #fff; opacity: 0; transition: opacity .4s .8s; }
+.bitm.full .bitm-over { opacity: 1; }
+
+/* column-spotting game */
+.gcols { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 12px 0 4px; }
+.gcol { border: 2px solid var(--line); background: var(--panel); border-radius: 12px; padding: 6px 7px; font: 600 13px/1.5 var(--mono); display: grid; min-height: 44px; min-width: 44px; transition: border-color .2s, background .2s; }
+.gcol:hover:not([disabled]) { border-color: var(--accent); }
+.gcol.wrong { border-color: var(--bad); background: var(--bad-soft); }
+.gcol.near { border-color: var(--warn); background: var(--warn-soft); }
+.gcol.right { border-color: var(--good); background: var(--good-soft); }
+.gcol .cap { font: 700 10px var(--font); color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+.gcol.dig { font-size: 22px; min-width: 52px; padding: 6px 10px; }
+.gmsg { font-size: 15px; min-height: 24px; margin-top: 8px; }
+/* sort race */
+.race { display: grid; gap: 6px; margin: 12px 0 6px; position: relative; }
+.rrow { display: grid; grid-template-columns: 34px 1fr auto; gap: 8px; align-items: center; padding: 6px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); font-family: var(--mono); font-size: 13px; animation: rise .3s; }
+.rrow .ord { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; font-weight: 700; background: var(--accent-soft); color: var(--accent); font-family: var(--font); }
+.rrow .id { word-break: break-all; }
+.rrow .tm { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.rrow.off .ord { background: var(--bad-soft); color: var(--bad); }
+.rrow.on .ord { background: var(--good-soft); color: var(--good); }
+@media (max-width: 420px) { .rrow { grid-template-columns: 28px 1fr; font-size: 11.5px; } .rrow .tm { grid-column: 2; } }
+
+/* stage 2: birthday gauge */
+.bday { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; align-items: center; padding: 14px; }
+@media (max-width: 680px) { .bday { grid-template-columns: 1fr; } }
+.gauge { max-width: 300px; margin: 0 auto; width: 100%; }
+.gauge .bg { fill: none; stroke: var(--bg-2); stroke-width: 22; }
+.gauge .fg { fill: none; stroke-width: 22; stroke-linecap: butt; transition: stroke .3s; }
+.gauge .half { stroke: var(--ink); stroke-width: 2.5; }
+.gauge .hl { fill: var(--muted); font: 600 11px var(--mono); text-anchor: middle; }
+.gauge .needle { stroke: var(--ink); stroke-width: 3.5; stroke-linecap: round; }
+.gauge .hub { fill: var(--ink); }
+.gauge .pc { fill: var(--ink); font: 700 26px var(--mono); text-anchor: middle; }
+.gauge .pcs { fill: var(--muted); font: 600 12px var(--font); text-anchor: middle; }
+.ctrl { display: grid; gap: 12px; }
+.ctrl label { font-weight: 600; font-size: 14px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.ctrl input[type=range] { width: 100%; accent-color: var(--accent); height: 30px; }
+.nudge { display: flex; gap: 8px; align-items: center; }
+.nudge input { flex: 1; min-width: 0; }
+.nudge .btn { padding: 6px 0; width: 44px; font-size: 18px; line-height: 1.2; flex: none; }
+.seg button { min-height: 40px; }
+.readout { font-family: var(--mono); font-size: 13px; color: var(--muted); display: grid; gap: 2px; }
+.readout b { color: var(--ink); }
+.formula { font-family: var(--mono); font-size: 13px; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); text-align: center; word-break: break-word; }
+.ansrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.ansrow input { width: 120px; min-height: 44px; border-radius: 12px; border: 2px solid var(--line); background: var(--bg); color: var(--ink); font: 600 17px var(--mono); padding: 6px 12px; }
+.ansrow input:focus { border-color: var(--accent); outline: none; }
+
+/* stage 3: ticket server sim */
+.sim svg.tk { max-width: 560px; margin: 0 auto; }
+.tk .wire { stroke: var(--wire); stroke-width: 2; }
+.tk .wire.cut { stroke: var(--bad); stroke-dasharray: 5 5; opacity: .7; }
+.tk .web rect { fill: var(--panel); stroke: var(--accent); stroke-width: 2.5; transition: fill .3s, stroke .3s; }
+.tk .web.fail rect { fill: var(--bad-soft); stroke: var(--bad); }
+.tk .web .nm { fill: var(--ink); font: 700 14px var(--font); }
+.tk .web .st { fill: var(--muted); font: 600 12.5px var(--mono); }
+.tk .web.fail .st { fill: var(--bad); }
+.tk .tsv .body { stroke-width: 2.5; transition: fill .3s, stroke .3s; }
+.tk .tsv.a .body { fill: color-mix(in srgb, var(--tA) 14%, var(--panel)); stroke: var(--tA); }
+.tk .tsv.b .body { fill: color-mix(in srgb, var(--tB) 16%, var(--panel)); stroke: var(--tB); }
+.tk .tsv.dead .body { fill: var(--bg-2); stroke: var(--muted); stroke-dasharray: 6 5; }
+.tk .tsv .nm { fill: var(--ink); font: 700 13.5px var(--font); text-anchor: middle; }
+.tk .tsv .ct { fill: var(--muted); font: 600 12px var(--mono); text-anchor: middle; }
+.tk .tsv.dead .nm, .tk .tsv.dead .ct { fill: var(--muted); }
+.tk .tsv .skull { font-size: 26px; text-anchor: middle; opacity: 0; transition: opacity .3s; }
+.tk .tsv.dead .skull { opacity: 1; }
+.tk .req { fill: var(--ink); }
+.tk .resp { font: 700 14px var(--mono); text-anchor: middle; }
+.tk .resp.a { fill: var(--tA); } .tk .resp.b { fill: var(--tB); } .tk .resp.x { fill: var(--bad); }
+.tbadges { display: flex; gap: 8px; flex-wrap: wrap; }
+.tbadge { font-size: 13px; font-weight: 700; padding: 4px 10px; border-radius: 99px; background: var(--bg-2); color: var(--muted); transition: background .3s, color .3s; }
+.tbadge.good { background: var(--good-soft); color: var(--good); }
+.tbadge.warn { background: var(--warn-soft); color: var(--warn); }
+.tbadge.bad { background: var(--bad-soft); color: var(--bad); }
+.issued { display: flex; flex-wrap: wrap; gap: 5px; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); min-height: 46px; align-items: center; font-size: 13px; }
+.issued .lab { color: var(--muted); font-weight: 600; margin-right: 4px; }
+.issued .id { font: 700 13px var(--mono); padding: 3px 8px; border-radius: 7px; border: 1.5px solid; animation: rise .3s; }
+.issued .id.a { color: var(--tA); border-color: var(--tA); }
+.issued .id.b { color: var(--tB); border-color: var(--tB); }
+.issued .id.x { color: var(--bad); border-color: var(--bad); }
+.issued .id.late { background: var(--warn-soft); }
+pre.sql { background: var(--code-bg); color: var(--code-ink); border-radius: 12px; padding: 12px 14px; font: 13px/1.5 var(--mono); overflow-x: auto; margin: 12px 0; white-space: pre; }
+pre.sql .k { color: #9fa8ff; } pre.sql .c { color: #8a8fb3; } pre.sql .s { color: #6ee7a8; }
+
+/* stage 4: scorecard */
+.score { display: grid; grid-template-columns: minmax(78px, 1.25fr) repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 14px; align-items: stretch; }
+.score .ch { font-size: 13px; font-weight: 700; text-align: center; align-self: end; padding: 4px 2px; line-height: 1.2; overflow-wrap: anywhere; }
+.score .ch.sf { color: var(--muted); }
+.score .rh { font-size: 13.5px; font-weight: 600; display: flex; align-items: center; line-height: 1.25; }
+.score .cell { min-height: 46px; border-radius: 12px; border: 2px solid var(--line); background: var(--panel); font: 700 20px var(--font); color: var(--muted); transition: border-color .2s, background .2s, transform .1s; padding: 0; }
+.score .cell:hover:not([disabled]) { border-color: var(--accent); }
+.score .cell.y { color: var(--good); }
+.score .cell.n { color: var(--bad); }
+.score .cell.wrong { border-color: var(--bad); background: var(--bad-soft); animation: shake .4s; }
+.score .cell.right { border-color: var(--good); background: var(--good-soft); }
+.score .sfc { min-height: 46px; border-radius: 12px; border: 2px dashed var(--line); display: grid; place-items: center; font: 700 20px var(--font); color: var(--muted); transition: transform .5s, background .3s, color .3s; }
+.score .sfc.flip { background: var(--teal-soft); color: var(--teal); border-style: solid; border-color: var(--teal); animation: flipin .6s; }
+@keyframes flipin { 0% { transform: rotateY(90deg); } 100% { transform: rotateY(0); } }
+@media (max-width: 420px) { .score { gap: 4px; } .score .ch { font-size: 11.5px; } .score .rh { font-size: 12.5px; } }
+.why { margin-top: 12px; display: grid; gap: 6px; font-size: 14.5px; }
+.why div { padding: 8px 12px; border-radius: 10px; background: var(--bad-soft); animation: rise .3s; }
+.why div.ok { background: var(--good-soft); }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 7.2 · Design a Unique ID Generator</div>
+    <h1>Dice or the Ticket Booth</h1>
+    <p class="lede">Two easy ways to hand out IDs. Roll dice so big nobody ever matches, or put one booth in the middle that prints numbered tickets. Both are real. Neither passes this interview.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can explain why UUIDs almost never collide yet still fail this prompt, how Flickr's ticket server works and why it's a single point of failure, and fill in the four-approach scorecard from memory.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Roll a UUID</h2><div class="sub">128 random-ish bits, no coordination</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Quick recap from <a href="0701-unique-id-scope-and-multi-master.html">Quest 7.1</a>. The interviewer's IDs must be:</p>
+      <div class="reqchips"><span>unique</span><span>numbers only</span><span>fit in 64 bits</span><span>sorted by time</span><span>10,000+ per second</span></div>
+      <p>The book's second candidate is the <b>UUID</b> (universally unique identifier). It's a 128-bit number, written as 32 <b>hex</b> digits (0–9 and a–f, 4 bits each) in groups of 8-4-4-4-12. The book's example is <code style="word-break:break-all">09c93e62-50b4-468d-bf8a-c07e1040bfb2</code>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems" target="_blank" rel="noopener">[1]</a></p>
+      <p>The common kind, <b>version 4</b>, is pure dice: every web server rolls its own, and nobody has to talk to anybody. There's no <b>coordination</b> (servers checking with each other before acting). Roll a few.</p>
+
+      <div class="sim">
+        <div class="uulist" id="uuList"></div>
+        <div class="bitm" id="bitm">
+          <div class="bitm-lab"><span>Size of one UUID: <span class="bignum" id="bitN">0</span> bits</span><span id="bitMsg"></span></div>
+          <div class="bitm-track"><div class="bitm-fill" id="bitFill"></div><div class="bitm-budget"><span>64-bit budget</span></div><div class="bitm-over">+64 over</div></div>
+        </div>
+        <div class="sim-bar">
+          <button class="btn primary" id="uuGen">🎲 Generate UUID</button>
+          <span class="small">Rolled: <span class="bignum" id="uuCount">0</span></span>
+        </div>
+      </div>
+      <ul class="checklist" id="s1goals">
+        <li data-g="gen"><span class="box">✓</span><span>Roll 5 UUIDs</span></li>
+        <li data-g="spot"><span class="box">✓</span><span>Spot the digit that never changes</span></li>
+        <li data-g="sort"><span class="box">✓</span><span>Predict: does sorting by value sort by time?</span></li>
+      </ul>
+      <div class="challenge boxed" id="spotBox"></div>
+      <div class="challenge boxed" id="sortBox"></div>
+      <div class="callout" id="uuProsCons" style="display:none"><b>The book's scorecard for UUIDs.</b><a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems" target="_blank" rel="noopener">[1]</a>
+        👍 Simple to generate. No coordination, so no syncing problems between servers. Easy to scale: each web server makes the IDs it uses, so the ID generator grows with the web tier.<br>
+        👎 128 bits, but we need 64. They don't go up with time. They can be non-numeric. <span class="muted">(A UUID is a number underneath, but it's usually stored and passed around as a 36-character string with letters and dashes.)</span></div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>The birthday odds</h2><div class="sub">How unlikely is "unlikely"?</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Random IDs can clash. How often? It's the <b>birthday paradox</b>: in a room of just 23 people, there's a 50% chance two share a birthday. The trick is that every <i>pair</i> of people is a chance to match, and pairs grow much faster than people.</p>
+      <p>For UUIDs the "days of the year" are the 2<sup>122</sup> possible random values (128 bits minus the 6 fixed ones you found in stage 1). With <b>n</b> UUIDs made, the chance of <i>any</i> duplicate is about:</p>
+      <div class="callout" style="text-align:center;font-family:var(--mono);font-size:15px">P(duplicate) ≈ 1 − e<sup>−n² / (2 × 2<sup>122</sup>)</sup><br><span class="small muted">while P is small, that's roughly n² / (2 × 2<sup>122</sup>)</span></div>
+      <p>The book borrows a line from Wikipedia: you'd have to make <b>1 billion UUIDs every second for about 100 years</b> before the odds of a single duplicate reach 50%.<a class="cite" href="https://en.wikipedia.org/wiki/Universally_unique_identifier" target="_blank" rel="noopener">[2]</a> Check that claim yourself.</p>
+
+      <div class="sim">
+        <div class="bday">
+          <svg class="gauge" id="gauge" viewBox="0 0 240 150" role="img" aria-label="Probability gauge"></svg>
+          <div class="ctrl">
+            <div><div class="small" style="font-weight:600;margin-bottom:6px">Rate</div>
+              <span class="seg" id="rateSeg"><button data-r="1e4">10k/s</button><button data-r="1e6">1M/s</button><button data-r="1e9" class="on">1B/s</button></span></div>
+            <div><label for="yrs"><span>Years of nonstop generating</span><span class="bignum" id="yrsVal">1</span></label>
+              <div class="nudge"><button class="btn" id="yrsDn" aria-label="Fewer years">‹</button><input type="range" id="yrs" min="0" max="700" step="1" value="0" aria-label="Years, log scale"><button class="btn" id="yrsUp" aria-label="More years">›</button></div>
+              <div class="small muted">log scale: 1 year → 10 million years</div></div>
+            <div class="readout" id="readout"></div>
+          </div>
+        </div>
+        <div class="formula" id="formula"></div>
+      </div>
+
+      <div class="challenge boxed" id="bc1">
+        <div class="step">Challenge 1</div>
+        <h3>Set the rate to <b>1 billion per second</b>. Slide to where the odds of a duplicate hit 50%, then lock it in.</h3>
+        <div class="row"><button class="btn primary" id="bc1go">🔒 Lock in this many years</button></div>
+        <div class="explain" id="bc1ex"></div>
+      </div>
+      <div class="challenge boxed" id="bc2" style="display:none">
+        <div class="step">Challenge 2</div>
+        <h3>Our prompt needs <b>10,000 IDs per second</b>. How long until the odds of one duplicate reach 50%?</h3>
+        <div class="ansrow"><input id="bc2in" type="text" inputmode="decimal" autocomplete="off" aria-label="Answer in millions of years" placeholder="?"><span class="small" style="font-weight:600">million years</span><button class="btn primary" id="bc2go">Check</button></div>
+        <p class="small muted" style="margin:8px 0 0">Use the gauge, or reason it out. The number of UUIDs needed for 50% doesn't change, only how fast you make them.</p>
+        <div class="explain" id="bc2ex"></div>
+      </div>
+      <div class="callout warn"><b>Real-world catch.</b> The math assumes a good random source. Duplicate UUIDs seen in practice almost always come from a broken one, like a virtual machine cloned together with its random-number state, or a generator seeded with something guessable such as the time.</div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>The ticket booth</h2><div class="sub">Flickr's central counter</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The third candidate goes the other way: <b>one</b> place hands out every number. Flickr built this in 2010 and called it a <b>ticket server</b>.<a class="cite" href="https://code.flickr.net/2010/02/08/ticket-servers-distributed-unique-primary-keys-on-the-cheap/" target="_blank" rel="noopener">[3]</a> It's a single MySQL database whose only job is <code>auto_increment</code> (a column the database fills with the next number, 1, 2, 3…, on every insert). Every web server that needs an ID asks it for the next one.</p>
+      <p>Flickr's trick keeps the table at one row forever. <code>REPLACE INTO</code> deletes the row and inserts it again, which bumps the counter:</p>
+<pre class="sql"><span class="k">REPLACE INTO</span> Tickets64 (stub) <span class="k">VALUES</span> (<span class="s">'a'</span>);
+<span class="k">SELECT</span> LAST_INSERT_ID();   <span class="c">-- your new ID</span></pre>
+      <p>Run some traffic through it. Then break it.</p>
+
+      <div class="sim">
+        <svg class="tk" id="tkSvg" viewBox="0 0 420 260" role="img" aria-label="Four web servers asking a ticket server for IDs"></svg>
+        <div class="issued" id="tkIssued"><span class="lab">IDs handed out, in order:</span></div>
+        <div class="sim-bar">
+          <button class="btn primary" id="tkRun">▶ Run traffic</button>
+          <span class="tbadges"><span class="tbadge" id="tbUp">Up</span><span class="tbadge" id="tbOrd">Time-ordered</span></span>
+        </div>
+      </div>
+      <ul class="checklist" id="s3goals">
+        <li data-g="run"><span class="box">✓</span><span>Run traffic through one ticket server</span></li>
+        <li data-g="kill"><span class="box">✓</span><span>Predict, then kill the ticket server</span></li>
+        <li data-g="two"><span class="box">✓</span><span>Fix it with a second ticket server</span></li>
+        <li data-g="survive"><span class="box">✓</span><span>Kill one of the two and keep serving</span></li>
+      </ul>
+      <div class="challenge boxed" id="tkBox"></div>
+      <div class="callout" id="tkProsCons" style="display:none"><b>The book's scorecard for a ticket server.</b><a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems" target="_blank" rel="noopener">[1]</a>
+        👍 Numeric IDs. Easy to build. Works for small to medium-scale apps.<br>
+        👎 A <b>single point of failure</b> (SPOF): one part whose crash takes the whole feature down. Adding more ticket servers fixes that but brings new problems, like keeping them in sync.
+        <span class="muted">Flickr's own post goes one step further than the book: two servers, odd and even, and they accept that IDs come out only roughly in order.</span></div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>The four-way scorecard</h2><div class="sub">Fill the table the interviewer is grading you on</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book weighs four approaches against the same requirements. You've now met three of them. Tap each cell to cycle <b>·</b> → <b>✓</b> → <b>✗</b>, then press <b>Check</b>. Saying this table out loud is how you justify the final pick.</p>
+      <div class="score" id="score" role="group" aria-label="Scorecard"></div>
+      <div class="row" style="margin-top:14px"><button class="btn primary" id="scoreGo">Check the scorecard</button><span class="small muted" id="scoreMsg"></span></div>
+      <div class="why" id="scoreWhy"></div>
+      <div class="callout tip" id="sfTeaser" style="display:none"><b>Next quest teaser.</b> The fourth column is <b>Twitter Snowflake</b>: a 64-bit number built from a timestamp, a machine ID and a counter. Every server makes its own IDs (no SPOF), and they sort by time. That's <a href="0703-snowflake-bit-layout.html">Quest 7.3, Anatomy of a Snowflake</a>.</div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Coin-Flip Golem</h2><div class="sub">UUID, ticket server, or count-by-k?</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>These three ideas fail <i>this</i> prompt, but each is the right tool somewhere else. Six situations. Pick the one you'd use.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">Reject two designs in 40 seconds</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 7: Design a Unique ID Generator in Distributed Systems</a>, Step 2, the "UUID" and "Ticket server" parts. Then read Flickr's short original post, <a href="https://code.flickr.net/2010/02/08/ticket-servers-distributed-unique-primary-keys-on-the-cheap/" target="_blank" rel="noopener">"Ticket Servers: Distributed Unique Primary Keys on the Cheap"</a>. It's a 5-minute read and shows the odd/even setup in full.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <b>UUIDv7 fixes one con, not all of them.</b> The book predates RFC 9562 (2024), which standardised UUID version 7: a 48-bit Unix timestamp in milliseconds, then random bits.<a class="cite" href="https://www.rfc-editor.org/rfc/rfc9562" target="_blank" rel="noopener">[4]</a> v7 IDs <i>do</i> sort by time. They're still 128 bits, so they still fail this prompt's 64-bit rule.<br><br>
+      <b>Random keys hurt databases.</b> Random v4 UUIDs as primary keys land all over a B-tree index (the sorted tree most databases use to find rows), so inserts split pages and fight for cache. That's a practical reason teams avoid them, beyond the book's list.<br><br>
+      <b>The numbers are rounded.</b> The book's "about 100 years" at 1 billion per second works out to about 86 years with the birthday formula.<br><br>
+      <b>Real ticket systems batch.</b> Instead of one round trip per ID, a server can grab a block of numbers (say 1,000 at a time) and hand them out locally. Fewer trips, but IDs from different servers interleave out of order.
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"why can't we just cut a UUID down to 64 bits?"</i> or <i>"if Flickr's two ticket servers drift apart, can they ever hand out the same number?"</i> Follow-up questions are part of the quest.
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 7 "Design a Unique ID Generator in Distributed Systems", Step 2 (ByteByteGo).</li>
+        <li>Wikipedia, "Universally unique identifier", collisions section (the book's reference [1]).</li>
+        <li>Flickr Code, "Ticket Servers: Distributed Unique Primary Keys on the Cheap", 2010 (the book's reference [2]).</li>
+        <li>IETF RFC 9562, "Universally Unique IDentifiers (UUIDs)", 2024 (versions 4 and 7).</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0702',
+  winTitle: 'Two ideas weighed and found wanting',
+  badge: '🎟️ Badge: Ticket Taker',
+  cheatsheet: '../reference/ch07-unique-id-cheatsheet.html',
+});
+const { sleep, shuffle } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+const BOOK = 'https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems';
+const cite = (n, url) => `<a class="cite" href="${url}" target="_blank" rel="noopener">[${n}]</a>`;
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function anim(dur, f) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 1) { f(1); return res(); }
+    const t0 = performance.now();
+    const fr = now => { const p = Math.min(1, (now - t0) / dur); f(p); p < 1 ? requestAnimationFrame(fr) : res(); };
+    requestAnimationFrame(fr);
+  });
+}
+const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done');
+  if (xp) Q.addXP(xp, li);
+  return true;
+}
+// Predict-then-watch round. Resolves after the learner picks and the action has played.
+function predict(box, { step, title, options, correct, act, explain, xp = 20, score = true }) {
+  box.innerHTML = `${step ? `<div class="step">${step}</div>` : ''}<h3>${title}</h3><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+  const opts = $('.opts', box);
+  let busy = false;
+  return new Promise(resolve => {
+    shuffle(options.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = async () => {
+        if (busy) return; busy = true;
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        b.classList.add('picked');
+        if (act) await act(i);
+        const ok = i === correct;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-i="${correct}"]`, opts).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + explain;
+        if (score) ok ? Q.addXP(xp, b) : Q.loseHeart(b);
+        resolve({ ok, row: $('.row', box) });
+      };
+      opts.appendChild(b);
+    });
+  });
+}
+function nextBtn(row, label, fn, primary = true) {
+  const b = document.createElement('button'); b.className = 'btn' + (primary ? ' primary' : ''); b.textContent = label; b.onclick = fn; row.appendChild(b); return b;
+}
+// Several Q.quiz() one after another; calls done() after the last.
+function quizChain(mount, list, done) {
+  let i = 0;
+  const next = () => {
+    if (i >= list.length) { done && setTimeout(done, 900); return; }
+    const q = list[i++];
+    Q.quiz(mount, { ...q, onDone: () => setTimeout(next, 700) });
+  };
+  next();
+}
+// version-4 UUID: crypto.randomUUID when available, else build one from random bytes
+function uuid4() {
+  const c = window.crypto;
+  if (c && typeof c.randomUUID === 'function') { try { return c.randomUUID(); } catch (_) {} }
+  const b = new Uint8Array(16);
+  if (c && c.getRandomValues) c.getRandomValues(b); else for (let i = 0; i < 16; i++) b[i] = Math.random() * 256 | 0;
+  b[6] = (b[6] & 0x0f) | 0x40; // version 4
+  b[8] = (b[8] & 0x3f) | 0x80; // variant 10xx
+  const h = [...b].map(x => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+const SUP = { '-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
+const sup = n => String(n).split('').map(c => SUP[c] || c).join('');
+function sci(x, d = 1) {
+  if (!isFinite(x) || x === 0) return String(x);
+  let e = Math.floor(Math.log10(x)), m = x / Math.pow(10, e);
+  if (+m.toFixed(d) >= 10) { m /= 10; e++; }
+  return `${m.toFixed(d)} × 10${sup(e)}`;
+}
+const fmtInt = n => Math.round(n).toLocaleString('en-US');
+
+/* ================= STAGE 1: roll a UUID ================= */
+Q.onStage(1, () => {
+  const goals = new Set(), all = [];
+  let spotOn = false, sortOn = false, quizShown = false;
+  const list = $('#uuList');
+  const mark = u => `${u.slice(0, 14)}<span class="v">${u[14]}</span>${u.slice(15)}`;
+  function render() {
+    list.innerHTML = all.slice(-5).reverse().map((u, k) => `<div class="uu"><span class="n">#${all.length - k}</span>${goals.has('spot') ? mark(u) : u}</div>`).join('');
+    $('#uuCount').textContent = all.length;
+  }
+  $('#uuGen').onclick = () => {
+    all.push(uuid4()); render();
+    if (all.length === 1) {
+      $('#bitN').textContent = '128';
+      $('#bitFill').style.width = '100%'; $('#bitm').classList.add('full');
+      $('#bitMsg').innerHTML = '<b>2× the budget</b>';
+    }
+    if (all.length >= 5 && checkGoal('#s1goals', 'gen', goals, 10)) startSpot();
+  };
+
+  /* mini-game 1: which digit never changes? */
+  function startSpot() {
+    if (spotOn) return; spotOn = true;
+    const box = $('#spotBox');
+    const five = all.slice(-5);
+    const groups = five.map(u => u.split('-'));
+    let lostA = false, lostB = false;
+    box.innerHTML = `<div class="step">Mini-game 1</div><h3>Look down the columns of your last 5 UUIDs. One digit is the same in all of them. First, which <b>group</b> holds it?</h3>
+      <div class="gcols" id="gA">${[0, 1, 2, 3, 4].map(g => `<button class="gcol" data-g="${g}" aria-label="Group ${g + 1}"><span class="cap">group ${g + 1}</span>${groups.map(p => `<span>${p[g]}</span>`).join('')}</button>`).join('')}</div>
+      <div class="gmsg" id="gMsg"></div><div id="gB"></div>`;
+    $$('#gA .gcol', box).forEach(b => b.onclick = () => {
+      const g = +b.dataset.g;
+      if (g === 2) {
+        $$('#gA .gcol', box).forEach(x => x.disabled = true); b.classList.add('right');
+        $('#gMsg').textContent = 'Right group. Now tap the exact digit.';
+        stepB();
+      } else if (g === 3) {
+        b.classList.add('near');
+        $('#gMsg').innerHTML = 'Close! Group 4’s <i>first</i> digit only ever takes 4 values (8, 9, a or b), so it can repeat by luck. Find one that is <b>always</b> the same.';
+      } else {
+        b.classList.add('wrong'); b.disabled = true;
+        $('#gMsg').textContent = 'Every column in that group changes. Keep looking.';
+        if (!lostA) { lostA = true; Q.loseHeart(b); }
+      }
+    });
+    function stepB() {
+      const wrap = $('#gB', box);
+      wrap.innerHTML = `<div class="gcols" id="gBc">${[0, 1, 2, 3].map(i => `<button class="gcol dig" data-i="${i}" aria-label="Digit ${i + 1} of group 3">${groups.map(p => `<span>${p[2][i]}</span>`).join('')}</button>`).join('')}</div>`;
+      $$('#gBc .gcol', wrap).forEach(b => b.onclick = () => {
+        if (+b.dataset.i === 0) {
+          $$('#gBc .gcol', wrap).forEach(x => x.disabled = true); b.classList.add('right');
+          $('#gMsg').innerHTML = `<b>It’s the 4.</b> That digit is the <b>version</b>: it says "I’m a version 4, random UUID". The first digit of group 4 is the <b>variant</b> (8, 9, a or b). Together that’s 6 fixed bits, so only <b>122 bits</b> are random.${cite(4, 'https://www.rfc-editor.org/rfc/rfc9562')} The list above now highlights the 4.`;
+          checkGoal('#s1goals', 'spot', goals, 10); render();
+          maybeSort();
+        } else {
+          b.classList.add('wrong'); b.disabled = true;
+          if (!lostB) { lostB = true; Q.loseHeart(b); }
+        }
+      });
+    }
+    maybeSort();
+  }
+
+  /* mini-game 2: does sorting by value sort by time? */
+  function maybeSort() {
+    if (sortOn || !goals.has('spot')) return; sortOn = true;
+    const box = $('#sortBox');
+    box.innerHTML = `<div class="step">Mini-game 2 · predict, then watch</div><h3>Databases often sort rows by ID. Let’s make 5 UUIDs, one second apart, and label each with when it was made.</h3>
+      <div class="row"><button class="btn primary" id="raceGo">⏱️ Make 5, one second apart</button></div><div class="race" id="race"></div><div id="raceQ"></div>`;
+    $('#raceGo').onclick = race;
+  }
+  let raced = false;
+  async function race() {
+    const go = $('#raceGo'); go.disabled = true;
+    let ids;
+    do { ids = Array.from({ length: 5 }, uuid4); } while (ids.every((u, i) => !i || ids[i - 1] < u)); // a sorted draw is 1 in 120; re-roll so the lesson shows the usual case
+    const rows = [];
+    const r = $('#race'); r.innerHTML = '';
+    for (let i = 0; i < 5; i++) {
+      if (i) await sleep(Q.reduced ? 60 : 1000);
+      const t = new Date();
+      const tm = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}:${String(t.getSeconds()).padStart(2, '0')}`;
+      rows.push({ u: ids[i], k: i + 1, tm });
+      r.insertAdjacentHTML('beforeend', `<div class="rrow" data-k="${i + 1}"><span class="ord">${i + 1}</span><span class="id">${ids[i]}</span><span class="tm">made ${tm}</span></div>`);
+    }
+    const { row } = await predict($('#raceQ'), {
+      title: 'Now sort these by value (smallest first). Will the made-at order stay 1, 2, 3, 4, 5?',
+      options: ['Yes, made later means sorts later', 'No, the order comes out jumbled'],
+      correct: 1, xp: 10, score: !raced,
+      act: async () => {
+        const els = $$('.rrow', r), first = new Map(els.map(e => [e, e.getBoundingClientRect().top]));
+        rows.slice().sort((a, b) => a.u < b.u ? -1 : 1).forEach(x => r.appendChild($(`.rrow[data-k="${x.k}"]`, r)));
+        if (!Q.reduced) {
+          $$('.rrow', r).forEach(e => { const dy = first.get(e) - e.getBoundingClientRect().top; e.style.transition = 'none'; e.style.transform = `translateY(${dy}px)`; });
+          void r.offsetWidth;
+          $$('.rrow', r).forEach(e => { e.style.transition = 'transform .8s cubic-bezier(.3,.7,.2,1)'; e.style.transform = ''; });
+          await sleep(850);
+        }
+        $$('.rrow', r).forEach((e, pos) => e.classList.add(+e.dataset.k === pos + 1 ? 'on' : 'off'));
+      },
+      explain: 'Sorted by value, the made-at numbers come out scrambled. A v4 UUID is dice: nothing in it knows what time it is. So "newest first" can’t be done by sorting on the ID, which is one of the five requirements. (By pure luck, 1 draw in 120 would come out in order.)',
+    });
+    raced = true;
+    checkGoal('#s1goals', 'sort', goals);
+    nextBtn(row, '↻ Race again', () => { maybeSortReset(); }, false);
+    $('#uuProsCons').style.display = 'block';
+    maybeQuiz();
+  }
+  function maybeSortReset() { sortOn = false; maybeSort(); }
+  function maybeQuiz() {
+    if (quizShown || goals.size < 3) return;
+    quizShown = true;
+    quizChain($('#s1quiz'), [
+      { q: 'How many bits are in a UUID?', options: ['64 bits', '128 bits', '256 bits'], correct: 1,
+        good: '128 bits, written as 32 hex digits. In version 4, 122 of them are random.', bad: 'It’s 128 bits: 32 hex digits × 4 bits each. That’s double the 64-bit budget.' },
+      { q: 'Which of this prompt’s rules does a v4 UUID break?', options: ['Too long, unsorted, not numeric', 'Not unique, too long, unsorted', 'Too slow, not unique, not numeric'], correct: 0,
+        good: 'The book’s three cons: 128 bits (not 64), no time order, and possibly non-numeric. Uniqueness and speed are fine.', bad: 'Uniqueness and speed are fine. The book’s three cons are: 128 bits instead of 64, no time order, and possibly non-numeric.' },
+      { q: 'Why do UUIDs scale so easily?', options: ['Each server makes its own, no talking', 'A central server hands them out fast', 'They are cached in a shared database'], correct: 0,
+        good: 'No coordination: each web server generates the IDs it needs, so adding web servers adds ID capacity for free.', bad: 'There’s no central anything. Each web server makes its own IDs without asking anyone, so the generator grows with the web tier.' },
+    ], () => Q.clearStage(1));
+  }
+});
+
+/* ================= STAGE 2: birthday odds ================= */
+Q.onStage(2, () => {
+  const SPACE = Math.pow(2, 122), YEAR = 365.25 * 24 * 3600;
+  let rate = 1e9, v = 0, done1 = false, done2 = false, quizShown = false;
+  const years = () => Math.pow(10, v / 100);
+  const prob = (r, y) => { const n = r * y * YEAR; return -Math.expm1(-(n * n) / (2 * SPACE)); };
+  const fmtYears = y => y < 10 ? y.toFixed(1) : y < 1e6 ? fmtInt(y) : (y / 1e6).toFixed(2) + ' million';
+  const fmtP = p => p >= 0.9995 ? '≈100%' : p >= 0.1 ? (p * 100).toFixed(1) + '%' : p >= 0.001 ? (p * 100).toFixed(2) + '%' : '1 in ' + sci(1 / p);
+  const rateName = r => r === 1e9 ? '1 billion/s' : r === 1e6 ? '1 million/s' : '10,000/s';
+  // gauge
+  const g = $('#gauge'), cx = 120, cy = 125, R = 92;
+  const P = a => [cx - R * Math.cos(a * Math.PI), cy - R * Math.sin(a * Math.PI)]; // a: 0 = left (0%), 1 = right (100%)
+  const arc = (a0, a1) => { const [x0, y0] = P(a0), [x1, y1] = P(a1); return `M${x0.toFixed(2)} ${y0.toFixed(2)}A${R} ${R} 0 0 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`; };
+  S('path', { class: 'bg', d: arc(0, 1) }, g);
+  const fg = S('path', { class: 'fg', d: arc(0, 0.0001) }, g);
+  const [hx0, hy0] = [cx, cy - R + 14], [hx1, hy1] = [cx, cy - R - 14];
+  S('line', { class: 'half', x1: hx0, y1: hy0, x2: hx1, y2: hy1 }, g);
+  S('text', { class: 'hl', x: cx, y: cy - R - 18 }, g).textContent = '50%';
+  S('text', { class: 'hl', x: cx - R, y: cy + 18 }, g).textContent = '0%';
+  S('text', { class: 'hl', x: cx + R, y: cy + 18 }, g).textContent = '100%';
+  const needle = S('line', { class: 'needle', x1: cx, y1: cy, x2: cx - R + 20, y2: cy }, g);
+  S('circle', { class: 'hub', cx, cy, r: 6 }, g);
+  const pc = S('text', { class: 'pc', x: cx, y: cy - 30 }, g), pcs = S('text', { class: 'pcs', x: cx, y: cy - 12 }, g);
+  pcs.textContent = 'chance of any duplicate';
+  function render() {
+    const y = years(), p = prob(rate, y), n = rate * y * YEAR;
+    const a = Math.max(0.0001, Math.min(0.9999, p));
+    fg.setAttribute('d', arc(0, a));
+    fg.style.stroke = p < 0.25 ? 'var(--good)' : p < 0.5 ? 'var(--warn)' : 'var(--bad)';
+    const [nx, ny] = [cx - (R - 22) * Math.cos(a * Math.PI), cy - (R - 22) * Math.sin(a * Math.PI)];
+    needle.setAttribute('x2', nx.toFixed(2)); needle.setAttribute('y2', ny.toFixed(2));
+    pc.textContent = fmtP(p);
+    $('#yrsVal').textContent = fmtYears(y);
+    $('#yrs').value = v;
+    $('#readout').innerHTML = `<span>UUIDs made: <b>${sci(n)}</b></span><span>Rate: <b>${rateName(rate)}</b></span>`;
+    $('#formula').innerHTML = `n = ${sci(rate, 0)}/s × ${fmtYears(y)} yr × 3.16 × 10⁷ s/yr = <b>${sci(n)}</b> → P ≈ <b>${fmtP(p)}</b>`;
+    g.setAttribute('aria-label', `Probability of a duplicate: ${fmtP(p)}`);
+  }
+  $('#yrs').addEventListener('input', e => { v = +e.target.value; render(); });
+  $('#yrsDn').onclick = () => { v = Math.max(0, v - 1); render(); };
+  $('#yrsUp').onclick = () => { v = Math.min(700, v + 1); render(); };
+  $$('#rateSeg button').forEach(b => b.onclick = () => { rate = +b.dataset.r; $$('#rateSeg button').forEach(x => x.classList.toggle('on', x === b)); render(); });
+  render();
+
+  $('#bc1go').onclick = e => {
+    if (done1) return;
+    const btn = e.currentTarget, ex = $('#bc1ex'), y = years();
+    if (rate !== 1e9) { Q.toast('switch the rate to 1B/s first', btn, 'practice'); return; }
+    if (y >= 75 && y <= 100) {
+      done1 = true; btn.disabled = true;
+      ex.className = 'explain show good';
+      ex.innerHTML = `<b>Locked at ${fmtYears(y)} years (${fmtP(prob(rate, y))}).</b> The exact 50% point is <b>about 86 years</b>, after roughly <b>2.7 × 10¹⁸</b> UUIDs. The book rounds it to "about 100 years". Either way: a billion a second, for a lifetime, before a coin-flip chance of <i>one</i> clash.`;
+      Q.addXP(20, btn);
+      $('#bc2').style.display = 'block';
+    } else {
+      ex.className = 'explain show bad';
+      ex.innerHTML = `<b>Not yet.</b> At ${fmtYears(y)} years the gauge reads ${fmtP(prob(rate, y))}. Aim for the needle on the 50% mark at the top. Use ‹ › to fine-tune.`;
+      Q.loseHeart(btn);
+    }
+  };
+  function parseMillions(s) {
+    s = String(s).toLowerCase().replace(/[,\s_]/g, '').replace(/years?|yrs?/g, '');
+    if (/(million|mil|m)$/.test(s)) s = s.replace(/(million|mil|m)$/, '');
+    const x = parseFloat(s);
+    if (!isFinite(x)) return NaN;
+    return x > 1000 ? x / 1e6 : x; // a full year count (e.g. 8600000) → millions
+  }
+  function check2(btn) {
+    if (done2) return;
+    const x = parseMillions($('#bc2in').value), ex = $('#bc2ex');
+    if (isNaN(x)) { Q.toast('type a number', btn, 'practice'); return; }
+    if (x >= 5 && x <= 12) {
+      done2 = true; btn.disabled = true; $('#bc2in').readOnly = true;
+      ex.className = 'explain show good';
+      ex.innerHTML = `<b>About 8.6 million years.</b> You need the same ~2.7 × 10¹⁸ UUIDs for a 50% chance. 10,000/s is 100,000× slower than 1 billion/s, so it takes 100,000× longer: 86 years × 100,000 ≈ 8.6 million years. <b>Collisions are not the problem with UUIDs here.</b>`;
+      Q.addXP(20, btn);
+      maybeQuiz();
+    } else {
+      ex.className = 'explain show bad';
+      ex.innerHTML = `<b>Not quite (${x.toLocaleString('en-US', { maximumFractionDigits: 3 })} million).</b> Hint: the number of UUIDs needed for 50% stays the same. 10,000/s is 100,000× slower than 1 billion/s. Or set the rate to 10k/s and slide.`;
+      Q.loseHeart(btn);
+    }
+  }
+  $('#bc2go').onclick = e => check2(e.currentTarget);
+  $('#bc2in').addEventListener('keydown', e => { if (e.key === 'Enter') check2($('#bc2go')); });
+  function maybeQuiz() {
+    if (quizShown) return; quizShown = true;
+    quizChain($('#s2quiz'), [
+      { q: 'So is collision risk the reason we reject UUIDs for this prompt?', options: ['No: they’re 128 bits and unsorted', 'Yes: duplicates are fairly common', 'Yes: 10,000 a second is too many'], correct: 0,
+        good: 'Right. Uniqueness is practically guaranteed. UUIDs lose on <b>size</b> (128 > 64 bits) and <b>order</b> (no time in a v4 UUID).', bad: 'At 10,000 a second you’d wait millions of years for a 50% chance of one clash. UUIDs lose on <b>size</b> (128 > 64 bits) and <b>order</b>, not uniqueness.' },
+    ], () => Q.clearStage(2));
+  }
+});
+
+/* ================= STAGE 3: the ticket booth ================= */
+Q.onStage(3, () => {
+  const svg = $('#tkSvg'), goals = new Set();
+  const WEB = [0, 1, 2, 3].map(i => ({ i, x: 12, y: 18 + i * 60, w: 112, h: 44 }));
+  const TX = 282, TW = 124;
+  let mode = 'one', T = {}, busy = false, issued = [], quizShown = false;
+  const idle = async () => { while (busy) await sleep(50); };
+  const wireG = S('g', {}, svg), webG = S('g', {}, svg), tG = S('g', {}, svg), fxG = S('g', {}, svg);
+  const webEls = WEB.map(w => {
+    const gg = S('g', { class: 'web' }, webG);
+    S('rect', { x: w.x, y: w.y, width: w.w, height: w.h, rx: 9 }, gg);
+    S('text', { class: 'nm', x: w.x + 10, y: w.y + 18 }, gg).textContent = `Web ${w.i + 1}`;
+    const st = S('text', { class: 'st', x: w.x + 10, y: w.y + 36 }, gg); st.textContent = 'idle';
+    return { g: gg, st };
+  });
+  function cyl(gg, x, y, w, h) {
+    const ry = 9;
+    S('path', { class: 'body', d: `M${x} ${y + ry}A${w / 2} ${ry} 0 0 1 ${x + w} ${y + ry}V${y + h - ry}A${w / 2} ${ry} 0 0 1 ${x} ${y + h - ry}Z` }, gg);
+    S('path', { class: 'body', d: `M${x} ${y + ry}A${w / 2} ${ry} 0 0 0 ${x + w} ${y + ry}`, style: 'fill:none' }, gg);
+  }
+  function build(m) {
+    mode = m; wireG.innerHTML = ''; tG.innerHTML = ''; fxG.innerHTML = '';
+    const specs = m === 'one'
+      ? [{ k: 'a', name: 'Ticket server', next: 1, step: 1, y: 85, h: 90 }]
+      : [{ k: 'a', name: 'Ticket A · odd', next: 1, step: 2, y: 22, h: 88 }, { k: 'b', name: 'Ticket B · even', next: 2, step: 2, y: 150, h: 88 }];
+    T = {};
+    specs.forEach(s => {
+      const gg = S('g', { class: 'tsv ' + s.k }, tG);
+      cyl(gg, TX, s.y, TW, s.h);
+      S('text', { class: 'nm', x: TX + TW / 2, y: s.y + 34 }, gg).textContent = s.name;
+      const ct = S('text', { class: 'ct', x: TX + TW / 2, y: s.y + 54 }, gg);
+      const sk = S('text', { class: 'skull', x: TX + TW / 2, y: s.y + s.h / 2 + 10 }, gg); sk.textContent = '💀';
+      T[s.k] = { ...s, g: gg, ct, dead: false, cy: s.y + s.h / 2, wires: [] };
+      WEB.forEach(w => T[s.k].wires.push(S('line', { class: 'wire', x1: w.x + w.w, y1: w.y + w.h / 2, x2: TX, y2: s.y + s.h / 2 }, wireG)));
+    });
+    issued = [];
+    webEls.forEach(e => { e.g.classList.remove('fail'); e.st.textContent = 'idle'; });
+    paintT(); renderIssued(); badges();
+  }
+  function paintT() {
+    Object.values(T).forEach(t => {
+      t.g.classList.toggle('dead', t.dead);
+      t.ct.textContent = t.dead ? '' : `next: ${t.next}`;
+      t.wires.forEach(l => l.classList.toggle('cut', t.dead));
+    });
+  }
+  const ordered = () => issued.filter(x => x.id).every((x, i, a) => !i || a[i - 1].id < x.id);
+  function badges() {
+    const up = $('#tbUp'), ord = $('#tbOrd');
+    const anyFail = issued.some(x => !x.id), allDead = Object.values(T).every(t => t.dead);
+    up.className = 'tbadge ' + (allDead ? 'bad' : 'good'); up.textContent = allDead ? 'Up ✗ down' : 'Up ✓';
+    if (allDead && anyFail) { ord.className = 'tbadge bad'; ord.textContent = 'Time-ordered: no IDs at all'; }
+    else if (ordered()) { ord.className = 'tbadge good'; ord.textContent = 'Time-ordered ✓'; }
+    else { ord.className = 'tbadge warn'; ord.textContent = 'Time-ordered ~ only roughly'; }
+  }
+  function renderIssued() {
+    const box = $('#tkIssued');
+    let maxSoFar = 0;
+    box.innerHTML = '<span class="lab">IDs handed out, in order:</span>' + (issued.length ? issued.map(x => {
+      if (!x.id) return '<span class="id x">✗</span>';
+      const late = x.id < maxSoFar; maxSoFar = Math.max(maxSoFar, x.id);
+      return `<span class="id ${x.k}${late ? ' late' : ''}" title="${late ? 'smaller than an ID handed out earlier' : ''}">${x.id}</span>`;
+    }).join('') : '<span class="muted">none yet</span>');
+  }
+  // one request from web server w to ticket server k (or k = null → nobody answers)
+  async function request(w, k) {
+    const W = WEB[w], t = T[k], x0 = W.x + W.w, y0 = W.y + W.h / 2, x1 = TX, y1 = t.cy;
+    const dot = S('circle', { class: 'req', r: 5, cx: x0, cy: y0 }, fxG);
+    await anim(380, p => { const e = ease(p); dot.setAttribute('cx', x0 + (x1 - x0) * e); dot.setAttribute('cy', y0 + (y1 - y0) * e); });
+    dot.remove();
+    let id = null;
+    if (!t.dead) { id = t.next; t.next += t.step; paintT(); }
+    const lab = S('text', { class: 'resp ' + (id ? k : 'x'), x: x1, y: y1 }, fxG); lab.textContent = id ? '#' + id : '✗';
+    await anim(380, p => { const e = ease(p); lab.setAttribute('x', x1 + (x0 + 16 - x1) * e); lab.setAttribute('y', y1 + (y0 + 5 - y1) * e); });
+    lab.remove();
+    const we = webEls[w];
+    we.g.classList.toggle('fail', !id); we.st.textContent = id ? `got ID ${id}` : '✗ no ID';
+    issued.push({ id, k }); renderIssued(); badges();
+    return id;
+  }
+  async function traffic(routes) { // routes: [[web, ticketKey], ...]
+    busy = true; $('#tkRun').disabled = true;
+    const gap = Q.reduced ? 0 : 200;
+    await Promise.all(routes.map(([w, k], i) => sleep(i * gap).then(() => request(w, k))));
+    busy = false; $('#tkRun').disabled = false;
+  }
+  const routeOne = n => Array.from({ length: n }, (_, i) => [i % 4, 'a']);
+  // Two servers. A answers more often (B is slower that minute), so the odd counter runs ahead.
+  const TWO_PATTERN = ['a', 'a', 'b', 'a', 'a', 'a', 'b', 'a'];
+  const routeTwo = () => TWO_PATTERN.map((k, i) => [i % 4, k]);
+  const routeSurvive = () => [0, 1, 2, 3].map(w => [w, 'b']);
+
+  $('#tkRun').onclick = async () => {
+    if (busy) return;
+    if (mode === 'one' && T.a.dead) { Q.toast('it’s down: nothing answers', $('#tkRun'), 'practice'); await traffic(routeOne(4)); return; }
+    if (mode === 'one') await traffic(routeOne(8));
+    else if (T.a.dead) await traffic(routeSurvive());
+    else await traffic(routeTwo());
+    if (mode === 'one' && checkGoal('#s3goals', 'run', goals, 10)) stepKill();
+  };
+
+  const box = $('#tkBox');
+  async function stepKill() {
+    const { row } = await predict(box, {
+      step: 'Predict, then watch',
+      title: 'You pull the plug on the ticket server. What happens to new signups that need an ID?',
+      options: ['Every web server’s signups fail', 'Web servers fall back to local IDs', 'Only one web server is affected'],
+      correct: 0,
+      act: async () => { await idle(); T.a.dead = true; paintT(); badges(); await sleep(Q.reduced ? 0 : 400); await traffic(routeOne(4)); },
+      explain: 'All four web servers depend on the one box, so all four fail. Nothing falls back on its own, unless you build a fallback, and then you’re back to coordinating IDs. That’s a <b>single point of failure</b> (SPOF): one component whose crash takes the whole feature down.',
+    });
+    checkGoal('#s3goals', 'kill', goals);
+    nextBtn(row, 'Add a second ticket server →', stepTwo);
+  }
+  async function stepTwo() {
+    const { row } = await predict(box, {
+      step: 'Fix it',
+      title: 'You add a second ticket server. How do you stop the two from ever handing out the same number?',
+      options: ['Each one returns a random number', 'One counts odd, one counts even', 'Both lock one shared counter row'],
+      correct: 1,
+      act: async () => { await idle(); build('two'); await sleep(Q.reduced ? 0 : 300); await traffic(routeTwo()); },
+      explain: `Flickr's answer: <code>auto_increment_increment = 2</code> on both, with offsets 1 and 2. Server A makes 1, 3, 5… and server B makes 2, 4, 6…, so they can never collide.${cite(3, 'https://code.flickr.net/2010/02/08/ticket-servers-distributed-unique-primary-keys-on-the-cheap/')} That's the <b>count by k</b> trick from <a href="0701-unique-id-scope-and-multi-master.html">Quest 7.1</a> with k = 2. Random numbers bring back collisions, and a shared locked row is the single box again. But look at the IDs: A got more requests, so its counter ran ahead. The amber IDs are <i>smaller</i> than one handed out earlier. You've rebuilt multi-master, and the time order is only rough.`,
+    });
+    checkGoal('#s3goals', 'two', goals);
+    nextBtn(row, 'Now kill ticket server A →', stepSurvive);
+  }
+  function stepSurvive() {
+    box.innerHTML = `<div class="step">Stress test</div><h3>Two ticket servers. Kill A and send more traffic.</h3><div class="row"><button class="btn primary" id="tkKillA">💀 Kill ticket server A</button></div><div class="explain" id="tkSurvEx"></div><div class="row" style="margin-top:12px" id="tkSurvRow"></div>`;
+    $('#tkKillA').onclick = async e => {
+      const b = e.currentTarget; b.disabled = true; await idle();
+      T.a.dead = true; paintT(); badges();
+      await sleep(Q.reduced ? 0 : 300);
+      await traffic(routeSurvive());
+      const ex = $('#tkSurvEx'); ex.className = 'explain show good';
+      ex.innerHTML = 'Web servers switch to B and keep getting IDs (even numbers only). No single point of failure any more. The price: two boxes to run, IDs only roughly in time order, and every ID still costs a <b>network round trip</b> (a request out and a reply back) to a ticket server.';
+      checkGoal('#s3goals', 'survive', goals, 10);
+      $('#tkProsCons').style.display = 'block';
+      maybeQuiz();
+    };
+  }
+  function maybeQuiz() {
+    if (quizShown || goals.size < 4) return;
+    quizShown = true;
+    quizChain($('#s3quiz'), [
+      { q: 'What is a single point of failure (SPOF)?', options: ['One part whose crash stops the feature', 'A server that fails once, then recovers', 'A bug that only ever happens one time'], correct: 0,
+        good: 'One component that everything depends on. If it dies, the whole feature dies, like your one ticket server.', bad: 'A SPOF is one component everything depends on: when it dies, the whole feature dies. Your single ticket server was one.' },
+      { q: 'Flickr’s two ticket servers reuse which idea from Quest 7.1?', options: ['Count by k from different offsets', 'Hash the user ID to pick a server', 'Put a timestamp in every number'], correct: 0,
+        good: 'Step by k = 2, starting at offsets 1 and 2. Same as multi-master, with the same weakness: the two counters drift, so IDs only roughly follow time.', bad: 'It’s count by k: both step by 2, one from 1 and one from 2. That’s multi-master again, drift and all.' },
+      { q: 'What does every ID cost when it comes from a ticket server?', options: ['A network round trip to that server', 'A full scan of the tickets table', 'A lock held on every web server'], correct: 0,
+        good: 'Every ID means a request out and a reply back over the network. Real systems often fetch a block of IDs at once to cut that down.', bad: 'The table has one row, so no scans, and web servers don’t lock each other. The cost is a network round trip for every ID.' },
+    ], () => Q.clearStage(3));
+  }
+  build('one');
+});
+
+/* ================= STAGE 4: the four-way scorecard ================= */
+Q.onStage(4, () => {
+  const COLS = [{ k: 'mm', t: 'Multi-master' }, { k: 'uu', t: 'UUID' }, { k: 'ts', t: 'Ticket server' }];
+  const ROWS = [{ k: 'uniq', t: 'Unique' }, { k: 'num', t: 'Numbers only' }, { k: 'b64', t: 'Fits in 64 bits' }, { k: 'ord', t: 'Sorted by time' }, { k: 'scale', t: 'Scales out, no SPOF' }];
+  const A = {
+    mm: { uniq: [1, 'Each server counts by k from its own offset, so two servers never hit the same number.'], num: [1, 'It’s a plain integer counter.'], b64: [1, 'An integer counter fits easily in 64 bits.'], ord: [0, 'Server 1 can be at 1,001 while server 2 is at 502. IDs don’t go up with time across servers.'], scale: [0, 'k is baked into every server. Adding or removing one breaks the scheme, and it’s hard across data centers.'] },
+    uu: { uniq: [1, 'Not guaranteed, but at 10,000/s a 50% chance of one clash takes ~8.6 million years. Counts as unique.'], num: [0, 'The book’s con: usually a 36-character string with letters and dashes, not a plain number.'], b64: [0, '128 bits, double the budget.'], ord: [0, 'A v4 UUID is random, so sorting by it scrambles creation order.'], scale: [1, 'No coordination: every web server makes its own. Nothing central to fail.'] },
+    ts: { uniq: [1, 'One counter hands out every number, so no repeats.'], num: [1, 'auto_increment gives plain integers.'], b64: [1, 'A 64-bit integer column (Flickr’s table is even called Tickets64).'], ord: [1, 'With one server, one counter only goes up. (Two servers, odd/even, make it only roughly ordered.)'], scale: [0, 'The one ticket server is a single point of failure. More servers bring sync problems or lose ordering.'] },
+  };
+  const state = {}; let tries = 0, solved = false;
+  const sym = v => v === 1 ? '✓' : v === 0 ? '✗' : '·';
+  const word = v => v === 1 ? 'yes' : v === 0 ? 'no' : 'not set';
+  const grid = $('#score');
+  grid.innerHTML = '<div></div>' + COLS.map(c => `<div class="ch">${c.t}</div>`).join('') + '<div class="ch sf">Snowflake</div>' +
+    ROWS.map(r => `<div class="rh">${r.t}</div>` + COLS.map(c => `<button class="cell" data-c="${c.k}" data-r="${r.k}">·</button>`).join('') + `<div class="sfc" aria-label="Snowflake, ${r.t}: unknown">?</div>`).join('');
+  const cells = $$('.cell', grid);
+  const label = (b) => { const c = COLS.find(x => x.k === b.dataset.c).t, r = ROWS.find(x => x.k === b.dataset.r).t; b.setAttribute('aria-label', `${c}, ${r}: ${word(state[b.dataset.c + b.dataset.r])}. Tap to change.`); };
+  cells.forEach(b => {
+    state[b.dataset.c + b.dataset.r] = -1; label(b);
+    b.onclick = () => {
+      if (solved) return;
+      const key = b.dataset.c + b.dataset.r, v = state[key];
+      state[key] = v === -1 ? 1 : v === 1 ? 0 : 1;
+      b.textContent = sym(state[key]); b.className = 'cell ' + (state[key] === 1 ? 'y' : 'n'); label(b);
+    };
+  });
+  $('#scoreGo').onclick = e => {
+    if (solved) return;
+    const btn = e.currentTarget, why = $('#scoreWhy');
+    const blanks = cells.filter(b => state[b.dataset.c + b.dataset.r] === -1).length;
+    if (blanks) { Q.toast(`${blanks} cell${blanks > 1 ? 's' : ''} still blank`, btn, 'practice'); $('#scoreMsg').textContent = 'Fill every cell first.'; return; }
+    tries++;
+    const wrong = cells.filter(b => state[b.dataset.c + b.dataset.r] !== A[b.dataset.c][b.dataset.r][0]);
+    cells.forEach(b => b.classList.remove('wrong', 'right'));
+    if (wrong.length) {
+      void grid.offsetWidth;
+      wrong.forEach(b => b.classList.add('wrong'));
+      $('#scoreMsg').textContent = `${wrong.length} cell${wrong.length > 1 ? 's' : ''} off. Read why, fix them, check again.`;
+      why.innerHTML = wrong.map(b => { const c = COLS.find(x => x.k === b.dataset.c).t, r = ROWS.find(x => x.k === b.dataset.r).t; return `<div><b>${c} · ${r}:</b> ${A[b.dataset.c][b.dataset.r][1]}</div>`; }).join('');
+      Q.loseHeart(btn);
+      return;
+    }
+    solved = true; btn.disabled = true;
+    cells.forEach(b => { b.classList.add('right'); b.disabled = true; });
+    $('#scoreMsg').textContent = tries === 1 ? 'Perfect on the first try.' : 'All 15 correct.';
+    why.innerHTML = `<div class="ok"><b>Read it row by row.</b> Multi-master fails on order and scaling. UUID fails on numbers, size and order. The ticket server fails on the SPOF. Every simple option breaks at least one rule.${cite(1, BOOK)}</div>`;
+    $$('.sfc', grid).forEach((s, i) => setTimeout(() => { s.textContent = '✓'; s.classList.add('flip'); s.setAttribute('aria-label', 'Snowflake: yes'); }, Q.reduced ? 0 : 200 + i * 160));
+    $('#sfTeaser').style.display = 'block';
+    Q.addXP(30, btn);
+    if (tries === 1) setTimeout(() => Q.addXP(10, $('#scoreMsg')), 500);
+    setTimeout(() => Q.clearStage(4), 1400);
+  };
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss'), {
+  name: '🪙 Coin-Flip Golem',
+  xp: 15,
+  choices: [
+    { k: 'uuid', label: 'UUID', sub: 'random, no coordination' },
+    { k: 'ticket', label: 'Ticket server', sub: 'one central counter' },
+    { k: 'multi', label: 'Multi-master', sub: 'step by k' },
+  ],
+  scenarios: [
+    { e: '📱', t: 'Offline-first notes app', d: 'Phones must create new records on a plane, with no network, and sync them later.', a: 'uuid', why: 'With no network there’s nobody to ask. Each device rolls its own UUID, and the odds of a clash on sync are negligible.' },
+    { e: '🧾', t: 'Short order numbers for a small shop', d: 'A startup in one data center wants short numeric order numbers. A brief outage now and then is acceptable.', a: 'ticket', why: 'One auto_increment box gives short, numeric, ordered IDs. The book says it works for small to medium apps, and this team can live with the SPOF.' },
+    { e: '🗄️', t: 'Two fixed database primaries', d: 'Exactly two primary databases, never more. IDs must be numeric, and there’s no budget for a central box.', a: 'multi', why: 'Count by k with k = 2: one makes odds, one makes evens. It works because the fleet is small and fixed, and nobody needs strict time order.' },
+    { e: '💳', t: 'Payment retry keys', d: 'Each payment request needs an idempotency key (a tag so a retried request isn’t charged twice). Any format is fine.', a: 'uuid', why: 'Format and size don’t matter here, and the client can make the key itself with no round trip. That’s the classic UUID job.' },
+    { e: '🚨', t: 'Spot the SPOF', d: 'At 3 a.m. one database dies and every signup in the company stops. Which ID design was in use?', a: 'ticket', why: 'Everything depending on one box is the ticket server’s weakness. Multi-master would lose only one server’s share, and UUIDs need no box at all.' },
+    { e: '🌍', t: 'Five data centers, no chatter', d: 'A global system across 5 data centers. It must not coordinate on every ID, and the storage team is fine with 128-bit keys.', a: 'uuid', why: 'No coordination across regions, no central box, and 128 bits is allowed. The two cons that kill UUIDs in this interview don’t apply here.' },
+  ],
+  outro: 'The pattern: UUID when size and order don’t matter, a ticket server for small apps that can live with a SPOF, and count-by-k for a small fixed fleet.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: interview drill ================= */
+Q.onStage(6, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"Why not just use UUIDs? And why not a ticket server?"</i>',
+  placeholder: 'UUIDs need no coordination, but…',
+  model: '"UUIDs are tempting: every server makes its own with no coordination, and a clash is so unlikely it practically never happens. But they\'re 128 bits and we need 64, and a random UUID carries no time, so sorting by ID doesn\'t sort by date. A ticket server, like Flickr\'s single auto_increment database, gives short numeric IDs in order, but it\'s a single point of failure, and every ID costs a round trip. Adding a second server with odd and even counters removes the SPOF but loses strict ordering, and more servers mean more syncing. So none of the three simple options meets all five requirements, which is why I\'d move on to a Snowflake-style design."',
+  checks: ['I said UUIDs are 128 bits, not 64', 'I said UUIDs aren’t sorted by time', 'I called the ticket server a single point of failure', 'I said extra ticket servers mean sync work or lost ordering'],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>
