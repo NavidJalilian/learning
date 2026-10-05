@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Rules of the Room</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: step colours (stage 3), signal radar (stage 1), transcript (stage 2), budget bars (stage 3), card deck (stage 4) */
+:root { --st1: #5a48f0; --st2: #0d9a96; --st3: #c27400; --st4: #b8409a; --on-st: #ffffff; --bubble-i: #ece8df; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --st1: #8f82ff; --st2: #31d3c8; --st3: #ffb547; --st4: #f07ad0; --on-st: #0e0f1d; --bubble-i: #23263f; }
+}
+:root[data-theme="dark"] { --st1: #8f82ff; --st2: #31d3c8; --st3: #ffb547; --st4: #f07ad0; --on-st: #0e0f1d; --bubble-i: #23263f; }
+
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.bignum { font-family: var(--mono); font-weight: 700; }
+.bignum.bad { color: var(--bad); }
+.bignum.good { color: var(--good); }
+
+/* ---------- stage 1: signal radar ---------- */
+.radar svg { max-width: 400px; margin: 0 auto; }
+.radar .grid { fill: none; stroke: var(--line); stroke-width: 1.5; }
+.radar .axis { stroke: var(--line); stroke-width: 1.5; }
+.radar .area { fill: color-mix(in srgb, var(--accent) 28%, transparent); stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; }
+.radar .vdot { fill: var(--accent); stroke: var(--bg); stroke-width: 2; }
+.radar .sp { cursor: pointer; }
+.radar .sp:focus { outline: none; }
+.radar .sp .hit { fill: transparent; }
+.radar .sp text { fill: var(--ink); font: 700 13px var(--font); text-anchor: middle; pointer-events: none; }
+.radar .sp .cnt { fill: var(--muted); font: 600 11px var(--mono); }
+.radar .sp:hover .hit, .radar .sp:focus .hit { fill: var(--accent-soft); }
+.radar .sp.ok .hit { fill: var(--good-soft); }
+.radar .sp.no .hit { fill: var(--bad-soft); }
+.radar .sp.hint .hit { fill: var(--good-soft); stroke: var(--good); stroke-width: 2; }
+.radar .sp.shake { animation: shake .4s; }
+.radar .sp.full text:first-of-type { fill: var(--good); }
+.bcard { margin: 0 14px 14px; border: 1px solid var(--line); background: var(--panel); border-radius: 16px; padding: 14px 16px; box-shadow: var(--shadow); animation: rise .35s; }
+.bcard .lbl { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.bcard p { margin: 4px 0 0; font-size: 16px; font-weight: 500; }
+.bcard.wrong { animation: shake .4s; border-color: var(--bad); }
+.spokebtns { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 8px; padding: 0 14px 14px; }
+.spokebtns .opt { text-align: center; min-height: 44px; padding: 8px 10px; font-weight: 600; font-size: 14px; }
+.caption { display: none; text-align: center; font-weight: 700; padding: 0 14px 14px; color: var(--accent); }
+.caption.show { display: block; animation: rise .35s; }
+
+/* ---------- stage 2: transcript ---------- */
+.chat { display: grid; gap: 8px; padding: 14px; }
+.msg { max-width: 88%; border-radius: 16px; padding: 10px 13px; font-size: 15px; line-height: 1.45; text-align: left; position: relative; }
+.msg .who { display: block; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+.msg.i { background: var(--bubble-i); justify-self: start; border-bottom-left-radius: 4px; }
+.msg.c { justify-self: end; border: 2px solid var(--line); background: var(--panel); border-bottom-right-radius: 4px; min-height: 44px; transition: border-color .2s, background .2s; }
+.msg.c:hover:not([disabled]) { border-color: var(--accent); }
+.msg.c.sel { border-color: var(--accent); background: var(--accent-soft); }
+.msg.c.flag { border-color: var(--bad); background: var(--bad-soft); }
+.msg.c.clean { border-color: var(--good); background: var(--good-soft); }
+.msg.c.shake { animation: shake .4s; }
+.msg.c[disabled] { cursor: default; color: var(--ink); }
+.msg .tagx { display: inline-block; margin-top: 6px; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: var(--panel); }
+.msg.flag .tagx { color: var(--bad); }
+.msg.clean .tagx { color: var(--good); }
+.fmenu { justify-self: end; max-width: 100%; display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; animation: rise .25s; }
+.fmenu .opt { padding: 8px 12px; font-size: 14px; min-height: 42px; }
+.fmenu .opt.cancel { color: var(--muted); }
+.cnote { justify-self: end; max-width: 88%; font-size: 14px; padding: 8px 12px; border-radius: 12px; animation: rise .3s; }
+.cnote.good { background: var(--good-soft); }
+.cnote.bad { background: var(--bad-soft); }
+
+/* ---------- stage 3: budget ---------- */
+.bud { display: grid; gap: 12px; padding: 14px; }
+.brow { display: grid; grid-template-columns: 1fr; gap: 2px; }
+.brow label { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; font-weight: 600; font-size: 14px; }
+.brow label .sw { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.brow .rng { font-family: var(--mono); font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.brow.out .rng { color: var(--bad); }
+.brow .v { font-family: var(--mono); font-weight: 700; }
+.brow.out .v { color: var(--bad); }
+.brow input { width: 100%; height: 32px; accent-color: var(--accent); }
+.brow.out input { accent-color: var(--bad); }
+.tbar { position: relative; height: 34px; margin: 4px 14px 0; border-radius: 10px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; }
+.tbar .seg2 { position: absolute; top: 0; bottom: 0; display: grid; place-items: center; color: var(--on-st); font: 700 12px var(--mono); overflow: hidden; white-space: nowrap; transition: left .25s, width .25s; }
+.tbar .seg2.over { background: repeating-linear-gradient(135deg, var(--bad) 0 6px, color-mix(in srgb, var(--bad) 60%, var(--bg)) 6px 12px) !important; color: #fff; }
+.tbar .seg2.squeeze { box-shadow: inset 0 0 0 3px var(--bad); }
+.tbar .mark { position: absolute; top: -2px; bottom: -2px; width: 3px; background: var(--ink); }
+.tscale { display: flex; justify-content: space-between; margin: 3px 14px 0; font: 600 11.5px var(--mono); color: var(--muted); }
+.bstatus { padding: 10px 14px 0; font-size: 15px; font-weight: 600; min-height: 30px; }
+.bstatus.good { color: var(--good); }
+.bstatus.bad { color: var(--bad); }
+.clock { font: 700 13px var(--mono); color: var(--muted); text-align: right; padding: 8px 14px 0; }
+.say { display: none; margin: 10px 14px 0; padding: 10px 13px; border-radius: 14px; background: var(--bubble-i); font-size: 15px; border-bottom-left-radius: 4px; max-width: 92%; }
+.say.show { display: block; animation: rise .35s; }
+.slegend { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 8px 14px 12px; font-size: 12.5px; color: var(--muted); }
+.slegend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+
+/* ---------- stage 4: deck ---------- */
+.deck { padding: 16px 14px; display: grid; gap: 12px; }
+.dtop { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.dcard { perspective: 900px; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.dcard-in { position: relative; min-height: 150px; transition: transform .6s cubic-bezier(.3,.7,.2,1); transform-style: preserve-3d; }
+.dcard.flip .dcard-in { transform: rotateY(180deg); }
+.dface { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; border-radius: 16px; padding: 16px 18px; border: 1px solid var(--line); background: var(--panel); box-shadow: var(--shadow); display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+.dface .big { font-size: 19px; font-weight: 600; line-height: 1.35; }
+.dface .hintx { font-size: 12px; color: var(--muted); }
+.dface.back { transform: rotateY(180deg); }
+.dface.back.good { background: var(--good-soft); border-color: var(--good); }
+.dface.back.bad { background: var(--bad-soft); border-color: var(--bad); }
+.dface.back .verdict { font-weight: 700; font-size: 15px; }
+.dface.back p { margin: 0; font-size: 15px; }
+.dcard.wrong .dcard-in { animation: shake .4s; }
+.dbtns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dbtns .opt { text-align: center; min-height: 52px; font-size: 17px; font-weight: 700; }
+.dbtns .opt.dn { color: var(--bad); }
+.dbtns .opt.dy { color: var(--good); }
+.piles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pile { border: 1px dashed var(--line); border-radius: 12px; padding: 8px; min-height: 52px; font-size: 12.5px; }
+.pile h4 { margin: 0 0 4px; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.pile .pc { display: block; padding: 3px 6px; margin-top: 3px; border-radius: 6px; background: var(--bg-2); animation: rise .3s; }
+.pile .pc.x { text-decoration: line-through; text-decoration-color: var(--bad); }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 3.1 · A Framework for System Design Interviews</div>
+    <h1>Rules of the Room</h1>
+    <p class="lede">Before you design anything, learn the game. What is the interviewer actually writing down? What sinks a candidate who knows the tech? And where should your 45 minutes go?</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> explain what a system design interview tests, name the three red flags, recite the four steps with their minute ranges, and list the core dos and don'ts.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Two Coworkers, One Whiteboard</h2><div class="sub">What the interview is really simulating</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book frames the session as an imitation of real work: <b>two colleagues tackle a vague problem together</b> and talk their way to a solution that meets their goals.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener">[1]</a></p>
+      <p>You'll be asked to "design" products that took hundreds or thousands of engineers years to build. Nobody expects that in under an hour. There's <b>no single right answer</b>, and the final diagram matters less than how you got there.</p>
+      <p>What matters is the <b>signal</b>: the evidence the interviewer writes down to justify "hire" or "no hire". The book lists five kinds: design skill, collaboration, working under pressure, resolving ambiguity (turning a fuzzy prompt into a concrete scope), and asking good questions.</p>
+      <p>Below are 7 things candidates did. For each one, tap the spoke of the radar it's evidence for. Tap the label on the chart or use the buttons.</p>
+
+      <div class="sim radar">
+        <svg id="radar" viewBox="0 0 360 300" role="group" aria-label="Signal radar with five spokes"></svg>
+        <div id="bcard"></div>
+        <div class="spokebtns" id="spokebtns"></div>
+        <div class="caption" id="radarCap">The diagram is the by-product. The radar is what gets graded.</div>
+        <div class="simlog" id="r1log"><div>An empty radar. Fill it with evidence.</div></div>
+      </div>
+      <div class="row" style="margin-top:12px"><button class="btn" id="r1reset" style="display:none">↻ Refill the radar (practice)</button></div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Red Flag Detector</h2><div class="sub">Over-engineering, narrow-mindedness, stubbornness</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book names three behaviours that sink candidates who otherwise know their stuff:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener">[1]</a></p>
+      <ul>
+        <li><b>Over-engineering:</b> chasing a "pure", impressive design and ignoring trade-offs (the costs you accept for each benefit). The book says many engineers don't see how the costs of an over-built system pile up over time, and companies pay heavily for it.</li>
+        <li><b>Narrow-mindedness:</b> locking onto one idea and refusing to look at alternatives.</li>
+        <li><b>Stubbornness:</b> refusing to adjust when the interviewer raises a valid concern about your plan.</li>
+      </ul>
+      <p>Careful: healthy behaviour can look similar. <b>Defending a choice with a reason</b> and then updating when new facts arrive is good. <b>Choosing a simple design for a small scale</b> is good judgment, not narrow-mindedness.</p>
+      <p>Here's a transcript. The task: a URL shortener for an internal tool with 1,000 users. <b>Tap any candidate line you think is a red flag</b>, then say which flag. Three flags are hidden. Flagging a healthy line costs a heart.</p>
+
+      <div class="sim">
+        <div class="sim-bar" style="border-top:0;border-bottom:1px solid var(--line)"><span><b>🕵️ Flags found:</b> <span class="bignum" id="flagCount">0 / 3</span></span><span class="small muted">I = interviewer · C = candidate</span></div>
+        <div class="chat" id="chat"></div>
+      </div>
+      <div class="callout" id="decoyNote" style="display:none"><b>All three flags caught.</b> Two lines were traps that look risky but aren't. "Start with a single database and shard later" is right-sizing for 1,000 users. "Good point, I'd drop the cache" is a candidate who defended a choice with a reason and then updated on new facts. That's the opposite of stubborn.</div>
+      <div class="callout warn"><b>Honest caveat.</b> These three are the book's list, and it says there are others. Real hiring rubrics vary by company and level. At senior level you're usually also expected to <i>drive</i> the conversation yourself, not wait for prompts.</div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Budget the 45 Minutes</h2><div class="sub">The four steps and their clocks</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book's framework has four steps, always in this order:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener">[1]</a></p>
+      <ol>
+        <li><b>Understand the problem and set the design scope</b> (what exactly are we building, for whom, at what size?)</li>
+        <li><b>Propose a high-level design and get buy-in</b> (a box diagram the interviewer agrees with)</li>
+        <li><b>Deep dive</b> into the parts that matter most</li>
+        <li><b>Wrap up</b> (bottlenecks, improvements, what you'd do next)</li>
+      </ol>
+      <p>For a 45-minute session the book gives a rough guide: scope <b>3–10 min</b>, high-level design <b>10–15 min</b>, deep dive <b>10–25 min</b>, wrap-up <b>3–5 min</b>.</p>
+
+      <div class="challenge boxed">
+        <div class="step">Part A · Your budget</div>
+        <h3>Drag the sliders until the bar is exactly 45 minutes and every step is inside the book's range.</h3>
+        <div class="sim" style="margin-top:0">
+          <div class="bud" id="bud"></div>
+          <div class="tbar" id="tbarA" aria-hidden="true"></div>
+          <div class="tscale"><span>0</span><span>15</span><span>30</span><span>45 min</span><span>60</span></div>
+          <div class="bstatus" id="bstatus" role="status"></div>
+          <div class="sim-bar"><button class="btn primary" id="lockBud" disabled>Lock in my 45 minutes</button><span class="small muted" id="budHint">Red means outside the book's range.</span></div>
+        </div>
+        <div class="callout tip" id="budNote" style="display:none"><b>Notice the ranges don't add up neatly.</b> The minimums sum to 26 minutes and the maximums to 55, on purpose. You flex with the problem and the interviewer. The deep dive has the widest range (10–25) because it soaks up whatever time is left.</div>
+      </div>
+
+      <div class="challenge boxed" style="margin-top:16px">
+        <div class="step">Part B · Predict, then watch</div>
+        <p class="small" style="margin:0 0 8px">Candidate <b>Sam</b> gets "design a news feed" and splits the 45 minutes like this: scope <b>20</b> · high-level <b>15</b> · deep dive <b>7</b> · wrap-up <b>3</b>.</p>
+        <div class="sim" style="margin-top:0">
+          <div class="clock" id="samClock">minute 0 / 45</div>
+          <div class="tbar" id="tbarB" aria-hidden="true"></div>
+          <div class="tscale"><span>0</span><span>15</span><span>30</span><span>45 min</span><span>60</span></div>
+          <div class="slegend"><span><i style="background:var(--st1)"></i>Scope</span><span><i style="background:var(--st2)"></i>High-level</span><span><i style="background:var(--st3)"></i>Deep dive</span><span><i style="background:var(--st4)"></i>Wrap-up</span><span><i style="background:var(--bad)"></i>Over budget</span></div>
+          <div class="say" id="samSay"></div>
+          <div class="simlog" id="samLog"><div>Sam's session hasn't started.</div></div>
+        </div>
+        <div class="challenge" id="samPredict"></div>
+      </div>
+      <div class="callout warn"><b>Honest caveat.</b> These minutes are the book's rough guide for a 45-minute slot. Many companies run 45–60 minutes, and some use a different shape (for example, a written requirements doc first). Treat the ranges as proportions, not a stopwatch.</div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Dos &amp; Don'ts Sorter</h2><div class="sub">The chapter's checklist, in your own hands</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The chapter ends with a list of dos and don'ts.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener">[1]</a> In short: <b>clarify</b> and never treat your own assumption as fact. <b>Think out loud.</b> Offer <b>more than one approach</b>. Give the <b>big picture first</b>, then detail the most critical parts. Treat the interviewer like a <b>teammate</b>. Ask for a <b>hint</b> when stuck. You're done when the <b>interviewer</b> says so, not when the boxes are drawn.</p>
+      <p>Now sort 12 behaviours into <b>DO</b> or <b>DON'T</b>. Tap a button, or swipe the card (right = do, left = don't).</p>
+      <div class="sim">
+        <div class="deck" id="deck"></div>
+      </div>
+      <div class="callout tip"><b>"Never give up" vs "ask for a hint".</b> They don't clash. Asking for a hint <i>after trying</i> is fine and shows you collaborate. What hurts is a long, silent stall.</div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Interviewer's Notebook</h2><div class="sub">Signal or red flag?</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>You're the interviewer now. Eight moments from real sessions. For each one, decide what goes in your notebook: a <b>strong signal</b>, a <b>red flag</b>, or <b>neutral</b> (tells you little on its own). Beat the boss with at most 2 wrong.</p>
+      <div id="boss"></div>
+      <div class="row" style="margin-top:12px" id="bossRow"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say It Like a Senior</h2><div class="sub">The framework in 45 seconds</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p class="small muted">Being able to state your game plan out loud is itself a signal. Some candidates say it in the first minute of the session.</p>
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> Step 1 gets its own quest: how to turn "design a news feed" into a scoped problem with the right questions. That's Quest 3.2, <a href="0302-ask-before-you-build.html"><i>Ask Before You Build</i></a>.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 3: A framework for system design interviews</a>. Read the opening (what the session simulates and what gets assessed), the time-allocation table, and the dos and don'ts at the end. For a second view of the same four steps, see <a href="https://github.com/donnemartin/system-design-primer#how-to-approach-a-system-design-interview-question" target="_blank" rel="noopener">The System Design Primer's "how to approach" section</a>.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      The minute ranges are proportions, not law. In a 60-minute slot, scale them up, and keep the deep dive as the biggest block. The three red flags are the book's list; real rubrics differ by company and level, and many add things like communication clarity or "drives the discussion". At senior level, interviewers often expect <i>you</i> to set the agenda ("I'll spend a few minutes on requirements, then sketch, then go deep on the feed") rather than wait to be led. Finally, "never give up" and "ask for hints" fit together: try, think out loud, then ask. A long silent stall is the real failure mode.
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"what if the interviewer stays silent and gives no feedback?"</i> or <i>"how do I recover if I've spent 15 minutes on scoping?"</i> Follow-up questions are part of the quest.
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 3 "A framework for system design interviews" (ByteByteGo).</li>
+        <li>Donne Martin, <i>The System Design Primer</i>, "How to approach a system design interview question" (GitHub).</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0301',
+  winTitle: 'You know the rules of the game',
+  badge: '🎟️ Badge: Arena Pass',
+  cheatsheet: '../reference/ch03-framework-cheatsheet.html',
+});
+const { sleep, shuffle, esc } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function anim(dur, f) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 1) { f(1); return res(); }
+    const t0 = performance.now();
+    const fr = now => { const p = Math.min(1, (now - t0) / dur); f(p); p < 1 ? requestAnimationFrame(fr) : res(); };
+    requestAnimationFrame(fr);
+  });
+}
+const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function shakeEl(el) { el.classList.remove('shake'); void el.getBoundingClientRect(); el.classList.add('shake'); setTimeout(() => el.classList.remove('shake'), 450); }
+function onActivate(el, fn) {
+  el.addEventListener('click', fn);
+  el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(e); } });
+}
+function nextBtn(row, label, fn, primary = true) {
+  const b = document.createElement('button'); b.className = 'btn' + (primary ? ' primary' : ''); b.textContent = label; b.onclick = fn; row.appendChild(b); return b;
+}
+// Predict-then-watch round. Resolves after the learner picks and the action has played.
+function predict(box, { step, title, options, correct, act, explain, xp = 20 }) {
+  box.innerHTML = `${step ? `<div class="step">${step}</div>` : ''}<h3>${title}</h3><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+  const opts = $('.opts', box);
+  let busy = false;
+  return new Promise(resolve => {
+    shuffle(options.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = async () => {
+        if (busy) return; busy = true;
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        b.classList.add('picked');
+        await act();
+        const ok = i === correct;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-i="${correct}"]`, opts).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Not quite.</b> ') + explain;
+        ok ? Q.addXP(xp, b) : Q.loseHeart(b);
+        resolve({ ok, row: $('.row', box) });
+      };
+      opts.appendChild(b);
+    });
+  });
+}
+
+/* ================= STAGE 1: signal radar ================= */
+Q.onStage(1, () => {
+  const SPOKES = [
+    { k: 'design', label: 'Design skill', lines: ['Design', 'skill'] },
+    { k: 'collab', label: 'Collaboration', lines: ['Collaboration'] },
+    { k: 'pressure', label: 'Under pressure', lines: ['Under', 'pressure'] },
+    { k: 'ambig', label: 'Ambiguity', lines: ['Ambiguity'] },
+    { k: 'questions', label: 'Good questions', lines: ['Good', 'questions'] },
+  ];
+  const CARDS = [
+    { t: 'Asks how many daily users to plan for before drawing anything.', a: 'questions', why: 'Asking about scale before designing is a classic good question. The answer changes everything that follows.' },
+    { t: 'The interviewer pushes back on SQL. The candidate asks what worries them, then adjusts the plan.', a: 'collab', why: 'Treating pushback as input from a teammate, not an attack, is collaboration.' },
+    { t: 'Says the prompt could mean a web app or a mobile app, picks one out loud, and notes it as an assumption.', a: 'ambig', why: 'Turning a fuzzy prompt into a concrete, stated scope is resolving ambiguity.' },
+    { t: 'Explains why a cache in front of the database cuts read latency.', a: 'design', why: 'Knowing what a component does and why it helps is technical design skill.' },
+    { t: 'At minute 30 a new requirement lands. The candidate re-plans calmly instead of freezing.', a: 'pressure', why: 'Staying steady when the ground shifts late in the session is working under pressure.' },
+    { t: 'Proposes two storage options and compares their trade-offs.', a: 'design', why: 'Weighing options by their costs and benefits is the heart of design skill.' },
+    { t: 'Checks in: "Does this level of detail work for you?"', a: 'collab', why: 'Checking in keeps the interviewer in the loop, the way a good teammate would.' },
+  ];
+  const need = {}; CARDS.forEach(c => need[c.a] = (need[c.a] || 0) + 1);
+  const cx = 180, cy = 150, R = 92;
+  const ang = i => (-90 + i * 72) * Math.PI / 180;
+  const P = (i, r) => [cx + r * Math.cos(ang(i)), cy + r * Math.sin(ang(i))];
+  const svg = $('#radar');
+  svg.innerHTML = '';
+  [1 / 3, 2 / 3, 1].forEach(f => S('polygon', { class: 'grid', points: SPOKES.map((_, i) => P(i, R * f).map(n => n.toFixed(1)).join(',')).join(' ') }, svg));
+  SPOKES.forEach((_, i) => { const [x, y] = P(i, R); S('line', { class: 'axis', x1: cx, y1: cy, x2: x.toFixed(1), y2: y.toFixed(1) }, svg); });
+  const area = S('polygon', { class: 'area' }, svg);
+  const dotsG = S('g', {}, svg);
+  const spEls = {};
+  SPOKES.forEach((sp, i) => {
+    const [lx, ly] = P(i, R + 38);
+    const g = S('g', { class: 'sp', tabindex: 0, role: 'button', 'aria-label': `${sp.label} spoke` }, svg);
+    S('rect', { class: 'hit', x: (lx - 52).toFixed(1), y: (ly - 26).toFixed(1), width: 104, height: 52, rx: 12 }, g);
+    const y0 = ly - (sp.lines.length - 1) * 8 - 4;
+    sp.lines.forEach((ln, j) => { S('text', { x: lx.toFixed(1), y: (y0 + j * 16).toFixed(1) }, g).textContent = ln; });
+    const c = S('text', { class: 'cnt', x: lx.toFixed(1), y: (y0 + sp.lines.length * 16).toFixed(1) }, g);
+    spEls[sp.k] = { g, c };
+    onActivate(g, () => pick(sp.k));
+  });
+  $('#spokebtns').innerHTML = SPOKES.map(sp => `<button class="opt" data-k="${sp.k}">${sp.label}</button>`).join('');
+  $$('#spokebtns .opt').forEach(b => b.onclick = () => pick(b.dataset.k));
+
+  let deck, ci, placed, shown, busy, quizShown = false;
+  const vals = () => SPOKES.map(sp => placed[sp.k] / need[sp.k]);
+  let cur = [0, 0, 0, 0, 0];
+  function draw(v) {
+    const pts = v.map((f, i) => P(i, R * (0.1 + 0.9 * f)));
+    area.setAttribute('points', pts.map(p => p.map(n => n.toFixed(1)).join(',')).join(' '));
+    dotsG.innerHTML = '';
+    pts.forEach(([x, y]) => S('circle', { class: 'vdot', cx: x.toFixed(1), cy: y.toFixed(1), r: 4 }, dotsG));
+    SPOKES.forEach(sp => { const e = spEls[sp.k]; e.c.textContent = `${placed[sp.k]}/${need[sp.k]}`; e.g.classList.toggle('full', placed[sp.k] === need[sp.k]); });
+  }
+  async function grow() {
+    const from = cur.slice(), to = vals();
+    await anim(500, p => { cur = from.map((f, i) => f + (to[i] - f) * ease(p)); draw(cur); });
+  }
+  function showCard() {
+    const c = deck[ci];
+    $('#bcard').innerHTML = `<div class="bcard"><div class="lbl">Card ${ci + 1} of ${deck.length} · which signal is this?</div><p>${c.t}</p><div class="explain"></div><div class="row" style="margin-top:10px"></div></div>`;
+    $$('#spokebtns .opt').forEach(b => { b.disabled = false; b.classList.remove('right', 'wrong'); });
+    SPOKES.forEach(sp => spEls[sp.k].g.classList.remove('ok', 'no', 'hint'));
+    busy = false;
+  }
+  function pick(k) {
+    if (busy || !deck || ci >= deck.length) return;
+    busy = true;
+    const c = deck[ci], ok = k === c.a;
+    const btn = $(`#spokebtns .opt[data-k="${k}"]`), rbtn = $(`#spokebtns .opt[data-k="${c.a}"]`);
+    $$('#spokebtns .opt').forEach(b => b.disabled = true);
+    btn.classList.add(ok ? 'right' : 'wrong');
+    spEls[k].g.classList.add(ok ? 'ok' : 'no');
+    const card = $('#bcard .bcard'), ex = $('.explain', card);
+    const lab = SPOKES.find(s => s.k === c.a).label;
+    if (ok) { Q.addXP(5, btn); }
+    else { Q.loseHeart(btn); shakeEl(spEls[k].g); card.classList.add('wrong'); rbtn.classList.add('right'); spEls[c.a].g.classList.add('hint'); }
+    ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+    ex.innerHTML = `<b>${lab}.</b> ${c.why}`;
+    placed[c.a]++;
+    grow();
+    logTo('r1log', `${ok ? '✓' : '✗'} card ${ci + 1} → ${lab}`, ok ? 'g' : 'e');
+    nextBtn($('.row', card), ci < deck.length - 1 ? 'Next card →' : 'See the full radar →', () => {
+      ci++;
+      if (ci < deck.length) return showCard();
+      $('#bcard').innerHTML = '';
+      $('#radarCap').classList.add('show');
+      logTo('r1log', 'Radar full. Every spoke has evidence.', 'g');
+      $('#r1reset').style.display = '';
+      maybeQuiz();
+    });
+  }
+  function reset() {
+    deck = shuffle(CARDS); ci = 0; placed = {}; SPOKES.forEach(s => placed[s.k] = 0); cur = [0, 0, 0, 0, 0];
+    draw(cur); $('#radarCap').classList.remove('show'); showCard();
+  }
+  $('#r1reset').onclick = () => { $('#r1reset').style.display = 'none'; $('#r1log').innerHTML = '<div>Radar emptied. Fill it again.</div>'; reset(); };
+  reset();
+  function maybeQuiz() {
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => Q.quiz($('#s1quiz'), {
+      q: 'In a 45-minute session, what is the interviewer mainly trying to learn?',
+      options: [
+        'Whether you can deliver a finished, production-ready design',
+        'How you reason, collaborate and handle ambiguity on the way',
+        'Whether you already know the company’s real architecture',
+        'How many databases and frameworks you can name from memory',
+      ],
+      correct: 1,
+      good: 'The diagram is a by-product. The interviewer is collecting <b>signal</b>: design skill, collaboration, calm under pressure, handling ambiguity and good questions.',
+      bad: 'Nobody builds a real product in 45 minutes, and naming tools isn’t the point. The interviewer is collecting <b>signal</b> about how you think and work with others on the way to a design.',
+      onDone: () => setTimeout(() => Q.clearStage(1), 900),
+    }), 400);
+  }
+});
+
+/* ================= STAGE 2: red flag detector ================= */
+Q.onStage(2, () => {
+  const FLAGS = { over: '🏗️ Over-engineering', narrow: '🔭 Narrow-mindedness', stubborn: '🧱 Stubbornness' };
+  const CHAT = [
+    { w: 'i', t: 'Let’s design a URL shortener for an internal tool. About 1,000 employees will use it.' },
+    { w: 'c', t: 'Before I draw anything: roughly how many links a day, and do links ever expire?', a: 'ok', why: 'Healthy. Clarifying questions before designing is exactly what the book asks for.' },
+    { w: 'c', t: 'Since we’re tiny, I’d start with a single database, and shard later only if we need to.', a: 'ok', why: 'Not a flag. A simple design for a small scale is good judgment, not narrow-mindedness. They even named the way out (shard later).' },
+    { w: 'c', t: 'For availability I’ll run active-active in three regions, with a custom consensus layer between them.', a: 'over', why: 'Over-engineering. Three regions and home-made consensus for 1,000 internal users buys cost and complexity nobody asked for.' },
+    { w: 'i', t: 'Could a plain relational database work here?' },
+    { w: 'c', t: 'NoSQL is always better for this kind of thing. Let’s move on.', a: 'narrow', why: 'Narrow-mindedness. The interviewer offered an alternative and the candidate wouldn’t even weigh it. "Always" is a warning word.' },
+    { w: 'i', t: 'Your codes come from a counter, so they’re guessable, and some links point to private docs. Does that worry you?' },
+    { w: 'c', t: 'Like I said: a counter, encoded in base 62. That’s the design.', a: 'stubborn', why: 'Stubbornness. The interviewer raised a valid concern about the candidate’s own plan, and the candidate repeated the plan without addressing it.' },
+    { w: 'i', t: 'Why put a cache in front of the database?' },
+    { w: 'c', t: 'Clicks should far outnumber new links, so a cache would save most database reads.', a: 'ok', why: 'Healthy. Defending a choice with a reason is not stubbornness. It’s what you should do.' },
+    { w: 'i', t: 'Actually, most of our links get clicked once or twice, then never again.' },
+    { w: 'c', t: 'Good point. With that little reuse the cache won’t pay off, so I’d drop it for now.', a: 'ok', why: 'Not a flag. They defended the choice with a reason, then updated when new facts arrived. That’s the healthy version of standing your ground.' },
+  ];
+  let found, quizShown = false;
+  const chat = $('#chat');
+  function render() {
+    found = 0; $('#flagCount').textContent = '0 / 3'; $('#flagCount').className = 'bignum';
+    chat.innerHTML = CHAT.map((m, i) => m.w === 'i'
+      ? `<div class="msg i"><span class="who">I · Interviewer</span>${m.t}</div>`
+      : `<button class="msg c" data-i="${i}" aria-label="Candidate line: ${esc(m.t)}. Tap to flag."><span class="who">C · Candidate</span>${m.t}</button>`).join('');
+    $$('.msg.c', chat).forEach(b => b.onclick = () => openMenu(b));
+  }
+  function closeMenus() { $$('.fmenu', chat).forEach(x => x.remove()); $$('.msg.c.sel', chat).forEach(x => x.classList.remove('sel')); }
+  function openMenu(b) {
+    if (b.disabled) return;
+    const had = b.classList.contains('sel');
+    closeMenus();
+    if (had) return;
+    b.classList.add('sel');
+    const menu = document.createElement('div'); menu.className = 'fmenu';
+    menu.innerHTML = Object.entries(FLAGS).map(([k, l]) => `<button class="opt" data-f="${k}">${l}</button>`).join('') + '<button class="opt cancel" data-f="none">Not a flag</button>';
+    b.after(menu);
+    $$('.opt', menu).forEach(o => o.onclick = () => judge(b, o.dataset.f, o));
+    $('.opt', menu).focus();
+  }
+  function judge(b, f, o) {
+    if (f === 'none') { closeMenus(); b.focus(); return; }
+    const m = CHAT[+b.dataset.i];
+    closeMenus();
+    b.disabled = true;
+    let ok, note;
+    if (m.a === 'ok') {
+      ok = false; b.classList.add('clean'); shakeEl(b);
+      b.insertAdjacentHTML('beforeend', '<span class="tagx">✓ healthy</span>');
+      note = m.why;
+    } else {
+      found++;
+      ok = f === m.a;
+      b.classList.add('flag');
+      b.insertAdjacentHTML('beforeend', `<span class="tagx">⚑ ${FLAGS[m.a]}</span>`);
+      note = ok ? m.why : `You picked ${FLAGS[f].slice(3)}, but this one is ${m.why}`;
+      $('#flagCount').textContent = `${found} / 3`;
+    }
+    const n = document.createElement('div'); n.className = 'cnote ' + (ok ? 'good' : 'bad'); n.innerHTML = note; b.after(n);
+    ok ? Q.addXP(15, b) : Q.loseHeart(b);
+    if (found === 3) {
+      $('#flagCount').className = 'bignum good';
+      $('#decoyNote').style.display = 'block';
+      $$('.msg.c', chat).forEach(x => x.disabled = true);
+      maybeQuiz();
+    }
+  }
+  render();
+  function maybeQuiz() {
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => Q.quiz($('#s2quiz'), {
+      q: 'The interviewer questions your cache choice. You think you’re right. What’s the best move?',
+      options: [
+        'Restate the same plan more firmly, so you sound confident',
+        'Drop the cache right away, since the interviewer is always right',
+        'Give your reason, ask what worries them, adjust if their point holds',
+        'Switch to a part of the design you know better and move on',
+      ],
+      correct: 2,
+      good: 'Defend with a reason, listen, and update if the concern is valid. Repeating yourself is stubbornness, and folding instantly throws away a good reason you had.',
+      bad: 'Repeating yourself is stubbornness, dodging looks evasive, and folding instantly throws away a good reason. Give your reason, ask what worries them, and adjust if their point holds.',
+      onDone: () => setTimeout(() => {
+        Q.clearStage(2);
+        const r = document.createElement('div'); r.className = 'row'; r.style.marginTop = '12px';
+        nextBtn(r, '↻ Reset the transcript (practice)', () => { r.remove(); $('#decoyNote').style.display = 'none'; render(); }, false);
+        $('#s2quiz').after(r);
+      }, 900),
+    }), 500);
+  }
+});
+
+/* ================= STAGE 3: budget the 45 minutes ================= */
+Q.onStage(3, () => {
+  const STEPS = [
+    { name: 'Scope the problem', short: 'Scope', lo: 3, hi: 10, c: 'var(--st1)' },
+    { name: 'High-level design + buy-in', short: 'High-level', lo: 10, hi: 15, c: 'var(--st2)' },
+    { name: 'Deep dive', short: 'Deep dive', lo: 10, hi: 25, c: 'var(--st3)' },
+    { name: 'Wrap up', short: 'Wrap', lo: 3, hi: 5, c: 'var(--st4)' },
+  ];
+  const SCALE = 60;
+  const goals = new Set();
+  let quizShown = false;
+  const v = [15, 20, 5, 5];
+  $('#bud').innerHTML = STEPS.map((s, i) => `<div class="brow" data-i="${i}">
+      <label for="sl${i}"><span><span class="sw" style="background:${s.c}"></span>${i + 1} · ${s.name}</span><span><span class="v" id="sv${i}"></span> <span class="rng">book: ${s.lo}–${s.hi}</span></span></label>
+      <input type="range" id="sl${i}" min="0" max="30" step="1" value="${v[i]}" aria-label="Minutes for step ${i + 1}, ${s.name}">
+    </div>`).join('');
+  function bar(el, segs, mark45 = true) {
+    el.innerHTML = segs.map(s => `<div class="seg2 ${s.cls || ''}" style="left:${s.a / SCALE * 100}%;width:${Math.max(0, s.d) / SCALE * 100}%;background:${s.c}">${s.label || ''}</div>`).join('') + (mark45 ? `<div class="mark" style="left:calc(${45 / SCALE * 100}% - 1px)" title="45 minutes"></div>` : '');
+  }
+  function budSegs() {
+    let t = 0; const out = [];
+    v.forEach((m, i) => {
+      const a = Math.min(t, SCALE), d = Math.max(0, Math.min(t + m, SCALE) - a);
+      out.push({ a, d, c: STEPS[i].c, label: d >= 4 ? m : '' });
+      t += m;
+    });
+    if (t > 45) out.push({ a: 45, d: Math.min(t, SCALE) - 45, c: 'var(--bad)', cls: 'over' });
+    return out;
+  }
+  function update() {
+    const sum = v.reduce((a, b) => a + b, 0);
+    const bad = [];
+    STEPS.forEach((s, i) => {
+      const out = v[i] < s.lo || v[i] > s.hi;
+      $(`.brow[data-i="${i}"]`).classList.toggle('out', out);
+      $('#sv' + i).textContent = v[i] + ' min';
+      if (out) bad.push(s.short);
+    });
+    bar($('#tbarA'), budSegs());
+    const st = $('#bstatus');
+    const ok = sum === 45 && !bad.length;
+    if (ok) { st.className = 'bstatus good'; st.textContent = `✓ ${v.join(' / ')} = 45 minutes, every step in range.`; }
+    else {
+      st.className = 'bstatus bad';
+      const parts = [];
+      if (sum !== 45) parts.push(`total ${sum} min (${sum > 45 ? 'over by ' + (sum - 45) : 'under by ' + (45 - sum)})`);
+      if (bad.length) parts.push(`out of range: ${bad.join(', ')}`);
+      st.textContent = parts.join(' · ');
+    }
+    $('#lockBud').disabled = !ok;
+  }
+  STEPS.forEach((_, i) => $('#sl' + i).addEventListener('input', e => { v[i] = +e.target.value; update(); }));
+  $('#lockBud').onclick = e => {
+    if (!goals.has('budget')) { goals.add('budget'); Q.addXP(20, e.currentTarget); }
+    else Q.toast('✓ still valid', e.currentTarget, 'practice');
+    $('#budNote').style.display = 'block';
+    $('#budHint').textContent = `Locked: ${v.join(' / ')}. Any valid split passes. Keep playing if you like.`;
+    maybeQuiz();
+  };
+  update();
+
+  /* part B: Sam */
+  const SAM = [20, 15, 7, 3];
+  function samSegs(t) {
+    const out = []; let a = 0;
+    SAM.forEach((m, i) => {
+      const d = Math.max(0, Math.min(t, a + m) - a);
+      if (i === 0) {
+        out.push({ a, d: Math.min(d, 10), c: STEPS[0].c, label: d >= 6 ? 'Scope' : '' });
+        if (d > 10) out.push({ a: 10, d: d - 10, c: 'var(--bad)', cls: 'over', label: d >= 16 ? '+10 over' : '' });
+      } else out.push({ a, d, c: STEPS[i].c, cls: i === 2 && d >= m ? 'squeeze' : '', label: d >= 5 ? m : '' });
+      a += m;
+    });
+    return out;
+  }
+  function samReset() { bar($('#tbarB'), samSegs(0)); $('#samClock').textContent = 'minute 0 / 45'; $('#samSay').className = 'say'; $('#samLog').innerHTML = '<div>Sam’s session hasn’t started.</div>'; }
+  async function playSam() {
+    $('#samLog').innerHTML = '';
+    const EV = [
+      [3, 'min 3: Sam starts asking questions. Good start.', ''],
+      [10, 'min 10: still scoping. The book’s guide says scoping is done by now.', 'w'],
+      [20, 'min 20: finally sketching. Scoping ran 10 minutes over.', 'e'],
+      [35, 'min 35: the deep dive starts, with only 7 minutes before wrap-up.', 'w'],
+      [42, 'min 42: wrap-up. The scaling discussion never happened.', 'e'],
+    ];
+    let k = 0;
+    await anim(5200, p => {
+      const t = 45 * p;
+      bar($('#tbarB'), samSegs(t));
+      $('#samClock').textContent = `minute ${Math.floor(t)} / 45`;
+      while (k < EV.length && t >= EV[k][0]) { logTo('samLog', EV[k][1], EV[k][2]); k++; }
+    });
+    while (k < EV.length) { logTo('samLog', EV[k][1], EV[k][2]); k++; }
+    const say = $('#samSay'); say.innerHTML = '<b>Interviewer:</b> "We’re out of time. I’d hoped to see how you’d scale the feed."'; say.className = 'say show';
+    Q.toast('⏰ out of time', say, 'minus');
+    await sleep(Q.reduced ? 50 : 500);
+  }
+  function runSam() {
+    samReset();
+    predict($('#samPredict'), {
+      title: 'What goes wrong with Sam’s split?',
+      options: [
+        'He ran out of time, so the interviewer never saw any depth',
+        'Nothing at all. The interviewer loved all the careful scoping',
+        'Nothing at all. Any split is fine as long as it totals 45',
+      ],
+      correct: 0,
+      act: playSam,
+      explain: 'Scoping ate double its budget, so the deep dive (the step with the widest range, and where depth shows) got squeezed to 7 minutes. Too long on any one step starves the next.',
+    }).then(({ row }) => {
+      goals.add('sam');
+      nextBtn(row, '↻ Watch it again', runSam, false);
+      maybeQuiz();
+    });
+  }
+  runSam();
+
+  function maybeQuiz() {
+    if (quizShown || !goals.has('budget') || !goals.has('sam')) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s3quiz'), {
+      q: 'Which step has the widest time range in the book’s 45-minute guide?',
+      options: ['Scoping, at 3–10 min', 'High-level design, at 10–15 min', 'Deep dive, at 10–25 min', 'Wrap-up, at 3–5 min'],
+      correct: 2,
+      good: 'The deep dive flexes from 10 to 25 minutes. It absorbs whatever time the other steps leave, which is why overrunning step 1 hurts so much.',
+      bad: 'It’s the deep dive, at 10–25 minutes. It absorbs whatever time the other steps leave, which is why overrunning step 1 hurts so much.',
+      onDone: () => setTimeout(() => Q.clearStage(3), 900),
+    }), 500);
+  }
+});
+
+/* ================= STAGE 4: dos & don'ts deck ================= */
+Q.onStage(4, () => {
+  const DECK = [
+    { t: 'Ask what scale you should plan for.', a: 'do', why: 'Clarify before building. Scale changes the whole design.' },
+    { t: 'Assume it’s a mobile-only app without saying so.', a: 'dont', why: 'A silent assumption gets treated as fact. Ask, or at least say the assumption out loud.' },
+    { t: 'Offer two storage options and compare them.', a: 'do', why: 'Offering more than one approach shows you see trade-offs, not one fixed answer.' },
+    { t: 'At minute 3, start designing the database index layout.', a: 'dont', why: 'Too deep, too early. Give the high-level picture first, then go into detail.' },
+    { t: 'Ask for a hint after being stuck for a while.', a: 'do', why: 'The book says not to be shy about asking for a hint when you’re stuck.' },
+    { t: 'Go quiet for 4 minutes to think it through.', a: 'dont', why: 'The interviewer can’t grade thinking they can’t hear. Think out loud.' },
+    { t: 'Say "I think we’re done" once the boxes are drawn.', a: 'dont', why: 'You’re done when the interviewer says so. Use spare time for bottlenecks, improvements or feedback.' },
+    { t: 'Ask: "Does this direction make sense to you?"', a: 'do', why: 'Checking in and asking for feedback early and often keeps you both aligned.' },
+    { t: 'Detail the most critical component first.', a: 'do', why: 'Once the blueprint is agreed, go into the components in order of importance.' },
+    { t: 'Assume there’s one textbook answer you must find.', a: 'dont', why: 'There’s no single best answer. A young startup and a company with millions of users need different designs.' },
+    { t: 'Practise the common prompts before the day.', a: 'do', why: 'Showing up unprepared for the common questions is on the book’s don’t list.' },
+    { t: 'Give up when a curveball lands.', a: 'dont', why: 'Keep going. Re-plan out loud, and ask for a hint if you need one.' },
+  ];
+  const box = $('#deck');
+  let deck, di, busy, quizShown = false;
+  box.innerHTML = `<div class="dtop"><span id="dCount"></span><span>✓ <span id="dRight">0</span> right</span></div>
+    <div class="dcard" id="dcard" tabindex="-1"><div class="dcard-in"><div class="dface front"><div class="big" id="dText"></div><div class="hintx">← swipe for DON’T · swipe for DO →</div></div><div class="dface back" id="dBack"></div></div></div>
+    <div class="dbtns" id="dbtns"><button class="opt dn" data-k="dont">👎 DON’T</button><button class="opt dy" data-k="do">👍 DO</button></div>
+    <div class="row" id="dNext"></div>
+    <div class="piles"><div class="pile" id="pDo"><h4>DO pile</h4></div><div class="pile" id="pDont"><h4>DON’T pile</h4></div></div>`;
+  const card = $('#dcard'), cin = $('.dcard-in', card);
+  let right = 0;
+  function show() {
+    const c = deck[di];
+    card.classList.remove('flip', 'wrong');
+    cin.style.transform = '';
+    $('#dText').textContent = c.t;
+    $('#dCount').textContent = `Card ${di + 1} of ${deck.length}`;
+    $$('#dbtns .opt').forEach(b => { b.disabled = false; b.classList.remove('right', 'wrong'); });
+    $('#dNext').innerHTML = '';
+    busy = false;
+  }
+  function answer(k) {
+    if (busy || di >= deck.length) return;
+    busy = true;
+    const c = deck[di], ok = k === c.a;
+    const btn = $(`#dbtns .opt[data-k="${k}"]`);
+    $$('#dbtns .opt').forEach(b => b.disabled = true);
+    btn.classList.add(ok ? 'right' : 'wrong');
+    if (!ok) $(`#dbtns .opt[data-k="${c.a}"]`).classList.add('right');
+    const back = $('#dBack');
+    back.className = 'dface back ' + (ok ? 'good' : 'bad');
+    back.innerHTML = `<div class="verdict">${ok ? '✓ Right:' : '✗ Actually:'} ${c.a === 'do' ? 'DO' : 'DON’T'}</div><p>${esc(c.t)}</p><p class="small">${c.why}</p>`;
+    cin.style.transform = '';
+    card.classList.add('flip');
+    if (!ok) card.classList.add('wrong');
+    if (ok) { right++; $('#dRight').textContent = right; Q.addXP(5, btn); } else Q.loseHeart(btn);
+    const pile = c.a === 'do' ? $('#pDo') : $('#pDont');
+    pile.insertAdjacentHTML('beforeend', `<span class="pc">${esc(c.t)}</span>`);
+    nextBtn($('#dNext'), di < deck.length - 1 ? 'Next card →' : 'Finish the deck →', () => {
+      di++;
+      if (di < deck.length) return show();
+      card.classList.remove('flip', 'wrong');
+      $('#dText').textContent = `Deck sorted: ${right} of ${deck.length} right.`;
+      $('#dCount').textContent = 'Done';
+      $('#dNext').innerHTML = '';
+      nextBtn($('#dNext'), '↻ Shuffle and sort again (practice)', reset, false);
+      maybeQuiz();
+    });
+  }
+  $$('#dbtns .opt').forEach(b => b.onclick = () => answer(b.dataset.k));
+  // swipe: right = DO, left = DON'T
+  let sx = null, dx = 0;
+  card.addEventListener('pointerdown', e => { if (busy || card.classList.contains('flip')) return; sx = e.clientX; dx = 0; card.setPointerCapture(e.pointerId); });
+  card.addEventListener('pointermove', e => { if (sx === null) return; dx = e.clientX - sx; cin.style.transform = `translateX(${dx}px) rotate(${dx / 20}deg)`; });
+  const end = () => { if (sx === null) return; sx = null; if (Math.abs(dx) > 70) answer(dx > 0 ? 'do' : 'dont'); else cin.style.transform = ''; };
+  card.addEventListener('pointerup', end); card.addEventListener('pointercancel', end);
+  function reset() {
+    deck = shuffle(DECK); di = 0; right = 0; $('#dRight').textContent = '0';
+    $$('.pile .pc').forEach(x => x.remove());
+    show();
+  }
+  reset();
+  function maybeQuiz() {
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => Q.quiz($('#s4quiz'), {
+      q: 'You’ve been stuck for two minutes on how to keep the feed fresh. What do you do?',
+      options: [
+        'Keep thinking in silence until the idea finally arrives',
+        'Say what you’ve considered so far and ask for a hint',
+        'Skip it for now and carry on as if it were solved',
+        'Throw the whole design away and start a new one',
+      ],
+      correct: 1,
+      good: 'Thinking out loud lets the interviewer follow (and grade) your reasoning, and asking for a hint after a real try is on the book’s do list.',
+      bad: 'Silence hides your thinking, pretending it’s solved gets caught, and restarting burns the clock. Say what you’ve tried, then ask for a hint.',
+      onDone: () => setTimeout(() => Q.clearStage(4), 900),
+    }), 500);
+  }
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => {
+  const CHOICES = [
+    { k: 'strong', label: 'Strong signal', sub: 'a plus in the notes' },
+    { k: 'red', label: 'Red flag', sub: 'a minus in the notes' },
+    { k: 'neutral', label: 'Neutral', sub: 'says little on its own' },
+  ];
+  const SCEN = [
+    { e: '🏢', t: 'Startup or giant?', d: 'Early on, the candidate asks: "Are we a young startup or a big company with millions of users?"', a: 'strong', why: 'Scale and context change the design completely. This is a good clarifying question.' },
+    { e: '🏗️', t: 'Kafka for ten users', d: 'For a 10-user prototype, the candidate adds Kafka, Kubernetes and three cache layers.', a: 'red', why: 'Over-engineering: complexity and cost with no matching need. Right-size for the scale you were given.' },
+    { e: '🔥', t: 'The hot-key hint', d: 'The interviewer hints that a few celebrity accounts get most of the traffic. The candidate: "Interesting. Here’s how that changes my sharding."', a: 'strong', why: 'Collaboration under pressure: taking the hint as input and adapting the design on the spot.' },
+    { e: '🤐', t: 'The silent sketch', d: 'The candidate draws boxes for 12 minutes without saying a word.', a: 'red', why: 'Thinking in silence. The interviewer can’t follow, help, or record any reasoning they don’t hear.' },
+    { e: '🗄️', t: 'A decisive pick', d: 'The candidate picks a relational database, with a one-line reason: the data has many relations and needs transactions.', a: 'strong', why: 'Decisive, with a stated trade-off. You don’t need an essay, you need a reason.' },
+    { e: '🎨', t: 'Not what they pictured', d: 'The candidate’s final diagram looks nothing like the design the interviewer had in mind.', a: 'neutral', why: 'There’s no single right answer. A different design is neither plus nor minus by itself. The reasoning behind it decides.' },
+    { e: '🏆', t: '"No weaknesses"', d: 'In the wrap-up the candidate says: "My design has no weaknesses."', a: 'red', why: 'The book warns against calling your design perfect. There’s always a bottleneck or improvement to name in the wrap-up.' },
+    { e: '🙋', t: 'Feedback mid-design', d: 'Halfway through, the candidate asks: "Any feedback so far? Am I spending time on the right parts?"', a: 'strong', why: 'Asking for feedback early and often is on the book’s do list, and it keeps you aligned with what the interviewer wants to see.' },
+  ];
+  let round = 0;
+  function fight() {
+    round++;
+    $('#bossRow').innerHTML = '';
+    Q.boss($('#boss'), {
+      name: round === 1 ? '📓 The Silent Scorer' : `📓 The Silent Scorer · rematch ${round - 1}`,
+      xp: round === 1 ? 15 : 5,
+      choices: CHOICES,
+      scenarios: SCEN,
+      outro: 'Interviewers write down behaviour, not boxes.',
+      onDone: wins => {
+        if (wins >= SCEN.length - 2) { Q.clearStage(5); nextBtn($('#bossRow'), '↻ Fight again (practice)', fight, false); }
+        else {
+          $('#bossRow').innerHTML = `<p class="small" style="margin:0;flex-basis:100%">The Scorer needs at most 2 wrong calls to fall. You had ${SCEN.length - wins}. Rematches pay less XP.</p>`;
+          nextBtn($('#bossRow'), '⚔️ Rematch', fight);
+        }
+      },
+    });
+  }
+  fight();
+});
+
+/* ================= STAGE 6: drill ================= */
+Q.onStage(6, () => Q.drill($('#drill'), {
+  prompt: 'A friend asks: <i>"How will you approach tomorrow’s system design round?"</i> Explain your game plan in a few sentences.',
+  placeholder: 'I treat it as a design session with a colleague…',
+  model: '"I treat it as a design session with a colleague, not a quiz. For the first 5 to 10 minutes I ask questions and pin down scope and assumptions. Then about 10 to 15 minutes on a high-level box diagram, checking that the interviewer agrees. Most of the remaining time goes to a deep dive on the parts they care about, most critical first. I keep the last few minutes to name bottlenecks and what I’d improve. Throughout, I think out loud, offer options with trade-offs, and avoid over-engineering."',
+  checks: [
+    'I named all four steps in order (scope, high-level, deep dive, wrap-up)',
+    'I gave rough minute budgets for the steps',
+    'I mentioned at least two dos (clarify, think out loud, offer options, ask for hints)',
+    'I mentioned a red flag to avoid (over-engineering, narrow-mindedness, stubbornness)',
+  ],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>
