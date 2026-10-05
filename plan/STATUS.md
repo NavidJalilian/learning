@@ -2,7 +2,7 @@
 
 Every chapter of *System Design Interview* Vol. 1 as a world of quests. Ticked = done. Regenerate: `python3 plan/tools/status.py`.
 
-**55 of 83 quests built** · 51 live on the map · 4 built, awaiting world review · 14 being built (draft on disk, not verified) · 14 not started.
+**56 of 83 quests built** · 51 live on the map · 5 built, awaiting world review · 14 being built (draft on disk, not verified) · 13 not started.
 
 Legend: `[x]` done · `[ ]` not done. A world is **done** when every quest is built, the world review has run, its cheat sheet
 exists, and its quests are `ready: true` on the map.
@@ -86,7 +86,7 @@ exists, and its quests are `ready: true` on the map.
 
 - [x] `0901` 9.1 · [Release the Spider](../lessons/0901-web-crawler-scope-and-estimates.html) — built · needs world review
 - [ ] `0902` 9.2 · [Assemble the Spider](../lessons/0902-web-crawler-components-and-workflow.html) — being built (unverified draft)
-- [ ] `0903` 9.3 · [Taming the Frontier](../lessons/0903-web-crawler-url-frontier.html) — not started
+- [ ] `0903` 9.3 · [Taming the Frontier](../lessons/0903-web-crawler-url-frontier.html) — being built (unverified draft)
 - [ ] `0904` 9.4 · [Fast Fangs, Thick Skin](../lessons/0904-web-crawler-downloader-and-robustness.html) — being built (unverified draft)
 - [x] `0905` 9.5 · [Beware the Spider Traps](../lessons/0905-web-crawler-traps-and-extensibility.html) — built · needs world review
 - [x] `0906` BOSS · [Crawl the Web, Live](../lessons/0906-web-crawler-boss-design-it-live.html) — built · needs world review
@@ -104,7 +104,7 @@ exists, and its quests are `ready: true` on the map.
 ## ⬜ World 11 · Design a News Feed System — *Feedstream Falls*
 
 - [ ] `1101` 11.1 · [Two Rivers](../lessons/1101-news-feed-scope-and-flows.html) — being built (unverified draft)
-- [ ] `1102` 11.2 · [Push, Pull, or Both](../lessons/1102-news-feed-fanout-push-vs-pull.html) — being built (unverified draft)
+- [x] `1102` 11.2 · [Push, Pull, or Both](../lessons/1102-news-feed-fanout-push-vs-pull.html) — built · needs world review
 - [ ] `1103` 11.3 · [The Fanout Factory](../lessons/1103-news-feed-publishing-pipeline.html) — being built (unverified draft)
 - [ ] `1104` 11.4 · [Hydrate the Feed](../lessons/1104-news-feed-retrieval-and-caches.html) — not started
 - [ ] `1105` BOSS · [Design It Live: News Feed](../lessons/1105-news-feed-boss-design-it-live.html) — not started

@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Taming the Frontier</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: host colours, crawl-order graph (s1), politeness sim (s2), priority lab (s3),
+   frontier assembly + step-through (s4), freshness + storage labs (s5) */
+:root { --h1: #5a48f0; --h2: #0d9a96; --h3: #c27400; --h4: #d4423f; --h5: #2f7fd8; --h6: #b8409a; --on-h: #ffffff; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --h1: #8f82ff; --h2: #31d3c8; --h3: #ffb547; --h4: #ff6d6a; --h5: #5aa9ff; --h6: #f07ad0; --on-h: #0e0f1d; }
+}
+:root[data-theme="dark"] { --h1: #8f82ff; --h2: #31d3c8; --h3: #ffb547; --h4: #ff6d6a; --h5: #5aa9ff; --h6: #f07ad0; --on-h: #0e0f1d; }
+
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); }
+.legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+.bignum { font-family: var(--mono); font-weight: 700; }
+.bignum.bad { color: var(--bad); }
+.bignum.good { color: var(--good); }
+.sim-bar .btn { padding: 8px 12px; font-size: 14px; }
+.btn.sm { padding: 7px 12px; font-size: 14px; }
+.uq { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 5px; font: 700 10.5px var(--mono); color: var(--on-h); background: var(--hc, var(--muted)); flex: none; }
+.uq.big { width: 26px; height: 26px; font-size: 12px; border-radius: 7px; }
+
+/* stage 1: crawl-order graph */
+.web svg { max-width: 520px; margin: 0 auto; }
+.web .edge { stroke: var(--line); stroke-width: 1.2; }
+.web .nd { stroke-width: 1.6; }
+.web .nd.fr { fill: var(--panel); }
+.web .cur { fill: none; stroke: var(--ink); stroke-width: 1.6; }
+.web .lbl { fill: var(--muted); font: 600 10px var(--mono); }
+.web .deep { fill: var(--bad); font: 700 10px var(--mono); }
+.fq { display: flex; gap: 8px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); font-size: 13px; min-height: 44px; flex-wrap: wrap; }
+.fq .fql { font-weight: 700; color: var(--muted); white-space: nowrap; }
+.fq .fqc { display: flex; gap: 3px; flex-wrap: wrap; align-items: center; min-width: 0; }
+.tl { display: grid; grid-template-columns: repeat(12, 1fr); gap: 4px; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+.tl div { aspect-ratio: 1; border-radius: 6px; background: var(--bg-2); border: 1px dashed var(--line); display: grid; place-items: center; font: 700 11px var(--mono); color: var(--on-h); }
+.tl div.on { border: 0; background: var(--hc); animation: rise .25s; }
+.mets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); font-size: 12.5px; }
+@media (max-width: 520px) { .mets { grid-template-columns: 1fr; gap: 6px; } }
+.met { display: grid; grid-template-columns: 52px 1fr 34px; gap: 6px; align-items: center; }
+.met b { font-family: var(--mono); font-size: 12px; }
+.met .tr { height: 12px; border-radius: 99px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; }
+.met .fl { height: 100%; width: 0; background: var(--good); transition: width .2s, background .2s; }
+.met.hot .fl { background: var(--bad); }
+.met .v { font-family: var(--mono); text-align: right; }
+.met.hot .v { color: var(--bad); font-weight: 700; }
+.stats1 { display: flex; gap: 8px 18px; flex-wrap: wrap; }
+
+/* stage 2: politeness sim */
+.pipe { display: flex; flex-wrap: wrap; align-items: stretch; gap: 6px; padding: 14px; }
+.pnode, .pslot { border-radius: 12px; padding: 8px 10px; font-size: 13px; min-height: 52px; display: flex; flex-direction: column; justify-content: center; text-align: center; }
+.pnode { background: var(--bg-2); border: 1px solid var(--line); font-weight: 700; flex: 1 1 90px; }
+.pslot { border: 2px dashed var(--accent); background: var(--accent-soft); flex: 1 1 120px; min-width: 0; }
+.pslot small { color: var(--muted); font-size: 11.5px; line-height: 1.3; }
+.pslot b { font-size: 14px; }
+.pslot.filled { border-style: solid; border-color: var(--good); background: var(--good-soft); cursor: default; }
+.pslot.nope { animation: shake .4s; border-color: var(--bad); }
+.parr { align-self: center; color: var(--muted); font-weight: 700; }
+.tray { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 14px 14px; }
+.tile { border: 2px solid var(--line); background: var(--panel); border-radius: 12px; padding: 9px 12px; font-weight: 600; font-size: 14px; min-height: 42px; }
+.tile:hover { border-color: var(--accent); }
+.tile.sel { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
+.tile.nope { animation: shake .4s; border-color: var(--bad); }
+.tile.gone { display: none; }
+.bmsg { padding: 0 14px 12px; font-size: 14px; min-height: 22px; font-weight: 600; }
+.bmsg.bad { color: var(--warn); }
+.bmsg.good { color: var(--good); }
+.maped { border-top: 1px solid var(--line); padding: 12px 14px; background: var(--panel); }
+.maped[hidden] { display: none; }
+.hchip { border: 2px solid var(--hc); background: var(--panel); color: var(--ink); border-radius: 10px; padding: 6px 12px; font: 700 13px var(--mono); min-height: 40px; }
+.hchip.sel { background: var(--hc); color: var(--on-h); }
+.hchip.used { opacity: .45; }
+.mtab { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; }
+@media (max-width: 520px) { .mtab { grid-template-columns: repeat(2, 1fr); } }
+.mrow { border: 1px solid var(--line); border-radius: 10px; background: var(--bg); padding: 8px; min-height: 44px; display: flex; justify-content: space-between; gap: 6px; align-items: center; font: 600 13px var(--mono); }
+.mrow .mh { color: var(--muted); }
+.mrow.set .mh { color: var(--hc); font-weight: 700; }
+.lanes { display: grid; gap: 6px; padding: 12px 14px; border-top: 1px solid var(--line); }
+.shared { display: flex; gap: 8px; align-items: center; font-size: 12.5px; flex-wrap: wrap; min-height: 26px; }
+.shared .fql { font-weight: 700; color: var(--muted); }
+.lane { display: grid; grid-template-columns: 74px 1fr 96px; gap: 8px; align-items: center; font-size: 12.5px; min-height: 30px; border-radius: 10px; padding: 3px 6px; background: var(--panel); border: 1px solid var(--line); }
+.lane .ln { font-weight: 700; font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lane .lq { display: flex; flex-wrap: wrap; gap: 3px; min-width: 0; }
+.lane .lw { display: flex; gap: 5px; align-items: center; justify-content: flex-end; font-family: var(--mono); white-space: nowrap; }
+.lane .lw.wait { color: var(--warn); }
+.lane .lw.idle { color: var(--muted); }
+.hosts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 0 14px 12px; }
+@media (max-width: 560px) { .hosts { grid-template-columns: repeat(2, 1fr); } }
+.hostc { border: 2px solid var(--line); border-radius: 14px; padding: 8px; text-align: center; background: var(--panel); position: relative; transition: border-color .2s, background .2s; }
+.hostc .face { font-size: 26px; line-height: 1.1; }
+.hostc .hn { font: 700 12.5px var(--mono); color: var(--hc); }
+.hostc .hs { font-size: 11.5px; color: var(--muted); }
+.hostc.angry { border-color: var(--bad); background: var(--bad-soft); }
+.hostc.calm { border-color: var(--good); }
+.hostc .b429 { display: none; position: absolute; top: -9px; right: -4px; background: var(--bad); color: #fff; font: 700 10px var(--mono); padding: 2px 6px; border-radius: 99px; }
+.hostc.angry .b429 { display: block; }
+.slider { display: grid; gap: 2px; min-width: 200px; flex: 1; }
+.slider label { display: flex; justify-content: space-between; font-weight: 600; font-size: 13.5px; gap: 8px; }
+.slider input { width: 100%; accent-color: var(--accent); height: 28px; }
+
+/* stage 3: priority */
+.pcard .url { font: 700 14px var(--mono); word-break: break-all; }
+.badges { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 10px; }
+.badge { font-size: 12px; padding: 3px 8px; border-radius: 8px; background: var(--bg-2); border: 1px solid var(--line); white-space: nowrap; }
+.badge b { font-family: var(--mono); letter-spacing: 1px; color: var(--accent); }
+.selq { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 14px; }
+.qcol { border: 1px solid var(--line); border-radius: 14px; padding: 10px; background: var(--panel); display: grid; gap: 6px; text-align: center; position: relative; }
+.qcol h4 { margin: 0; font-size: 15px; }
+.qcol .qs { font-size: 12px; color: var(--muted); }
+.qcol input { width: 100%; accent-color: var(--accent); height: 28px; }
+.qcol .w { font: 700 13px var(--mono); }
+.qcol .hbar { height: 90px; border-radius: 8px; background: var(--bg-2); border: 1px solid var(--line); position: relative; overflow: hidden; }
+.qcol .hbar div { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: var(--accent); transition: height .08s linear; }
+.qcol .cnt { font: 700 18px var(--mono); }
+.qcol.starve { border-color: var(--bad); background: var(--bad-soft); }
+.qcol .stv { display: none; font-size: 11.5px; font-weight: 700; color: var(--bad); }
+.qcol.starve .stv { display: block; }
+.seg button { min-height: 36px; }
+
+/* stage 4: frontier assembly + step-through */
+.asm { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 14px; }
+@media (max-width: 620px) { .asm { grid-template-columns: 1fr; } }
+.slots { display: grid; gap: 6px; }
+.mod-h { font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
+.slot { display: flex; gap: 8px; align-items: center; border: 2px dashed var(--line); border-radius: 12px; padding: 7px 10px; min-height: 40px; font-size: 14px; font-weight: 600; }
+.slot .sn { width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; font: 700 11px var(--mono); background: var(--bg-2); color: var(--muted); flex: none; }
+.slot.next { border-color: var(--accent); background: var(--accent-soft); }
+.slot.ok { border-style: solid; border-color: var(--good); background: var(--good-soft); animation: rise .3s; }
+.slot.side { margin-left: 26px; }
+.slot .q { color: var(--muted); font-weight: 500; }
+.ttray { display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; }
+.fr { display: grid; gap: 8px; padding: 14px; font-size: 13px; }
+.fr-mod { border-radius: 14px; padding: 10px; display: grid; gap: 6px; }
+.fr-mod.front { background: var(--accent-soft); }
+.fr-mod.back { background: var(--teal-soft); }
+.fr-h { font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.fr-box { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 6px 10px; font-weight: 600; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+.fr-row { display: grid; grid-template-columns: 58px 1fr; gap: 8px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 5px 8px; min-height: 36px; }
+.fr-row.wrow { grid-template-columns: 80px 1fr 104px; }
+.fr-row .rn { font: 700 12px var(--mono); }
+.fr-row .rq { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.fr-row .rw { font: 600 11.5px var(--mono); text-align: right; }
+.fr-row .rw.dl { color: var(--good); }
+.fr-row .rw.wait { color: var(--warn); }
+.fr-row .rw.idle { color: var(--muted); }
+.flash { animation: flash 1s; }
+@keyframes flash { 0%, 60% { box-shadow: 0 0 0 3px var(--xp); } }
+.uc { display: inline-flex; align-items: center; gap: 4px; border-left: 4px solid var(--hc); background: var(--bg); border-radius: 6px; padding: 2px 6px; font: 600 11.5px var(--mono); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.uc i { font-style: normal; color: var(--xp); letter-spacing: -1px; }
+.say { padding: 12px 14px; border-top: 1px solid var(--line); background: var(--panel); font-size: 15px; min-height: 60px; }
+.mapline { font: 600 12px var(--mono); color: var(--muted); }
+.mapline b { color: var(--hc); }
+
+/* stage 5: freshness + storage */
+.frows { display: grid; gap: 8px; padding: 14px; }
+.frow { display: grid; grid-template-columns: 1fr 120px 130px; gap: 6px 12px; align-items: center; border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; background: var(--panel); }
+@media (max-width: 620px) { .frow { grid-template-columns: 1fr auto; } .frow .spark { grid-column: 1 / -1; order: 3; } .frow .stl { grid-column: 1 / -1; order: 4; } }
+.frow .nm { font-weight: 700; font-size: 14.5px; }
+.frow .ds { font-size: 12px; color: var(--muted); }
+.frow .imp { color: var(--xp); letter-spacing: 1px; font-size: 12px; }
+.spark svg { width: 100%; height: 22px; display: block; }
+.spark .bg { fill: var(--bg-2); }
+.spark .tk { stroke: var(--h4); stroke-width: 1.2; }
+.spark .vs { stroke: var(--good); stroke-width: 2; }
+.stepper { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; justify-content: flex-end; }
+.stepper .btn { padding: 4px 0; width: 40px; min-height: 40px; font-size: 18px; line-height: 1; }
+.stepper .n { font-family: var(--mono); min-width: 24px; text-align: center; }
+.stl { display: grid; grid-template-columns: 1fr 44px; gap: 6px; align-items: center; font-size: 12px; }
+.stl .tr { height: 10px; border-radius: 99px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; }
+.stl .fl { height: 100%; background: var(--warn); transition: width .3s; }
+.stl .v { font-family: var(--mono); text-align: right; }
+.store { padding: 14px; display: grid; gap: 10px; }
+.sgauge { display: grid; grid-template-columns: 110px 1fr 100px; gap: 8px; align-items: center; font-size: 13px; }
+@media (max-width: 520px) { .sgauge { grid-template-columns: 82px 1fr 84px; font-size: 12px; } }
+.sgauge .tr { height: 14px; border-radius: 99px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; position: relative; }
+.sgauge .fl { height: 100%; width: 0; background: var(--teal); }
+.sgauge .v { font-family: var(--mono); text-align: right; }
+.crash { display: none; text-align: center; font-weight: 700; color: var(--bad); padding: 6px; border-radius: 10px; background: var(--bad-soft); }
+.crash.on { display: block; animation: shake .4s; }
+.rtab { width: 100%; border-collapse: collapse; font-size: 13px; }
+.rtab th, .rtab td { border-top: 1px solid var(--line); padding: 6px 4px; text-align: left; vertical-align: top; }
+.rtab th { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.rtab td.g { color: var(--good); font-weight: 600; }
+.rtab td.b { color: var(--bad); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 9.3 · Design a Web Crawler</div>
+    <h1>Taming the Frontier</h1>
+    <p class="lede">The URL frontier is the crawler's to-do list. Make it a plain queue and you'll hammer small websites and crawl junk before gold. Today you rebuild it in two layers: one for priority, one for politeness.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can explain why plain BFS is impolite and priority-blind, draw the two-layer URL frontier (<b>front queues</b> for priority, <b>back queues</b> for politeness with a host-to-queue mapping), name two recrawl strategies, and justify keeping the frontier on disk with memory buffers.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Deep or wide?</h2><div class="sub">DFS vs BFS on the web graph</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The web is a <b>directed graph</b>: each page is a <i>node</i>, and each link is a one-way <i>edge</i> from one page to another. Crawling means walking that graph. There are two classic ways to walk it:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener">[1]</a></p>
+      <ul>
+        <li><b>DFS</b> (depth-first search): follow the first link, then <i>that</i> page's first link, and keep going down. It uses a <b>stack</b>: last in, first out.</li>
+        <li><b>BFS</b> (breadth-first search): fetch every page one link away, then every page two links away, and so on. It uses a <b>FIFO queue</b>: first in, first out, so URLs are fetched in the order they were found.</li>
+      </ul>
+      <p>Below is a tiny web. A seed page links to three sites. Small sites like apple.com and bbc.co.uk run out of links quickly. The wiki is different: every page links to two more wiki pages, 30 levels deep. Each run makes 24 fetches.</p>
+
+      <div class="sim web">
+        <svg id="web1" viewBox="0 0 360 290" role="img" aria-label="A small web graph: a seed page, a deep wiki site and two small sites"></svg>
+        <div class="fq"><span class="fql" id="fqLabel">Frontier</span><span class="fqc" id="fqChips"><span class="muted">waiting for a run</span></span></div>
+        <div class="tl" id="tl1" aria-label="Fetch order"></div>
+        <div class="mets" id="mets1"></div>
+        <div class="sim-bar">
+          <span class="stats1"><span>Sites reached: <span class="bignum" id="s1sites">0 / 3</span></span><span>Deepest page: <span class="bignum" id="s1deep">0</span></span></span>
+          <span class="row" style="gap:8px"><button class="btn" id="dfsBtn" disabled>▶ Run DFS</button><button class="btn" id="bfsBtn" disabled>▶ Run BFS</button></span>
+        </div>
+        <div class="sim-bar"><div class="legend"><span><i style="background:var(--h1)"></i>wiki</span><span><i style="background:var(--h2)"></i>apple</span><span><i style="background:var(--h4)"></i>bbc</span><span>● fetched</span><span>○ in the frontier</span></div></div>
+      </div>
+      <div class="challenge boxed" id="s1pred"></div>
+      <ul class="checklist" id="s1goals">
+        <li data-g="dfs"><span class="box">✓</span><span>Watch DFS crawl (make your prediction first)</span></li>
+        <li data-g="bfs"><span class="box">✓</span><span>Watch BFS crawl the same web</span></li>
+      </ul>
+      <div class="callout" id="s1note" style="display:none"><b>BFS fixes depth, but floods one host and ignores importance.</b> Look at the end of the BFS timeline: 8 wiki pages back to back. Most links on a page point to the same site (on Wikipedia, nearly all of them), so a site's URLs pile up together in a FIFO queue. That's problem 1: <b>impolite</b> bursts at one host. Problem 2: every URL just waits its turn. Apple's home page and wiki page #4,000 get the same treatment, so there's <b>no priority</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener">[1]</a> The rest of this quest fixes both.</div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Don't knock too fast</h2><div class="sub">Politeness · back queues</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p><b>Politeness</b> means not sending a site lots of requests in a short time. A crawler that does this can look like a <b>denial-of-service attack</b> (flooding a server until it can't serve real users), and sometimes it really is one. The book's rule: <b>download one page at a time per host</b>, and <b>wait a little between two downloads from the same host</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener">[1]</a> (A <i>host</i> is the site part of a URL, like <code>apple.com</code>.)</p>
+      <p>Below, 20 URLs arrive from 4 hosts and 4 worker threads download them. Each download takes 0.5 s. In this toy, a host is happy with <b>one request at a time and at most one per second</b>. First, run the naive version.</p>
+
+      <div class="sim" id="polSim">
+        <div class="pipe" id="pipe">
+          <div class="pnode">📥 Incoming URLs</div><span class="parr">→</span>
+          <button class="pslot" data-slot="A" aria-label="Empty slot: reads each URL's host and sends it on"><small>reads each URL's host and sends it on</small><b>?</b></button><span class="parr">→</span>
+          <button class="pslot" data-slot="B" aria-label="Empty slot: answers which queue a host uses"><small>answers "which queue does this host use?"</small><b>?</b></button><span class="parr">→</span>
+          <button class="pslot" data-slot="C" aria-label="Empty slot: one FIFO line per host"><small>one FIFO line per host</small><b>?</b></button><span class="parr">→</span>
+          <div class="pnode">🎛️ Queue selector</div><span class="parr">→</span>
+          <div class="pnode">🧵 Workers W1–W4</div>
+        </div>
+        <div class="tray" id="tray2">
+          <button class="tile" data-t="C">Back queues b1–b4</button>
+          <button class="tile" data-t="A">Queue router</button>
+          <button class="tile" data-t="B">Mapping table</button>
+        </div>
+        <div class="bmsg" id="bmsg">Build the polite version: tap a tile, then tap the slot that does its job.</div>
+        <div class="maped" id="mapEd" hidden>
+          <p class="small" style="margin:0">Now fill in the <b>mapping table</b>. Tap a host, then tap the queue it should own. Each queue holds one host.</p>
+          <div class="chips" id="hostChips"></div>
+          <div class="mtab" id="mtab"></div>
+        </div>
+        <div class="lanes" id="lanes"></div>
+        <div class="hosts" id="hosts"></div>
+        <div class="sim-bar">
+          <span class="row" style="gap:8px"><button class="btn" id="naiveBtn">▶ Naive: shared FIFO</button><button class="btn primary" id="politeBtn" disabled>▶ Polite: back queues</button></span>
+          <div class="slider"><label for="delay"><span>Pause between downloads from one host</span><span class="bignum" id="delayVal">0.00 s</span></label><input type="range" id="delay" min="0" max="2" step="0.25" value="0" aria-label="Pause between downloads from the same host, in seconds"></div>
+        </div>
+        <div class="sim-bar"><span>Downloaded: <span class="bignum" id="p2done">0 / 20</span></span><span>Time: <span class="bignum" id="p2time">0.0 s</span></span><span>Throughput: <span class="bignum" id="p2rate">—</span></span></div>
+        <div class="simlog" id="p2log"><div>20 URLs, in the order a crawler found them. Most are wiki pages, bunched together.</div></div>
+      </div>
+      <ul class="checklist" id="s2goals">
+        <li data-g="naive"><span class="box">✓</span><span>Run the naive version and watch the hosts' faces</span></li>
+        <li data-g="build"><span class="box">✓</span><span>Build the back queues and fill in the mapping table</span></li>
+        <li data-g="polite"><span class="box">✓</span><span>Finish a polite run with every face calm</span></li>
+        <li data-g="sweet"><span class="box">✓</span><span>Bonus: the <b>lowest</b> pause that keeps every face calm</span></li>
+      </ul>
+      <div class="callout tip" id="s2note" style="display:none"><b>Why this works.</b> The <b>queue router</b> uses the <b>mapping table</b> (host → queue) to put each URL into the FIFO queue for its host, so each back queue holds one host only. The <b>queue selector</b> gives each worker thread one queue, and the worker downloads that queue's URLs one by one, pausing in between. One host, one queue, one worker, so two workers can never hit the same host at once.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener">[1]</a> The crawl still moves because the other hosts are being fetched in parallel. A real crawler has millions of hosts, so there's always one that's ready.</div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Important pages first</h2><div class="sub">Priority · front queues</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Not all pages are equal. A random forum post that mentions Apple is worth far less than Apple's home page, even though both contain the word "Apple". So crawl the useful pages first. The book judges usefulness with signals such as <b>PageRank</b><a class="cite" href="https://en.wikipedia.org/wiki/PageRank" target="_blank" rel="noopener">[5]</a> (a score based on how many important pages link to this one), <b>website traffic</b>, and <b>how often the page changes</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener">[1]</a></p>
+      <p>A component called the <b>Prioritizer</b> scores each URL and puts it in a <b>front queue</b>: f1 for high priority, f2 for medium, f3 for low (the book draws f1…fn, one queue per level). You're the prioritizer now.</p>
+      <div class="sort" id="pcards"></div>
+      <div id="s3partB" style="margin-top:18px">
+        <p>Next, a <b>queue selector</b> decides which front queue to take the next URL from. The book's selector picks a queue <b>at random, but weighted toward higher priority</b>. Set the weights, pick 100 URLs, and watch where they come from. Then try <b>strict priority</b> (always take from the highest non-empty queue).</p>
+        <div class="sim">
+          <div class="selq" id="selq"></div>
+          <div class="sim-bar">
+            <span class="seg" id="selMode"><button data-m="bias" class="on">Biased random</button><button data-m="strict">Strict priority</button></span>
+            <button class="btn primary" id="pickBtn">▶ Pick 100</button>
+          </div>
+          <div class="simlog" id="p3log"><div>The front queues never run dry on the real web: new high-priority URLs keep arriving.</div></div>
+        </div>
+      </div>
+      <ul class="checklist" id="s3goals">
+        <li data-g="sort"><span class="box">✓</span><span>Prioritize all 8 URLs</span></li>
+        <li data-g="bias"><span class="box">✓</span><span>Pick 100 with the biased random selector</span></li>
+        <li data-g="strict"><span class="box">✓</span><span>Pick 100 with strict priority</span></li>
+      </ul>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Stack the two layers</h2><div class="sub">Front queues + back queues = the URL frontier</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The full frontier design stacks both ideas. URLs flow from top to bottom. The <b>front queues</b> module decides <i>what</i> comes out next (priority). The <b>back queues</b> module decides <i>when</i> a host may be hit (politeness).<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener">[1]</a></p>
+      <p>Build it: tap the parts in the order a URL meets them, from top to bottom. One tile doesn't belong.</p>
+      <div class="sim">
+        <div class="asm">
+          <div class="slots" id="slots4"></div>
+          <div><p class="small muted" style="margin:0 0 8px">Parts</p><div class="ttray" id="ttray4"></div><div class="bmsg" id="amsg" style="padding:10px 0 0"></div></div>
+        </div>
+      </div>
+      <div id="run4wrap" style="display:none">
+        <p style="margin-top:18px">Now watch 12 URLs go through it. The colour stripe is the host and the ★ are the priority. Step through with <b>Next tick</b>. It will pause three times to ask you what's happening.</p>
+        <div class="sim">
+          <div class="fr" id="fr4"></div>
+          <div class="say" id="say4"></div>
+          <div class="sim-bar"><span class="small muted" id="tick4">tick 0</span><span class="row" style="gap:8px"><button class="btn sm" id="restart4">↻ Restart</button><button class="btn primary" id="next4">Next tick ▶</button></span></div>
+        </div>
+        <div id="ask4"></div>
+      </div>
+      <div class="callout warn"><b>Beyond the book: there are more hosts than queues.</b> The book's figure shows one back queue per host, but the web has hundreds of millions of hosts. The Mercator crawler keeps a fixed number of back queues (it suggested about three times the number of worker threads). When a back queue empties, it's handed to a new host pulled from the front queues. A heap (a structure that always gives you the smallest item) tracks the earliest time each host may be contacted again.<a class="cite" href="https://nlp.stanford.edu/IR-book/html/htmledition/the-url-frontier-1.html" target="_blank" rel="noopener">[2]</a><a class="cite" href="https://courses.cs.washington.edu/courses/cse454/15wi/papers/mercator.pdf" target="_blank" rel="noopener">[3]</a></div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Keep it fresh, keep it stored</h2><div class="sub">Recrawl strategy + where the frontier lives</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p><b>Freshness.</b> Pages are added, edited and deleted all the time, so a crawler must <b>recrawl</b> pages it has already downloaded. Recrawling everything is slow and expensive. The book gives two strategies:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener">[1]</a></p>
+      <ol>
+        <li><b>Use each page's update history</b>: pages that changed often in the past get revisited more often.</li>
+        <li><b>Prioritize</b>: recrawl important pages first, and more frequently.</li>
+      </ol>
+      <h3 style="margin:18px 0 4px;font-size:17px">Lab A · Spend the recrawl budget</h3>
+      <p class="small">You can afford <b>20 recrawls a day</b> across these 6 pages. The red ticks show when each page changed over 30 days. The bar shows how often your copy is out of date ("stale"). Lower total staleness is better, and important pages (★) count more. Beat the equal split by <b>25%</b>.</p>
+      <div class="sim">
+        <div class="frows" id="frows"></div>
+        <div class="sim-bar"><span>Budget: <span class="bignum" id="fBudget">20 / 20</span></span><span>Staleness: <span class="bignum" id="fScore">—</span> <span class="small muted">equal split: <span id="fBase">—</span></span></span><span class="bignum" id="fPct">—</span></div>
+        <div class="sim-bar"><button class="btn sm" id="fReset">↻ Back to the equal split</button><span class="small muted">Toy model: changes arrive at random, recrawls are evenly spaced.</span></div>
+      </div>
+      <h3 style="margin:22px 0 4px;font-size:17px">Lab B · Where does the frontier live?</h3>
+      <p class="small">For a crawl the size of a search engine's, the frontier can hold <b>hundreds of millions</b> of URLs.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener">[1]</a> Run each storage plan for 10 seconds with 100 million URLs queued and a goal of 1 million enqueues and dequeues. At second 7 the server crashes.</p>
+      <div class="sim">
+        <div class="store">
+          <div class="row"><button class="btn" data-k="ram">🧠 All in RAM</button><button class="btn" data-k="disk">💽 All on disk</button><button class="btn" data-k="hyb">🧠+💽 Disk + memory buffers</button></div>
+          <div class="sgauge"><span>Ops done</span><div class="tr"><div class="fl" id="sgOps"></div></div><span class="v" id="sgOpsV">0</span></div>
+          <div class="sgauge"><span>Throughput</span><div class="tr"><div class="fl" id="sgRate"></div></div><span class="v" id="sgRateV">—</span></div>
+          <div class="sgauge"><span>Frontier size</span><div class="tr"><div class="fl" id="sgSize" style="width:100%"></div></div><span class="v" id="sgSizeV">100.0 M</span></div>
+          <div class="crash" id="crash">💥 Crash at 7 s · server restarting</div>
+          <table class="rtab"><thead><tr><th>Plan</th><th>1 M ops</th><th>After the crash</th></tr></thead><tbody id="rtab">
+            <tr data-k="ram"><td>All in RAM</td><td>—</td><td>—</td></tr>
+            <tr data-k="disk"><td>All on disk</td><td>—</td><td>—</td></tr>
+            <tr data-k="hyb"><td>Disk + buffers</td><td>—</td><td>—</td></tr>
+          </tbody></table>
+        </div>
+        <div class="simlog" id="p5log"><div>Pick a plan. Speeds are toy numbers chosen to show the shape, not benchmarks.</div></div>
+      </div>
+      <ul class="checklist" id="s5goals">
+        <li data-g="fresh"><span class="box">✓</span><span>Lab A: beat the equal split by 25%</span></li>
+        <li data-g="store"><span class="box">✓</span><span>Lab B: run all three storage plans</span></li>
+      </ul>
+      <div class="callout tip" id="s5note" style="display:none"><b>The book's answer: hybrid.</b> Most URLs live on disk, where space is cheap and survives a crash. Small in-memory buffers sit in front for enqueue and dequeue, and the buffer is written to disk periodically in big batches. All in memory is neither durable nor scalable. All on disk is too slow and becomes the bottleneck.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener">[1]</a></div>
+      <div id="s5quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Boss: The Frontier Warden</h2><div class="sub">Which part of the frontier handles it?</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Eight complaints land on your desk. For each one, name the part of the frontier that fixes it: <b>front queues</b> (priority), <b>back queues</b> (politeness), the <b>recrawl policy</b> (freshness), or <b>frontier storage</b> (memory + disk).</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 7 ================= -->
+  <section class="stage" data-stage="7" id="s7">
+    <div class="stage-h"><div class="num">7</div><div><h2>Say it like a senior</h2><div class="sub">The frontier in 60 seconds</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> Politeness has a second half: asking the site what it allows. Quest 9.4, <i>Fast Fangs, Thick Skin</i>, covers robots.txt, then makes the downloader fast and hard to kill.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 9: "Design a Web Crawler"</a>, Step 3, the parts on DFS vs BFS and the URL frontier. Then read the short <a href="https://nlp.stanford.edu/IR-book/html/htmledition/the-url-frontier-1.html" target="_blank" rel="noopener">URL frontier section of <i>Introduction to Information Retrieval</i></a>. The book's figure comes from there, and it explains the back-queue heap the book skips.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <ul style="margin:0;padding-left:20px">
+        <li><b>Politeness is really per server, not per host name.</b> Thousands of small sites can share one IP address at a hosting provider, so careful crawlers limit by IP as well. Mercator also scaled the pause to the host: it waited several times as long as the last download took, instead of a fixed delay.<a class="cite" href="https://courses.cs.washington.edu/courses/cse454/15wi/papers/mercator.pdf" target="_blank" rel="noopener">[3]</a></li>
+        <li><b>"One page at a time per host" is conservative.</b> Big sites can take much more. Google adjusts its crawl rate for each site based on how quickly and cleanly the server responds.<a class="cite" href="https://developers.google.com/search/docs/crawling-indexing/large-site-managing-crawl-budget" target="_blank" rel="noopener">[6]</a></li>
+        <li><b>PageRank is just the book's example.</b> Modern search engines use many signals and keep the details private. Treat the prioritizer as "some scoring function", not a known algorithm.</li>
+        <li><b>Freshness has a twist.</b> Cho and Garcia-Molina found that recrawling pages strictly in proportion to how often they change can backfire: a page that changes constantly is stale again almost as soon as you fetch it. You may have seen this in Lab A, where piling recrawls onto the hourly score page barely helped. "Recrawl what changes often" is a good first answer, not the last word.<a class="cite" href="http://infolab.stanford.edu/~olston/publications/crawling_survey.pdf" target="_blank" rel="noopener">[4]</a></li>
+      </ul>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"if back queues are reused for new hosts, what stops one host from getting two queues?"</i> or <i>"how would you split the frontier across many crawler machines?"</i>
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 9 "Design a Web Crawler" (ByteByteGo).</li>
+        <li>Manning, Raghavan &amp; Schütze, <i>Introduction to Information Retrieval</i>, §20.2.3 "The URL frontier" (Cambridge UP, 2008).</li>
+        <li>Heydon &amp; Najork, "Mercator: A Scalable, Extensible Web Crawler", <i>World Wide Web</i> 2(4), 1999.</li>
+        <li>Olston &amp; Najork, "Web Crawling", <i>Foundations and Trends in Information Retrieval</i> 4(3), 2010.</li>
+        <li>"PageRank", Wikipedia.</li>
+        <li>Google Search Central, "Crawl budget management for large sites".</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0903',
+  winTitle: 'Polite, prioritised and fresh!',
+  badge: '🧭 Badge: Frontier Marshal',
+  cheatsheet: '../reference/ch09-web-crawler-cheatsheet.html',
+});
+const { sleep, shuffle, esc } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+const BOOK = 'https://bytebytego.com/courses/system-design-interview/design-a-web-crawler';
+const cite = (n, url) => `<a class="cite" href="${url}" target="_blank" rel="noopener">[${n}]</a>`;
+
+/* ================= shared helpers ================= */
+const HC = { wiki: 'var(--h1)', apple: 'var(--h2)', nike: 'var(--h3)', bbc: 'var(--h4)', forum: 'var(--h5)', blog: 'var(--h6)', start: 'var(--muted)' };
+const uq = (h, big) => `<span class="uq${big ? ' big' : ''}" style="--hc:${HC[h]}" title="${h}">${h[0]}</span>`;
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); if (xp) Q.addXP(xp, li);
+  return true;
+}
+// Predict-then-watch round (same shape as quest 6.2). Resolves after the pick and the action.
+function predict(box, { step, title, options, correct, act, explain, xp = 15 }) {
+  box.innerHTML = `${step ? `<div class="step">${step}</div>` : ''}<h3>${title}</h3><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+  const opts = $('.opts', box);
+  let busy = false;
+  return new Promise(resolve => {
+    shuffle(options.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = async () => {
+        if (busy) return; busy = true;
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        b.classList.add('picked');
+        await act();
+        const ok = i === correct;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-i="${correct}"]`, opts).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + explain;
+        ok ? Q.addXP(xp, b) : Q.loseHeart(b);
+        resolve({ ok, row: $('.row', box) });
+      };
+      opts.appendChild(b);
+    });
+  });
+}
+// A few Q.quiz questions in a row; `done` runs after the last one.
+function quizChain(mount, qs, done) {
+  let i = 0;
+  const next = () => {
+    if (i >= qs.length) { done && done(); return; }
+    const q = qs[i++];
+    Q.quiz(mount, { ...q, onDone: () => setTimeout(next, 650) });
+  };
+  next();
+}
+
+/* ================= STAGE 1: DFS vs BFS ================= */
+Q.onStage(1, () => {
+  const svg = $('#web1');
+  const FETCHES = 24;
+  const goals = new Set();
+  let running = false, predicted = false, quizShown = false;
+  const hostOf = id => id === 'S' ? 'start' : id[0] === 'w' ? 'wiki' : id[0] === 'a' ? 'apple' : 'bbc';
+  const wsplit = id => id.split(':').slice(1).map(Number);
+  function kids(id) {
+    if (id === 'S') return ['w:1:0', 'a0', 'b0'];
+    if (id[0] === 'w') { const [d, i] = wsplit(id); return d < 30 ? [`w:${d + 1}:${2 * i}`, `w:${d + 1}:${2 * i + 1}`] : []; }
+    return { a0: ['a1', 'a2'], a1: ['a3'], b0: ['b1', 'b2'], b1: ['b3'] }[id] || [];
+  }
+  function parent(id) {
+    if (id[0] === 'w') { const [d, i] = wsplit(id); return d === 1 ? 'S' : `w:${d - 1}:${i >> 1}`; }
+    return { a0: 'S', b0: 'S', a1: 'a0', a2: 'a0', a3: 'a1', b1: 'b0', b2: 'b0', b3: 'b1' }[id];
+  }
+  const depthOf = id => id === 'S' ? 0 : id[0] === 'w' ? wsplit(id)[0] : ({ a0: 1, b0: 1, a3: 3, b3: 3 }[id] || 2);
+  const FIX = { S: [180, 14], a0: [252, 58], a1: [234, 96], a2: [272, 96], a3: [234, 134], b0: [322, 58], b1: [304, 96], b2: [342, 96], b3: [304, 134] };
+  function pos(id) {
+    if (FIX[id]) return FIX[id];
+    const [d, i] = wsplit(id);
+    const y = 48 + (d - 1) * 9.6;
+    const x = d <= 5 ? 18 + 172 * (i + .5) / 2 ** (d - 1) : 22 + (i % 2) * 10;
+    return [x, y];
+  }
+  const label = id => id === 'S' ? 'seed' : id[0];
+  // timeline + meters scaffolding
+  $('#tl1').innerHTML = Array.from({ length: FETCHES }, () => '<div></div>').join('');
+  $('#mets1').innerHTML = ['wiki', 'apple', 'bbc'].map(h => `<div class="met" data-h="${h}"><b style="color:${HC[h]}">${h}</b><div class="tr"><div class="fl"></div></div><span class="v">0/5</span></div>`).join('') +
+    '<div class="small muted" style="grid-column:1/-1">Bars: how many of the <b>last 5 fetches</b> hit that site. Red means we are hammering it.</div>';
+
+  function draw(seen, fetched, cur) {
+    svg.innerHTML = '';
+    const eg = S('g', {}, svg), ng = S('g', {}, svg);
+    const t = (x, y, s, cls, anchor) => { const e = S('text', { x, y, class: cls || 'lbl', 'text-anchor': anchor || 'start' }, svg); e.textContent = s; };
+    t(10, 36, 'wiki.org (30 levels deep)'); t(252, 44, 'apple.com', 0, 'middle'); t(322, 44, 'bbc.co.uk', 0, 'middle'); t(192, 17, 'seed');
+    const fset = new Set(fetched);
+    seen.forEach(id => {
+      if (id !== 'S') { const [x1, y1] = pos(parent(id)), [x2, y2] = pos(id); S('line', { class: 'edge', x1, y1, x2, y2 }, eg); }
+    });
+    seen.forEach(id => {
+      const [x, y] = pos(id), h = hostOf(id), r = id[0] === 'w' ? 3.6 : 5.5;
+      const c = S('circle', { cx: x, cy: y, r, class: 'nd' + (fset.has(id) ? '' : ' fr') }, ng);
+      c.style.stroke = HC[h]; if (fset.has(id)) c.style.fill = HC[h];
+    });
+    if (cur) { const [x, y] = pos(cur); S('circle', { cx: x, cy: y, r: 8, class: 'cur' }, ng); }
+    const deep = Math.max(0, ...fetched.filter(id => id[0] === 'w').map(depthOf));
+    if (deep >= 6) { const [, y] = pos(`w:${deep}:0`); t(40, y + 3.5, `↓ depth ${deep}`, 'deep'); }
+  }
+  function frontierChips(fr, mode) {
+    $('#fqLabel').textContent = mode === 'dfs' ? 'Stack (top is on the right)' : 'Queue (next out is on the left)';
+    const show = mode === 'dfs' ? fr.slice(-18) : fr.slice(0, 18), more = fr.length - show.length;
+    const chips = show.map(id => uq(hostOf(id))).join('');
+    $('#fqChips').innerHTML = (mode === 'dfs' && more ? `<span class="small muted">+${more}…</span>` : '') + (chips || '<span class="muted">empty</span>') + (mode !== 'dfs' && more ? `<span class="small muted">…+${more}</span>` : '');
+  }
+  function meters(fetched) {
+    const last = fetched.slice(-5).map(hostOf);
+    $$('#mets1 .met').forEach(m => {
+      const n = last.filter(h => h === m.dataset.h).length;
+      $('.fl', m).style.width = n / 5 * 100 + '%'; $('.v', m).textContent = n + '/5'; m.classList.toggle('hot', n >= 4);
+    });
+    const sites = new Set(fetched.map(hostOf).filter(h => h !== 'start'));
+    const deep = Math.max(0, ...fetched.map(depthOf));
+    $('#s1sites').textContent = `${sites.size} / 3`; $('#s1sites').className = 'bignum ' + (sites.size === 3 ? 'good' : sites.size ? 'bad' : '');
+    $('#s1deep').textContent = deep; $('#s1deep').className = 'bignum ' + (deep > 8 ? 'bad' : '');
+  }
+  function timeline(fetched) {
+    $$('#tl1 div').forEach((c, k) => {
+      const id = fetched[k];
+      if (id) { c.className = 'on'; c.style.setProperty('--hc', HC[hostOf(id)]); c.textContent = label(id) === 'seed' ? 's' : label(id); c.title = `fetch ${k + 1}: ${hostOf(id)}, depth ${depthOf(id)}`; }
+      else { c.className = ''; c.textContent = ''; c.removeAttribute('title'); }
+    });
+  }
+  function setBtns() { $('#dfsBtn').disabled = running || !predicted; $('#bfsBtn').disabled = running || !predicted; }
+  async function run(mode) {
+    running = true; setBtns();
+    const seen = new Set(['S']), fetched = []; let fr = ['S'];
+    draw([...seen], fetched, null); frontierChips(fr, mode); timeline(fetched); meters(fetched);
+    for (let k = 0; k < FETCHES && fr.length; k++) {
+      const id = mode === 'dfs' ? fr.pop() : fr.shift();
+      fetched.push(id);
+      const ch = kids(id).filter(c => !seen.has(c)); ch.forEach(c => seen.add(c));
+      if (mode === 'dfs') fr.push(...ch.slice().reverse()); else fr.push(...ch);
+      draw([...seen], fetched, id); frontierChips(fr, mode); timeline(fetched); meters(fetched);
+      await sleep(Q.reduced ? 0 : 170);
+    }
+    draw([...seen], fetched, null);
+    running = false; setBtns();
+    let best = 0, runLen = 0; fetched.forEach((id, k) => { runLen = k && hostOf(id) === hostOf(fetched[k - 1]) ? runLen + 1 : 1; if (hostOf(id) === 'wiki') best = Math.max(best, runLen); });
+    return { sites: new Set(fetched.map(hostOf).filter(h => h !== 'start')).size, deep: Math.max(...fetched.map(depthOf)), best };
+  }
+  $('#dfsBtn').onclick = async () => {
+    const r = await run('dfs');
+    if (!$('#s1note').dataset.dfs) { $('#s1note').dataset.dfs = 1; }
+    afterRun('dfs', r);
+  };
+  $('#bfsBtn').onclick = async () => { const r = await run('bfs'); afterRun('bfs', r); };
+  function afterRun(mode, r) {
+    if (mode === 'dfs') {
+      $('#s1quiz').dataset.dfsDone = 1;
+      if (checkGoal('#s1goals', 'dfs', goals, 5)) logHint(`DFS: ${r.sites} site, ${r.deep} levels deep. apple and bbc are still at the bottom of the stack.`);
+    } else {
+      if (checkGoal('#s1goals', 'bfs', goals, 5)) logHint(`BFS: all ${r.sites} sites by fetch 4, never deeper than ${r.deep}. But the last ${r.best} fetches were all wiki.`);
+      $('#s1note').style.display = 'block';
+    }
+    maybeQuiz();
+  }
+  function logHint(s) { Q.toast('✓', $('#s1goals'), 'practice'); $('#fqChips').insertAdjacentHTML('afterbegin', ''); $('#s1pred .explain').insertAdjacentHTML('beforeend', `<br><span class="small">${esc(s)}</span>`); }
+  function maybeQuiz() {
+    if (quizShown || goals.size < 2) return;
+    quizShown = true;
+    setTimeout(() => quizChain($('#s1quiz'), [
+      { q: 'Which data structure does a BFS crawler use to decide what to fetch next?', xp: 15,
+        options: ['A FIFO queue: first found, first fetched', 'A stack: newest link is fetched first', 'A hash table keyed by each URL'],
+        correct: 0,
+        good: 'BFS fetches URLs in the order it found them, which is exactly what a first-in, first-out queue does. A stack gives you DFS.',
+        bad: 'A stack (last in, first out) is DFS: it keeps diving into the newest link. BFS uses a <b>FIFO queue</b>, so URLs come out in the order they were found.' },
+      { q: 'Plain BFS beats DFS for crawling, but it still has two problems. Which two?', xp: 15,
+        options: ['It bursts at one host and has no priority', 'It dives too deep and loses its stack', 'It re-fetches pages and misses new ones'],
+        correct: 0,
+        good: 'Links mostly point within the same site, so one host gets a burst of requests (<b>impolite</b>). And every URL waits its turn regardless of how important it is (<b>no priority</b>). Stages 2 and 3 fix these.',
+        bad: 'Diving too deep is the DFS problem. Plain BFS has two others: same-site links pile up, so one host gets <b>bursts</b> of requests, and it has <b>no priority</b>, so every URL waits its turn.' },
+    ], () => setTimeout(() => Q.clearStage(1), 400)), 500);
+  }
+  draw(['S'], [], null); timeline([]); meters([]);
+  predict($('#s1pred'), {
+    step: 'Predict first',
+    title: 'Run DFS for 24 fetches from the seed. How many of the three sites (wiki, apple, bbc) will it reach?',
+    options: ['Only 1 of them', '2 of the 3', 'All 3 sites'],
+    correct: 0,
+    act: async () => { await run('dfs'); },
+    explain: 'DFS followed wiki\'s first link, then that page\'s first link, 23 levels down. The links to apple and bbc sat at the bottom of the stack the whole time. On the real web the hole has no bottom, which is why the book says DFS is usually a bad fit.' + cite(1, BOOK),
+  }).then(() => { predicted = true; setBtns(); afterRun('dfs', { sites: 1, deep: 23 }); });
+  setBtns();
+});
+
+/* ================= STAGE 2: politeness ================= */
+Q.onStage(2, () => {
+  const HOSTS = ['wiki', 'apple', 'nike', 'bbc'];
+  const ORDER = ['wiki', 'wiki', 'wiki', 'wiki', 'apple', 'wiki', 'wiki', 'wiki', 'nike', 'bbc', 'wiki', 'wiki', 'wiki', 'apple', 'apple', 'bbc', 'nike', 'apple', 'bbc', 'nike'];
+  const STREAM = ORDER.map((h, i) => ({ i, h }));
+  const DL = 0.5, LIMIT = 1; // download time; host wants at most one request per LIMIT seconds
+  const goals = new Set();
+  const st = { placed: {}, sel: null, map: [null, null, null, null], hsel: null, running: false, quiz: false, mode: null };
+  const ROLE = { A: 'reads each URL\'s host and sends it on', B: 'answers "which queue does this host use?"', C: 'holds one FIFO line per host' };
+  const NAME = { A: 'Queue router', B: 'Mapping table', C: 'Back queues b1–b4' };
+
+  /* --- build the pipeline --- */
+  const msg = (t, cls) => { const m = $('#bmsg'); m.textContent = t; m.className = 'bmsg ' + (cls || ''); };
+  $$('#tray2 .tile').forEach(t => t.onclick = () => {
+    $$('#tray2 .tile').forEach(x => x.classList.toggle('sel', x === t && !t.classList.contains('sel')));
+    st.sel = t.classList.contains('sel') ? t.dataset.t : null;
+    if (st.sel) msg(`Now tap the slot where the ${NAME[st.sel]} belongs.`);
+  });
+  $$('#pipe .pslot').forEach(sl => sl.onclick = () => {
+    if (st.placed[sl.dataset.slot]) return;
+    if (!st.sel) { msg('Tap a tile first, then the slot.', 'bad'); return; }
+    if (st.sel !== sl.dataset.slot) {
+      sl.classList.remove('nope'); void sl.offsetWidth; sl.classList.add('nope');
+      msg(`Not that one. This slot ${ROLE[sl.dataset.slot]}. The ${NAME[st.sel]} doesn't do that.`, 'bad');
+      return;
+    }
+    st.placed[sl.dataset.slot] = true;
+    sl.classList.add('filled'); sl.innerHTML = `<small>${ROLE[sl.dataset.slot]}</small><b>${NAME[st.sel]}</b>`; sl.setAttribute('aria-label', NAME[st.sel]);
+    $(`#tray2 .tile[data-t="${st.sel}"]`).classList.add('gone'); st.sel = null;
+    if (Object.keys(st.placed).length === 3) { msg('Pipeline built. Now fill in the mapping table below.', 'good'); $('#mapEd').hidden = false; renderMap(); }
+    else msg('Placed. Next tile?', 'good');
+  });
+  function renderMap() {
+    $('#hostChips').innerHTML = HOSTS.map(h => `<button class="hchip${st.hsel === h ? ' sel' : ''}${st.map.includes(h) ? ' used' : ''}" data-h="${h}" style="--hc:${HC[h]}">${h}</button>`).join('');
+    $('#mtab').innerHTML = st.map.map((h, q) => `<button class="mrow${h ? ' set' : ''}" data-q="${q}" style="--hc:${h ? HC[h] : 'var(--muted)'}" aria-label="Queue b${q + 1}: ${h || 'empty'}"><span>b${q + 1}</span><span class="mh">${h ? '← ' + h : 'empty'}</span></button>`).join('');
+    $$('#hostChips .hchip').forEach(b => b.onclick = () => { st.hsel = st.hsel === b.dataset.h ? null : b.dataset.h; renderMap(); });
+    $$('#mtab .mrow').forEach(b => b.onclick = () => {
+      if (!st.hsel) { msg('Tap a host first, then a queue.', 'bad'); return; }
+      const q = +b.dataset.q; st.map = st.map.map(x => x === st.hsel ? null : x); st.map[q] = st.hsel; st.hsel = null;
+      renderMap();
+      if (st.map.every(Boolean)) {
+        msg(`Mapping table: ${st.map.map((h, i) => `${h} → b${i + 1}`).join(', ')}. Ready for a polite run.`, 'good');
+        if (checkGoal('#s2goals', 'build', goals, 10)) logTo('p2log', 'Router, mapping table and 4 back queues are in place. Each queue now holds one host.', 'g');
+        $('#politeBtn').disabled = st.running;
+        if (st.mode !== 'polite') renderAt(0, politeSched(+$('#delay').value), 'polite', analyse(politeSched(+$('#delay').value)));
+      } else msg('Keep going: every queue needs a host.');
+    });
+  }
+
+  /* --- schedules --- */
+  function naiveSched() {
+    const free = [0, 0, 0, 0];
+    return STREAM.map(u => { const s = Math.min(...free), w = free.indexOf(s); free[w] = s + DL; return { u, w, s, e: s + DL }; });
+  }
+  function politeSched(d) {
+    const qOf = {}; st.map.forEach((h, q) => { if (h) qOf[h] = q; });
+    const cnt = [0, 0, 0, 0];
+    return STREAM.map(u => { const w = qOf[u.h], k = cnt[w]++, s = k * (DL + d); return { u, w, s, e: s + DL }; });
+  }
+  function analyse(sched) {
+    const res = {};
+    HOSTS.forEach(h => {
+      const xs = sched.filter(x => x.u.h === h).sort((a, b) => a.s - b.s);
+      let angryAt = Infinity, maxPar = 1, minGap = Infinity;
+      for (let i = 1; i < xs.length; i++) {
+        const gap = xs[i].s - xs[i - 1].s; minGap = Math.min(minGap, gap);
+        if (gap < LIMIT - 1e-9 && xs[i].s < angryAt) angryAt = xs[i].s;
+      }
+      xs.forEach(x => { maxPar = Math.max(maxPar, xs.filter(y => y.s <= x.s + 1e-9 && y.e > x.s + 1e-9).length); });
+      res[h] = { angryAt, maxPar, minGap, n: xs.length };
+    });
+    return res;
+  }
+
+  /* --- rendering at sim time t --- */
+  function renderAt(t, sched, mode, an) {
+    const eps = 1e-9;
+    let html = '';
+    if (mode === 'naive') {
+      const waiting = sched.filter(x => x.s > t + eps).map(x => uq(x.u.h)).join('');
+      html += `<div class="shared"><span class="fql">Shared FIFO →</span>${waiting || '<span class="muted">empty</span>'}</div>`;
+    }
+    for (let w = 0; w < 4; w++) {
+      const mine = sched.filter(x => x.w === w);
+      const cur = mine.find(x => x.s <= t + eps && x.e > t + eps);
+      const queued = mode === 'polite' ? mine.filter(x => x.s > t + eps) : [];
+      const host = mode === 'polite' ? st.map[w] : null;
+      let ws;
+      if (cur) ws = `<span class="lw">⬇ ${uq(cur.u.h)}</span>`;
+      else if (mode === 'polite' && queued.length && t > eps) ws = '<span class="lw wait">⏳ pause</span>';
+      else ws = `<span class="lw idle">${mine.some(x => x.e <= t + eps) ? 'done' : 'idle'}</span>`;
+      const name = mode === 'polite' ? `b${w + 1}·${host}` : `W${w + 1}`;
+      html += `<div class="lane"><span class="ln" style="color:${host ? HC[host] : 'inherit'}" title="${mode === 'polite' ? `queue b${w + 1} (${host}) → worker W${w + 1}` : `worker W${w + 1}`}">${name}</span><span class="lq">${queued.map(x => uq(x.u.h)).join('')}</span>${ws}</div>`;
+    }
+    $('#lanes').innerHTML = html;
+    $('#hosts').innerHTML = HOSTS.map(h => {
+      const fl = sched.filter(x => x.u.h === h && x.s <= t + eps && x.e > t + eps).length;
+      const angry = an && an[h].angryAt <= t + eps;
+      const finished = sched.filter(x => x.u.h === h).every(x => x.e <= t + eps);
+      const face = angry ? '😡' : fl ? '🙂' : finished && t > 0 ? '😌' : '😶';
+      const sub = angry ? (an[h].maxPar > 1 ? `${an[h].maxPar} at once!` : 'too fast!') : fl ? `${fl} in flight` : finished && t > 0 ? 'all served' : 'waiting';
+      return `<div class="hostc${angry ? ' angry' : finished && t > 0 ? ' calm' : ''}" style="--hc:${HC[h]}"><span class="b429">429</span><div class="face" aria-hidden="true">${face}</div><div class="hn">${h}</div><div class="hs">${sub}</div></div>`;
+    }).join('');
+    const done = sched.filter(x => x.e <= t + eps).length;
+    $('#p2done').textContent = `${done} / 20`; $('#p2time').textContent = t.toFixed(1) + ' s';
+    $('#p2rate').textContent = t > 0.2 ? (done / t).toFixed(1) + ' pages/s' : '—';
+  }
+  async function play(sched, mode) {
+    const an = analyse(sched), T = Math.max(...sched.map(x => x.e)), msPer = Math.min(420, 6500 / T);
+    if (Q.reduced) { renderAt(T, sched, mode, an); return an; }
+    await new Promise(res => {
+      const t0 = performance.now();
+      const fr = now => { const t = Math.min(T, (now - t0) / msPer); renderAt(t, sched, mode, an); t < T ? requestAnimationFrame(fr) : res(); };
+      requestAnimationFrame(fr);
+    });
+    return an;
+  }
+  function lock(on) { st.running = on; $('#naiveBtn').disabled = on; $('#politeBtn').disabled = on || !goals.has('build'); $('#delay').disabled = on; }
+  $('#delay').addEventListener('input', e => { $('#delayVal').textContent = (+e.target.value).toFixed(2) + ' s'; });
+  $('#naiveBtn').onclick = async () => {
+    if (st.running) return; lock(true); st.mode = 'naive';
+    logTo('p2log', '▶ Naive: one shared FIFO queue, each free worker grabs the next URL.');
+    const sched = naiveSched(), an = await play(sched, 'naive');
+    const angry = HOSTS.filter(h => an[h].angryAt < Infinity);
+    logTo('p2log', `😡 ${angry.map(h => `${h} (up to ${an[h].maxPar} at once)`).join(', ')}. Wiki got 4 requests in the same instant: to wiki, that looks like an attack.`, 'e');
+    logTo('p2log', `Fast, though: 20 pages in ${Math.max(...sched.map(x => x.e)).toFixed(1)} s. Speed bought by being rude.`, 'w');
+    checkGoal('#s2goals', 'naive', goals, 10);
+    lock(false); maybeQuiz();
+  };
+  $('#politeBtn').onclick = async () => {
+    if (st.running || !goals.has('build')) return; lock(true); st.mode = 'polite';
+    const d = +$('#delay').value;
+    logTo('p2log', `▶ Polite: one queue per host, one worker per queue, ${d.toFixed(2)} s pause.`);
+    const sched = politeSched(d), an = await play(sched, 'polite'), T = Math.max(...sched.map(x => x.e));
+    const angry = HOSTS.filter(h => an[h].angryAt < Infinity);
+    if (angry.length) {
+      logTo('p2log', `😡 ${angry.join(', ')}: only one request at a time now, but a new one every ${(DL + d).toFixed(2)} s. These hosts accept one per second. Raise the pause.`, 'e');
+    } else {
+      logTo('p2log', `😌 Every host stayed calm. 20 pages in ${T.toFixed(1)} s (${(20 / T).toFixed(1)} pages/s). One polite worker alone would need ${(19 * (DL + d) + DL).toFixed(1)} s, but the 4 hosts ran in parallel.`, 'g');
+      if (checkGoal('#s2goals', 'polite', goals, 15)) $('#s2note').style.display = 'block';
+      if (Math.abs(d - (LIMIT - DL)) < 1e-9) { if (checkGoal('#s2goals', 'sweet', goals, 10)) logTo('p2log', `🎯 ${d.toFixed(2)} s is the sweet spot: 0.5 s download + 0.5 s pause = exactly one request per second per host.`, 'g'); }
+      else logTo('p2log', 'All calm. But a longer pause is slower. Find the lowest pause that keeps every face calm.', 'w');
+    }
+    lock(false); maybeQuiz();
+  };
+  function maybeQuiz() {
+    if (st.quiz || !goals.has('naive') || !goals.has('polite')) return;
+    st.quiz = true;
+    setTimeout(() => quizChain($('#s2quiz'), [
+      { q: 'In the back-queue design, what guarantees two workers never hit the same host at once?', xp: 10,
+        options: ['Each host has one queue, and each queue one worker', 'Workers lock the host in a shared database first', 'The router sends each host only one URL per day'],
+        correct: 0,
+        good: 'All of a host\'s URLs land in one queue, and only one worker reads that queue. So at most one request per host is in flight.',
+        bad: 'No locks needed. All of a host\'s URLs land in <b>one queue</b>, and <b>one worker</b> reads that queue, one page at a time.' },
+      { q: 'What does the mapping table store?', xp: 10,
+        options: ['Which back queue each host belongs to', 'Which pages each host links out to', 'Which worker last crashed on a host'],
+        correct: 0,
+        good: 'It maps host → queue, for example wikipedia.com → b1, apple.com → b2. The router looks up every URL\'s host in it.',
+        bad: 'It\'s a simple lookup from <b>host → queue</b> (wikipedia.com → b1, apple.com → b2, …). The router uses it to put each URL in the right queue.' },
+      { q: 'Why add a pause between two downloads from the same host?', xp: 10,
+        options: ['To spread requests out so the host isn\'t overloaded', 'To give the parser time to find duplicate URLs', 'To let DNS records expire before the next request'],
+        correct: 0,
+        good: 'One page at a time still means back-to-back requests. The pause caps how often each host is hit.',
+        bad: 'It\'s about the host, not our own pipeline. One-at-a-time with no pause is still a steady stream; the pause <b>spreads requests out</b> so the site isn\'t overloaded.' },
+    ], () => setTimeout(() => Q.clearStage(2), 400)), 500);
+  }
+  renderAt(0, naiveSched(), 'naive', null);
+});
+
+/* ================= STAGE 3: priority ================= */
+Q.onStage(3, () => {
+  const goals = new Set();
+  const dots = n => '●'.repeat(n) + '○'.repeat(3 - n);
+  const CARDS = [
+    { u: 'apple.com/', pr: 3, tr: 3, ch: 'weekly', ok: [1], why: 'Heavily linked, heavily visited: a top-priority page.' },
+    { u: 'bbc.co.uk/news', pr: 3, tr: 3, ch: 'every few minutes', ok: [1], why: 'Important, popular and changes constantly. Crawl it early and often.' },
+    { u: 'randomforum.net/thread/88213', pr: 1, tr: 1, ch: 'almost never', ok: [3], why: 'It may mention Apple, but few link to it and few read it. Low priority.' },
+    { u: 'someblog.io/2014/old-post', pr: 1, tr: 1, ch: 'never', ok: [3], why: 'Nobody links to it, nobody reads it, and it never changes. Bottom of the pile.' },
+    { u: 'en.wikipedia.org/wiki/Web_crawler', pr: 3, tr: 2, ch: 'monthly', ok: [1, 2], why: 'Strong PageRank, decent traffic. High or medium are both defensible.' },
+    { u: 'github.com/trending', pr: 2, tr: 2, ch: 'daily', ok: [1, 2], why: 'Middling rank and traffic, but it changes daily. Medium, or high if you weight freshness.' },
+    { u: 'citycouncil.gov/minutes/2019', pr: 2, tr: 1, ch: 'never', ok: [2, 3], why: 'Some authority, little traffic, never changes. Medium or low.' },
+    { u: 'smallbakery.co.uk/menu', pr: 1, tr: 1, ch: 'monthly', ok: [2, 3], why: 'Small local site. Low, or medium if you value its monthly changes.' },
+  ];
+  let answered = 0;
+  $('#pcards').innerHTML = CARDS.map((c, i) => `<div class="sort-item pcard" data-i="${i}"><div class="url">${c.u}</div>
+    <div class="badges"><span class="badge">PageRank <b>${dots(c.pr)}</b></span><span class="badge">Traffic <b>${dots(c.tr)}</b></span><span class="badge">Changes: ${c.ch}</span></div>
+    <div class="row">${[1, 2, 3].map(f => `<button class="opt" data-f="${f}">f${f} · ${['high', 'medium', 'low'][f - 1]}</button>`).join('')}</div><div class="explain"></div></div>`).join('');
+  $$('#pcards .pcard').forEach(card => {
+    const c = CARDS[+card.dataset.i];
+    $$('.opt', card).forEach(b => b.onclick = () => {
+      $$('.opt', card).forEach(x => x.disabled = true);
+      const f = +b.dataset.f, ok = c.ok.includes(f);
+      b.classList.add(ok ? 'right' : 'wrong');
+      if (!ok) c.ok.forEach(k => $(`.opt[data-f="${k}"]`, card).classList.add('right'));
+      const ex = $('.explain', card); ex.className = 'explain show ' + (ok ? 'good' : 'bad'); ex.textContent = c.why;
+      ok ? Q.addXP(3, b) : Q.loseHeart(b);
+      if (++answered === CARDS.length) { checkGoal('#s3goals', 'sort', goals, 0); maybeQuiz(); }
+    });
+  });
+
+  /* --- Part B: the front queue selector --- */
+  const W = [6, 3, 1], cnt = [0, 0, 0];
+  let mode = 'bias', busy = false;
+  $('#selq').innerHTML = [0, 1, 2].map(q => `<div class="qcol" data-q="${q}"><h4>f${q + 1}</h4><div class="qs">${['high', 'medium', 'low'][q]} priority</div>
+    <label class="small" for="w${q}">weight <span class="w" id="wv${q}">${W[q]}</span></label><input type="range" id="w${q}" min="0" max="10" value="${W[q]}" aria-label="Weight for queue f${q + 1}">
+    <div class="hbar"><div></div></div><div class="cnt">0</div><div class="stv">⚠ starving</div></div>`).join('');
+  [0, 1, 2].forEach(q => $('#w' + q).addEventListener('input', e => { W[q] = +e.target.value; $('#wv' + q).textContent = W[q]; }));
+  $$('#selMode button').forEach(b => b.onclick = () => {
+    if (busy) return;
+    mode = b.dataset.m; $$('#selMode button').forEach(x => x.classList.toggle('on', x === b));
+    $$('#selq input').forEach(i => i.disabled = mode === 'strict');
+  });
+  function paint() {
+    $$('#selq .qcol').forEach(col => { const q = +col.dataset.q; $('.hbar div', col).style.height = cnt[q] + '%'; $('.cnt', col).textContent = cnt[q]; });
+  }
+  $('#pickBtn').onclick = async () => {
+    if (busy) return;
+    const sum = W.reduce((a, b) => a + b, 0);
+    if (mode === 'bias' && !sum) { Q.toast('give a queue some weight', $('#pickBtn'), 'practice'); return; }
+    busy = true; $('#pickBtn').disabled = true;
+    cnt.fill(0); $$('#selq .qcol').forEach(c => c.classList.remove('starve')); paint();
+    for (let k = 0; k < 100; k++) {
+      let q = 0;
+      if (mode === 'bias') { let r = Math.random() * sum; q = r < W[0] ? 0 : r < W[0] + W[1] ? 1 : 2; }
+      cnt[q]++;
+      if (!Q.reduced && k % 4 === 3) { paint(); await sleep(28); }
+    }
+    paint();
+    const starving = [0, 1, 2].filter(q => cnt[q] === 0);
+    starving.forEach(q => $(`#selq .qcol[data-q="${q}"]`).classList.add('starve'));
+    if (mode === 'bias') {
+      logTo('p3log', `Biased random (${W.join(':')}): f1 ${cnt[0]}, f2 ${cnt[1]}, f3 ${cnt[2]}. ${starving.length ? `f${starving.map(q => q + 1).join(', f')} got nothing: a weight of 0 starves a queue too.` : 'High priority goes first most of the time, but every queue makes progress.'}`, starving.length ? 'w' : 'g');
+      if (!starving.length) checkGoal('#s3goals', 'bias', goals, 5);
+    } else {
+      logTo('p3log', `Strict priority: f1 ${cnt[0]}, f2 ${cnt[1]}, f3 ${cnt[2]}. f1 never empties, so f2 and f3 starve: their pages are never crawled.`, 'e');
+      checkGoal('#s3goals', 'strict', goals, 5);
+    }
+    busy = false; $('#pickBtn').disabled = false; maybeQuiz();
+  };
+  let quizShown = false;
+  function maybeQuiz() {
+    if (quizShown || goals.size < 3) return;
+    quizShown = true;
+    setTimeout(() => quizChain($('#s3quiz'), [
+      { q: 'Why does the front selector pick at random, biased toward high priority, instead of always taking the top queue?', xp: 10,
+        options: ['So lower-priority queues still get crawled', 'Because random picks are cheaper to compute', 'So that one host never gets two requests'],
+        correct: 0,
+        good: 'Strict priority starves the lower queues whenever the top one keeps refilling, which it always does on the web. Biased random keeps the order mostly right and still lets everything through.',
+        bad: 'Speed and politeness aren\'t the reason (politeness is the back queues\' job). Strict priority <b>starves</b> f2 and f3, because f1 never runs dry. Biasing the dice still lets them through.' },
+      { q: 'Which pair are both signals the book suggests for a URL\'s priority?', xp: 10,
+        options: ['PageRank and how often the page updates', 'URL length and the page\'s file size', 'Server location and the HTTP version'],
+        correct: 0,
+        good: 'The book lists PageRank, website traffic and update frequency. Any two of those will do.',
+        bad: 'The book\'s signals are <b>PageRank</b>, <b>website traffic</b> and <b>update frequency</b>. They measure how useful and how fresh a page is.' },
+      { q: 'What does the queue selector in the front layer do?', xp: 10,
+        options: ['Picks a front queue at random, weighted toward high', 'Assigns each host its own queue and its own worker', 'Scores each URL and drops it into a priority queue'],
+        correct: 0,
+        good: 'The prioritizer scores and files URLs; the front selector chooses which queue to pull from next, with a weighted random pick. Host-to-queue assignment happens later, in the back queues.',
+        bad: 'Scoring and filing is the <b>prioritizer</b>; one queue per host is the <b>back</b> layer. The front selector picks the next front queue <b>at random, weighted toward high priority</b>.' },
+    ], () => setTimeout(() => Q.clearStage(3), 400)), 500);
+  }
+});
+
+/* ================= STAGE 4: the two-layer frontier ================= */
+Q.onStage(4, () => {
+  const PARTS = [
+    { k: 'pri', t: 'Prioritizer', hint: 'URLs arrive unranked. Something has to score them first.' },
+    { k: 'fq', t: 'Front queues f1…fn', hint: 'Scored URLs need somewhere to wait: one line per priority level.' },
+    { k: 'fs', t: 'Front queue selector', hint: 'Something must pull from the priority lines, favouring the top one.' },
+    { k: 'br', t: 'Back queue router', hint: 'Now the politeness half: something must sort each URL by its host.' },
+    { k: 'mt', t: 'Mapping table', hint: 'The router needs a lookup: which queue belongs to this host?', side: true },
+    { k: 'bq', t: 'Back queues b1…bn', hint: 'Each host needs its own FIFO line.' },
+    { k: 'bs', t: 'Back queue selector', hint: 'Something must hand each worker its queue.' },
+    { k: 'wt', t: 'Worker threads', hint: 'Last step: who actually downloads the pages?' },
+  ];
+  const LB = { k: 'lb', t: 'Load balancer' };
+  let nextI = 0, mistakes = 0, built = false;
+  function renderSlots() {
+    $('#slots4').innerHTML = PARTS.map((p, i) => `${i === 0 ? '<div class="mod-h">Front queues · priority</div>' : ''}${i === 3 ? '<div class="mod-h">Back queues · politeness</div>' : ''}
+      <div class="slot${i < nextI ? ' ok' : i === nextI ? ' next' : ''}${p.side ? ' side' : ''}"><span class="sn">${p.side ? '↳' : i + 1 - (i > 4 ? 1 : 0)}</span>${i < nextI ? p.t : `<span class="q">${p.side ? 'consulted by the router' : '?'}</span>`}</div>`).join('') + '<div class="mod-h">↓ downloader</div>';
+  }
+  function renderTray() {
+    const left = PARTS.slice(nextI).concat(built ? [] : [LB]);
+    $('#ttray4').innerHTML = shuffle(left).map(p => `<button class="tile" data-k="${p.k}">${p.t}</button>`).join('') || '<span class="small muted">All placed.</span>';
+    $$('#ttray4 .tile').forEach(b => b.onclick = () => pick(b));
+  }
+  const amsg = (t, cls) => { const m = $('#amsg'); m.textContent = t; m.className = 'bmsg ' + (cls || ''); };
+  function pick(b) {
+    if (built) return;
+    const want = PARTS[nextI];
+    if (b.dataset.k !== want.k) {
+      mistakes++; b.classList.remove('nope'); void b.offsetWidth; b.classList.add('nope');
+      amsg(b.dataset.k === 'lb' ? 'A load balancer spreads incoming requests across servers. Nobody sends requests to the frontier: workers pull from it. Leave it out.' : `Not yet. ${want.hint}`, 'bad');
+      return;
+    }
+    nextI++; renderSlots();
+    $(`#ttray4 .tile[data-k="${b.dataset.k}"]`).remove();
+    amsg(nextI < PARTS.length ? `✓ ${want.t}.` : '', 'good');
+    if (nextI === PARTS.length) {
+      built = true; renderTray();
+      amsg(`✓ Frontier assembled${mistakes ? ` (${mistakes} wrong tap${mistakes > 1 ? 's' : ''})` : ' with no wrong taps'}. The load balancer stays out.`, 'good');
+      Q.addXP(mistakes <= 2 ? 20 : 10, $('#slots4'));
+      $('#run4wrap').style.display = 'block'; startRun();
+    }
+  }
+  renderSlots(); renderTray();
+
+  /* --- step-through run --- */
+  const U = {
+    ap: ['apple.com/', 'apple', 3], bn: ['bbc/news', 'bbc', 3], wm: ['wiki/Main', 'wiki', 3], nk: ['nike.com/', 'nike', 3],
+    wc: ['wiki/Crawler', 'wiki', 2], ai: ['apple/iphone', 'apple', 2], bs: ['bbc/sport', 'bbc', 2], wg: ['wiki/Graph', 'wiki', 2],
+    fo: ['forum/t/88213', 'forum', 1], bl: ['blog/old-post', 'blog', 1], wt: ['wiki/Talk', 'wiki', 1], al: ['apple/legal', 'apple', 1],
+  };
+  const chip = k => { const [t, h, p] = U[k]; return `<span class="uc" style="--hc:${HC[h]}" title="${t} (${h}, priority ${p})"><i>${'★'.repeat(p)}</i>${t}</span>`; };
+  const ASK = {
+    q1: { q: '<b>apple.com/</b> is heading for download, while <b>forum/t/88213</b> is still waiting. Which part made that call?',
+      options: ['The front queues and their biased selector', 'The back queues and their mapping table', 'The worker threads, which pick favourites'], correct: 0,
+      good: 'Priority lives in the front layer. The prioritizer put apple.com/ in f1 and the forum post in f3, and the biased selector pulls from f1 most often.',
+      bad: 'The back layer only decides <i>when</i> a host may be hit, and workers just download what they\'re handed. <b>Priority</b> is the front layer\'s job: f1 vs f3, and a selector biased toward f1.' },
+    q2: { q: 'W1 is free and <b>wiki/Crawler</b> is first in b1. Why doesn\'t W1 fetch it right now?',
+      options: ['wiki is inside its politeness pause', 'The front selector hasn\'t released it', 'The mapping table has no entry for wiki'], correct: 0,
+      good: 'W1 just downloaded wiki/Main. Politeness means waiting before hitting the same host again, even with a free worker.',
+      bad: 'It has already passed the front layer and the router (it\'s sitting in b1, wiki\'s queue). W1 just fetched wiki/Main, so wiki is in its <b>politeness pause</b>.' },
+    q3: { q: 'b3 has just gone empty and W3 has nothing to do. What should happen next?',
+      options: ['The router refills b3 with a new host\'s URLs', 'b3 sits idle until bbc has more URLs', 'W3 starts helping W1 fetch wiki pages'], correct: 0,
+      good: 'An empty back queue is wasted capacity. In Mercator-style frontiers, the router pulls from the front queues until it finds a host that has no queue yet, and gives b3 to that host.',
+      bad: 'Helping W1 would put two workers on wiki: impolite. Waiting for bbc wastes a worker. Mercator-style frontiers <b>refill b3 with a new host</b> pulled from the front queues.' },
+  };
+  // Hand-authored frames: a snapshot of every part + a line of narration.
+  const FR = [
+    { inbox: ['fo', 'ap', 'wc', 'bl', 'bn', 'wm', 'ai', 'wt', 'nk', 'bs', 'wg', 'al'], f: [[], [], []], sel: [], map: ['wiki', 'apple', 'bbc'], b: [[], [], []], w: ['idle', 'idle', 'idle'], done: [], hi: ['inbox'],
+      say: '12 newly found URLs reach the frontier. From earlier work the mapping table already says wiki → b1, apple → b2, bbc → b3. All queues are empty.' },
+    { inbox: [], f: [['ap', 'bn', 'wm', 'nk'], ['wc', 'ai', 'bs', 'wg'], ['fo', 'bl', 'wt', 'al']], sel: [], map: ['wiki', 'apple', 'bbc'], b: [[], [], []], w: ['idle', 'idle', 'idle'], done: [], hi: ['f0', 'f1', 'f2'],
+      say: 'The <b>prioritizer</b> scores each URL (PageRank, traffic, update frequency) and files it in f1, f2 or f3.' },
+    { inbox: [], f: [['nk'], ['bs', 'wg'], ['fo', 'bl', 'wt', 'al']], sel: ['ap', 'wm', 'bn', 'wc', 'ai'], map: ['wiki', 'apple', 'bbc'], b: [[], [], []], w: ['idle', 'idle', 'idle'], done: [], hi: ['sel'], ask: 'q1',
+      say: 'The <b>front selector</b> pulls five URLs: three from f1, two from f2, none from f3. Biased dice favour the top queue.' },
+    { inbox: [], f: [['nk'], ['bs', 'wg'], ['fo', 'bl', 'wt', 'al']], sel: [], map: ['wiki', 'apple', 'bbc'], b: [['wm', 'wc'], ['ap', 'ai'], ['bn']], w: ['idle', 'idle', 'idle'], done: [], hi: ['map', 'b0', 'b1', 'b2'],
+      say: 'The <b>router</b> looks up each host in the <b>mapping table</b>: both wiki URLs go to b1, both apple URLs to b2, bbc/news to b3.' },
+    { inbox: [], f: [['nk'], ['bs', 'wg'], ['fo', 'bl', 'wt', 'al']], sel: [], map: ['wiki', 'apple', 'bbc'], b: [['wc'], ['ai'], []], w: [['dl', 'wm'], ['dl', 'ap'], ['dl', 'bn']], done: [], hi: ['w0', 'w1', 'w2'],
+      say: 'The <b>back selector</b> gives each worker its own queue. Three hosts, three downloads in parallel, one per host.' },
+    { inbox: [], f: [['nk'], ['bs', 'wg'], ['fo', 'bl', 'wt', 'al']], sel: [], map: ['wiki', 'apple', 'bbc'], b: [['wc'], ['ai'], []], w: ['wait', 'wait', 'idle'], done: ['wm', 'ap', 'bn'], hi: ['w0', 'done'], ask: 'q2',
+      say: 'Three pages downloaded. W1 and W2 now pause before touching the same host again.' },
+    { inbox: [], f: [['nk'], ['bs', 'wg'], ['fo', 'bl', 'wt', 'al']], sel: [], map: ['wiki', 'apple', 'bbc'], b: [['wc'], ['ai'], []], w: ['wait', 'wait', 'idle'], done: ['wm', 'ap', 'bn'], hi: ['b2', 'w2'], ask: 'q3',
+      say: 'Meanwhile <b>b3 is empty</b>: bbc has nothing else waiting in the back layer, so W3 is idle.' },
+    { inbox: [], f: [[], ['bs', 'wg'], ['fo', 'bl', 'wt', 'al']], sel: [], map: ['wiki', 'apple', 'nike'], b: [['wc'], ['ai'], ['nk']], w: ['wait', 'wait', 'idle'], done: ['wm', 'ap', 'bn'], hi: ['map', 'b2', 'f0'],
+      say: 'b3 is reassigned. The router pulls from the front until it finds a host with no queue: <b>nike.com/</b>. The table now says nike → b3. (This refill trick comes from the Mercator crawler, not the book.)' },
+    { inbox: [], f: [[], ['bs', 'wg'], ['fo', 'bl', 'wt', 'al']], sel: [], map: ['wiki', 'apple', 'nike'], b: [[], [], []], w: [['dl', 'wc'], ['dl', 'ai'], ['dl', 'nk']], done: ['wm', 'ap', 'bn'], hi: ['w0', 'w1', 'w2'], end: true,
+      say: 'Pauses over: W1 fetches wiki again, W2 apple again, W3 starts on nike. The forum post is still in f3. It will get its turn, just later. <b>Priority decided what left the front. Politeness decided when each host was hit.</b>' },
+  ];
+  let fi = 0, waitingAsk = false, ended = false;
+  const asked = new Set();
+  function renderFrame() {
+    const F = FR[fi], hi = new Set(F.hi || []);
+    const fl = k => hi.has(k) ? ' flash' : '';
+    const wcell = (w, i) => {
+      if (Array.isArray(w)) return `<span class="rw dl">⬇ W${i + 1}</span>`;
+      return w === 'wait' ? `<span class="rw wait">⏳ W${i + 1} pause</span>` : `<span class="rw idle">W${i + 1} idle</span>`;
+    };
+    $('#fr4').innerHTML = `
+      <div class="fr-box${fl('inbox')}">📥 Incoming: ${F.inbox.map(chip).join('') || '<span class="muted">none</span>'}</div>
+      <div class="fr-mod front"><div class="fr-h">Front queues · priority</div>
+        <div class="fr-box">🏷️ Prioritizer</div>
+        ${F.f.map((q, i) => `<div class="fr-row${fl('f' + i)}"><span class="rn">f${i + 1} ${'★'.repeat(3 - i)}</span><span class="rq">${q.map(chip).join('') || '<span class="muted small">empty</span>'}</span></div>`).join('')}
+        <div class="fr-box${fl('sel')}">🎲 Front selector → ${F.sel.map(chip).join('') || '<span class="muted small">nothing in hand</span>'}</div>
+      </div>
+      <div class="fr-mod back"><div class="fr-h">Back queues · politeness</div>
+        <div class="fr-box${fl('map')}">🔀 Router + mapping table: ${F.map.map((h, i) => `<span class="mapline" style="--hc:${HC[h]}"><b>${h}</b> → b${i + 1}</span>`).join(' · ')}</div>
+        ${F.b.map((q, i) => `<div class="fr-row wrow${fl('b' + i)}${fl('w' + i)}"><span class="rn" style="color:${HC[F.map[i]]}">b${i + 1} · ${F.map[i]}</span><span class="rq">${q.map(chip).join('') || '<span class="muted small">empty</span>'}${Array.isArray(F.w[i]) ? chip(F.w[i][1]) : ''}</span>${wcell(F.w[i], i)}</div>`).join('')}
+      </div>
+      <div class="fr-box${fl('done')}">✅ Downloaded: ${F.done.map(chip).join('') || '<span class="muted small">nothing yet</span>'}</div>`;
+    $('#say4').innerHTML = F.say;
+    $('#tick4').textContent = `tick ${fi} / ${FR.length - 1}`;
+    $('#ask4').innerHTML = '';
+    if (F.ask && !asked.has(F.ask)) {
+      waitingAsk = true; $('#next4').disabled = true;
+      Q.quiz($('#ask4'), { ...ASK[F.ask], tag: 'Paused · what\'s happening?', xp: 10, onDone: () => { asked.add(F.ask); waitingAsk = false; $('#next4').disabled = false; } });
+    } else $('#next4').disabled = false;
+    if (F.end) { $('#next4').disabled = true; if (!ended) { ended = true; finalQuiz(); } }
+  }
+  function startRun() { fi = 0; renderFrame(); }
+  $('#next4').onclick = () => { if (waitingAsk || fi >= FR.length - 1) return; fi++; renderFrame(); };
+  $('#restart4').onclick = () => { waitingAsk = false; startRun(); };
+  let finalShown = false;
+  function finalQuiz() {
+    if (finalShown) return; finalShown = true;
+    setTimeout(() => Q.quiz($('#s4quiz'), {
+      tag: 'Final check', xp: 15,
+      q: 'In the two-layer frontier, which module manages politeness?',
+      options: ['The back queues', 'The front queues', 'The prioritizer'],
+      correct: 0,
+      good: 'Back queues: router + mapping table + one queue per host + a worker per queue, with a pause between downloads. The front queues handle priority.',
+      bad: 'Front queues and the prioritizer handle <b>priority</b>. Politeness is the <b>back queues</b>: one queue per host, one worker per queue, a pause between downloads.',
+      onDone: () => setTimeout(() => Q.clearStage(4), 600),
+    }), 400);
+  }
+});
+
+/* ================= STAGE 5: freshness + storage ================= */
+Q.onStage(5, () => {
+  const goals = new Set();
+  const TDAYS = 30, BUDGET = 20;
+  const PAGES = [
+    { n: 'News front page', d: 'changes ~6 times a day', lam: 6, w: 3 },
+    { n: 'Live sports scores', d: 'changes ~hourly, faster during games', lam: 24, w: 1 },
+    { n: 'Product page', d: 'changes about weekly', lam: 1 / 7, w: 2 },
+    { n: 'Government notice', d: 'changes about monthly', lam: 1 / 30, w: 1 },
+    { n: 'Company "About" page', d: 'changes about yearly', lam: 1 / 365, w: 1 },
+    { n: 'Old blog post (2014)', d: 'never changes', lam: 0, w: 1 },
+  ];
+  const START = [4, 4, 3, 3, 3, 3];
+  let alloc = START.slice();
+  // fraction of time our copy is stale, if changes arrive at random (rate lam/day) and we recrawl f times a day, evenly
+  function stale(lam, f) { const I = f ? Math.min(1 / f, TDAYS) : TDAYS, x = lam * I; return x ? 1 - (1 - Math.exp(-x)) / x : 0; }
+  const score = a => PAGES.reduce((s, p, i) => s + p.w * stale(p.lam, a[i]), 0) * 100;
+  const BASE = score(START), TARGET = 0.75 * BASE;
+  // deterministic pseudo-random change times for the sparkline
+  function marks(i) { const p = PAGES[i]; if (!p.lam) return []; let seed = 7 + i * 101; const r = () => (seed = (seed * 16807) % 2147483647) / 2147483647; const out = []; let t = 0; while (out.length < 120) { t += -Math.log(1 - r()) / p.lam; if (t > TDAYS) break; out.push(t); } if (!out.length && p.lam) out.push(TDAYS * 0.62); return out; }
+  $('#frows').innerHTML = PAGES.map((p, i) => `<div class="frow" data-i="${i}">
+      <div><div class="nm">${p.n} <span class="imp" title="importance">${'★'.repeat(p.w)}</span></div><div class="ds">${p.d}</div></div>
+      <div class="spark" aria-hidden="true"><svg viewBox="0 0 120 22" preserveAspectRatio="none"><rect class="bg" x="0" y="0" width="120" height="22" rx="4"></rect>${marks(i).map(t => `<line class="tk" x1="${(t / TDAYS * 120).toFixed(1)}" x2="${(t / TDAYS * 120).toFixed(1)}" y1="4" y2="18"></line>`).join('')}</svg></div>
+      <div class="stepper"><button class="btn" data-d="-1" aria-label="One fewer recrawl a day for ${p.n}">−</button><span class="n"></span><button class="btn" data-d="1" aria-label="One more recrawl a day for ${p.n}">+</button><span class="small muted">/day</span></div>
+      <div class="stl"><div class="tr"><div class="fl"></div></div><span class="v"></span></div>
+    </div>`).join('');
+  $('#fBase').textContent = BASE.toFixed(0);
+  function renderFresh() {
+    const used = alloc.reduce((a, b) => a + b, 0), sc = score(alloc), pct = (1 - sc / BASE) * 100;
+    $$('#frows .frow').forEach(row => {
+      const i = +row.dataset.i, s = stale(PAGES[i].lam, alloc[i]);
+      $('.n', row).textContent = alloc[i];
+      $('.fl', row).style.width = (s * 100).toFixed(1) + '%';
+      $('.v', row).textContent = Math.round(s * 100) + '%';
+      $('[data-d="-1"]', row).disabled = alloc[i] === 0; $('[data-d="1"]', row).disabled = used >= BUDGET;
+    });
+    $('#fBudget').textContent = `${used} / ${BUDGET}`;
+    $('#fScore').textContent = sc.toFixed(0);
+    const f = $('#fPct'); f.textContent = (pct >= 0 ? pct.toFixed(0) + '% better' : (-pct).toFixed(0) + '% worse'); f.className = 'bignum ' + (sc <= TARGET ? 'good' : pct < 0 ? 'bad' : '');
+    if (sc <= TARGET && !goals.has('fresh')) {
+      checkGoal('#s5goals', 'fresh', goals, 20);
+      const sports = alloc[1];
+      logTo('p5log', `✓ Lab A: ${pct.toFixed(0)}% less staleness than the equal split. Recrawls moved from pages that barely change to the important ones that change often (update history + priority).${sports >= 8 ? '' : ' Notice the sports page: even lots of recrawls leave it stale most of the time, because it changes again almost at once.'}`, 'g');
+      maybeQuiz();
+    }
+  }
+  $$('#frows .stepper .btn').forEach(b => b.onclick = () => {
+    const i = +b.closest('.frow').dataset.i, d = +b.dataset.d, used = alloc.reduce((a, c) => a + c, 0);
+    if (d > 0 && used >= BUDGET) { Q.toast('budget used up', b, 'practice'); return; }
+    alloc[i] = Math.max(0, alloc[i] + d); renderFresh();
+  });
+  $('#fReset').onclick = () => { alloc = START.slice(); renderFresh(); };
+  renderFresh();
+
+  /* --- Lab B: storage --- */
+  const PLAN = {
+    ram: { name: 'All in RAM', rate: 250000, maxRate: 250000 },
+    disk: { name: 'All on disk', rate: 4000, maxRate: 250000 },
+    hyb: { name: 'Disk + buffers', rate: 220000, maxRate: 250000 },
+  };
+  const SIZE = 100e6, GOAL = 1e6, CRASH = 7, RUN = 10, LOST_BUF = 38000;
+  const ran = new Set(); let busy = false;
+  const fmtN = n => n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 1 : 2) + ' M' : n >= 1e3 ? Math.round(n / 1e3) + ' k' : String(Math.round(n));
+  function show(k, t) {
+    const p = PLAN[k], ops = p.rate * t, crashed = t >= CRASH;
+    $('#sgOps').style.width = Math.min(100, ops / GOAL * 100) + '%';
+    $('#sgOpsV').textContent = ops >= GOAL ? '1 M ✓' : fmtN(ops);
+    $('#sgRate').style.width = (p.rate / p.maxRate * 100) + '%';
+    $('#sgRateV').textContent = fmtN(p.rate) + '/s';
+    let size = SIZE;
+    if (crashed) size = k === 'ram' ? 0 : k === 'hyb' ? SIZE - LOST_BUF : SIZE;
+    $('#sgSize').style.width = (size / SIZE * 100) + '%';
+    $('#sgSize').style.background = size < SIZE ? 'var(--bad)' : 'var(--teal)';
+    $('#sgSizeV').textContent = size ? fmtN(size) : '0 💀';
+    $('#crash').classList.toggle('on', crashed);
+  }
+  $$('.store [data-k]').forEach(b => { if (b.tagName === 'BUTTON') b.onclick = () => runStore(b.dataset.k, b); });
+  async function runStore(k, btn) {
+    if (busy) return; busy = true; $$('.store button').forEach(x => x.disabled = true);
+    logTo('p5log', `▶ ${PLAN[k].name}: 10 s, crash at 7 s.`);
+    if (Q.reduced) show(k, RUN);
+    else await new Promise(res => { const t0 = performance.now(); const fr = now => { const t = Math.min(RUN, (now - t0) / 320); show(k, t); t < RUN ? requestAnimationFrame(fr) : res(); }; requestAnimationFrame(fr); });
+    const p = PLAN[k], tGoal = GOAL / p.rate, row = $(`#rtab tr[data-k="${k}"]`).children;
+    row[1].textContent = tGoal <= RUN ? `${tGoal.toFixed(1)} s` : `only ${Math.round(p.rate * RUN / GOAL * 100)}% in 10 s`;
+    row[1].className = tGoal <= RUN ? 'g' : 'b';
+    row[2].textContent = k === 'ram' ? 'all 100 M URLs lost' : k === 'hyb' ? `lost ~${fmtN(LOST_BUF)} unflushed (0.04%)` : 'nothing lost';
+    row[2].className = k === 'ram' ? 'b' : 'g';
+    const verdict = {
+      ram: 'Fastest, but RAM is wiped on a crash: the whole frontier is gone. And hundreds of millions of URLs don\'t fit in one machine\'s memory anyway.',
+      disk: 'Survived the crash, but every enqueue and dequeue waits on the disk. The frontier is now the bottleneck of the whole crawler.',
+      hyb: 'Nearly as fast as RAM, because ops hit the memory buffers and the disk gets big batched writes. The crash only lost the URLs added since the last flush.',
+    }[k];
+    logTo('p5log', verdict, k === 'hyb' ? 'g' : 'w');
+    ran.add(k);
+    if (ran.size === 3 && checkGoal('#s5goals', 'store', goals, 10)) { $('#s5note').style.display = 'block'; maybeQuiz(); }
+    busy = false; $$('.store button').forEach(x => x.disabled = false);
+  }
+  let quizShown = false;
+  function maybeQuiz() {
+    if (quizShown || goals.size < 2) return;
+    quizShown = true;
+    setTimeout(() => quizChain($('#s5quiz'), [
+      { q: 'Which two recrawl strategies does the book suggest?', xp: 15,
+        options: ['Use update history, and recrawl important pages first', 'Recrawl everything daily, and skip all images', 'Recrawl at random, and drop pages that time out'],
+        correct: 0,
+        good: 'Pages that changed often in the past get revisited more often, and important pages are recrawled first and more frequently.',
+        bad: 'Recrawling everything is exactly what's too slow and expensive. The book\'s two strategies: base it on each page\'s <b>update history</b>, and <b>prioritize</b> important pages.' },
+      { q: 'Why not keep the whole URL frontier in memory?', xp: 15,
+        options: ['It\'s too big, and a crash would wipe it', 'Memory is slower than disk for random reads', 'Workers can\'t read URLs held in memory'],
+        correct: 0,
+        good: 'Hundreds of millions of URLs won\'t fit (not scalable), and RAM loses everything on a crash (not durable). So: disk for the bulk, memory buffers in front.',
+        bad: 'Memory is much faster than disk. The problem is size and safety: hundreds of millions of URLs don\'t fit (<b>not scalable</b>), and a crash wipes RAM (<b>not durable</b>).' },
+    ], () => setTimeout(() => Q.clearStage(5), 400)), 500);
+  }
+});
+
+/* ================= STAGE 6: boss ================= */
+Q.onStage(6, () => Q.boss($('#boss'), {
+  name: '🧭 Frontier Warden',
+  xp: 10,
+  choices: [
+    { k: 'front', label: 'Front queues', sub: 'priority' },
+    { k: 'back', label: 'Back queues', sub: 'politeness' },
+    { k: 'fresh', label: 'Recrawl policy', sub: 'freshness' },
+    { k: 'store', label: 'Frontier storage', sub: 'memory + disk' },
+  ],
+  scenarios: [
+    { e: '📧', t: 'An angry email', d: 'A small blog\'s owner complains that your crawler is sending them 20 requests a second.', a: 'back', why: 'Politeness: route each host to its own back queue, one worker per queue, one page at a time, with a pause in between.' },
+    { e: '🗑️', t: 'A week of junk', d: 'The crawler spent its first week on spam forums while major news sites waited their turn.', a: 'front', why: 'That\'s a priority problem. The prioritizer should score news sites higher (PageRank, traffic, update rate) so f1 serves them first.' },
+    { e: '🏷️', t: 'Stale prices', d: 'Search results show product prices from three months ago.', a: 'fresh', why: 'Freshness: those pages change, so recrawl them based on their update history, and recrawl important ones more often.' },
+    { e: '🔌', t: 'Restart amnesia', d: 'The frontier server restarted and 200 million queued URLs vanished.', a: 'store', why: 'An in-memory-only frontier isn\'t durable. Keep the bulk on disk with memory buffers in front, flushed periodically.' },
+    { e: '👯', t: 'Double trouble', d: 'Two worker threads were both downloading from apple.com at the same moment.', a: 'back', why: 'The back-queue rule was broken: one host, one queue, one worker. With a correct host → queue mapping this can\'t happen.' },
+    { e: '🦴', t: 'The forgotten pile', d: 'Low-priority URLs haven\'t been crawled in months. The top queue is always full.', a: 'front', why: 'Strict priority starves the lower queues. The front selector should pick at random, weighted toward high priority, so everything makes progress.' },
+    { e: '📰', t: 'Yesterday\'s headlines', d: 'Breaking-news home pages change every few minutes, but we revisit them once a month.', a: 'fresh', why: 'Recrawl policy: their update history says "changes constantly" and they\'re important, so they deserve frequent revisits.' },
+    { e: '🐢', t: 'Blocked on disk', d: 'Every enqueue waits for a disk write to finish, and the whole crawler has slowed to a crawl.', a: 'store', why: 'Put in-memory buffers in front of the disk for enqueue and dequeue, and flush them to disk in batches.' },
+  ],
+  outro: 'Priority → front queues. Politeness → back queues. Freshness → recrawl policy. Size and durability → disk with memory buffers.',
+  onDone: () => Q.clearStage(6),
+}));
+
+/* ================= STAGE 7: interview drill ================= */
+Q.onStage(7, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"Your crawler is a BFS. What\'s wrong with that, and how does your URL frontier fix it?"</i>',
+  placeholder: 'BFS is the right start, but…',
+  model: '"BFS beats DFS because the web is too deep for DFS. But plain BFS has two problems: most links point back to the same host, so we\'d hammer it, and it treats every URL as equally important. So the frontier has two layers. <b>Front queues handle priority</b>: a prioritizer scores URLs by things like PageRank, traffic and update frequency and files them in queues by priority, and a selector picks randomly but biased toward high priority, so nothing starves. <b>Back queues handle politeness</b>: a router uses a host-to-queue mapping table so each queue holds one host, each worker owns one queue, downloads one page at a time and waits between requests. For <b>freshness</b> I recrawl based on update history and recrawl important pages more often. The frontier is too big for memory, so it <b>lives on disk with in-memory buffers</b> for enqueue and dequeue, flushed periodically."',
+  checks: [
+    'I said why DFS is a poor fit and named BFS\'s two problems',
+    'I described front queues with a biased random selector',
+    'I described back queues: host → queue mapping, one worker per queue, a pause',
+    'I covered freshness and disk + memory-buffer storage',
+  ],
+  onDone: () => Q.clearStage(7),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>
