@@ -438,10 +438,10 @@ const ASK = [
   { q: 'Should we build microservices or a monolith?', a: 'Architecture comes after the estimate. What do you need to compute it?' },
 ];
 const chat1 = Chat($('#chat1'));
-let s1busy = false;
+let s1busy = false, asked = new Set();
 function setup1() {
   begun.delete(1);
-  chat1.clear(); pinned = new Set(); s1busy = false;
+  chat1.clear(); pinned = new Set(); asked = new Set(); s1busy = false;
   $('#s1q').innerHTML = ''; $('#deckWrap').style.display = 'none';
   ['#s1tip', '#s1caveat'].forEach(s => $(s).style.display = 'none');
   renderBoard();
@@ -458,9 +458,9 @@ function showDeck() {
     const a = ASK[+b.dataset.q]; b.disabled = true;
     chat1.me(a.q);
     if (a.k) {
-      b.classList.add('right'); Q.addXP(5, b); tick(1, 15, 'ask', 1, 1);
+      b.classList.add('right'); Q.addXP(5, b); tick(1, 15, 'ask', 1, 1); asked.add(a.k);
       chat1.iv(a.a).then(() => { pinned.add(a.k); renderBoard(); });
-      if (ASK.filter(x => x.k).every(x => x.k === a.k || pinned.has(x.k))) {
+      if (ASK.filter(x => x.k).every(x => asked.has(x.k))) {
         s1busy = true;
         $$('#qdeck .opt').forEach(x => x.disabled = true);
         chat1.iv('That\'s everything the math needs. One freebie: assume peak traffic is about <b>2× the average</b>.').then(() => {
@@ -579,7 +579,7 @@ $('#s2replay .btn').onclick = () => { $('#s2replay').style.display = 'none'; set
 Q.onStage(2, setup2);
 
 /* ================= STAGE 3: crunch it ================= */
-const UNITS = { users: ['users', 1], '/s': ['rate', 1], GB: ['bytes', 1e9], TB: ['bytes', 1e12], PB: ['bytes', 1e15], servers: ['servers', 1] };
+const UNITS = { users: ['users', 1], '/s': ['rate', 1], MB: ['bytes', 1e6], GB: ['bytes', 1e9], TB: ['bytes', 1e12], PB: ['bytes', 1e15], servers: ['servers', 1] };
 const ROWS = [
   { k: 'dau', t: 'Daily active users (DAU)', dim: 'users', nat: 'users', model: 150e6,
     fx: 'DAU = MAU × share active daily', show: '150 million users',
@@ -612,8 +612,8 @@ let ri = 0, s3res = [];
 function parseEntry(raw) {
   let s = String(raw).trim().toLowerCase().replace(/[,_\s]/g, '').replace(/^[~≈]/, '');
   let unit = null;
-  const um = s.match(/(gb|tb|pb|users?|servers?|\/s|qps|persecond)$/);
-  if (um) { s = s.slice(0, -um[1].length); unit = { gb: 'GB', tb: 'TB', pb: 'PB', user: 'users', users: 'users', server: 'servers', servers: 'servers', '/s': '/s', qps: '/s', persecond: '/s' }[um[1]]; }
+  const um = s.match(/(mb|gb|tb|pb|users?|servers?|\/s|qps|persecond)$/);
+  if (um) { s = s.slice(0, -um[1].length); unit = { mb: 'MB', gb: 'GB', tb: 'TB', pb: 'PB', user: 'users', users: 'users', server: 'servers', servers: 'servers', '/s': '/s', qps: '/s', persecond: '/s' }[um[1]]; }
   const m = s.match(/^(\d*\.?\d+(?:e[+-]?\d+)?)(k|thousand|m|mn|mil|million|b|bn|billion)?$/);
   if (!m) return null;
   const mult = { k: 1e3, thousand: 1e3, m: 1e6, mn: 1e6, mil: 1e6, million: 1e6, b: 1e9, bn: 1e9, billion: 1e9 }[m[2]] || 1;
@@ -869,7 +869,7 @@ function showClosing() {
 }
 async function deliver5() {
   const sp = $('#speech');
-  sp.innerHTML = '<b>Your close, as delivered:</b> "' + SLOTS.map(s => s.o.find(x => x.good).t).join(' ').replace(/…\s*…/g, ' ') + '"';
+  sp.innerHTML = '<b>Your close, as delivered:</b> "' + SLOTS.map(s => s.o.find(x => x.good).t).join(' ').replace(/…\s*…/g, ', ') + '"';
   sp.classList.add('show');
   await chat5.me('(delivers the closing statement)');
   await chat5.iv('Last one, and it\'s the question I always end on.');
