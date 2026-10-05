@@ -79,7 +79,9 @@
 .dg .frame.f2 { stroke: var(--muted); stroke-dasharray: 6 5; opacity: .6; }
 .dg .flab { fill: var(--muted); font: 700 11px var(--font); letter-spacing: .08em; }
 .dg .new { animation: rise .5s; }
-.dg .new rect { animation: glow 1.3s 2; }
+.dg .new rect:not(.hit) { animation: glow 1.3s 2; }
+.dg .bx rect.hit, .dg.picking .tgt rect.hit, .dg.picking .tgt:hover rect.hit, .dg.picking .tgt:focus rect.hit { fill: transparent; stroke: none; }
+.dg.picking .tgt:focus rect.hit { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 4 3; }
 @keyframes glow { 50% { stroke: var(--good); stroke-width: 4; } }
 .dg .pkt { stroke: var(--panel); stroke-width: 2; }
 .dg.picking .tgt { cursor: pointer; }
@@ -88,7 +90,7 @@
 .dg .tgt:focus { outline: none; }
 .dg .badge circle { fill: var(--good); stroke: var(--panel); stroke-width: 2; }
 .dg .badge text { fill: #fff; font: 700 11px var(--font); text-anchor: middle; }
-.dg .tgt.miss rect { animation: missfl .5s; }
+.dg .tgt.miss rect:not(.hit) { animation: missfl .5s; }
 @keyframes missfl { 50% { stroke: var(--bad); stroke-width: 4; } }
 
 /* stage 2: palette */
@@ -659,13 +661,14 @@ function bigSVG(built, { targets = false } = {}) {
   B += box(308, 10, 84, 44, has('dc') ? 'GeoDNS' : 'DNS', has('dc') ? 'nearest DC' : 'name → IP', 'k-edge' + tg('dns'), 'dns', T('dns'));
   if (has('lb')) B += box(104, 80, 192, 40, '⚖️ Load balancer', '', 'k-web' + tg('lb'), 'lb', T('lb'));
   // web tier: one group so it is a single target
-  B += `<g class="bx k-web${tg('web')}" data-k="web" ${T('web')}>${webX.map(x => `<rect x="${x}" y="168" width="${webW}" height="42" rx="10"/><text class="l" x="${x + webW / 2}" y="194">🖥️ Web</text>`).join('')}${has('stateless') ? '<text class="cap" x="150" y="228">stateless · autoscaled</text>' : ''}</g>`;
+  const hit = (x, y, w, h) => `<rect class="hit" x="${x}" y="${y}" width="${w}" height="${h}" rx="10"/>`;
+  B += `<g class="bx k-web${tg('web')}" data-k="web" ${T('web')}>${hit(webX[0] - 2, 166, webX[nWeb - 1] + webW - webX[0] + 4, has('stateless') ? 68 : 46)}${webX.map(x => `<rect x="${x}" y="168" width="${webW}" height="42" rx="10"/><text class="l" x="${x + webW / 2}" y="194">🖥️ Web</text>`).join('')}${has('stateless') ? '<text class="cap" x="150" y="228">stateless · autoscaled</text>' : ''}</g>`;
   if (has('cache')) B += box(60, 238, 180, 38, '⚡ Cache', '', 'k-data' + tg('cache'), 'cache', T('cache'));
   // data tier
   if (has('shard')) {
-    B += `<g class="bx k-data${tg('db')}" data-k="db" ${T('db')}>${[0, 1, 2, 3].map(i => `<rect x="${20 + i * 66}" y="${dbTop}" width="60" height="50" rx="10"/><text class="l" x="${50 + i * 66}" y="${dbTop + 24}">🗄️</text><text class="s" x="${50 + i * 66}" y="${dbTop + 41}">shard ${i}</text>`).join('')}<text class="cap" x="150" y="${dbTop + 70}">user_id % 4 · each with replicas</text></g>`;
+    B += `<g class="bx k-data${tg('db')}" data-k="db" ${T('db')}>${hit(16, dbTop - 2, 268, 78)}${[0, 1, 2, 3].map(i => `<rect x="${20 + i * 66}" y="${dbTop}" width="60" height="50" rx="10"/><text class="l" x="${50 + i * 66}" y="${dbTop + 24}">🗄️</text><text class="s" x="${50 + i * 66}" y="${dbTop + 41}">shard ${i}</text>`).join('')}<text class="cap" x="150" y="${dbTop + 70}">user_id % 4 · each with replicas</text></g>`;
   } else if (has('repl')) {
-    B += `<g class="bx k-data${tg('db')}" data-k="db" ${T('db')}><rect x="22" y="${dbTop}" width="120" height="66" rx="10"/><text class="l" x="82" y="${dbTop + 29}">🗄️ Master</text><text class="s" x="82" y="${dbTop + 47}">all writes</text>
+    B += `<g class="bx k-data${tg('db')}" data-k="db" ${T('db')}>${hit(20, dbTop - 2, 262, 70)}<rect x="22" y="${dbTop}" width="120" height="66" rx="10"/><text class="l" x="82" y="${dbTop + 29}">🗄️ Master</text><text class="s" x="82" y="${dbTop + 47}">all writes</text>
       <rect x="160" y="${dbTop}" width="120" height="30" rx="9"/><text class="s" x="220" y="${dbTop + 19}" style="fill:var(--ink);font-weight:700">Replica · reads</text>
       <rect x="160" y="${dbTop + 36}" width="120" height="30" rx="9"/><text class="s" x="220" y="${dbTop + 55}" style="fill:var(--ink);font-weight:700">Replica · reads</text></g>`;
   } else B += box(90, dbTop, 120, 56, '🗄️ Database', 'one server', 'k-data' + tg('db'), 'db', T('db'));
