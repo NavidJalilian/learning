@@ -2,7 +2,7 @@
 
 Every chapter of *System Design Interview* Vol. 1 as a world of quests. Ticked = done. Regenerate: `python3 plan/tools/status.py`.
 
-**55 of 83 quests built** · 46 live on the map · 9 built, awaiting world review · 13 being built (draft on disk, not verified) · 15 not started.
+**55 of 83 quests built** · 51 live on the map · 4 built, awaiting world review · 14 being built (draft on disk, not verified) · 14 not started.
 
 Legend: `[x]` done · `[ ]` not done. A world is **done** when every quest is built, the world review has run, its cheat sheet
 exists, and its quests are `ready: true` on the map.
@@ -14,7 +14,7 @@ exists, and its quests are `ready: true` on the map.
 - [ ] `0103` 1.3 · [Hot Memory, Near Edge](../lessons/0103-scale-cache-and-cdn.html) — being built (unverified draft)
 - [ ] `0104` 1.4 · [Forget Me, Find Me Anywhere](../lessons/0104-scale-stateless-and-data-centers.html) — being built (unverified draft)
 - [ ] `0105` 1.5 · [Queues, Gauges & Shards](../lessons/0105-scale-queues-observability-sharding.html) — being built (unverified draft)
-- [ ] `0106` BOSS · [Zero to Millions, Live](../lessons/0106-scale-boss-millions-live.html) — not started
+- [ ] `0106` BOSS · [Zero to Millions, Live](../lessons/0106-scale-boss-millions-live.html) — being built (unverified draft)
 - [ ] World review + cheat sheet
 
 ## ✅ World 2 · Back-of-the-Envelope Estimation — *The Napkin Forge*
@@ -92,14 +92,14 @@ exists, and its quests are `ready: true` on the map.
 - [x] `0906` BOSS · [Crawl the Web, Live](../lessons/0906-web-crawler-boss-design-it-live.html) — built · needs world review
 - [ ] World review + cheat sheet
 
-## ⬜ World 10 · Design a Notification System — *Ping Station*
+## ✅ World 10 · Design a Notification System — *Ping Station*
 
-- [x] `1001` 10.1 · [Three Roads to the Lock Screen](../lessons/1001-notification-channels.html) — built · needs world review
-- [x] `1002` 10.2 · [Shatter the Single Server](../lessons/1002-notification-high-level-design.html) — built · needs world review
-- [x] `1003` 10.3 · [Never Lose a Ping](../lessons/1003-notification-reliability.html) — built · needs world review
-- [x] `1004` 10.4 · [Respect the Inbox](../lessons/1004-notification-guardrails.html) — built · needs world review
-- [x] `1005` BOSS · [Ping the Planet — Live](../lessons/1005-notification-boss-design-it-live.html) — built · needs world review
-- [ ] World review + cheat sheet
+- [x] `1001` 10.1 · [Three Roads to the Lock Screen](../lessons/1001-notification-channels.html) — live
+- [x] `1002` 10.2 · [Shatter the Single Server](../lessons/1002-notification-high-level-design.html) — live
+- [x] `1003` 10.3 · [Never Lose a Ping](../lessons/1003-notification-reliability.html) — live
+- [x] `1004` 10.4 · [Respect the Inbox](../lessons/1004-notification-guardrails.html) — live
+- [x] `1005` BOSS · [Ping the Planet — Live](../lessons/1005-notification-boss-design-it-live.html) — live
+- [x] World review + cheat sheet — [ch10-notification-cheatsheet.html](../reference/ch10-notification-cheatsheet.html)
 
 ## ⬜ World 11 · Design a News Feed System — *Feedstream Falls*
 
