@@ -2,7 +2,7 @@
 
 Every chapter of *System Design Interview* Vol. 1 as a world of quests. Ticked = done. Regenerate: `python3 plan/tools/status.py`.
 
-**58 of 83 quests built** · 51 live on the map · 7 built, awaiting world review · 12 being built (draft on disk, not verified) · 13 not started.
+**59 of 83 quests built** · 51 live on the map · 8 built, awaiting world review · 11 being built (draft on disk, not verified) · 13 not started.
 
 Legend: `[x]` done · `[ ]` not done. A world is **done** when every quest is built, the world review has run, its cheat sheet
 exists, and its quests are `ready: true` on the map.
@@ -48,7 +48,7 @@ exists, and its quests are `ready: true` on the map.
 ## ⬜ World 5 · Design Consistent Hashing — *The Ring Road*
 
 - [ ] `0501` 5.1 · [Ring Math](../lessons/0501-consistent-hashing-ring-math.html) — being built (unverified draft)
-- [ ] `0502` 5.2 · [Cracks in the Ring](../lessons/0502-consistent-hashing-cracks-and-riders.html) — being built (unverified draft)
+- [x] `0502` 5.2 · [Cracks in the Ring](../lessons/0502-consistent-hashing-cracks-and-riders.html) — built · needs world review
 - [x] `0503` BOSS · [Hash It Live](../lessons/0503-consistent-hashing-boss-hash-it-live.html) — built · needs world review
 - [ ] World review + cheat sheet
 
