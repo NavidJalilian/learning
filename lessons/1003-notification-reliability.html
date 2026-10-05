@@ -176,7 +176,7 @@ table.score td.v { font-family: var(--mono); font-weight: 700; white-space: nowr
   <section class="stage" data-stage="1" id="s1">
     <div class="stage-h"><div class="num">1</div><div><h2>Delayed, reordered — never lost</h2><div class="sub">The notification log</div></div><span class="pill"></span></div>
     <div class="stage-b">
-      <p>In Quest 10.2 you split the system into notification servers, one <b>message queue</b> per channel, and <b>workers</b> that pull messages off a queue and hand them to a provider like Apple's <b>APNs</b> (Apple Push Notification service). Now the hard part: what happens when a worker dies halfway through?</p>
+      <p>In <a href="1002-notification-high-level-design.html">Quest 10.2</a> you split the system into notification servers, one <b>message queue</b> per channel, and <b>workers</b> that pull messages off a queue and hand them to a provider like Apple's <b>APNs</b> (Apple Push Notification service). Now the hard part: what happens when a worker dies halfway through?</p>
       <p>The book sets one firm rule. A notification may be <b>delayed</b> or arrive <b>out of order</b>, but it must <b>never be lost</b>. To keep that promise, the system saves notification data in a database, the <b>notification log</b>, and adds a <b>retry mechanism</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-notification-system" target="_blank" rel="noopener">[1]</a> The reason is simple. If the only copy of a notification sits in one worker's memory, a crash deletes it for good.</p>
       <p>There's a second lever. When a worker takes a message, it must at some point <b>acknowledge</b> ("ack") it, which tells the queue "done, delete it". It can ack <i>before</i> it sends, or only <i>after</i> the send has worked. Set the two toggles, predict, and crash the worker.</p>
 
@@ -690,7 +690,7 @@ Q.onStage(2, () => {
     C: 'The phone already had it, but the worker died before it could ack. The queue only knows "no ack", so it redelivers, and the user gets it twice.',
   };
   const box = $('#s2box');
-  let ri = 0;
+  let ri = 0, replay = false;
   const ORDER = ['A', 'B', 'C'];
   async function round() {
     const r = ORDER[ri];
@@ -699,6 +699,7 @@ Q.onStage(2, () => {
       title: `In run ${r}, ${RUNS[r].d}. The worker retries until it hears 200 OK. How many banners does the user see?`,
       options: ['0 banners', '1 banner', '2 banners'],
       correct: ANS[r],
+      scored: !replay,
       act: async () => { const n = await play(r, 'L'); $('#sc' + r + 'L').innerHTML = fmt(n); },
       explain: WHY[r],
     });
@@ -714,11 +715,12 @@ Q.onStage(2, () => {
       title: 'At-most-once: ack on pull, never retry. Replay all three runs. Which one now <b>loses</b> the notification?',
       options: ['Run A: crash before the send', 'Run B: the reply gets lost', 'Run C: crash after delivery'],
       correct: 0,
+      scored: !replay,
       act: async () => { for (const r of ORDER) { const n = await play(r, 'M'); $('#sc' + r + 'M').innerHTML = fmt(n); await sleep(T(500)); } },
       explain: 'Run A is lost: the message was deleted on pull, then the worker died before sending. B and C now show one banner each, so the duplicates are gone, but at the cost of a loss. Look at the table: at-least-once gives you <b>duplicates</b>, at-most-once gives you <b>losses</b>. No mode gives "exactly once".',
     });
     $('#s2note').style.display = 'block';
-    nextBtn(row, '↻ Replay the runs', () => { ri = 0; $('#s2log').innerHTML = ''; ['A', 'B', 'C'].forEach(r => { $('#sc' + r + 'L').textContent = '?'; $('#sc' + r + 'M').textContent = '?'; }); round(); }, false);
+    nextBtn(row, '↻ Replay the runs', () => { ri = 0; replay = true; $('#s2log').innerHTML = ''; ['A', 'B', 'C'].forEach(r => { $('#sc' + r + 'L').textContent = '?'; $('#sc' + r + 'M').textContent = '?'; }); round(); }, false);
     if (!quizShown) {
       quizShown = true;
       setTimeout(() => Q.quiz($('#s2quiz'), {
