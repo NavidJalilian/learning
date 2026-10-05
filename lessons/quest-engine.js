@@ -415,10 +415,12 @@
           <div class="row" style="margin-top:8px"><button class="btn primary q-finish">Lock it in</button></div></div>`;
       const ta = $('textarea', mount), rv = $('.q-reveal', mount);
       ta.addEventListener('input', () => { rv.disabled = ta.value.trim().split(/\s+/).length < minWords; });
-      rv.onclick = () => { rv.disabled = true; ta.readOnly = true; $('.model', mount).classList.add('show'); $('.selfgrade', mount).classList.add('show'); addXP(10, rv); };
+      rv.onclick = () => { rv.disabled = true; ta.readOnly = true; $('.model', mount).classList.add('show'); $('.selfgrade', mount).classList.add('show'); if (!mount.dataset.revealPaid) { mount.dataset.revealPaid = '1'; addXP(10, rv); } };
       $('.q-finish', mount).onclick = e => {
         const boxes = $$('.selfgrade input', mount), n = boxes.filter(x => x.checked).length;
-        if (n) addXP(n * 10, e.currentTarget);
+        // a retried drill (same mount) only pays for checks it hadn't paid for before
+        const paid = +(mount.dataset.checksPaid || 0);
+        if (n > paid) { addXP((n - paid) * 10, e.currentTarget); mount.dataset.checksPaid = n; }
         e.currentTarget.disabled = true; boxes.forEach(x => x.disabled = true);
         onDone && onDone(n);
       };
