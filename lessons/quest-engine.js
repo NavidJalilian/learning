@@ -23,6 +23,9 @@
   // WORLDS lists every chapter; `cheatsheet` is relative to reference/.
   const WORLDS = [
     { w: 6, t: 'Design a Key-Value Store', name: 'The Key-Value Vault', slug: 'design-a-key-value-store', cheatsheet: 'kv-store-cap-cheatsheet.html' },
+    { w: 7, t: 'Design a Unique ID Generator', name: 'The ID Mint', slug: 'design-a-unique-id-generator-in-distributed-systems' },
+    { w: 8, t: 'Design a URL Shortener', name: 'Shrink Ray Bay', slug: 'design-a-url-shortener' },
+    { w: 15, t: 'Design Google Drive', name: 'The Cloud Locker', slug: 'design-google-drive' },
   ];
   const CATALOG = [
     { id: '0001', w: 6, n: '6.1', t: 'The Key-Value Vault', d: 'put/get, single-server limits, CAP, CP vs AP', file: '0001-key-value-store-and-cap.html', ready: true },
@@ -33,6 +36,22 @@
     { id: '0006', w: 6, n: '6.6', t: 'When Nodes Die', d: 'Gossip, sloppy quorum, hinted handoff, Merkle trees', file: '0006-handling-failures.html', ready: true },
     { id: '0007', w: 6, n: '6.7', t: 'The Write & Read Path', d: 'Commit log, memtable, SSTables, Bloom filters', file: '0007-write-and-read-path.html', ready: true },
     { id: '0008', w: 6, n: 'BOSS', t: 'Design It Live', d: 'Full mock interview: design a key-value store', file: '0008-boss-design-it-live.html', boss: true, ready: true },
+    { id: '0701', w: 7, n: '7.1', t: 'Numbers Nobody Repeats', d: 'Why auto_increment breaks across servers, the 5 requirements, and multi-master \'count by k\'', file: '0701-unique-id-scope-and-multi-master.html', ready: false },
+    { id: '0702', w: 7, n: '7.2', t: 'Dice or the Ticket Booth', d: 'UUIDs (random, no coordination) vs a central ticket server (numeric, single point of failure)', file: '0702-uuid-and-ticket-server.html', ready: false },
+    { id: '0703', w: 7, n: '7.3', t: 'Anatomy of a Snowflake', d: 'Twitter Snowflake\'s 64-bit layout: mint an ID, decode one, and do the 69-year math', file: '0703-snowflake-bit-layout.html', ready: false },
+    { id: '0704', w: 7, n: '7.4', t: 'When Clocks Lie', d: 'Sequence overflow, clocks running backwards, rough ordering, re-tuning the bits, keeping it available', file: '0704-snowflake-clocks-and-tuning.html', ready: false },
+    { id: '0705', w: 7, n: 'BOSS', t: 'Mint It Live', d: 'Full mock interview: design a unique ID generator in distributed systems', file: '0705-boss-mint-it-live.html', boss: true, ready: false },
+    { id: '0801', w: 8, n: '8.1', t: 'Specs for a Shrink Ray', d: 'Scope the prompt, do the napkin math, design the two API calls, and choose 301 or 302', file: '0801-url-shortener-scope-and-api.html', ready: false },
+    { id: '0802', w: 8, n: '8.2', t: 'Seven Characters or Bust', d: 'Store the mapping, size the short code, and make hash + collision resolution work', file: '0802-url-shortener-hash-and-collisions.html', ready: false },
+    { id: '0803', w: 8, n: '8.3', t: 'Count in Base 62', d: 'Turn a unique ID into a short code with base 62, and weigh it against hashing', file: '0803-url-shortener-base62.html', ready: false },
+    { id: '0804', w: 8, n: '8.4', t: 'Shorten & Bounce', d: 'Walk the shortening and redirecting flows, add a cache, and scale it out', file: '0804-url-shortener-flows-and-scale.html', ready: false },
+    { id: '0805', w: 8, n: 'BOSS', t: 'Shrink the Internet, Live', d: 'Full mock interview: design a URL shortener in 45 minutes', file: '0805-url-shortener-boss-design-it-live.html', boss: true, ready: false },
+    { id: '1501', w: 15, n: '15.1', t: 'Claim Your Locker', d: 'Scope Google Drive, run the numbers, design the upload/download/revision APIs, outgrow one server', file: '1501-drive-scope-and-apis.html', ready: false },
+    { id: '1502', w: 15, n: '15.2', t: 'Chop It Into Blocks', d: 'The high-level design, block servers, 4 MB blocks, delta sync, compress-then-encrypt', file: '1502-drive-blocks-and-delta-sync.html', ready: false },
+    { id: '1503', w: 15, n: '15.3', t: 'The Metadata Ledger', d: 'Strong consistency, cache invalidation, the metadata schema, and sync conflicts', file: '1503-drive-metadata-and-conflicts.html', ready: false },
+    { id: '1504', w: 15, n: '15.4', t: 'Ping When It Changes', d: 'The upload flow, the download flow, long-polling notifications and the offline backup queue', file: '1504-drive-upload-download-notify.html', ready: false },
+    { id: '1505', w: 15, n: '15.5', t: 'Thrift & Chaos', d: 'Save storage space with dedup, version limits and cold storage, then survive every component failing', file: '1505-drive-storage-and-failures.html', ready: false },
+    { id: '1506', w: 15, n: 'BOSS', t: 'Design Drive Live', d: 'Full mock interview: design Google Drive with the 4-step framework', file: '1506-drive-boss-design-it-live.html', boss: true, ready: false },
   ];
 
   const REDUCED = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
