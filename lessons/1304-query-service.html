@@ -1,0 +1,1028 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Faster Than a Keystroke</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: read-path diagram (stages 1 + 4), network panel (2), sampling bars (3), filter + what-if grid (4) */
+:root { --net: #2f7fd8; --net-soft: #e2eefc; --redact: #b9b4c7; --flash: #ffffff; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --net: #5aa9ff; --net-soft: #14263f; --redact: #4a4766; --flash: #2a2d4a; }
+}
+:root[data-theme="dark"] { --net: #5aa9ff; --net-soft: #14263f; --redact: #4a4766; --flash: #2a2d4a; }
+
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.bignum { font-family: var(--mono); font-weight: 700; }
+.bignum.good { color: var(--good); } .bignum.bad { color: var(--bad); }
+
+/* read-path diagram */
+.path svg { max-width: 520px; margin: 0 auto; padding: 8px 6px 0; }
+.pbox rect { fill: var(--panel); stroke: var(--line); stroke-width: 2; transition: fill .3s, stroke .3s; }
+.pbox .t { font: 700 13.5px var(--font); fill: var(--ink); text-anchor: middle; pointer-events: none; }
+.pbox .s { font: 500 10.5px var(--font); fill: var(--muted); text-anchor: middle; pointer-events: none; }
+.pbox.tap { cursor: pointer; }
+.pbox:focus { outline: none; }
+.pbox.tap:hover rect, .pbox:focus rect { stroke: var(--accent); }
+.pbox.lit rect { stroke: var(--accent); fill: var(--accent-soft); }
+.pbox.hit rect { stroke: var(--good); fill: var(--good-soft); }
+.pbox.miss rect { stroke: var(--bad); fill: var(--bad-soft); }
+.pbox.on rect { stroke: var(--teal); fill: var(--teal-soft); }
+.pbox .ord circle { fill: var(--accent); }
+.pbox .ord text { font: 700 11px var(--mono); fill: #fff; text-anchor: middle; dominant-baseline: central; }
+.arr { stroke: var(--muted); stroke-width: 2; fill: none; }
+.arr.flow { stroke: var(--good); stroke-width: 3; stroke-dasharray: 6 5; animation: dash .6s linear infinite; }
+.arr.async { stroke-dasharray: 5 5; }
+@keyframes dash { to { stroke-dashoffset: -11; } }
+.ah { fill: var(--muted); }
+.alab { font: 600 10.5px var(--mono); fill: var(--muted); text-anchor: middle; }
+.pkt { fill: var(--xp); stroke: var(--ink); stroke-width: 1.5; }
+.predrow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); font-size: 14px; min-height: 52px; }
+.predrow .chip { font-size: 12px; }
+.predrow .chip.br { opacity: .6; }
+.pfx { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+.pfx input[type=text] { font: 600 16px var(--mono); padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); width: 9.5em; min-width: 0; }
+.pfx input[readonly] { opacity: .7; }
+.sbtn { padding: 8px 12px; font-size: 14px; min-height: 40px; }
+.drop { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); overflow: hidden; font-size: 14px; }
+.drop li { padding: 6px 10px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; gap: 8px; }
+.drop li:first-child { border-top: 0; }
+.drop li b { font-weight: 700; }
+.drop li .f { font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+.drop li.empty { color: var(--muted); font-style: italic; }
+.lat { display: grid; gap: 6px; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+.latr { display: grid; grid-template-columns: 52px 1fr 92px; gap: 8px; align-items: center; font-size: 13px; }
+.latr .tr { height: 16px; border-radius: 6px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; }
+.latr .fl { height: 100%; width: 0; transition: width .6s; }
+.latr .v { font-family: var(--mono); text-align: right; white-space: nowrap; }
+.steptag { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+
+/* stage 2: browser + network panel */
+.twocol { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 14px; }
+@media (max-width: 680px) { .twocol { grid-template-columns: 1fr; } }
+.frame { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--panel); position: relative; }
+.frame .bar { display: flex; gap: 5px; align-items: center; padding: 6px 10px; background: var(--bg-2); border-bottom: 1px solid var(--line); font: 12px var(--mono); color: var(--muted); }
+.frame .bar i { width: 8px; height: 8px; border-radius: 50%; background: var(--line); display: inline-block; }
+.frame .bar span { margin-left: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.frame .body { padding: 10px; }
+.frame input[type=text] { width: 100%; font: 600 16px var(--mono); padding: 9px 11px; border-radius: 10px; border: 2px solid var(--accent); background: var(--bg); color: var(--ink); }
+.frame .drop { margin-top: 6px; }
+.net { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); overflow: hidden; display: flex; flex-direction: column; }
+.net .nh { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 6px 10px; background: var(--bg-2); border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 700; color: var(--muted); }
+.netlog { font: 12px var(--mono); max-height: 230px; min-height: 120px; overflow-y: auto; }
+.nr { display: grid; grid-template-columns: 26px 1fr auto; gap: 6px; padding: 4px 10px; border-bottom: 1px solid var(--line); align-items: center; animation: rise .25s; }
+.nr .q { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nr .src { font-weight: 700; border-radius: 6px; padding: 1px 6px; white-space: nowrap; }
+.nr.n .src { background: var(--net-soft); color: var(--net); }
+.nr.c .src { background: var(--good-soft); color: var(--good); }
+.nr.sep { display: block; text-align: center; color: var(--warn); font-weight: 700; }
+.nr .no { color: var(--muted); }
+.ctr { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; padding: 8px 14px; border-top: 1px solid var(--line); background: var(--panel); font-size: 14px; }
+.ctr .bignum { font-size: 18px; }
+.cchips { display: flex; flex-wrap: wrap; gap: 5px; padding: 0 14px 12px; background: var(--panel); }
+.cchips .chip { font-size: 11.5px; padding: 3px 7px; }
+.cchips .chip.stale { opacity: .45; text-decoration: line-through; }
+.hdrs { background: var(--code-bg); color: var(--code-ink); border-radius: 12px; padding: 12px 14px; font: 13px/1.6 var(--mono); margin: 0; white-space: pre-wrap; word-break: break-word; }
+.hdrs b { color: #ffd23f; }
+.proxy { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 6px; align-items: center; margin-top: 12px; text-align: center; font-size: 13px; }
+.proxy .pn { border: 1px solid var(--line); border-radius: 12px; padding: 8px 6px; background: var(--panel); min-height: 74px; display: grid; align-content: center; gap: 2px; }
+.proxy .pn b { font-size: 13px; }
+.proxy .pn .e { font-size: 22px; line-height: 1; }
+.proxy .pn.store { border-color: var(--warn); background: var(--warn-soft); }
+.proxy .ar { color: var(--muted); font-weight: 700; }
+.pmsg { margin-top: 8px; font-size: 14px; min-height: 44px; }
+.ajax { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.mini { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--panel); position: relative; font-size: 12px; }
+.mini h5 { margin: 0; padding: 6px 8px; font-size: 12px; background: var(--bg-2); border-bottom: 1px solid var(--line); }
+.mini .pg { padding: 8px; display: grid; gap: 5px; }
+.mini .blk { height: 10px; border-radius: 4px; background: var(--line); }
+.mini .blk.w60 { width: 60%; } .mini .blk.w80 { width: 80%; }
+.mini .sb { border: 1.5px solid var(--accent); border-radius: 6px; padding: 3px 6px; font-family: var(--mono); }
+.mini .dd { border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; font-family: var(--mono); color: var(--muted); min-height: 22px; transition: background .3s; }
+.mini .dd.new { background: var(--good-soft); color: var(--ink); }
+.mini .wash { position: absolute; inset: 27px 0 0 0; background: var(--flash); display: grid; place-items: center; opacity: 0; pointer-events: none; font-weight: 700; color: var(--muted); }
+.mini .wash.on { opacity: 1; }
+.mini .cost { padding: 4px 8px 8px; font-family: var(--mono); color: var(--muted); min-height: 22px; }
+
+/* stage 3: sampling */
+.slider { padding: 12px 14px 0; display: grid; gap: 4px; }
+.slider label { display: flex; justify-content: space-between; font-weight: 600; font-size: 14px; gap: 8px; flex-wrap: wrap; }
+.slider input { width: 100%; accent-color: var(--accent); height: 32px; }
+.ticks { display: flex; justify-content: space-between; font: 600 12px var(--mono); color: var(--muted); padding: 0 2px; }
+.stats3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 10px 14px; }
+@media (max-width: 560px) { .stats3 { grid-template-columns: 1fr 1fr; } .stats3 > div:last-child { grid-column: span 2; } }
+.stats3 > div { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; }
+.stats3 b { display: block; font: 700 17px var(--mono); }
+.stats3 span { font-size: 12px; color: var(--muted); }
+.sbars { display: grid; gap: 6px; padding: 4px 14px 12px; }
+.sb3 { display: grid; grid-template-columns: 22px minmax(0, 118px) 1fr 74px; gap: 8px; align-items: center; font-size: 13px; }
+.sb3 .rk { font: 700 12px var(--mono); color: var(--muted); text-align: right; }
+.sb3 .nm { font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb3 .tr { position: relative; height: 16px; border-radius: 6px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; }
+.sb3 .fl { position: absolute; inset: 0 auto 0 0; background: var(--accent); width: 0; transition: width .5s; }
+.sb3 .truth { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink); }
+.sb3 .v { font-family: var(--mono); text-align: right; white-space: nowrap; font-size: 12px; }
+.sb3.top .nm { font-weight: 700; }
+.sb3.out { opacity: .55; }
+.sb3.rare .fl { background: var(--warn); }
+.sb3.rare .nm { color: var(--warn); font-weight: 700; }
+.verdict { padding: 0 14px 12px; font-size: 14px; font-weight: 600; }
+.verdict.good { color: var(--good); } .verdict.bad { color: var(--warn); }
+.calc { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.calc input { font: 600 16px var(--mono); padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); width: 12em; max-width: 100%; }
+
+/* stage 4: filter */
+.pchips, .rchips { display: flex; flex-wrap: wrap; gap: 6px; }
+.tog { min-height: 40px; padding: 6px 12px; border-radius: 10px; border: 2px solid var(--line); background: var(--panel); font-weight: 600; font-size: 14px; }
+.tog[aria-pressed="true"] { border-color: var(--teal); background: var(--teal-soft); }
+.tog.p[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.fpanel { padding: 12px 14px; display: grid; gap: 10px; border-top: 1px solid var(--line); background: var(--panel); }
+.fpanel .lbl { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.drop li.bad { color: var(--muted); }
+.redact { display: inline-block; height: 12px; border-radius: 3px; background: var(--redact); vertical-align: middle; }
+.cat { font: 700 11px var(--mono); padding: 1px 6px; border-radius: 6px; background: var(--bad-soft); color: var(--bad); white-space: nowrap; }
+.drop li.gone { opacity: .35; text-decoration: line-through; }
+.wi { overflow-x: auto; }
+.wi table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 300px; }
+.wi th, .wi td { border: 1px solid var(--line); padding: 6px 4px; text-align: center; }
+.wi th { font-size: 11.5px; color: var(--muted); font-weight: 700; }
+.wi td.rh { text-align: left; font-weight: 600; font-size: 12.5px; width: 31%; }
+.wi td.c { font-weight: 700; transition: background .3s; }
+.wi td.c.y { background: var(--bad-soft); color: var(--bad); }
+.wi td.c.n { background: var(--good-soft); color: var(--good); }
+.wi td.c.q { background: var(--warn-soft); color: var(--warn); }
+.wbtns { display: flex; gap: 8px; flex-wrap: wrap; }
+.wbtns .btn { font-size: 14px; padding: 8px 12px; min-height: 40px; }
+.wbtns .btn.done::after { content: " ✓"; color: var(--good); }
+.wmsg { font-size: 14px; min-height: 22px; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 13.4 · Design a Search Autocomplete System</div>
+    <h1>Faster Than a Keystroke</h1>
+    <p class="lede">The trie is built and the weekly pipeline keeps it fresh. Now the hot path: every key a user presses has to come back as five suggestions before the next key lands. Follow one request, then make it faster, cheaper and safer.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can trace one keystroke through <b>load balancer → API servers → Trie Cache</b> (→ <b>Trie DB</b> on a miss), name the three speed tricks (<b>AJAX</b>, <b>browser caching</b> with <code>Cache-Control: private, max-age=3600</code>, and <b>data sampling</b>) and what each one costs, and explain how a <b>filter layer</b> hides harmful suggestions right away while the database is cleaned in the background.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Follow one keystroke</h2><div class="sub">The read path, hit and miss</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The <b>query service</b> is the part that answers "what are the top 5 for this prefix?" The book's improved version has four steps:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system" target="_blank" rel="noopener">[1]</a></p>
+      <ol>
+        <li>The request goes to a <b>load balancer</b>, a box whose only job is to spread traffic across many servers.</li>
+        <li>The load balancer sends it on to one of the <b>API servers</b>.</li>
+        <li>The API server reads the prefix's top 5 from the <b>Trie Cache</b>, a copy of the trie kept in memory so reads are fast.</li>
+        <li>If the cache doesn't have that data (a <b>cache miss</b>), the API server reads it from the <b>Trie DB</b> on disk and writes it back into the cache. The next request for that prefix is a <b>hit</b> again.</li>
+      </ol>
+      <p>Misses happen when a cache server runs out of memory or goes offline. Below, type a prefix. Before each run, <b>tap the boxes in the order you think the request visits them</b>. Then send it.</p>
+
+      <div class="sim path">
+        <div class="pfx">
+          <label for="p1in" class="small"><b>Prefix</b></label>
+          <input type="text" id="p1in" value="tw" maxlength="14" autocomplete="off" spellcheck="false" aria-label="Prefix to look up">
+          <span class="steptag" id="p1step">Run 1 of 3 · cache is warm</span>
+        </div>
+        <svg id="p1svg" viewBox="0 0 420 200" role="group" aria-label="Read path: browser, load balancer, API server, Trie Cache, Trie DB. Tap boxes to predict the path."></svg>
+        <div class="predrow" id="p1pred" aria-live="polite"></div>
+        <div class="sim-bar">
+          <span class="row" style="gap:8px">
+            <button class="btn primary sbtn" id="p1send" disabled>▶ Send keystroke</button>
+            <button class="btn sbtn" id="p1undo">⌫ Undo tap</button>
+            <button class="btn sbtn" id="p1restart" disabled>🔌 Restart cache server</button>
+          </span>
+          <span class="small">Time inside the data centre: <span class="bignum" id="p1ms">—</span></span>
+        </div>
+        <div class="pfx" style="display:block">
+          <div class="small muted" style="margin-bottom:6px">Dropdown the user sees</div>
+          <ul class="drop" id="p1drop"><li class="empty">send a keystroke to fill this</li></ul>
+        </div>
+        <div class="lat" id="p1lat"></div>
+        <div class="simlog" id="p1log"><div>Cache is warm: it holds the whole trie. Tap boxes to predict the path, then send.</div></div>
+      </div>
+      <ul class="checklist" id="s1goals">
+        <li data-g="r1"><span class="box">✓</span><span>Run 1: send a keystroke while the cache is warm</span></li>
+        <li data-g="r2"><span class="box">✓</span><span>Run 2: restart the cache server, then send the same prefix</span></li>
+        <li data-g="r3"><span class="box">✓</span><span>Run 3: send it once more and compare the three times</span></li>
+      </ul>
+      <div class="callout" id="p1note" style="display:none"><b>Why the gap is so big.</b> Reading memory takes well under a microsecond. A disk-backed database read takes milliseconds, plus a network hop. The numbers here are toy values, but the shape is real: a miss can be ten times slower than a hit. That's why the miss writes the answer back. One slow request pays so that every later one is fast.</div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Speed tricks</h2><div class="sub">AJAX and the browser cache</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>For autocomplete, <b>speed is the top priority</b>. The book adds three optimizations on top of the read path.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system" target="_blank" rel="noopener">[1]</a> This stage covers the first two, and stage 3 covers the third.</p>
+      <ul>
+        <li><b>AJAX request.</b> AJAX stands for "Asynchronous JavaScript and XML". The page sends the request in the background and updates <i>only the dropdown</i>. The rest of the page is never reloaded.</li>
+        <li><b>Browser caching.</b> The top 5 for "din" won't change in the next few minutes. So the browser keeps each answer and reuses it. The book's example is a header Google sent at the time: <code>Cache-Control: private, max-age=3600</code>.</li>
+      </ul>
+      <p>Try it. <b>Type <code>dinner</code></b> in the search box. Then <b>backspace to <code>din</code></b> and <b>type <code>dinner</code> again</b>. Watch the network panel on the right.</p>
+
+      <div class="sim">
+        <div class="twocol">
+          <div class="frame">
+            <div class="bar"><i></i><i></i><i></i><span>search.example</span></div>
+            <div class="body">
+              <input type="text" id="b2in" placeholder="type dinner…" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Search box">
+              <ul class="drop" id="b2drop"><li class="empty">suggestions appear here</li></ul>
+            </div>
+          </div>
+          <div class="net">
+            <div class="nh"><span>Network</span><span id="b2clock">clock 09:00:00</span></div>
+            <div class="netlog" id="b2log" aria-live="polite"></div>
+          </div>
+        </div>
+        <div class="ctr">
+          <span>Requests that reached the server: <span class="bignum" id="b2srv">0</span></span>
+          <span>Served by the browser cache: <span class="bignum good" id="b2hit">0</span></span>
+          <button class="btn sbtn" id="b2ff">⏩ Fast-forward 1 hour</button>
+          <button class="btn sbtn" id="b2clr">↻ Clear</button>
+        </div>
+        <div class="cchips" id="b2cache"><span class="small muted">Browser cache is empty.</span></div>
+      </div>
+
+      <h3 style="margin:22px 0 6px;font-size:18px">Inspect the response header</h3>
+      <p class="small">Every answer from the server carries this header. Flip the first word and watch the shared <b>office proxy</b>. A proxy is a machine that sits between many people's browsers and the internet, and it can keep copies of responses too.</p>
+      <pre class="hdrs">HTTP/1.1 200 OK
+Content-Type: application/json
+Cache-Control: <b id="b2cc">private</b>, max-age=3600</pre>
+      <div class="row" style="margin-top:10px"><span class="small">First word:</span><span class="seg" id="b2seg"><button data-v="private" class="on" aria-pressed="true">private</button><button data-v="public" aria-pressed="false">public</button></span></div>
+      <div class="proxy" aria-live="polite">
+        <div class="pn"><span class="e">🧑‍💻</span><b>Your browser</b><span class="small muted">keeps a copy</span></div><span class="ar">⇄</span>
+        <div class="pn" id="b2proxy"><span class="e">🏢</span><b>Office proxy</b><span class="small muted" id="b2psub">passes it through</span></div><span class="ar">⇄</span>
+        <div class="pn"><span class="e">🖥️</span><b>Server</b><span class="small muted">sends the top 5</span></div>
+      </div>
+      <div class="pmsg" id="b2pmsg"><b>private</b>: only your own browser may store this answer. The proxy forwards it and keeps nothing.</div>
+
+      <h3 style="margin:18px 0 6px;font-size:18px">AJAX vs a full page reload</h3>
+      <div class="ajax">
+        <div class="mini" id="b2full"><h5>Full page reload</h5><div class="pg"><div class="blk w60"></div><div class="sb">d</div><div class="dd">…</div><div class="blk"></div><div class="blk w80"></div></div><div class="wash">reloading everything…</div><div class="cost">&nbsp;</div></div>
+        <div class="mini" id="b2ajax"><h5>AJAX</h5><div class="pg"><div class="blk w60"></div><div class="sb">d</div><div class="dd">…</div><div class="blk"></div><div class="blk w80"></div></div><div class="cost">&nbsp;</div></div>
+      </div>
+      <div class="row" style="margin-top:10px"><button class="btn sbtn" id="b2key">⌨️ Press a key in both</button><span class="small muted">sizes are illustrative</span></div>
+
+      <ul class="checklist" id="s2goals">
+        <li data-g="type"><span class="box">✓</span><span>Type <code>dinner</code>: one request per keystroke</span></li>
+        <li data-g="retype"><span class="box">✓</span><span>Backspace to <code>din</code> and retype <code>dinner</code> with <b>zero</b> new server requests</span></li>
+        <li data-g="expire"><span class="box">✓</span><span>Fast-forward 1 hour, then type: see a cached prefix go back to the server</span></li>
+        <li data-g="hdr"><span class="box">✓</span><span>Switch the header to <code>public</code> and back to <code>private</code></span></li>
+        <li data-g="ajax"><span class="box">✓</span><span>Press a key in both mini pages and compare</span></li>
+      </ul>
+      <div class="callout warn"><b>Honest caveat: a snapshot, not a promise.</b> The Google header in the book was true when the book was written. Treat it as an example of the technique, not as how Google works today. Also notice the trade-off you just built: an answer stays in the browser for up to an hour, so a suggestion removed on the server can linger on one user's screen until it expires.<a class="cite" href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cache-Control" target="_blank" rel="noopener">[2]</a></div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Log 1 in N</h2><div class="sub">Data sampling, and what it loses</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The third trick is on the <i>logging</i> side. Every search gets written to the analytics log so the weekly job can count popularity. Logging every single search takes a lot of processing power and storage. With <b>data sampling</b>, the system logs only <b>1 out of every N</b> requests.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system" target="_blank" rel="noopener">[1]</a></p>
+      <p>To get counts back, multiply each sampled count by N. Below is one simulated week of searches starting with <code>tw</code>, using the book's example queries at a bigger scale. The black tick on each bar is the true count. Drag the slider and see what survives.</p>
+
+      <div class="sim">
+        <div class="slider">
+          <label for="n3"><span>Log 1 in every <span class="bignum" id="n3v">1</span> searches</span><button class="btn sbtn" id="n3re" style="padding:4px 10px;min-height:36px">🎲 Another week</button></label>
+          <input type="range" id="n3" min="0" max="3" step="1" value="0" aria-label="Sampling rate N" aria-valuetext="N = 1">
+          <div class="ticks"><span>N=1</span><span>10</span><span>100</span><span>1000</span></div>
+        </div>
+        <div class="stats3">
+          <div><b id="n3rows">100,000,000</b><span>log rows per day</span></div>
+          <div><b id="n3gb">2 GB</b><span>query text per day (20 bytes each)</span></div>
+          <div><b id="n3save">0%</b><span>logging work saved</span></div>
+        </div>
+        <div class="sbars" id="n3bars"></div>
+        <div class="verdict" id="n3verdict"></div>
+        <div class="simlog" id="n3log"><div>N = 1 logs everything. The estimates equal the truth.</div></div>
+      </div>
+      <ul class="checklist" id="s3goals">
+        <li data-g="all"><span class="box">✓</span><span>Try all four settings: N = 1, 10, 100 and 1000</span></li>
+        <li data-g="calc"><span class="box">✓</span><span>Do the math below</span></li>
+      </ul>
+      <div class="challenge boxed">
+        <div class="step">Calculate, then check</div>
+        <h3>The book's scale is 10 million daily users, each searching 10 times a day. With N = 10, how many searches a day get logged?</h3>
+        <div class="calc"><input type="text" id="c3in" inputmode="numeric" placeholder="e.g. 5,000,000" aria-label="Searches logged per day"><button class="btn primary sbtn" id="c3go">Check</button></div>
+        <div class="explain" id="c3ex"></div>
+      </div>
+      <div class="callout warn"><b>Honest caveat: fine for top 5, bad for exact counts.</b> Sampling keeps the order of popular queries, which is all autocomplete needs. It blurs rare queries, and at large N they can vanish completely. That's fine for a "top 5 by popularity" product. It would be wrong for billing, fraud checks, or anything else that needs exact counts.</div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>The filter layer</h2><div class="sub">Deleting what must never appear</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Some suggestions must never be shown: hateful, violent, sexually explicit or dangerous ones. The book's fix has two parts:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system" target="_blank" rel="noopener">[1]</a></p>
+      <ul>
+        <li>A <b>filter layer</b> sits in front of the Trie Cache, between it and the API servers. It drops unwanted suggestions on the way out. Because it runs on rules, you can swap in different rules without rebuilding anything.</li>
+        <li>The unwanted entries are also <b>physically deleted from the database</b>, <i>asynchronously</i> (in the background, not while the user waits). That way the next weekly build of the trie starts from clean data.</li>
+      </ul>
+      <p>Pick a prefix. Harmful rows are shown as grey bars with a category tag (no real text here). Turn on filter rules and watch the dropdown.</p>
+
+      <div class="sim path">
+        <svg id="f4svg" viewBox="0 0 420 170" role="img" aria-label="API servers, then the filter layer, then the Trie Cache. A purge job deletes rows from the Trie DB in the background."></svg>
+        <div class="fpanel">
+          <div><div class="lbl">Prefix</div><div class="pchips" id="f4pfx"></div></div>
+          <div><div class="lbl">Filter rules</div><div class="rchips" id="f4rules"></div></div>
+          <div><div class="lbl" id="f4cnt">Dropdown</div><ul class="drop" id="f4drop"></ul></div>
+        </div>
+        <div class="simlog" id="f4log"><div>No rules on. Everything the cache returns goes straight to the user.</div></div>
+      </div>
+
+      <h3 style="margin:22px 0 6px;font-size:18px">What if you only did one half?</h3>
+      <p class="small">A harmful suggestion is trending. Play each plan and watch a week go by, and a bit beyond.</p>
+      <div class="wbtns" id="w4btns">
+        <button class="btn" data-w="filter">Filter only</button>
+        <button class="btn" data-w="purge">DB purge only</button>
+        <button class="btn" data-w="both">Both</button>
+      </div>
+      <div class="wi" style="margin-top:10px">
+        <table aria-live="polite">
+          <thead><tr><th></th><th>Now</th><th>Day 3</th><th>Day 7 rebuild</th><th>Later: rule off</th></tr></thead>
+          <tbody>
+            <tr><td class="rh">Users see it?</td><td class="c" data-r="see" data-c="0">·</td><td class="c" data-r="see" data-c="1">·</td><td class="c" data-r="see" data-c="2">·</td><td class="c" data-r="see" data-c="3">·</td></tr>
+            <tr><td class="rh">Still in Trie DB?</td><td class="c" data-r="db" data-c="0">·</td><td class="c" data-r="db" data-c="1">·</td><td class="c" data-r="db" data-c="2">·</td><td class="c" data-r="db" data-c="3">·</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="wmsg" id="w4msg" style="margin-top:8px"></div>
+      <ul class="checklist" id="s4goals">
+        <li data-g="rule"><span class="box">✓</span><span>Turn on a rule and watch a row disappear</span></li>
+        <li data-g="all"><span class="box">✓</span><span>Turn on all four rules</span></li>
+        <li data-g="wi"><span class="box">✓</span><span>Play all three what-if plans</span></li>
+      </ul>
+      <div class="callout warn"><b>Honest caveat: a blocklist isn't all of moderation.</b> The book's filter is a rule list on the read path. Real search engines publish autocomplete policies and also use automated classifiers, human review and ways to report a prediction, which the book doesn't cover.<a class="cite" href="https://support.google.com/websearch/answer/7368877" target="_blank" rel="noopener">[3]</a><a class="cite" href="https://blog.google/products/search/how-google-autocomplete-works-search/" target="_blank" rel="noopener">[4]</a> And remember stage 2: a filtered suggestion can still sit in one user's browser cache until <code>max-age</code> runs out.</div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Spinner of Doom</h2><div class="sub">Query-path scenarios</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The interviewer throws follow-ups at your read path. Each one has a fix from this quest. Pick it.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">The read path, out loud</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> One Trie Cache won't hold a world's worth of prefixes. And far more English words start with "c" than with "x". Quest 13.5, <a href="1305-scaling-autocomplete.html"><i>Split the Alphabet</i></a>, shards the trie and balances the hot letters. If you skipped how the weekly trie gets built, that's Quest 13.3, <a href="1303-data-gathering-service.html"><i>The Weekly Harvest</i></a>.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 13: "Design a Search Autocomplete System"</a>. Read the deep-dive parts on the <b>query service</b> and <b>trie operations (delete)</b>. Then skim MDN's <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cache-Control" target="_blank" rel="noopener">Cache-Control reference</a> for what <code>private</code>, <code>public</code> and <code>max-age</code> really promise.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <ul style="margin:0;padding-left:20px">
+        <li><b>The header is an example.</b> <code>private, max-age=3600</code> is a snapshot from when the book was written. Name the technique in an interview, not the vendor.</li>
+        <li><b>Sampling skews the tail.</b> It keeps popular rankings and distorts rare queries. That's right for top 5 by popularity and wrong for anything that needs exact counts.</li>
+        <li><b>Moderation is bigger than a filter.</b> Google's published autocomplete policies describe automated systems plus enforcement teams and user reports on top of rules.<a class="cite" href="https://support.google.com/websearch/answer/7368877" target="_blank" rel="noopener">[3]</a></li>
+        <li><b>Caching vs takedowns.</b> With browser caching, a removed suggestion can linger in a user's browser for up to <code>max-age</code>. A shorter max-age shrinks that window but sends more requests to the server. Say this trade-off out loud.</li>
+      </ul>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"why not cache suggestions at a CDN close to users?"</i> or <i>"how would personalised suggestions change the caching story?"</i>
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 13 "Design a Search Autocomplete System": query service, browser caching, data sampling, trie delete (ByteByteGo).</li>
+        <li>MDN Web Docs, "Cache-Control" HTTP header.</li>
+        <li>Google Search Help, "How Google autocomplete predictions work" (autocomplete policies).</li>
+        <li>Google blog (The Keyword), "How Google autocomplete works in Search".</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '1304',
+  winTitle: 'Suggestions before the next key',
+  badge: '⚡ Badge: Speed Typist',
+  cheatsheet: '../reference/ch13-autocomplete-cheatsheet.html',
+});
+const { sleep, shuffle, esc } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function anim(dur, f) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 1) { f(1); return res(); }
+    const t0 = performance.now();
+    const fr = now => { const p = Math.min(1, (now - t0) / dur); f(p); p < 1 ? requestAnimationFrame(fr) : res(); };
+    requestAnimationFrame(fr);
+  });
+}
+const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); Q.addXP(xp || 10, li);
+  return true;
+}
+const fmt = n => Math.round(n).toLocaleString('en-US');
+// Search popularity (the book's "tw" examples, scaled up, plus filler so any prefix shows something)
+const DATA = {
+  'twitter': 35000, 'twitch': 29000, 'twilight': 25000, 'twin peak': 21000, 'twitch prime': 18000, 'twitter search': 14000, 'twillo': 10000, 'twin peak sf': 80,
+  'dinner ideas': 9000, 'dinner recipes': 7000, 'dinner near me': 6500, 'dinosaur': 5000, 'dinner party': 3000, 'dining table': 2500, 'dinner for two': 2000,
+  'disney plus': 12000, 'dictionary': 8000, 'dish soap': 1500, 'weather': 40000, 'weather tomorrow': 15000, 'world cup': 22000, 'wikipedia': 30000,
+  'translate': 26000, 'train tickets': 9000, 'tree': 4000, 'news': 33000, 'netflix': 31000, 'maps': 28000, 'music': 12000, 'movies': 14000,
+  'recipes': 11000, 'restaurants near me': 16000, 'amazon': 38000, 'apple': 20000, 'airport': 7000, 'bank': 6000, 'best pizza': 9000, 'books': 5000,
+  'calculator': 17000, 'calendar': 8000, 'cats': 6000, 'email': 13000, 'flights': 19000, 'football': 21000, 'games': 15000, 'hotels': 12000,
+  'jobs': 10000, 'lyrics': 8000, 'pizza': 18000, 'pizza near me': 14000, 'shoes': 7000, 'speed test': 11000, 'stocks': 9000, 'youtube': 45000,
+  'ice cream': 6000, 'instagram': 34000, 'king tides': 900, 'zoo': 3000, 'yoga': 5000, 'quotes': 7000, 'video games': 6000, 'umbrella': 2000, 'xbox': 9000,
+};
+function top5(p) { return Object.entries(DATA).filter(([q]) => q.startsWith(p)).sort((a, b) => b[1] - a[1]).slice(0, 5); }
+function dropHTML(p, list) {
+  if (!list.length) return `<li class="empty">no suggestions for “${esc(p)}”</li>`;
+  return list.map(([q, f]) => `<li><span><b>${esc(q.slice(0, p.length))}</b>${esc(q.slice(p.length))}</span><span class="f">${fmt(f)}</span></li>`).join('');
+}
+const clean = v => v.toLowerCase().replace(/[^a-z ]/g, '');
+
+/* ================= STAGE 1: follow one keystroke ================= */
+Q.onStage(1, () => {
+  const W = 116, H = 52;
+  const B = {
+    br: { x: 8, y: 20, t: 'Browser', s: 'the user types' },
+    lb: { x: 152, y: 20, t: 'Load balancer', s: 'spreads traffic' },
+    api: { x: 296, y: 20, t: 'API server', s: 'builds the top 5' },
+    db: { x: 152, y: 128, t: 'Trie DB', s: 'on disk · slow' },
+    ca: { x: 296, y: 128, t: 'Trie Cache', s: 'in memory · fast' },
+  };
+  const NAMES = { br: 'Browser', lb: 'LB', api: 'API', ca: 'Cache', db: 'DB' };
+  const C = k => [B[k].x + W / 2, B[k].y + H / 2];
+  const svg = $('#p1svg');
+  svg.innerHTML = '';
+  const defs = S('defs', {}, svg);
+  const mk = S('marker', { id: 'ah1', viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' }, defs);
+  S('path', { d: 'M0 0L10 5L0 10z', class: 'ah' }, mk);
+  const arr = (d, extra) => S('path', { d, class: 'arr', 'marker-end': 'url(#ah1)', ...(extra || {}) }, svg);
+  arr('M124 46H150'); arr('M268 46H294'); arr('M354 72V126');
+  const aMiss = arr('M296 146H270'); const aRep = arr('M268 162H294');
+  S('text', { x: 282, y: 140, class: 'alab' }, svg).textContent = 'miss';
+  S('text', { x: 282, y: 178, class: 'alab' }, svg).textContent = 'write back';
+  S('text', { x: 66, y: 112, class: 'alab' }, svg).textContent = 'top 5 return';
+  S('text', { x: 66, y: 126, class: 'alab' }, svg).textContent = 'the same way ↩';
+  const els = {};
+  Object.entries(B).forEach(([k, b]) => {
+    const g = S('g', { class: 'pbox' + (k === 'br' ? '' : ' tap') }, svg);
+    S('rect', { x: b.x, y: b.y, width: W, height: H, rx: 11 }, g);
+    S('text', { x: b.x + W / 2, y: b.y + 23, class: 't' }, g).textContent = b.t;
+    const sub = S('text', { x: b.x + W / 2, y: b.y + 40, class: 's' }, g); sub.textContent = b.s;
+    const ord = S('g', { class: 'ord' }, g);
+    if (k !== 'br') {
+      g.setAttribute('tabindex', 0); g.setAttribute('role', 'button'); g.setAttribute('aria-label', `Add ${b.t} to your predicted path`); g.dataset.k = k;
+      g.addEventListener('click', () => tap(k));
+      g.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tap(k); } });
+    }
+    els[k] = { g, sub, ord };
+  });
+  const pkt = S('circle', { class: 'pkt', r: 8, cx: C('br')[0], cy: C('br')[1], opacity: 0 }, svg);
+
+  const inp = $('#p1in'), send = $('#p1send'), restart = $('#p1restart');
+  let pred = [], busy = false, step = 1, warm = true, cacheSet = new Set(), runs = [];
+  const goals = new Set();
+  let quizShown = false;
+
+  function drawPred() {
+    Object.values(els).forEach(e => e.ord.innerHTML = '');
+    const pos = {};
+    pred.forEach((k, i) => (pos[k] = pos[k] || []).push(i + 1));
+    Object.entries(pos).forEach(([k, nums]) => {
+      const b = B[k], t = nums.join(','), w = 10 + t.length * 7;
+      S('rect', { x: b.x + W - w + 6, y: b.y - 8, width: w, height: 18, rx: 9, style: 'fill:var(--accent)' }, els[k].ord);
+      S('text', { x: b.x + W - w / 2 + 6, y: b.y + 1 }, els[k].ord).textContent = t;
+    });
+    $('#p1pred').innerHTML = `<span class="small"><b>Your prediction:</b></span><span class="chip br">Browser</span>` + pred.map(k => `<span>→</span><span class="chip">${NAMES[k]}</span>`).join('') + (pred.length ? '' : '<span class="small muted">tap the boxes in order…</span>');
+    send.disabled = busy || !pred.length || (step === 2 && warm === true && !restartedThisStep);
+  }
+  let restartedThisStep = false;
+  function tap(k) {
+    if (busy) return;
+    if (pred.length >= 6) { Q.toast('that’s plenty of hops', els[k].g, 'practice'); return; }
+    pred.push(k); drawPred();
+  }
+  $('#p1undo').onclick = () => { if (!busy) { pred.pop(); drawPred(); } };
+  inp.addEventListener('input', () => { const v = clean(inp.value).slice(0, 14); if (v !== inp.value) inp.value = v; });
+
+  function stepText() {
+    const t = step === 1 ? 'Run 1 of 3 · cache is warm' : step === 2 ? (restartedThisStep ? 'Run 2 of 3 · cache was just restarted' : 'Run 2 of 3 · restart the cache first') : step === 3 ? 'Run 3 of 3 · same prefix again' : 'Free play';
+    $('#p1step').textContent = t;
+  }
+  function cacheSub() {
+    els.ca.sub.textContent = warm ? 'in memory · warm' : cacheSet.size ? `holds ${cacheSet.size} prefix${cacheSet.size > 1 ? 'es' : ''}` : 'EMPTY (restarted)';
+  }
+  restart.onclick = () => {
+    if (busy) return;
+    warm = false; cacheSet.clear(); cacheSub();
+    els.ca.g.classList.add('miss'); setTimeout(() => els.ca.g.classList.remove('miss'), 700);
+    logTo('p1log', '🔌 Cache server restarted. Its memory is now empty.', 'w');
+    if (step === 2) restartedThisStep = true;
+    stepText(); drawPred();
+  };
+
+  const seg = async (a, b, ms) => {
+    const [x0, y0] = a, [x1, y1] = b;
+    await anim(ms, p => { const e = ease(p); pkt.setAttribute('cx', x0 + (x1 - x0) * e); pkt.setAttribute('cy', y0 + (y1 - y0) * e); });
+  };
+  const light = (k, cls) => { els[k].g.classList.add(cls || 'lit'); };
+  const unlightAll = () => Object.values(els).forEach(e => e.g.classList.remove('lit', 'hit', 'miss', 'on'));
+  const HOP = 360;
+
+  send.onclick = async () => {
+    if (busy || !pred.length) return;
+    let p = clean(inp.value).trim();
+    if (!p) { Q.toast('type a prefix first', inp, 'practice'); return; }
+    busy = true; send.disabled = true; restart.disabled = true; inp.readOnly = true;
+    const hit = warm || cacheSet.has(p);
+    const actual = hit ? ['lb', 'api', 'ca'] : ['lb', 'api', 'ca', 'db', 'ca'];
+    const guess = pred.slice();
+    unlightAll();
+    $('#p1drop').innerHTML = '<li class="empty">…waiting</li>';
+    pkt.setAttribute('opacity', 1); pkt.setAttribute('cx', C('br')[0]); pkt.setAttribute('cy', C('br')[1]);
+    light('br');
+    logTo('p1log', `⌨️ GET /autocomplete?q=${esc(p)}`);
+    await seg(C('br'), C('lb'), HOP); light('lb'); logTo('p1log', 'LB → picks one of the API servers');
+    await seg(C('lb'), C('api'), HOP); light('api'); logTo('p1log', `API → asks the Trie Cache for “${esc(p)}”`);
+    await seg(C('api'), C('ca'), HOP);
+    let ms;
+    if (hit) {
+      light('ca', 'hit'); logTo('p1log', `Cache HIT: top 5 for “${esc(p)}” is already in memory`, 'g'); ms = 5;
+    } else {
+      light('ca', 'miss'); logTo('p1log', `Cache MISS: “${esc(p)}” isn’t in memory`, 'e');
+      aMiss.classList.add('flow');
+      await seg(C('ca'), C('db'), HOP * 1.6); light('db', 'on'); logTo('p1log', 'Trie DB → reads the node from disk (slow)', 'w');
+      await sleep(Q.reduced ? 0 : 350);
+      aMiss.classList.remove('flow'); aRep.classList.add('flow');
+      await seg(C('db'), C('ca'), HOP * 1.2);
+      cacheSet.add(p); cacheSub(); els.ca.g.classList.remove('miss'); light('ca', 'hit');
+      logTo('p1log', `Write back: “${esc(p)}” → Trie Cache. The next request for it is a hit.`, 'g');
+      setTimeout(() => aRep.classList.remove('flow'), 900);
+      ms = 47;
+    }
+    await seg(C('ca'), C('api'), HOP * .6); await seg(C('api'), C('lb'), HOP * .6); await seg(C('lb'), C('br'), HOP * .6);
+    pkt.setAttribute('opacity', 0);
+    $('#p1drop').innerHTML = dropHTML(p, top5(p));
+    const msEl = $('#p1ms'); msEl.textContent = `~${ms} ms`; msEl.className = 'bignum ' + (hit ? 'good' : 'bad');
+    const runNo = step <= 3 ? step : runs.length + 1;
+    runs.push({ n: runNo, hit, ms, p });
+    drawLat();
+
+    const ok = guess.length === actual.length && guess.every((k, i) => k === actual[i]);
+    const path = ['Browser', ...actual.map(k => NAMES[k])].join(' → ');
+    if (ok) { Q.addXP(10, send); logTo('p1log', `✓ Your prediction matched: ${path}`, 'g'); }
+    else { Q.loseHeart(send); logTo('p1log', `✗ The real path was ${path}${hit ? '. Warm cache: it stops at the cache.' : '. On a miss it goes on to the DB, then writes back into the cache.'}`, 'e'); }
+
+    if (step === 1) { checkGoal('#s1goals', 'r1', goals); step = 2; restartedThisStep = false; }
+    else if (step === 2) {
+      if (!hit) { checkGoal('#s1goals', 'r2', goals); step = 3; }
+    } else if (step === 3) {
+      checkGoal('#s1goals', 'r3', goals); step = 4; $('#p1note').style.display = 'block';
+      inp.readOnly = false; maybeQuiz();
+    }
+    if (step === 4) inp.readOnly = false;
+    pred = []; busy = false;
+    restart.disabled = !(step === 2 || step === 4);
+    stepText(); drawPred();
+  };
+  function drawLat() {
+    const show = runs.slice(-3);
+    $('#p1lat').innerHTML = '<div class="small muted">Latency strip (your last three runs)</div>' + show.map(r => `<div class="latr"><span class="small"><b>Run ${r.n}</b></span><div class="tr"><div class="fl" style="width:0;background:${r.hit ? 'var(--good)' : 'var(--bad)'}" data-w="${Math.min(100, r.ms / 50 * 100)}"></div></div><span class="v">${r.hit ? 'hit' : 'miss'} · ${r.ms} ms</span></div>`).join('');
+    requestAnimationFrame(() => $$('#p1lat .fl').forEach(f => f.style.width = f.dataset.w + '%'));
+  }
+  function maybeQuiz() {
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => Q.quiz($('#s1quiz'), {
+      q: 'When does the query service read the Trie DB?',
+      options: ['Only when the Trie Cache misses that prefix', 'On every keystroke, to get the freshest counts', 'Once per user, when their session first starts', 'Only when the load balancer is overloaded'],
+      correct: 0,
+      good: 'The cache answers almost everything. The DB is the fallback for a miss, and the answer is written back so the next request for that prefix is a hit.',
+      bad: 'The DB is only the fallback. API servers read the Trie Cache first. Only on a miss (cache node restarted or out of memory) do they read the Trie DB and write the result back into the cache.',
+      onDone: () => setTimeout(() => Q.clearStage(1), 900),
+    }), 400);
+  }
+  cacheSub(); stepText(); drawPred(); drawLat();
+  $('#p1lat').innerHTML = '<div class="small muted">Latency strip: your runs will appear here</div>';
+});
+
+/* ================= STAGE 2: AJAX + browser cache ================= */
+Q.onStage(2, () => {
+  const MAXAGE = 3600;
+  const inp = $('#b2in');
+  let clock = 0, srv = 0, hits = 0, last = '', rowN = 0, ffSince = false;
+  let cache = new Map();
+  let passStart = null; // server count when the learner backspaced down to "din"
+  const goals = new Set();
+  let quizShown = false, seenPublic = false;
+  const hhmmss = s => { const t = 9 * 3600 + s; return [Math.floor(t / 3600) % 24, Math.floor(t / 60) % 60, t % 60].map(n => String(n).padStart(2, '0')).join(':'); };
+  function renderTop() {
+    $('#b2clock').textContent = 'clock ' + hhmmss(clock);
+    $('#b2srv').textContent = srv; $('#b2hit').textContent = hits;
+    const ent = [...cache.entries()];
+    $('#b2cache').innerHTML = ent.length ? '<span class="small muted" style="align-self:center">Browser cache:</span>' + ent.map(([p, t]) => {
+      const left = MAXAGE - (clock - t);
+      return `<span class="chip${left <= 0 ? ' stale' : ''}" title="${left > 0 ? 'fresh' : 'expired'}">${esc(p)} · ${left > 0 ? Math.ceil(left / 60) + 'm left' : 'expired'}</span>`;
+    }).join('') : '<span class="small muted">Browser cache is empty.</span>';
+  }
+  function addRow(p, kind, age) {
+    rowN++;
+    const log = $('#b2log');
+    const src = kind === 'n' ? 'server · 200' : 'browser cache';
+    log.insertAdjacentHTML('beforeend', `<div class="nr ${kind}"><span class="no">${rowN}</span><span class="q">?q=${esc(p)}</span><span class="src">${src}${kind === 'c' ? ` · ${age}s old` : ''}</span></div>`);
+    log.scrollTop = log.scrollHeight;
+  }
+  function request(p) {
+    clock += 1;
+    const t = cache.get(p);
+    if (t !== undefined && clock - t < MAXAGE) { hits++; addRow(p, 'c', clock - t); }
+    else {
+      srv++;
+      if (t !== undefined && ffSince) { if (checkGoal('#s2goals', 'expire', goals)) maybeQuiz(); }
+      cache.set(p, clock); addRow(p, 'n');
+    }
+    $('#b2drop').innerHTML = dropHTML(p, top5(p));
+    renderTop();
+  }
+  inp.addEventListener('input', () => {
+    const v = clean(inp.value).slice(0, 24);
+    if (v !== inp.value) inp.value = v;
+    if (v === last) return;
+    last = v;
+    if (!v) { $('#b2drop').innerHTML = '<li class="empty">suggestions appear here</li>'; return; }
+    request(v);
+    // goal tracking
+    const PRE = ['d', 'di', 'din', 'dinn', 'dinne', 'dinner'];
+    if (v === 'dinner' && PRE.every(p => cache.has(p))) { if (checkGoal('#s2goals', 'type', goals)) maybeQuiz(); }
+    if (goals.has('type') && 'dinner'.startsWith(v) && v.length <= 3) passStart = srv;
+    if (v === 'dinner' && passStart !== null) {
+      if (srv === passStart) { if (checkGoal('#s2goals', 'retype', goals)) { logTo2('✓ Second pass: 0 new server requests.'); maybeQuiz(); } }
+      passStart = null;
+    }
+    if (!'dinner'.startsWith(v)) passStart = null;
+  });
+  function logTo2(t) { const log = $('#b2log'); log.insertAdjacentHTML('beforeend', `<div class="nr sep" style="color:var(--good)">${t}</div>`); log.scrollTop = log.scrollHeight; }
+  $('#b2ff').onclick = () => {
+    clock += 3600; ffSince = true; passStart = null;
+    const log = $('#b2log'); log.insertAdjacentHTML('beforeend', '<div class="nr sep">⏩ one hour later: every cached answer has passed max-age</div>'); log.scrollTop = log.scrollHeight;
+    renderTop();
+    Q.toast('+1 hour', $('#b2ff'), 'practice');
+  };
+  $('#b2clr').onclick = () => {
+    clock = 0; srv = 0; hits = 0; last = ''; rowN = 0; ffSince = false; passStart = null; cache = new Map();
+    inp.value = ''; $('#b2log').innerHTML = ''; $('#b2drop').innerHTML = '<li class="empty">suggestions appear here</li>'; renderTop();
+  };
+  // header inspector
+  $$('#b2seg button').forEach(b => b.onclick = () => {
+    const v = b.dataset.v;
+    $$('#b2seg button').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); });
+    $('#b2cc').textContent = v;
+    const px = $('#b2proxy');
+    if (v === 'public') {
+      seenPublic = true;
+      px.classList.add('store'); $('#b2psub').textContent = 'stores a shared copy';
+      $('#b2pmsg').innerHTML = '<b>public</b>: any cache on the way may keep it. Your coworker Sam types “din” and the proxy hands Sam <i>your</i> stored answer. Fine for identical results. A problem the day results become personal.';
+    } else {
+      px.classList.remove('store'); $('#b2psub').textContent = 'passes it through';
+      $('#b2pmsg').innerHTML = '<b>private</b>: only your own browser may store this answer. The proxy forwards it and keeps nothing. Shared caches (proxies, CDNs) must not store it.';
+      if (seenPublic && checkGoal('#s2goals', 'hdr', goals)) maybeQuiz();
+    }
+  });
+  // AJAX vs full reload
+  $('#b2key').onclick = async () => {
+    const btn = $('#b2key'); btn.disabled = true;
+    const full = $('#b2full'), aj = $('#b2ajax');
+    $$('.dd', full).concat($$('.dd', aj)).forEach(d => { d.classList.remove('new'); d.textContent = '…'; });
+    $$('.sb', full).concat($$('.sb', aj)).forEach(s => s.textContent = 'di');
+    $('.wash', full).classList.add('on');
+    $('.cost', full).textContent = 'whole page: ~500 KB, ~1 s';
+    $('.cost', aj).textContent = 'just the list: ~1 KB';
+    await sleep(Q.reduced ? 50 : 250);
+    $('.dd', aj).textContent = 'disney plus'; $('.dd', aj).classList.add('new');
+    await sleep(Q.reduced ? 50 : 900);
+    $('.wash', full).classList.remove('on'); $('.dd', full).textContent = 'disney plus'; $('.dd', full).classList.add('new');
+    btn.disabled = false;
+    if (checkGoal('#s2goals', 'ajax', goals)) maybeQuiz();
+  };
+  renderTop();
+
+  function maybeQuiz() {
+    if (quizShown || goals.size < 5) return;
+    quizShown = true;
+    const m = $('#s2quiz');
+    setTimeout(() => Q.quiz(m, {
+      tag: 'Check 1 of 3',
+      q: 'What does <code>max-age=3600</code> tell the browser?',
+      options: ['Reuse this answer for up to one hour', 'Keep at most 3600 answers in the cache', 'Retry the request every 3600 milliseconds', 'Wait one hour before asking the server'],
+      correct: 0,
+      good: 'max-age is in <b>seconds</b>. 3600 seconds = 1 hour. Until then the stored answer counts as fresh and the browser doesn’t ask the server.',
+      bad: 'max-age is a freshness time in <b>seconds</b>. 3600 s = 1 hour, during which the browser reuses its stored copy without asking the server.',
+      onDone: () => setTimeout(() => Q.quiz(m, {
+        tag: 'Check 2 of 3',
+        q: 'Why <code>private</code> and not <code>public</code>?',
+        options: ['Only the user’s own browser may store it', 'It encrypts the suggestions on the way', 'It stops the browser from caching at all', 'It tells the server to skip its own cache'],
+        correct: 0,
+        good: '<code>private</code> means the response is for one user. Shared caches like an office proxy or a CDN must not keep it, so one person’s answer is never handed to someone else.',
+        bad: '<code>private</code> is about <i>who</i> may store it, not encryption: only the user’s own browser. Shared caches (proxies, CDNs) must not.',
+        onDone: () => setTimeout(() => Q.quiz(m, {
+          tag: 'Check 3 of 3',
+          q: 'You type <code>dinner</code>, backspace to <code>din</code>, and retype <code>dinner</code> within a minute. How many requests reach the server on the second pass?',
+          options: ['0, every prefix is still fresh in the cache', '3, one for each letter you retyped', '6, one for every prefix of the word', '1, a single request for the whole word'],
+          correct: 0,
+          good: 'All six prefixes were cached on the first pass, and none has reached max-age. The dropdown fills from the browser and the server never hears about it.',
+          bad: 'Every prefix (d, di, din… dinner) was cached on the first pass and is still fresh. So the second pass sends 0 requests to the server.',
+          onDone: () => setTimeout(() => Q.clearStage(2), 900),
+        }), 600),
+      }), 600),
+    }), 400);
+  }
+});
+
+/* ================= STAGE 3: data sampling ================= */
+Q.onStage(3, () => {
+  const QS = [['twitter', 35000], ['twitch', 29000], ['twilight', 25000], ['twin peak', 21000], ['twitch prime', 18000], ['twitter search', 14000], ['twillo', 10000], ['twin peak sf', 80]];
+  const NS3 = [1, 10, 100, 1000];
+  const PER_DAY = 10e6 * 10;
+  const goals = new Set(), seen = new Set([1]);
+  let ni = 0, week = 1, quizShown = false;
+  function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  $('#n3bars').innerHTML = QS.map(([q], i) => `<div class="sb3${i === 7 ? ' rare' : ''}" data-q="${i}"><span class="rk"></span><span class="nm">${q}</span><div class="tr"><div class="fl"></div><div class="truth"></div></div><span class="v"></span></div>`).join('');
+  const MAX = 40000;
+  function update(logIt) {
+    const N = NS3[ni], r = rng(N * 7919 + week * 104729);
+    const est = QS.map(([q, c], i) => {
+      let s = 0;
+      if (N === 1) s = c; else { const p = 1 / N; for (let k = 0; k < c; k++) if (r() < p) s++; }
+      return { i, q, c, s, e: s * N };
+    });
+    const byEst = est.slice().sort((a, b) => b.e - a.e || a.i - b.i);
+    const rows = $$('#n3bars .sb3');
+    // reorder visually
+    const box = $('#n3bars');
+    byEst.forEach((o, rank) => {
+      const el = rows[o.i]; box.appendChild(el);
+      el.classList.toggle('top', rank < 5); el.classList.toggle('out', rank >= 5);
+      $('.rk', el).textContent = '#' + (rank + 1);
+      $('.fl', el).style.width = Math.min(100, o.e / MAX * 100) + '%';
+      $('.truth', el).style.left = Math.min(99.5, o.c / MAX * 100) + '%';
+      $('.v', el).textContent = fmt(o.e);
+    });
+    const truthTop = QS.slice(0, 5).map(x => x[0]);
+    const estTop = byEst.slice(0, 5).map(o => o.q);
+    const sameSet = truthTop.every(q => estTop.includes(q)), sameOrder = truthTop.every((q, k) => estTop[k] === q);
+    const v = $('#n3verdict');
+    v.className = 'verdict ' + (sameOrder ? 'good' : 'bad');
+    v.textContent = sameOrder ? '✓ Top 5 identical to the true ranking' : sameSet ? '≈ Same top 5, but two of them swapped places' : '⚠ A different query slipped into the top 5 this week';
+    $('#n3v').textContent = N;
+    $('#n3').setAttribute('aria-valuetext', 'N = ' + N);
+    $('#n3rows').textContent = fmt(PER_DAY / N);
+    const bytes = PER_DAY / N * 20;
+    $('#n3gb').textContent = bytes >= 1e9 ? (bytes / 1e9).toFixed(1).replace('.0', '') + ' GB' : fmt(bytes / 1e6) + ' MB';
+    $('#n3save').textContent = (100 - 100 / N).toFixed(1).replace('.0', '') + '%';
+    const rare = est[7];
+    if (logIt) logTo('n3log', `N = ${N}: “twin peak sf” sampled ${rare.s}× → estimate ${fmt(rare.e)} (truth 80). “twitter” → ${fmt(est[0].e)} (truth 35,000).`, rare.e === 0 ? 'e' : Math.abs(rare.e - 80) > 40 ? 'w' : '');
+  }
+  $('#n3').addEventListener('input', () => {
+    ni = +$('#n3').value; seen.add(NS3[ni]);
+    update(true);
+    if (seen.size === 4 && checkGoal('#s3goals', 'all', goals)) maybeQuiz();
+  });
+  $('#n3re').onclick = () => { week++; update(true); };
+  update(false);
+
+  // calculate-and-check
+  let calcDone = false;
+  function parseNum(s) {
+    s = String(s).toLowerCase().replace(/[,\s_]/g, '');
+    let m = 1;
+    if (/(million|mil|m)$/.test(s)) { m = 1e6; s = s.replace(/(million|mil|m)$/, ''); }
+    else if (/(billion|bn|b)$/.test(s)) { m = 1e9; s = s.replace(/(billion|bn|b)$/, ''); }
+    else if (/(thousand|k)$/.test(s)) { m = 1e3; s = s.replace(/(thousand|k)$/, ''); }
+    if (!/^\d*\.?\d+(e\d+)?$/.test(s)) return NaN;
+    return parseFloat(s) * m;
+  }
+  const go = () => {
+    if (calcDone) return;
+    const v = parseNum($('#c3in').value), ex = $('#c3ex');
+    if (!isFinite(v)) { Q.toast('type a number', $('#c3go'), 'practice'); return; }
+    if (Math.abs(v - 1e7) <= 5e5) {
+      calcDone = true; $('#c3in').readOnly = true; $('#c3go').disabled = true;
+      ex.className = 'explain show good';
+      ex.innerHTML = '<b>Correct: 10 million a day.</b> 10,000,000 users × 10 searches = 100,000,000 searches a day. Logging 1 in 10 keeps 10,000,000. That’s 90% less logging work, and the top-5 ranking barely moves.';
+      Q.addXP(20, $('#c3go'));
+      if (checkGoal('#s3goals', 'calc', goals, 0)) maybeQuiz();
+    } else {
+      ex.className = 'explain show bad';
+      ex.innerHTML = '<b>Not quite.</b> First find all searches per day: 10,000,000 users × 10 searches each. Then keep 1 out of every 10. Try again.';
+      Q.loseHeart($('#c3go'));
+    }
+  };
+  $('#c3go').onclick = go;
+  $('#c3in').addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+
+  function maybeQuiz() {
+    if (quizShown || goals.size < 2) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s3quiz'), {
+      q: 'What does logging only 1 in N searches cost you?',
+      options: ['Accurate counts for rare, long-tail queries', 'The correct order of the most popular queries', 'Read-path speed for every user’s keystrokes', 'Freshness of the suggestions in the browser'],
+      correct: 0,
+      good: 'Popular queries have so many samples that ×N lands close to the truth. A query searched 80 times a week gets maybe zero or one sample, so its estimate jumps between 0 and 1000. Sampling also never touches the read path.',
+      bad: 'Big counts survive sampling, so the top of the ranking holds. What breaks is the long tail: “twin peak sf” (80 a week) is often never sampled at N = 1000. Sampling is on the logging side, so it doesn’t slow reads.',
+      onDone: () => setTimeout(() => Q.clearStage(3), 900),
+    }), 400);
+  }
+});
+
+/* ================= STAGE 4: the filter layer ================= */
+Q.onStage(4, () => {
+  // Diagram
+  const svg = $('#f4svg');
+  svg.innerHTML = '';
+  const defs = S('defs', {}, svg);
+  const mk = S('marker', { id: 'ah4', viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' }, defs);
+  S('path', { d: 'M0 0L10 5L0 10z', class: 'ah' }, mk);
+  const W = 120, H = 54;
+  const box = (x, y, t, s) => { const g = S('g', { class: 'pbox' }, svg); S('rect', { x, y, width: W, height: H, rx: 11 }, g); S('text', { x: x + W / 2, y: y + 24, class: 't' }, g).textContent = t; const sub = S('text', { x: x + W / 2, y: y + 42, class: 's' }, g); sub.textContent = s; return { g, sub }; };
+  box(8, 14, 'API servers', 'ask for the top 5');
+  const fb = box(150, 14, 'Filter layer', '0 rules on');
+  box(292, 14, 'Trie Cache', 'returns its top 5');
+  box(150, 106, 'Purge job', 'runs in background');
+  const dbb = box(292, 106, 'Trie DB', 'source for next build');
+  S('path', { d: 'M128 34H148', class: 'arr', 'marker-end': 'url(#ah4)' }, svg);
+  S('path', { d: 'M270 34H290', class: 'arr', 'marker-end': 'url(#ah4)' }, svg);
+  S('path', { d: 'M290 54H272', class: 'arr', 'marker-end': 'url(#ah4)' }, svg);
+  S('path', { d: 'M148 54H130', class: 'arr', 'marker-end': 'url(#ah4)' }, svg);
+  const purgeArr = S('path', { d: 'M270 133H290', class: 'arr async', 'marker-end': 'url(#ah4)' }, svg);
+  S('text', { x: 210, y: 92, class: 'alab' }, svg).textContent = 'flagged rows ↓';
+  S('path', { d: 'M210 70V104', class: 'arr async', 'marker-end': 'url(#ah4)' }, svg);
+  S('text', { x: 66, y: 120, class: 'alab' }, svg).textContent = 'request →';
+  S('text', { x: 66, y: 136, class: 'alab' }, svg).textContent = '← top 5 back';
+
+  const CATS = { violent: 'violent', hateful: 'hateful', explicit: 'explicit', dangerous: 'dangerous' };
+  const PFX = {
+    'how to': [['how to tie a tie', 900], [null, 870, 'dangerous', 7], ['how to boil an egg', 820], [null, 640, 'violent', 9], ['how to take a screenshot', 600]],
+    'why is': [['why is the sky blue', 950], [null, 910, 'hateful', 8], ['why is my wifi slow', 700], ['why is the ocean salty', 520], [null, 480, 'violent', 6]],
+    'best': [['best pizza near me', 990], [null, 760, 'explicit', 10], ['best running shoes', 730], ['best free games', 610], [null, 560, 'dangerous', 7]],
+  };
+  const rules = new Set(), goals = new Set();
+  let cur = 'how to', quizShown = false;
+  $('#f4pfx').innerHTML = Object.keys(PFX).map(p => `<button class="tog p" data-p="${p}" aria-pressed="${p === cur}">${p}…</button>`).join('');
+  $('#f4rules').innerHTML = Object.keys(CATS).map(c => `<button class="tog" data-r="${c}" aria-pressed="false">${c}</button>`).join('');
+  function render(justDropped) {
+    const list = PFX[cur];
+    const dropped = list.filter(x => x[0] === null && rules.has(x[2])).length;
+    $('#f4drop').innerHTML = list.map(([q, f, cat, w]) => {
+      if (q === null) {
+        const gone = rules.has(cat);
+        return `<li class="bad${gone ? ' gone' : ''}"><span><b>${esc(cur)}</b> <span class="redact" style="width:${w * 9}px" aria-label="redacted ${cat} suggestion"></span></span><span class="cat">${cat}${gone ? ' · dropped' : ''}</span></li>`;
+      }
+      return `<li><span><b>${esc(cur)}</b>${esc(q.slice(cur.length))}</span><span class="f">${fmt(f)}</span></li>`;
+    }).join('');
+    const left = list.length - dropped;
+    $('#f4cnt').textContent = `Dropdown · cache returned ${list.length} → filter dropped ${dropped} → user sees ${left}`;
+    fb.sub.textContent = rules.size ? `${rules.size} rule${rules.size > 1 ? 's' : ''} on · dropping ${dropped}` : '0 rules on';
+    fb.g.classList.toggle('on', rules.size > 0);
+    return dropped;
+  }
+  $$('#f4pfx .tog').forEach(b => b.onclick = () => {
+    cur = b.dataset.p; $$('#f4pfx .tog').forEach(x => x.setAttribute('aria-pressed', x === b)); render();
+  });
+  $$('#f4rules .tog').forEach(b => b.onclick = () => {
+    const r = b.dataset.r, on = !rules.has(r);
+    const before = render();
+    on ? rules.add(r) : rules.delete(r);
+    b.setAttribute('aria-pressed', on);
+    const after = render();
+    logTo('f4log', on ? `Rule “${r}” on: the filter drops ${r} suggestions on the way out. No rebuild needed.` : `Rule “${r}” off: those rows flow through again (they are still in the cache).`, on ? 'g' : 'w');
+    if (on && after > before) checkGoal('#s4goals', 'rule', goals);
+    if (rules.size === 4 && checkGoal('#s4goals', 'all', goals)) { logTo('f4log', 'All four rules on. Try the other prefixes: nothing harmful gets through.', 'g'); maybeQuiz(); }
+    maybeQuiz();
+  });
+  render();
+
+  // What-if timelines. y = yes (bad), n = no (good), q = queued
+  const WI = {
+    filter: { see: ['n', 'n', 'n', 'y'], db: ['y', 'y', 'y', 'y'], msg: 'Hidden at once, but the row never leaves the DB. Every weekly build puts it back into the trie, and the day someone edits the rule list, it’s back on screen.' },
+    purge: { see: ['y', 'y', 'n', 'n'], db: ['q', 'n', 'n', 'n'], msg: 'The DB is clean within hours, but the cache still serves last week’s trie. Users keep seeing it until the next weekly rebuild. Too slow for an emergency.' },
+    both: { see: ['n', 'n', 'n', 'n'], db: ['q', 'n', 'n', 'n'], msg: 'The filter hides it right now. The background purge removes it for good, so the next build is clean and it can’t come back. This is the book’s design.' },
+  };
+  const played = new Set();
+  let wbusy = false;
+  $$('#w4btns .btn').forEach(b => b.onclick = async () => {
+    if (wbusy) return; wbusy = true;
+    const k = b.dataset.w, w = WI[k];
+    $$('#w4btns .btn').forEach(x => x.classList.toggle('primary', x === b));
+    $$('.wi td.c').forEach(td => { td.className = 'c'; td.textContent = '·'; });
+    $('#w4msg').textContent = '';
+    purgeArr.classList.toggle('flow', k !== 'filter');
+    for (let c = 0; c < 4; c++) {
+      ['see', 'db'].forEach(r => {
+        const v = w[r][c], td = $(`.wi td[data-r="${r}"][data-c="${c}"]`);
+        td.classList.add(v); td.textContent = v === 'y' ? 'yes' : v === 'n' ? 'no' : 'queued';
+      });
+      await sleep(Q.reduced ? 30 : 450);
+    }
+    setTimeout(() => purgeArr.classList.remove('flow'), 600);
+    $('#w4msg').innerHTML = `<b>${b.textContent.replace(' ✓', '')}:</b> ${w.msg}`;
+    b.classList.add('done'); played.add(k);
+    wbusy = false;
+    if (played.size === 3 && checkGoal('#s4goals', 'wi', goals)) maybeQuiz();
+  });
+
+  function maybeQuiz() {
+    if (quizShown || goals.size < 3) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s4quiz'), {
+      q: 'The book uses a filter layer <i>and</i> an async delete from the DB. Why both?',
+      options: ['The filter hides it now; the purge keeps it out of the next build', 'The purge hides it now; the filter cleans up the next weekly build', 'The filter is slow, so the purge is a faster backup for emergencies', 'Two layers let users vote on which suggestions should be kept'],
+      correct: 0,
+      good: 'The filter acts on the read path, so it works on the very next keystroke. The async purge fixes the source data, so the weekly rebuild doesn’t bring the entry back.',
+      bad: 'It’s the other way round. The filter is on the read path, so it hides the entry instantly. The purge runs in the background and cleans the DB, so the next weekly build is clean and the entry can’t return.',
+      onDone: () => setTimeout(() => Q.clearStage(4), 900),
+    }), 400);
+  }
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss'), {
+  name: '🌀 The Spinner of Doom',
+  xp: 20,
+  choices: [
+    { k: 'warm', label: 'Warm the cache', sub: 'preload before switching' },
+    { k: 'browser', label: 'Browser cache', sub: 'Cache-Control max-age' },
+    { k: 'sample', label: 'Sample the logs', sub: 'log 1 in N' },
+    { k: 'filter', label: 'Filter + purge', sub: 'rule now, delete later' },
+  ],
+  scenarios: [
+    { e: '🔁', t: 'Same prefixes, again and again', d: 'Users type a word, backspace, and retype it. Half of all server traffic is for prefixes the same user asked about a minute ago.', a: 'browser', why: 'Suggestions barely change within an hour, so let the browser keep them: <code>Cache-Control: private, max-age=3600</code>. Repeat keystrokes are answered locally and never reach the server.' },
+    { e: '🚨', t: 'A harmful suggestion is trending', d: 'Legal says it must be gone from every dropdown now, and it must not come back next week.', a: 'filter', why: 'Add a filter rule: it hides the entry on the read path on the very next request. Then delete it from the DB in the background so the next weekly build is clean. (Users who cached it may still see it until max-age runs out.)' },
+    { e: '📈', t: 'p99 spikes every Monday morning', d: 'Right after the new weekly trie goes live, tail latency (p99, the slowest 1% of requests) jumps for an hour, then settles. The Trie DB is getting hammered.', a: 'warm', why: 'The new trie lands in a cold cache, so every prefix misses and falls through to the DB until it’s written back. Load the snapshot (at least the hot prefixes) into the cache <i>before</i> switching traffic. This goes beyond the book, but it follows from its miss-and-replenish design.' },
+    { e: '💾', t: 'Logging is eating the budget', d: 'The analytics log grows by gigabytes a day and the weekly aggregation job takes longer every week. The only output you need is the top 5 per prefix.', a: 'sample', why: 'Log only 1 in N searches. Counts scale back by ×N and the popular ranking stays stable. The cost is noisy counts for rare queries, which the top 5 doesn’t need.' },
+    { e: '🌐', t: 'Why not a shared CDN?', d: 'A teammate says: switch to <code>public</code> so a CDN near users caches suggestions for everyone. What do you answer?',
+      choices: [
+        { k: 'priv', label: 'Keep it private', sub: 'browser only, for now' },
+        { k: 'pub', label: 'Go public', sub: 'CDN for everyone' },
+        { k: 'none', label: 'Turn off caching', sub: 'always ask the server' },
+      ],
+      a: 'priv', why: 'The book’s example uses <code>private</code>. Shared caches can hand one user’s response to others, which breaks the day results become personal or regional, and it makes takedowns harder to push out. A CDN for plain, global prefixes is a fair trade-off to <i>discuss</i>, as long as you name those costs. Turning caching off throws away a free speed win.' },
+  ],
+  outro: 'The pattern: memory first, the user’s browser before the server, sample what you only need roughly, and filter on the read path while you clean the source.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: say it like a senior ================= */
+Q.onStage(6, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"Walk me through one keystroke, from the browser to the dropdown. What did you do to keep it under 100 ms, and to keep it safe?"</i>',
+  placeholder: 'The keystroke fires an AJAX request to the load balancer…',
+  minWords: 25,
+  model: '"Each keystroke sends an AJAX request, so only the dropdown updates and the page never reloads. It hits a load balancer, which picks an API server. The API server reads the prefix\'s top 5 from the Trie Cache, which keeps the trie in memory. If that\'s a miss, because a cache node restarted or ran out of memory, it reads the Trie DB and writes the result back into the cache so the next request is a hit. The response carries <code>Cache-Control: private, max-age=3600</code>, so the user\'s own browser reuses it for an hour, but shared proxies don\'t store it. On the logging side I record only 1 in N searches. That keeps the popular rankings and saves a lot of storage, but rare queries get noisy. For safety, a filter layer between the API servers and the cache drops harmful suggestions right away. A background job also deletes them from the DB, so the next weekly build is clean."',
+  checks: [
+    'I traced LB → API servers → Trie Cache, and on a miss → Trie DB + write back',
+    'I said AJAX: only the dropdown updates, no full page reload',
+    'I named browser caching: <code>private, max-age=3600</code> (one hour, user’s browser only)',
+    'I mentioned sampling 1 in N logs, and that it blurs rare queries',
+    'I put a filter layer in front of the cache, plus an async delete from the DB',
+  ],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>
