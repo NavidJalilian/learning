@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Hot Memory, Near Edge</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: s1 read-through sim, s2 TTL lab + eviction traces, s3 CDN dot map, s4 incidents + architecture */
+:root { --land: #d8d1c1; --hot: #d9541e; --edge: #0d9a96; --origin: #5a48f0; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --land: #2c3156; --hot: #ff8a5c; --edge: #31d3c8; --origin: #8f82ff; }
+}
+:root[data-theme="dark"] { --land: #2c3156; --hot: #ff8a5c; --edge: #31d3c8; --origin: #8f82ff; }
+
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.bignum { font-family: var(--mono); font-weight: 700; }
+
+/* ---------- stage 1: read-through sim ---------- */
+.rt-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; padding: 12px 14px 0; font-size: 14px; }
+.reqcard { font: 700 14px var(--mono); background: var(--accent-soft); color: var(--accent); padding: 5px 10px; border-radius: 9px; }
+.reqcard.hotk::after { content: " 🔥"; }
+.rt-flow { display: grid; grid-template-columns: 1fr 28px 1.7fr 28px 1fr; gap: 6px; align-items: center; padding: 12px 14px 14px; }
+.node { border: 2px solid var(--line); border-radius: 14px; padding: 10px 8px; background: var(--panel); text-align: center; transition: border-color .3s, box-shadow .3s; min-width: 0; }
+.node .ico { font-size: 22px; line-height: 1; display: block; }
+.node b { display: block; font-size: 14px; margin-top: 2px; }
+.node small { display: block; color: var(--muted); font-size: 12px; }
+.node.on { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+.node.hit { border-color: var(--good); box-shadow: 0 0 0 4px var(--good-soft); }
+.node.miss { border-color: var(--warn); box-shadow: 0 0 0 4px var(--warn-soft); }
+.wire { text-align: center; font-size: 20px; color: var(--muted); transition: color .3s, transform .3s; }
+.wire.on { color: var(--accent); transform: scale(1.25); }
+.wire .v { display: none; }
+@media (max-width: 640px) {
+  .rt-flow { grid-template-columns: 1fr; }
+  .wire .h { display: none; } .wire .v { display: inline; }
+}
+.slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
+.slot { font: 600 12px var(--mono); border: 1px dashed var(--line); border-radius: 8px; padding: 6px 2px; min-height: 30px; color: var(--muted); transition: background .25s, border-color .25s; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.slot.full { border-style: solid; color: var(--ink); background: var(--bg); }
+.slot.hot::after { content: "🔥"; font-size: 10px; margin-left: 2px; }
+.slot.fh { background: var(--good-soft); border-color: var(--good); }
+.slot.fn { background: var(--warn-soft); border-color: var(--warn); }
+.acts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 0 14px 14px; }
+@media (max-width: 560px) { .acts { grid-template-columns: 1fr 1fr; } }
+.acts .btn { min-height: 44px; font-size: 14px; padding: 8px 6px; }
+.btn.shake { animation: shake .4s; border-color: var(--bad); }
+.btn.ok { border-color: var(--good); background: var(--good-soft); }
+.gauges { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 12px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+@media (max-width: 560px) { .gauges { grid-template-columns: 1fr; gap: 8px; } }
+.gauge .gl { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 600; }
+.gauge .gl b { font-family: var(--mono); }
+.gauge .gt { position: relative; height: 12px; border-radius: 99px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; margin-top: 4px; }
+.gauge .gf { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 99px; background: var(--good); transition: width .3s, background .3s; }
+.gauge .gf.bad { background: var(--bad); }
+.gauge .gf.mid { background: var(--warn); }
+.gauge .lim { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink); opacity: .7; }
+.gauge .gs { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.codelog { background: var(--code-bg); color: var(--code-ink); font: 12.5px/1.5 var(--mono); padding: 10px 14px; min-height: 104px; max-height: 160px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; border-top: 1px solid var(--line); }
+.codelog div { animation: rise .25s; }
+.codelog .c { color: #8b93c9; }
+.codelog .h { color: #6ee7a8; }
+.codelog .m { color: #ffb36b; }
+.codelog .e { color: #ff8a8a; }
+.codelog .x { color: #9fa8ff; }
+
+/* ---------- stage 2 ---------- */
+.five { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 14px 0; }
+.five > div { border: 1px solid var(--line); border-radius: 14px; padding: 12px; background: var(--bg); font-size: 14px; }
+.five .n { font: 700 12px var(--mono); color: var(--accent); }
+.five b { display: block; font-size: 15px; margin: 2px 0 4px; }
+.five p { margin: 0; color: var(--muted); }
+.slider { padding: 12px 14px 0; display: grid; gap: 4px; }
+.slider label { display: flex; justify-content: space-between; font-weight: 600; font-size: 14px; gap: 8px; flex-wrap: wrap; }
+.slider input { width: 100%; accent-color: var(--accent); height: 32px; }
+.tl { padding: 4px 10px 0; }
+.tl svg { display: block; width: 100%; max-width: 560px; height: auto; margin: 0 auto; }
+.tl text { fill: var(--muted); font: 600 10px var(--font); }
+.tl .ax { stroke: var(--line); stroke-width: 1.5; }
+.tl .chg { fill: var(--accent); }
+.tl .chgt { fill: var(--accent); font: 700 9px var(--mono); text-anchor: middle; }
+.tl .rf { stroke: var(--teal); stroke-width: 1.4; }
+.tl .fresh { fill: var(--good); opacity: .3; }
+.tl .stale { fill: var(--bad); opacity: .55; }
+.tlcap { text-align: center; font-size: 12px; color: var(--muted); padding: 0 14px 8px; }
+.ttlmsg { font-size: 14px; font-weight: 600; }
+.ttlmsg.good { color: var(--good); }
+.ttlmsg.bad { color: var(--warn); }
+.seqline { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 8px 0 2px; }
+.seqline .chip { font-weight: 700; font-size: 14px; }
+.seqline .chip.d { background: var(--warn-soft); border-color: var(--warn); }
+.evrow { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--bg); margin-top: 10px; }
+.evrow h4 { margin: 0; font-size: 16px; }
+.evrow .small { margin: 2px 0 8px; }
+.evrow .row .opt { min-width: 52px; min-height: 44px; text-align: center; font-weight: 700; font-family: var(--mono); }
+.trace { margin-top: 10px; display: grid; gap: 5px; font: 12.5px var(--mono); }
+.trace .tr { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; animation: rise .3s; }
+.trace .rq { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.trace .sl { display: flex; gap: 4px; }
+.trace .sl i { font-style: normal; padding: 2px 6px; border-radius: 6px; background: var(--panel); border: 1px solid var(--line); min-width: 48px; font-weight: 700; }
+.trace .sl i small { font-weight: 400; color: var(--muted); margin-left: 3px; }
+.trace .sl i.nw { background: var(--good-soft); border-color: var(--good); }
+.trace .sl i.ev { background: var(--bad-soft); border-color: var(--bad); }
+.trace .sl i.hi { border-color: var(--teal); }
+.trace .nt { color: var(--muted); font-size: 12px; }
+
+/* ---------- stage 3: CDN map ---------- */
+.map svg { display: block; width: 100%; height: auto; max-width: 720px; margin: 0 auto; }
+.map .land { fill: var(--land); }
+.map .route { fill: none; stroke: var(--muted); stroke-width: .8; stroke-dasharray: 2 2.5; opacity: .7; }
+.map .route.on { stroke: var(--accent); opacity: 1; stroke-width: 1.2; }
+.map .edge circle { fill: var(--edge); stroke: var(--bg); stroke-width: 1.2; }
+.map .edge .ring2 { fill: none; stroke: var(--edge); stroke-width: .8; opacity: .5; }
+.map .origin rect { fill: var(--origin); stroke: var(--bg); stroke-width: 1.2; }
+.map .lbl { fill: var(--ink); font: 700 9.5px var(--font); }
+.map .lbl.s { fill: var(--muted); font-weight: 600; font-size: 8.5px; }
+.map .pin circle { fill: var(--hot); stroke: var(--bg); stroke-width: 1; }
+.map .pin text { fill: #fff; font: 700 6px var(--font); text-anchor: middle; dominant-baseline: central; }
+.map .pin { transition: opacity .3s; }
+.map .pin.off { opacity: 0; }
+.map .pkt { fill: var(--accent); stroke: var(--bg); stroke-width: 1; }
+.map .flash { fill: none; stroke: var(--good); stroke-width: 1.5; transform-box: fill-box; transform-origin: center; animation: halo 1s ease-out forwards; }
+.map .flash.m { stroke: var(--warn); }
+@keyframes halo { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(3); } }
+.cdnstats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); font-size: 13px; }
+@media (max-width: 560px) { .cdnstats { grid-template-columns: 1fr; gap: 6px; } }
+.cdnstats div span { color: var(--muted); font-weight: 600; display: block; }
+.cdnstats b { font-family: var(--mono); font-size: 15px; }
+.cdnstats b.good { color: var(--good); } .cdnstats b.bad { color: var(--warn); }
+.wf { list-style: none; counter-reset: wf; padding: 0; margin: 12px 0 0; display: grid; gap: 4px; font-size: 14px; }
+.wf li { counter-increment: wf; position: relative; padding: 6px 10px 6px 38px; border-radius: 10px; color: var(--muted); transition: background .3s, color .3s; }
+.wf li::before { content: counter(wf); position: absolute; left: 8px; top: 6px; width: 22px; height: 22px; border-radius: 7px; background: var(--bg-2); display: grid; place-items: center; font: 700 12px var(--mono); }
+.wf li.on { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+.wf li.on::before { background: var(--accent); color: #fff; }
+.wf li.done { color: var(--ink); }
+.wf li.done::before { background: var(--good-soft); color: var(--good); }
+.ffbox { text-align: center; }
+
+/* ---------- stage 4 ---------- */
+.inc h4 { margin: 0 0 4px; font-size: 16px; }
+.inc .row .opt { flex: 1 1 210px; }
+.arch { margin-top: 12px; display: grid; grid-template-columns: 1fr 1.3fr; gap: 12px; padding: 14px; }
+@media (max-width: 640px) { .arch { grid-template-columns: 1fr; } }
+.users { grid-column: 1 / -1; text-align: center; font-weight: 700; font-size: 14px; border: 1px solid var(--line); border-radius: 12px; padding: 8px; background: var(--panel); }
+.cdnzone { border: 2px dashed var(--edge); border-radius: 20px; padding: 12px; background: var(--teal-soft); min-height: 120px; transition: box-shadow .2s; }
+.cdnzone.over { box-shadow: 0 0 0 4px var(--accent-soft); border-style: solid; }
+.cdnzone h4, .stack h4 { margin: 0 0 6px; font-size: 14px; }
+.stack { display: grid; gap: 8px; }
+.stack .box2 { border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; background: var(--panel); font-size: 14px; }
+.stack .box2 small { color: var(--muted); }
+.assets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; min-height: 44px; }
+.asset { min-height: 44px; padding: 6px 12px; border-radius: 10px; border: 2px solid var(--warn); background: var(--warn-soft); font: 700 13px var(--mono); color: var(--ink); cursor: grab; }
+.asset.moved { border-color: var(--edge); background: var(--panel); cursor: default; }
+.asset:hover:not(.moved) { transform: translateY(-1px); }
+.bwrow { margin-top: 8px; }
+.archnote { display: none; }
+.archnote.on { display: block; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 1.3 · Scale From Zero to Millions of Users</div>
+    <h1>Hot Memory, Near Edge</h1>
+    <p class="lede">Your database answers the same questions all day, and users on the far side of the world wait for every image. Add two layers of fast copies: a cache next to your servers, and a CDN next to your users.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can walk through the <b>read-through cache loop</b>, name the <b>five cache considerations</b> (when to use, expiry, consistency, failures, eviction), explain how a <b>CDN</b> fetches and serves a file, and fix a stale-asset problem with <b>versioning</b>.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>The read-through loop</h2><div class="sub">Cache tier basics</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Every time a page loads, your web server usually asks the database for something: a profile, a product, a price. Asking again and again for the same data is slow, and it keeps the database busy.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">[1]</a></p>
+      <p>A <b>cache</b> is temporary storage that keeps <b>results that were expensive to get</b>, or <b>data asked for often</b>, in memory (RAM). The next request for the same thing is answered from memory, which is much faster. In the book, the <b>cache tier</b> is its own layer of cache servers that sits between the web servers and the database. It gives you three wins: faster pages, less work for the database, and a layer you can scale on its own.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">[1]</a></p>
+      <p>The book's strategy is called <b>read-through</b>: the web server asks the cache first. If the data is there (a <b>hit</b>), it returns it. If not (a <b>miss</b>), it reads the database, stores a copy in the cache, then returns it. <b>You are the web server now.</b> Serve 6 requests by pressing the steps in the right order.</p>
+
+      <div class="sim" id="rtSim">
+        <div class="rt-top"><span>Request <b id="rtNum">1</b> of 6: <span class="reqcard" id="rtReq">GET user:1</span></span><span class="small muted">🔥 = hot key (most traffic)</span></div>
+        <div class="rt-flow">
+          <div class="node" id="nWeb"><span class="ico">🖥️</span><b>Web server</b><small>that's you</small></div>
+          <div class="wire" id="w1"><span class="h">⇄</span><span class="v">⇅</span></div>
+          <div class="node" id="nCache"><b>⚡ Cache tier</b><small>in memory · ~1 ms*</small><div class="slots" id="rtSlots"></div></div>
+          <div class="wire" id="w2"><span class="h">⇄</span><span class="v">⇅</span></div>
+          <div class="node" id="nDb"><span class="ico">🗄️</span><b>Database</b><small>on disk · ~10 ms*</small></div>
+        </div>
+        <div class="acts" id="rtActs">
+          <button class="btn" data-a="store">Store in cache</button>
+          <button class="btn" data-a="check">Check cache</button>
+          <button class="btn" data-a="ret">Return response</button>
+          <button class="btn" data-a="db">Query DB</button>
+        </div>
+        <div class="gauges">
+          <div class="gauge"><div class="gl"><span>Hit rate</span><b id="gHit">—</b></div><div class="gt"><div class="gf" id="gHitF"></div></div><div class="gs">share of requests the cache answered</div></div>
+          <div class="gauge"><div class="gl"><span>DB load</span><b id="gDb">—</b></div><div class="gt"><div class="gf" id="gDbF"></div></div><div class="gs">last 20 requests that reached the DB</div></div>
+          <div class="gauge"><div class="gl"><span>Avg response</span><b id="gLat">—</b></div><div class="gt"><div class="gf" id="gLatF"></div></div><div class="gs">*illustrative times, not measurements</div></div>
+        </div>
+        <div class="codelog" id="rtLog"><div class="c">// the calls your web server makes show up here</div></div>
+        <div class="sim-bar"><span class="small" id="rtHint">Start with request 1.</span><span class="row" style="gap:8px"><button class="btn" id="rtAuto" disabled style="padding:7px 12px;font-size:14px">▶ Autoplay 200 requests</button><button class="btn" id="rtReset" style="padding:7px 12px;font-size:14px">↻ Reset</button></span></div>
+      </div>
+      <ul class="checklist" id="s1goals">
+        <li data-g="manual"><span class="box">✓</span><span>Serve 6 requests by hand, in the right order</span></li>
+        <li data-g="auto"><span class="box">✓</span><span>Autoplay 200 requests and watch the hit rate climb</span></li>
+      </ul>
+      <div class="callout tip"><b>What the cache's API looks like.</b> Caches like <a href="https://memcached.org/" target="_blank" rel="noopener">Memcached</a><a class="cite" href="https://memcached.org/" target="_blank" rel="noopener">[6]</a> are simple: <code>set(key, value, ttl)</code> stores a value, and <code>get(key)</code> reads it back. In the book's example the TTL (time to live) is 3,600 seconds, so the entry vanishes after one hour.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">[1]</a> This sim also has only 6 slots, so when it's full the entry used longest ago is thrown out. Stage 2 is about that.</div>
+      <div class="callout warn"><b>Honest caveat: the name.</b> What the book calls <i>read-through</i>, where your app code checks the cache and loads from the DB on a miss, most engineers call <b>cache-aside</b>. In a strict read-through setup, the cache library loads from the database by itself.<a class="cite" href="https://codeahoy.com/2017/08/11/caching-strategies-and-how-to-choose-the-right-one/" target="_blank" rel="noopener">[3]</a> Use either name in an interview, but know both.</div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Five cache questions</h2><div class="sub">When, how long, how fresh, what if it dies, what to evict</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Adding a cache raises five questions. The book lists them as things to think about before you use one:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">[1]</a></p>
+      <div class="five">
+        <div><span class="n">1</span><b>When to use it</b><p>For data that's read often and changed rarely. Cache memory is <i>volatile</i>: a restart wipes it. So the real copy of important data stays in a persistent store, like the database.</p></div>
+        <div><span class="n">2</span><b>Expiration</b><p>Expired data is removed. Too short and the DB is hit too often. Too long and the data goes stale (out of date).</p></div>
+        <div><span class="n">3</span><b>Consistency</b><p>The DB and the cache must agree. A write to both isn't one transaction, so they can drift. Across regions it's harder still.<a class="cite" href="https://www.usenix.org/conference/nsdi13/technical-sessions/presentation/nishtala" target="_blank" rel="noopener">[2]</a></p></div>
+        <div><span class="n">4</span><b>Failures</b><p>One cache server is a <b>single point of failure</b> (SPOF): if it dies, everything behind it suffers. Run several, across data centers, and give them spare memory.</p></div>
+        <div><span class="n">5</span><b>Eviction</b><p>When the cache is full, adding an item pushes another out. <b>LRU</b> is the most popular rule. <b>LFU</b> and <b>FIFO</b> are others.</p></div>
+      </div>
+
+      <div class="challenge">
+        <div class="step">Mini-game A · Expiration</div>
+        <h3>Find a TTL that keeps both meters green</h3>
+        <p class="small">A product price changes about <b>once a minute</b>. Every time the cached copy expires, the next read goes to the DB. Drag the TTL and watch two things: how hard the DB works, and how often readers see an old price.</p>
+      </div>
+      <div class="sim" id="ttlSim">
+        <div class="slider"><label for="ttlIn"><span>TTL: <span class="bignum" id="ttlVal">1 h</span></span><span class="muted small">1 s ⟷ 1 hour</span></label><input type="range" id="ttlIn" min="0" max="12" step="1" value="12" aria-label="Cache TTL"></div>
+        <div class="tl"><svg id="ttlTl" viewBox="0 0 300 92" role="img" aria-label="Timeline of source changes and cache refreshes"></svg></div>
+        <div class="tlcap">One example 3 minutes: <span style="color:var(--accent)">●</span> price changes, <span style="color:var(--teal)">|</span> cache refills from the DB, <span style="color:var(--bad)">■</span> readers get an old price. The meters average over many minutes.</div>
+        <div class="gauges" style="grid-template-columns:1fr 1fr">
+          <div class="gauge"><div class="gl"><span>DB load</span><b id="mDb">—</b></div><div class="gt"><div class="gf" id="mDbF"></div><div class="lim" style="left:80%"></div></div><div class="gs">green under the line (80%)</div></div>
+          <div class="gauge"><div class="gl"><span>Stale reads</span><b id="mSt">—</b></div><div class="gt"><div class="gf" id="mStF"></div><div class="lim" style="left:25%"></div></div><div class="gs">green under the line (25%)</div></div>
+        </div>
+        <div class="sim-bar"><span class="ttlmsg" id="ttlMsg">An hour-long TTL: the DB relaxes, but almost every read is old.</span></div>
+      </div>
+
+      <div class="challenge" style="margin-top:22px">
+        <div class="step">Mini-game B · Eviction</div>
+        <h3>Who gets kicked out?</h3>
+        <p class="small">A cache with <b>3 slots</b> receives these requests. When <b>D</b> arrives, the cache is full and one key must go. Predict the victim under each rule, then watch the trace.</p>
+        <div class="seqline" id="seqLine"></div>
+      </div>
+      <div id="evRows"></div>
+      <ul class="checklist" id="s2goals">
+        <li data-g="ttl"><span class="box">✓</span><span>Get both TTL meters into the green</span></li>
+        <li data-g="evict"><span class="box">✓</span><span>Predict the eviction under LRU, LFU and FIFO</span></li>
+      </ul>
+      <div class="callout warn"><b>Honest caveat: invalidation and stampedes.</b> A common pattern on write is: update the database, then <i>delete</i> the cache key so the next read refills it. Races can still leave an old value behind, which is why teams keep a TTL as a safety net. Facebook's Memcache paper is a long story about exactly this.<a class="cite" href="https://www.usenix.org/conference/nsdi13/technical-sessions/presentation/nishtala" target="_blank" rel="noopener">[2]</a> And when a hot key expires, or a cache node dies, thousands of requests can miss at once and stampede the DB. That's the <i>thundering herd</i>, and one reason the book says to run several cache servers.</div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Edge of the map</h2><div class="sub">How a CDN serves a file</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>A <b>CDN</b> (content delivery network) is a set of servers spread around the world that hand out <b>static content</b>: files that are the same for everyone, like images, videos, CSS and JavaScript. When a user visits, the CDN server <b>closest to them</b> answers. The farther a user is from the CDN servers, the slower the page loads.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">[1]</a></p>
+      <p>The CDN servers are called <b>edges</b>. The place where the real file lives is the <b>origin</b>: your web server, or file storage such as Amazon S3. The page links to the file through the CDN's domain, for example <code>https://mysite.cloudfront.net/image.png</code>. Here's the book's six-step flow. <b>Predict each request first, then watch.</b></p>
+      <ol class="wf" id="wf">
+        <li>A user requests <code>image.png</code> through a CDN URL.</li>
+        <li>The edge doesn't have it, so it asks the origin.</li>
+        <li>The origin returns the file, optionally with a TTL in an HTTP header.</li>
+        <li>The edge caches it and sends it to the user. It stays until the TTL runs out.</li>
+        <li>Another user asks the same edge for <code>image.png</code>.</li>
+        <li>The edge serves it from its cache, as long as the TTL is still valid.</li>
+      </ol>
+      <div class="sim map">
+        <svg id="cdnMap" viewBox="50 22 285 116" role="img" aria-label="World map with an origin server in Virginia and CDN edges in London, São Paulo and Tokyo"></svg>
+        <div class="cdnstats">
+          <div><span>Origin requests</span><b id="cOrig">0</b></div>
+          <div><span>Tokyo edge holds</span><b id="cEdge">nothing yet</b></div>
+          <div><span>Last load time*</span><b id="cLat">—</b></div>
+        </div>
+        <div class="simlog" id="cdnLog"><div>🕘 Day 1, 09:00. The origin in Virginia holds <b>image.png</b>. Edges: London, São Paulo, Tokyo. *Times are illustrative.</div></div>
+      </div>
+      <div class="challenge boxed" id="cdnBox"></div>
+      <div class="callout"><b>Out of scope here.</b> The book keeps CDNs to static files and calls caching <i>dynamic</i> content (pages built per request) a newer idea beyond the chapter. Real CDNs now do both, and can even run code at the edge.<a class="cite" href="https://aws.amazon.com/cloudfront/dynamic-content/" target="_blank" rel="noopener">[5]</a></div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>CDN gotchas</h2><div class="sub">Cost, expiry, fallback, invalidation</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book flags four things to watch once a CDN is in place:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">[1]</a></p>
+      <ul>
+        <li><b>Cost.</b> A third party runs the CDN and charges for data moved in and out. Caching files that are rarely asked for costs money and gains little.</li>
+        <li><b>Cache expiry.</b> For content that changes with time, pick the expiry with care. Too long and it's stale. Too short and edges keep re-fetching from the origin.</li>
+        <li><b>CDN fallback.</b> If the CDN goes down, clients should spot the problem and load the files from the origin.</li>
+        <li><b>Invalidating files early.</b> To replace a file before its TTL ends, call the vendor's invalidation API, or use <b>object versioning</b>: change the URL, e.g. <code>image.png?v=2</code>, so edges see a brand-new object.</li>
+      </ul>
+      <p>You're on call. Four incidents come in. Pick the fix for each.</p>
+      <div class="sort inc" id="incs"></div>
+
+      <div class="challenge" style="margin-top:22px">
+        <div class="step">Rewire the diagram</div>
+        <h3>Move the static files to the CDN</h3>
+        <p class="small">Right now your web servers send every JS file, stylesheet and image themselves. Drag each one onto the CDN, or just tap it.</p>
+      </div>
+      <div class="sim">
+        <div class="arch">
+          <div class="users">👥 Users: browsers and phones, all over the world</div>
+          <div class="cdnzone" id="cdnZone" aria-label="CDN drop zone"><h4>☁️ CDN edges</h4><span class="small muted">static files, close to users</span><div class="assets" id="cdnAssets"></div></div>
+          <div class="stack">
+            <div class="box2"><b>⚖️ Load balancer</b></div>
+            <div class="box2"><b>🖥️ Web servers</b> <small>run your app code</small>
+              <div class="assets" id="webAssets"></div>
+              <div class="gauge bwrow"><div class="gl"><span>Outbound bandwidth</span><b id="bwVal">100%</b></div><div class="gt"><div class="gf bad" id="bwF" style="width:100%"></div></div><div class="gs">toy numbers</div></div>
+            </div>
+            <div class="box2"><b>⚡ Cache tier</b> <small>hot data in memory</small></div>
+            <div class="box2"><b>🗄️ Database</b> <small>lighter load, thanks to the cache</small></div>
+          </div>
+        </div>
+      </div>
+      <div class="callout tip archnote" id="archNote"><b>This is the book's design after cache + CDN.</b> Static assets (JS, CSS, images) no longer come from the web servers. Browsers fetch them from the CDN, which is faster for users. And the cache tier takes much of the read load off the database.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">[1]</a></div>
+      <ul class="checklist" id="s4goals">
+        <li data-g="inc"><span class="box">✓</span><span>Fix all 4 incidents</span></li>
+        <li data-g="arch"><span class="box">✓</span><span>Move JS, CSS and images onto the CDN</span></li>
+      </ul>
+      <div class="callout warn"><b>Honest caveat: <code>?v=2</code> in practice.</b> Many CDNs leave the query string out of the cache key by default, so <code>logo.png?v=2</code> can still hit the old copy. Most teams put a content hash in the file name instead, like <code>app.3f9a1c.js</code>. A new build gets a new name, so it can't collide with the old file.</div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Stale Specter</h2><div class="sub">Cache it, CDN it, or leave it alone</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Seven pieces of data, seven calls. For each, pick the right layer: put it in the <b>cache</b>, serve it from a <b>CDN</b>, <b>don't cache</b> it at all, or the caching is already there and you need to <b>fix the expiry</b>.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">The interview answer, in your words</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div id="drillMsg"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> Your web servers still remember who's logged in, so a user is stuck to one box. Quest 1.4, <i>Forget Me, Find Me Anywhere</i>, makes the web tier stateless so you can add and remove servers freely, then spreads the whole system across data centers.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 1: Scale From Zero To Millions Of Users</a>, the sections "Cache" and "Content delivery network (CDN)". It's a few pages and has the diagrams this quest is built on. Then read section 3 of <a href="https://www.usenix.org/conference/nsdi13/technical-sessions/presentation/nishtala" target="_blank" rel="noopener">Scaling Memcache at Facebook</a><a class="cite" href="https://www.usenix.org/conference/nsdi13/technical-sessions/presentation/nishtala" target="_blank" rel="noopener">[2]</a> to see what keeping a cache consistent looks like at huge scale.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <ul style="margin:0;padding-left:20px">
+        <li><b>Read-through vs cache-aside.</b> The book's "read-through" (your app checks the cache and loads on a miss) is usually called <i>cache-aside</i>. In a strict read-through, the cache does the DB load itself. There are also write-through and write-back caches, which handle writes differently.<a class="cite" href="https://codeahoy.com/2017/08/11/caching-strategies-and-how-to-choose-the-right-one/" target="_blank" rel="noopener">[3]</a></li>
+        <li><b>Invalidation on write is the hard part.</b> Update the DB, then delete the cache key. Races can still leave a stale value behind, so keep TTLs as a safety net.</li>
+        <li><b>Thundering herd.</b> When a hot key expires or a cache node dies, many requests miss at the same moment and hit the DB together. Fixes include letting only one request refill a key (request coalescing), adding a little randomness to TTLs, and serving the old value while one request refreshes it.</li>
+        <li><b>Eviction policies have trade-offs.</b> LRU is simple and good for most workloads. LFU keeps long-term favourites but is slow to forget them. Real systems often use tuned variants.<a class="cite" href="https://en.wikipedia.org/wiki/Cache_replacement_policies" target="_blank" rel="noopener">[4]</a></li>
+        <li><b>Version with hashes, not query strings.</b> Many CDNs ignore the query string in the cache key by default, so teams put a content hash in the file name (<code>app.3f9a1c.js</code>).</li>
+        <li><b>CDNs do more than static files now.</b> They can cache dynamic responses and run code at the edge. The book leaves that out to keep things simple.<a class="cite" href="https://aws.amazon.com/cloudfront/dynamic-content/" target="_blank" rel="noopener">[5]</a></li>
+        <li><b>Latency numbers in the sims are illustrative.</b> RAM is far faster than disk, and a nearby edge is far faster than a distant origin. The exact milliseconds here aren't measurements.</li>
+      </ul>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"if I update a user's name, how does the cache find out?"</i> or <i>"should the cache be Redis or Memcached?"</i> Follow-up questions are part of the quest.
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 1 "Scale From Zero To Millions Of Users": Cache, Content delivery network (ByteByteGo).</li>
+        <li>Nishtala et al., "Scaling Memcache at Facebook", NSDI 2013.</li>
+        <li>CodeAhoy, "Caching Strategies and How to Choose the Right One", 2017.</li>
+        <li>Wikipedia, "Cache replacement policies".</li>
+        <li>Amazon CloudFront, "Dynamic content delivery".</li>
+        <li>Memcached, memcached.org.</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0103',
+  winTitle: 'Fast as a cache hit!',
+  badge: '⚡ Badge: Cache Keeper',
+  cheatsheet: '../reference/ch01-scaling-cheatsheet.html',
+});
+const { sleep, shuffle } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function anim(dur, f) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 1) { f(1); return res(); }
+    const t0 = performance.now();
+    const fr = now => { const p = Math.min(1, (now - t0) / dur); f(p); p < 1 ? requestAnimationFrame(fr) : res(); };
+    requestAnimationFrame(fr);
+  });
+}
+const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+const wait = ms => sleep(Q.reduced ? 0 : ms);
+function logTo(el, html, cls) { el.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); el.scrollTop = el.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); Q.addXP(xp || 10, li);
+  return true;
+}
+function shake(b) { b.classList.remove('shake'); void b.offsetWidth; b.classList.add('shake'); setTimeout(() => b.classList.remove('shake'), 450); }
+// a chain of Q.quiz() cards in one mount; calls done() after the last one is answered
+function quizChain(mount, list, done) {
+  let i = 0;
+  const next = () => { if (i >= list.length) return done(); const q = list[i++]; Q.quiz(mount, { ...q, tag: q.tag || `Check ${i} of ${list.length}`, onDone: () => setTimeout(next, 700) }); };
+  next();
+}
+// Predict-then-watch round. Resolves after the learner picks and the action has played.
+function predict(box, { step, title, options, correct, act, explain, xp = 10 }) {
+  box.innerHTML = `${step ? `<div class="step">${step}</div>` : ''}<h3>${title}</h3><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+  const opts = $('.opts', box);
+  let busy = false;
+  return new Promise(resolve => {
+    shuffle(options.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = async () => {
+        if (busy) return; busy = true;
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        b.classList.add('picked');
+        await act();
+        const ok = i === correct;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-i="${correct}"]`, opts).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + explain;
+        ok ? Q.addXP(xp, b) : Q.loseHeart(b);
+        resolve({ ok, row: $('.row', box) });
+      };
+      opts.appendChild(b);
+    });
+  });
+}
+function nextBtn(row, label, fn, primary = true) {
+  const b = document.createElement('button'); b.className = 'btn' + (primary ? ' primary' : ''); b.textContent = label; b.onclick = fn; row.appendChild(b); return b;
+}
+function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function setGauge(fill, val, pct, cls) { fill.style.width = Math.max(0, Math.min(100, pct)) + '%'; fill.className = 'gf' + (cls ? ' ' + cls : ''); }
+
+/* ================= STAGE 1: the read-through loop ================= */
+Q.onStage(1, () => {
+  const SLOTS = 6, HOT = new Set(['user:1', 'user:2']);
+  const MANUAL = ['user:1', 'user:2', 'user:1', 'user:7', 'user:1', 'user:2'];
+  const NAMES = { 'user:1': 'Ana', 'user:2': 'Bo', 'user:3': 'Cy', 'user:4': 'Di', 'user:5': 'Ed', 'user:6': 'Fay', 'user:7': 'Gus', 'user:8': 'Hal' };
+  // traffic for autoplay: two hot keys get ~78% of requests
+  const WEIGHTS = [['user:1', .42], ['user:2', .36], ['user:3', .037], ['user:4', .037], ['user:5', .037], ['user:6', .037], ['user:7', .036], ['user:8', .036]];
+  const LAT_HIT = 1, LAT_MISS = 12;
+  const log = $('#rtLog'), hint = $('#rtHint'), goals = new Set();
+  let cache, clock, st, mi, step, cur, phase, quizShown = false, last = null;
+
+  function reset() {
+    cache = []; clock = 0; st = { n: 0, hits: 0, lat: 0, recent: [] }; mi = 0; phase = 'manual'; last = null;
+    log.innerHTML = '<div class="c">// the calls your web server makes show up here</div>';
+    $('#rtAuto').disabled = !goals.has('manual'); $('#rtAuto').textContent = '▶ Autoplay 200 requests';
+    $$('#rtActs .btn').forEach(b => { b.disabled = false; b.classList.remove('ok'); });
+    lights(); renderSlots(); renderStats(); nextManual();
+  }
+  function lookup(k) { const e = cache.find(x => x.k === k); if (e) e.used = ++clock; return !!e; }
+  function store(k) {
+    let ev = null;
+    if (cache.length >= SLOTS) { const v = cache.reduce((a, b) => (b.used < a.used ? b : a)); ev = v.k; cache.splice(cache.indexOf(v), 1, { k, used: ++clock }); }
+    else cache.push({ k, used: ++clock });
+    return ev;
+  }
+  function renderSlots(flashK, flashCls) {
+    $('#rtSlots').innerHTML = Array.from({ length: SLOTS }, (_, i) => {
+      const e = cache[i];
+      if (!e) return '<div class="slot">empty</div>';
+      return `<div class="slot full${HOT.has(e.k) ? ' hot' : ''}${e.k === flashK ? ' ' + flashCls : ''}">${e.k}</div>`;
+    }).join('');
+  }
+  function record(hit) {
+    st.n++; if (hit) st.hits++; st.lat += hit ? LAT_HIT : LAT_MISS;
+    st.recent.push(hit ? 0 : 1); if (st.recent.length > 20) st.recent.shift();
+  }
+  function renderStats() {
+    if (!st.n) { $('#gHit').textContent = '—'; $('#gDb').textContent = '—'; $('#gLat').textContent = '—'; ['#gHitF', '#gDbF', '#gLatF'].forEach(s => setGauge($(s), 0, 0)); return; }
+    const hr = 100 * st.hits / st.n, db = 100 * st.recent.reduce((a, b) => a + b, 0) / st.recent.length, lat = st.lat / st.n;
+    $('#gHit').textContent = Math.round(hr) + '%'; setGauge($('#gHitF'), 0, hr, hr >= 80 ? '' : hr >= 50 ? 'mid' : 'bad');
+    $('#gDb').textContent = Math.round(db) + '%'; setGauge($('#gDbF'), 0, db, db <= 25 ? '' : db <= 50 ? 'mid' : 'bad');
+    $('#gLat').textContent = '~' + lat.toFixed(1) + ' ms'; setGauge($('#gLatF'), 0, 100 * lat / LAT_MISS, lat <= 3 ? '' : lat <= 7 ? 'mid' : 'bad');
+  }
+  function lights(web, w1, cacheCls, w2, db) {
+    $('#nWeb').className = 'node' + (web ? ' on' : '');
+    $('#w1').className = 'wire' + (w1 ? ' on' : '');
+    $('#nCache').className = 'node' + (cacheCls ? ' ' + cacheCls : '');
+    $('#w2').className = 'wire' + (w2 ? ' on' : '');
+    $('#nDb').className = 'node' + (db ? ' on' : '');
+  }
+  function nextManual() {
+    if (mi >= MANUAL.length) return;
+    cur = MANUAL[mi]; step = 'check';
+    $('#rtNum').textContent = mi + 1;
+    const rq = $('#rtReq'); rq.textContent = 'GET ' + cur; rq.classList.toggle('hotk', HOT.has(cur));
+    logTo(log, `<span class="x">→ request ${mi + 1}: GET /users/${cur.split(':')[1]}</span>`);
+    hint.textContent = mi === 0 ? 'Where does a read-through server look first?' : 'Next request. Same loop.';
+    $$('#rtActs .btn').forEach(b => b.classList.remove('ok'));
+  }
+  const EXPECT = { check: 'check', hit: 'ret', miss: 'db', db: 'store', stored: 'ret' };
+  const HINTS = {
+    check: 'Look in the cache first. It is the fast path.',
+    hit: { db: 'It’s already in the cache. Don’t bother the database.', store: 'It’s already cached. Nothing new to store.', check: 'You already checked: it was a hit.' },
+    miss: { store: 'Nothing to store yet. Get the data first.', ret: 'You have nothing to return yet. It was a miss.', check: 'You already checked: it was a miss.' },
+    db: { ret: 'Save a copy in the cache first, so the next request for it is a hit.', check: 'Already checked. You have the data now.', db: 'You already have the data from the DB.' },
+    stored: { db: 'Done that. Send the answer back.', store: 'Already stored. Send the answer back.', check: 'Done that. Send the answer back.' },
+  };
+  function act(a, btn) {
+    if (phase !== 'manual' || mi >= MANUAL.length) return;
+    if (a !== EXPECT[step]) {
+      shake(btn);
+      const h = HINTS[step]; hint.textContent = '✋ ' + (typeof h === 'string' ? h : (h[a] || 'Not yet.'));
+      return;
+    }
+    btn.classList.add('ok');
+    const id = cur.split(':')[1];
+    if (a === 'check') {
+      const hit = lookup(cur);
+      lights(true, true, hit ? 'hit' : 'miss');
+      renderSlots(cur, 'fh');
+      if (hit) { logTo(log, `cache.get('${cur}')  <span class="h">→ {name:'${NAMES[cur]}'}  HIT</span>`); step = 'hit'; hint.textContent = '✅ Hit! The data is in memory.'; }
+      else { logTo(log, `cache.get('${cur}')  <span class="m">→ null  MISS</span>`); step = 'miss'; hint.textContent = '❌ Miss. The cache doesn’t have it.'; }
+    } else if (a === 'db') {
+      lights(true, false, '', true, true);
+      logTo(log, `db.query("SELECT * FROM users WHERE id=${id}")  → {name:'${NAMES[cur]}'}`);
+      step = 'db'; hint.textContent = 'Got it from the database (slow). Now what?';
+    } else if (a === 'store') {
+      const ev = store(cur);
+      lights(true, true, 'on');
+      renderSlots(cur, 'fn');
+      if (ev) logTo(log, `<span class="e">// cache full: evicted '${ev}' (used longest ago)</span>`);
+      logTo(log, `cache.set('${cur}', {name:'${NAMES[cur]}'}, 3600)  <span class="c">// TTL: 1 hour</span>`);
+      step = 'stored'; hint.textContent = 'Stored. The next request for it will be a hit.';
+    } else if (a === 'ret') {
+      const hit = step === 'hit';
+      record(hit); renderStats(); lights(true);
+      logTo(log, `<span class="h">return 200</span>  <span class="c">// ~${hit ? LAT_HIT : LAT_MISS} ms*${hit ? ', the DB never noticed' : ''}</span>`);
+      mi++;
+      if (mi < MANUAL.length) nextManual();
+      else {
+        hint.textContent = '🎉 6 requests served. Now let the machine run: press Autoplay.';
+        $$('#rtActs .btn').forEach(b => { b.disabled = true; b.classList.remove('ok'); });
+        $('#rtAuto').disabled = false;
+        checkGoal('#s1goals', 'manual', goals, 15);
+      }
+    }
+  }
+  $$('#rtActs .btn').forEach(b => b.onclick = () => act(b.dataset.a, b));
+
+  function pick(r) { let x = r(); for (const [k, w] of WEIGHTS) { if ((x -= w) < 0) return k; } return 'user:8'; }
+  $('#rtAuto').onclick = async () => {
+    if (phase !== 'manual') return;
+    phase = 'auto'; $('#rtAuto').disabled = true; $('#rtReset').disabled = true;
+    const rnd = mulberry32(1031);
+    logTo(log, '<span class="x">▶ autoplay: 200 requests, mostly for the 2 hot keys</span>');
+    let evictions = 0;
+    for (let i = 0; i < 200; i++) {
+      const k = pick(rnd), hit = lookup(k);
+      if (!hit && store(k)) evictions++;
+      record(hit);
+      if ((i + 1) % 50 === 0) logTo(log, `<span class="c">// after ${st.n} requests: hit rate ${Math.round(100 * st.hits / st.n)}%, ${evictions} evictions so far</span>`);
+      if (!Q.reduced) {
+        $('#rtNum').textContent = '—'; $('#rtReq').textContent = 'GET ' + k; $('#rtReq').classList.toggle('hotk', HOT.has(k));
+        lights(true, true, hit ? 'hit' : 'miss', !hit, !hit);
+        renderSlots(k, hit ? 'fh' : 'fn'); renderStats();
+        await sleep(16);
+      }
+    }
+    lights(); renderSlots(); renderStats();
+    const hr = Math.round(100 * st.hits / st.n), dbq = st.n - st.hits;
+    logTo(log, `<span class="h">■ done: ${st.n} requests, hit rate ${hr}%. The DB answered only ${dbq} of them.</span>`);
+    hint.textContent = `Hit rate ${hr}%. The hot keys almost never leave the cache.`;
+    $('#rtReset').disabled = false; phase = 'done';
+    checkGoal('#s1goals', 'auto', goals, 10);
+    if (!quizShown) {
+      quizShown = true;
+      setTimeout(() => quizChain($('#s1quiz'), [
+        { q: 'A request is a <b>miss</b>. What does a read-through web server do before it returns the data?',
+          options: ['Reads the database, then stores the result in the cache', 'Returns an error so the client can retry a bit later', 'Stores an empty entry, then sends the client to the DB'],
+          correct: 0,
+          good: 'Read from the DB, put a copy in the cache (with a TTL), then return it. The next request for that key is a hit.',
+          bad: 'On a miss the server fetches the data from the database, stores it in the cache, and then returns it. That last “store” step is what makes the next request a hit.' },
+        { q: 'Your code calls <code>cache.set(\'user:12\', profile, 3600)</code>. What does the 3600 mean?',
+          options: ['Expire this entry after one hour', 'Keep at most 3,600 entries in total', 'Allow 3,600 reads of it per second'],
+          correct: 0,
+          good: 'It’s the TTL (time to live) in seconds: after 3,600 s, one hour, the entry expires and the next read is a miss.',
+          bad: 'It’s the TTL (time to live) in seconds. After 3,600 s, one hour, the entry expires, and the next read goes back to the database.' },
+      ], () => setTimeout(() => Q.clearStage(1), 600)), 500);
+    }
+  };
+  $('#rtReset').onclick = () => { if (phase !== 'auto') reset(); };
+  reset();
+});
+
+/* ================= STAGE 2: five cache questions ================= */
+Q.onStage(2, () => {
+  const goals = new Set();
+  let quizShown = false;
+  function maybeQuiz() {
+    if (quizShown || goals.size < 2) return;
+    quizShown = true;
+    setTimeout(() => quizChain($('#s2quiz'), [
+      { q: 'Why shouldn’t the <b>only</b> copy of your order data live in the cache?',
+        options: ['Cache memory is wiped when a server restarts', 'Caches can only hold short pieces of plain text', 'Reading from memory is slower than reading disk'],
+        correct: 0,
+        good: 'Cache memory is volatile: a restart or crash empties it. Important data must live in a persistent store, and the cache only holds copies.',
+        bad: 'The problem is that cache memory is volatile. A restart or crash empties it, so the only copy of important data must never live there.' },
+      { q: 'Your whole app uses just <b>one</b> cache server. What is that server?',
+        options: ['A single point of failure', 'A read replica of the database', 'A content delivery network'],
+        correct: 0,
+        good: 'If it dies, every request misses and lands on the DB at once. The book’s fix: several cache servers across data centers, with some spare memory.',
+        bad: 'It’s a single point of failure (SPOF). If it dies, every request misses and hits the DB at once. Run several cache servers across data centers.' },
+      { q: 'The cache is full and a new item arrives. Which eviction policy is the <b>most popular</b>?',
+        options: ['LRU: least recently used', 'LFU: least frequently used', 'FIFO: first in, first out'],
+        correct: 0,
+        good: 'LRU throws out the item that hasn’t been used for the longest time. The book calls it the most popular. LFU and FIFO fit some workloads better.',
+        bad: 'The book names LRU, least recently used, as the most popular. LFU and FIFO exist and fit some workloads better.' },
+    ], () => setTimeout(() => Q.clearStage(2), 600)), 500);
+  }
+
+  /* ---- A: TTL lab ---- */
+  const TTLS = [1, 2, 5, 10, 15, 20, 30, 45, 60, 120, 300, 900, 3600];
+  const CHG = 60, DBK = 8, WIN = 180, CHANGES = [43, 103, 163];
+  const dbLoad = T => Math.min(100, 100 * DBK / T);                       // toy: refills per second vs what the DB can take
+  const stale = T => T <= CHG ? 100 * T / (2 * CHG) : 100 * (1 - CHG / (2 * T)); // average share of reads that are old
+  const fmt = T => T < 60 ? `${T} s` : T < 3600 ? `${T / 60} min` : '1 h';
+  const svg = $('#ttlTl'), X = t => 44 + t * (292 - 44) / WIN;
+  function drawTL(T) {
+    svg.innerHTML = '';
+    S('text', { x: 4, y: 25 }, svg).textContent = 'price';
+    S('text', { x: 4, y: 59 }, svg).textContent = 'cache';
+    S('line', { class: 'ax', x1: X(0), y1: 22, x2: X(WIN), y2: 22 }, svg);
+    CHANGES.forEach((c, i) => { S('circle', { class: 'chg', cx: X(c), cy: 22, r: 4 }, svg); S('text', { class: 'chgt', x: X(c), y: 13 }, svg).textContent = 'v' + (i + 2); });
+    S('rect', { class: 'fresh', x: X(0), y: 49, width: X(WIN) - X(0), height: 14, rx: 3 }, svg);
+    // stale stretches: the last change happened after the last refill
+    let segStart = null;
+    for (let s = 0; s <= WIN; s += .5) {
+      const lc = CHANGES.filter(c => c <= s).pop() ?? -1, lr = Math.floor(s / T) * T;
+      const isStale = s < WIN && lc > lr;
+      if (isStale && segStart === null) segStart = s;
+      if (!isStale && segStart !== null) { S('rect', { class: 'stale', x: X(segStart), y: 49, width: X(s) - X(segStart), height: 14 }, svg); segStart = null; }
+    }
+    let d = '';
+    for (let t = 0; t < WIN; t += T) d += `M${X(t).toFixed(2)} 45v22`;
+    S('path', { class: 'rf', d }, svg);
+    [0, 60, 120, 180].forEach(t => { S('text', { x: X(t), y: 84, 'text-anchor': 'middle' }, svg).textContent = t + 's'; });
+  }
+  function updTTL(fromUser) {
+    const T = TTLS[+$('#ttlIn').value], db = dbLoad(T), sr = stale(T);
+    $('#ttlVal').textContent = fmt(T);
+    $('#ttlIn').setAttribute('aria-valuetext', fmt(T));
+    $('#mDb').textContent = Math.round(db) + '%'; setGauge($('#mDbF'), 0, db, db <= 80 ? '' : 'bad');
+    $('#mSt').textContent = Math.round(sr) + '%'; setGauge($('#mStF'), 0, sr, sr <= 25 ? '' : 'bad');
+    drawTL(T);
+    const m = $('#ttlMsg'), good = db <= 80 && sr <= 25;
+    if (good) { m.className = 'ttlmsg good'; m.textContent = `✅ ${fmt(T)}: both green. In this toy model that's 10 to 30 s. There's no universal right TTL: it depends on how fresh the data must be and how much load the DB can take.`; }
+    else if (db > 80) { m.className = 'ttlmsg bad'; m.textContent = `${fmt(T)} is too short: entries expire so fast that the DB is hit almost as if there were no cache.`; }
+    else { m.className = 'ttlmsg bad'; m.textContent = `${fmt(T)} is too long: the DB relaxes, but readers keep getting a price that already changed.`; }
+    if (good && fromUser && checkGoal('#s2goals', 'ttl', goals, 10)) maybeQuiz();
+  }
+  $('#ttlIn').addEventListener('input', () => updTTL(false));
+  $('#ttlIn').addEventListener('change', () => updTTL(true));
+  updTTL(false);
+
+  /* ---- B: eviction predictor ---- */
+  const SEQ = ['A', 'B', 'C', 'A', 'A', 'D'];
+  $('#seqLine').innerHTML = SEQ.map((k, i) => `<span class="chip${i === SEQ.length - 1 ? ' d' : ''}">${k}</span>${i < SEQ.length - 1 ? '<span class="muted">→</span>' : ''}`).join('');
+  const POL = {
+    LRU: { name: 'LRU · least recently used', desc: 'Evict the key that hasn’t been used for the longest time.', meta: e => 'used t' + e.used, by: (a, b) => a.used - b.used },
+    LFU: { name: 'LFU · least frequently used', desc: 'Evict the key used the fewest times. On a tie, the older one goes.', meta: e => '×' + e.cnt, by: (a, b) => a.cnt - b.cnt || a.used - b.used },
+    FIFO: { name: 'FIFO · first in, first out', desc: 'Evict the key that arrived first, however popular it is.', meta: e => 'in #' + e.inAt, by: (a, b) => a.inAt - b.inAt },
+  };
+  function simulate(p) {
+    const slots = [], steps = [];
+    let victim = null;
+    SEQ.forEach((k, i) => {
+      const t = i + 1;
+      let e = slots.find(x => x && x.k === k), note, ev = -1, nw = -1, hi = -1;
+      if (e) { e.used = t; e.cnt++; note = 'hit'; hi = slots.indexOf(e); }
+      else if (slots.length < 3) { slots.push({ k, used: t, cnt: 1, inAt: t }); nw = slots.length - 1; note = 'miss → add'; }
+      else {
+        const v = slots.slice().sort(POL[p].by)[0]; ev = slots.indexOf(v); victim = v.k;
+        note = `miss → evict ${v.k}`;
+        steps.push({ k, snap: slots.map(x => ({ ...x })), note: `full: ${v.k} must go`, ev });
+        slots[ev] = { k, used: t, cnt: 1, inAt: t }; nw = ev; ev = -1;
+      }
+      steps.push({ k, snap: slots.map(x => ({ ...x })), note, ev, nw, hi });
+    });
+    return { steps, victim };
+  }
+  const done = new Set();
+  $('#evRows').innerHTML = Object.keys(POL).map(p => `<div class="evrow" data-p="${p}"><h4>${POL[p].name}</h4><p class="small muted">${POL[p].desc}</p>
+    <div class="row"><span class="small"><b>D</b> arrives. Who's evicted?</span>${['A', 'B', 'C'].map(k => `<button class="opt" data-k="${k}" aria-label="Predict ${k} is evicted under ${p}">${k}</button>`).join('')}</div>
+    <div class="trace"></div><div class="explain"></div></div>`).join('');
+  $$('#evRows .evrow').forEach(row => {
+    const p = row.dataset.p, { steps, victim } = simulate(p);
+    $$('.opt', row).forEach(b => b.onclick = async () => {
+      $$('.opt', row).forEach(x => x.disabled = true);
+      b.classList.add('picked');
+      const tr = $('.trace', row); tr.innerHTML = '';
+      for (const s of steps) {
+        tr.insertAdjacentHTML('beforeend', `<div class="tr"><span class="rq">${s.k}</span><span class="sl">${[0, 1, 2].map(i => {
+          const e = s.snap[i]; if (!e) return '<i class="muted">—</i>';
+          return `<i class="${i === s.ev ? 'ev' : i === s.nw ? 'nw' : i === s.hi ? 'hi' : ''}">${e.k}<small>${POL[p].meta(e)}</small></i>`;
+        }).join('')}</span><span class="nt">${s.note}</span></div>`);
+        await wait(260);
+      }
+      const ok = b.dataset.k === victim;
+      b.classList.add(ok ? 'right' : 'wrong');
+      if (!ok) $(`.opt[data-k="${victim}"]`, row).classList.add('right');
+      const ex = $('.explain', row); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+      const why = {
+        LRU: 'A was used at t4 and t5, so it’s fresh. B was last touched at t2, longest ago. <b>B goes.</b>',
+        LFU: 'A was used 3 times; B and C once each. It’s a tie, and B is the older of the two. <b>B goes.</b>',
+        FIFO: 'FIFO ignores use completely. A arrived first, so <b>A goes</b>, even though it’s the most popular key here.',
+      }[p];
+      ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Not quite.</b> ') + why;
+      ok ? Q.addXP(10, b) : Q.loseHeart(b);
+      done.add(p);
+      if (done.size === 3 && checkGoal('#s2goals', 'evict', goals, 10)) maybeQuiz();
+    });
+  });
+});
+
+/* ================= STAGE 3: CDN on the map ================= */
+Q.onStage(3, () => {
+  // very rough continent outlines, [lon, lat] pairs, drawn as a dot map
+  const LAND = [
+    [-166,68,-160,71,-140,70,-125,70,-110,73,-95,72,-85,70,-80,63,-90,58,-82,53,-78,58,-70,61,-64,60,-60,55,-56,52,-60,47,-66,44,-70,42,-74,40,-76,37,-76,35,-81,31,-80,26,-82,26,-84,30,-90,30,-97,27,-97,22,-92,19,-88,21,-87,16,-83,15,-83,10,-79,9,-80,7,-84,9,-86,12,-92,14,-97,16,-105,20,-106,24,-112,31,-110,24,-115,30,-118,34,-121,36,-124,41,-124,46,-123,49,-130,55,-136,58,-145,60,-152,59,-158,57,-162,59,-165,62],
+    [-55,60,-45,60,-40,65,-22,70,-20,77,-35,82,-60,82,-72,78,-58,75,-52,69],
+    [-80,8,-77,8,-72,12,-62,11,-52,5,-50,0,-44,-2,-35,-6,-35,-9,-39,-14,-39,-18,-41,-22,-48,-26,-49,-29,-53,-34,-58,-35,-57,-38,-62,-39,-65,-42,-65,-47,-68,-50,-69,-53,-74,-52,-73,-46,-73,-40,-72,-30,-71,-20,-76,-14,-80,-6,-81,-2,-79,2,-77,4],
+    [-9,37,-9,43,-2,43.5,-1.5,46,-4.5,48.5,1.5,50.5,4,51.5,8,54,9,57,11,59,5,59,5,62,13,67,18,70,26,71,33,70,41,67,44,68,53,69,60,70,69,73,80,73,90,76,105,78,113,74,130,72,140,72,150,71,160,70,170,70,180,68,180,66,172,61,163,58,157,51,155,57,143,59,137,55,141,52,140,48,135,43,130,42,129,35,126,37,125,40,121,40,122,37,119,35,121,31,122,29,119,25,114,22,109,21,106,18,109,12,105,9,103,10,100,13,100,8,103,1.5,100,4,98,9,97,16,94,18,92,22,88,22,86,20,80,15,80,10,77,8,73,17,72,21,67,25,62,25,57,26,56,27,52,28,48,30,50,26,52,24,56,24,59,22,56,18,52,16,45,13,43,13,40,16,35,28,34,32,36,36,30,36,27,37,26,40,23,40,23,37,21,38,20,40,16,38,18,40,13,45,12,44,16,41,15,38,12,38,10,44,7,44,3,43,3,42,0,40,-1,37,-5,36],
+    [-17,21,-13,27,-10,30,-6,35,0,36,10,37,11,33,20,31,25,32,32,31,34,28,38,20,43,12,51,12,48,6,41,-2,40,-10,40,-15,35,-23,33,-26,31,-30,27,-34,20,-35,18,-32,15,-27,12,-17,13,-11,12,-5,9,-1,9,4,5,6,-2,5,-8,4,-13,8,-16,12,-17,15],
+    [44,-25,47,-25,50,-15,49,-12,44,-16],
+    [114,-22,114,-26,115,-34,118,-35,124,-33,129,-31,132,-32,135,-35,138,-35,141,-38,147,-39,150,-37,153,-32,153,-25,146,-19,145,-15,142,-11,141,-17,136,-12,132,-11,129,-15,125,-14,122,-18,118,-20],
+    [130,31,132,34,135,34,140,35,141,38,142,42,145,44,142,45,140,41,139,38,136,36,133,35],
+    [-5,50,1,51,2,53,-1,55,-3,58.5,-6,58,-5,55,-3,54,-5,52], [-10,52,-6,52,-6,55,-8,55],
+    [109,1,110,-3,116,-4,119,1,117,7,113,3], [95,5,98,4,104,-2,106,-6,101,-3,96,2], [131,-1,141,-3,150,-10,141,-9,137,-5],
+  ].map(a => { const p = []; for (let i = 0; i < a.length; i += 2) p.push([a[i], a[i + 1]]); return p; });
+  const inside = (x, y, poly) => { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, yi] = poly[i], [xj, yj] = poly[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; };
+  const svg = $('#cdnMap');
+  const P = (lon, lat) => [lon + 180, 90 - lat];
+  let d = '';
+  for (let lat = 66; lat >= -46; lat -= 3.1) for (let lon = -131; lon <= 156; lon += 3.1) if (LAND.some(p => inside(lon, lat, p))) { const [x, y] = P(lon, lat); d += `M${(x - 1.1).toFixed(1)} ${(y - 1.1).toFixed(1)}h2.2v2.2h-2.2z`; }
+  S('path', { class: 'land', d }, svg);
+  const ORIGIN = P(-77.5, 38.9), EDGES = { London: P(0, 51.5), 'São Paulo': P(-46.6, -23.5), Tokyo: P(139.7, 35.7) };
+  const routes = S('g', {}, svg);
+  const mk = (from, to, bend) => { const mx = (from[0] + to[0]) / 2, my = Math.min(from[1], to[1]) - bend; return S('path', { class: 'route', d: `M${from[0]} ${from[1]}Q${mx} ${my} ${to[0]} ${to[1]}` }, routes); };
+  const toOrigin = mk(EDGES.Tokyo, ORIGIN, 46);
+  mk(EDGES.London, ORIGIN, 10); mk(EDGES['São Paulo'], ORIGIN, -10).setAttribute('d', `M${EDGES['São Paulo'][0]} ${EDGES['São Paulo'][1]}Q${ORIGIN[0] + 4} ${(ORIGIN[1] + EDGES['São Paulo'][1]) / 2} ${ORIGIN[0]} ${ORIGIN[1]}`);
+  // origin
+  const og = S('g', { class: 'origin' }, svg);
+  S('rect', { x: ORIGIN[0] - 5, y: ORIGIN[1] - 5, width: 10, height: 10, rx: 2 }, og);
+  S('text', { class: 'lbl', x: ORIGIN[0] - 2, y: ORIGIN[1] + 15, 'text-anchor': 'middle' }, svg).textContent = 'Origin';
+  S('text', { class: 'lbl s', x: ORIGIN[0] - 2, y: ORIGIN[1] + 24, 'text-anchor': 'middle' }, svg).textContent = 'Virginia';
+  // edges
+  const edgeEl = {};
+  Object.entries(EDGES).forEach(([n, [x, y]]) => {
+    const g = S('g', { class: 'edge' }, svg);
+    S('circle', { class: 'ring2', cx: x, cy: y, r: 8 }, g);
+    S('circle', { cx: x, cy: y, r: 4.5 }, g);
+    edgeEl[n] = g;
+  });
+  S('text', { class: 'lbl', x: EDGES.London[0], y: EDGES.London[1] - 11, 'text-anchor': 'middle' }, svg).textContent = 'London edge';
+  S('text', { class: 'lbl', x: EDGES['São Paulo'][0] + 12, y: EDGES['São Paulo'][1] + 3, 'text-anchor': 'start' }, svg).textContent = 'São Paulo edge';
+  S('text', { class: 'lbl', x: EDGES.Tokyo[0] + 8, y: EDGES.Tokyo[1] - 11, 'text-anchor': 'end' }, svg).textContent = 'Tokyo edge';
+  // users near Tokyo
+  const USERS = { A: [300, 74], B: [311, 82], C: [322, 72] };
+  const userPath = {}, pins = {};
+  Object.entries(USERS).forEach(([u, [x, y]]) => {
+    userPath[u] = S('path', { class: 'route', d: `M${x} ${y}L${EDGES.Tokyo[0]} ${EDGES.Tokyo[1]}`, style: 'opacity:0' }, routes);
+    const g = S('g', { class: 'pin off' }, svg);
+    S('circle', { cx: x, cy: y, r: 4.6 }, g);
+    S('text', { x, y }, g).textContent = u;
+    pins[u] = g;
+  });
+  const fx = S('g', {}, svg);
+  async function travel(path, dur, reverse) {
+    path.classList.add('on');
+    const len = path.getTotalLength(), dot = S('circle', { class: 'pkt', r: 2.6 }, fx);
+    await anim(dur, p => { const q = ease(reverse ? 1 - p : p), pt = path.getPointAtLength(q * len); dot.setAttribute('cx', pt.x.toFixed(2)); dot.setAttribute('cy', pt.y.toFixed(2)); });
+    dot.remove(); path.classList.remove('on');
+  }
+  function flash(xy, miss) { if (Q.reduced) return; const c = S('circle', { class: 'flash' + (miss ? ' m' : ''), cx: xy[0], cy: xy[1], r: 5 }, fx); setTimeout(() => c.remove(), 1000); }
+  const wf = $$('#wf li');
+  function wfStep(n) { wf.forEach((li, i) => { li.classList.toggle('on', i === n - 1); if (i < n - 1) li.classList.add('done'); }); }
+  function wfReset() { wf.forEach(li => li.classList.remove('on', 'done')); }
+  const log = $('#cdnLog');
+  let origin = 0, cached = false;
+  function stats(lat, good) {
+    $('#cOrig').textContent = origin;
+    $('#cEdge').textContent = cached ? 'image.png · TTL 24 h' : (cached === null ? 'image.png · expired' : 'nothing yet');
+    if (lat) { const l = $('#cLat'); l.textContent = lat; l.className = good ? 'good' : 'bad'; }
+  }
+  async function missFlow(u) {
+    pins[u].classList.remove('off');
+    wfStep(1); logTo(log, `👤 User ${u} (Tokyo) → GET https://mysite.cloudfront.net/image.png`);
+    await travel(userPath[u], 600);
+    flash(EDGES.Tokyo, true);
+    wfStep(2); logTo(log, '⚡ Tokyo edge: not in cache (MISS) → asking the origin in Virginia', 'w');
+    await travel(toOrigin, 1300);
+    origin++; stats();
+    wfStep(3); logTo(log, '🗄️ Origin → 200 OK, image.png, <code>Cache-Control: max-age=86400</code> (a TTL of 24 h)');
+    await travel(toOrigin, 1300, true);
+    cached = true; stats();
+    wfStep(4); logTo(log, '⚡ Tokyo edge stores image.png for 24 h and sends it to the user');
+    await travel(userPath[u], 600, true);
+    stats('~300 ms (miss)', false);
+  }
+  async function hitFlow(u) {
+    pins[u].classList.remove('off');
+    wfStep(5); logTo(log, `👤 User ${u} (Tokyo) → GET https://mysite.cloudfront.net/image.png`);
+    await travel(userPath[u], 600);
+    flash(EDGES.Tokyo, false);
+    wfStep(6); logTo(log, '⚡ Tokyo edge: in cache, TTL still valid (HIT). The origin is never asked.', 'g');
+    await travel(userPath[u], 600, true);
+    stats('~20 ms (hit)', true);
+  }
+  const ROUNDS = [
+    { title: '<b>User A</b> in Tokyo is the first person to request <code>image.png</code>. Will the Tokyo edge already have it?',
+      options: ['No: it’s a miss, so the edge asks the origin', 'Yes: it’s a hit, served straight from the edge', 'Neither: Tokyo users go straight to the origin'], correct: 0,
+      act: () => missFlow('A'),
+      explain: 'Nobody near Tokyo has asked for it yet, so the edge has nothing. It fetches the file from the origin across the Pacific, caches it, and passes it on. The first user pays the slow trip.' },
+    { title: 'A minute later, <b>User B</b>, also in Tokyo, asks for the same <code>image.png</code>. What happens?',
+      options: ['Hit: the Tokyo edge serves its cached copy', 'Miss: every user triggers a fresh origin fetch', 'Redirect: User B is sent to the London edge'], correct: 0,
+      act: () => hitFlow('B'),
+      explain: 'The edge already holds a copy and its 24-hour TTL is still valid, so it answers by itself. The origin counter stays at 1. That’s the whole point: one slow trip, then many fast ones.' },
+    { title: '25 hours later (the TTL was 24 h), <b>User C</b> in Tokyo requests <code>image.png</code>. What happens?',
+      options: ['Miss: the copy expired, so refetch from origin', 'Hit: edges keep a file until someone deletes it', 'Error: the file is gone until it’s re-uploaded'], correct: 0,
+      pre: true,
+      act: () => missFlow('C'),
+      explain: 'The TTL ran out, so the edge’s copy no longer counts. It goes back to the origin (counter: 2), gets a fresh copy with a new TTL, and serves it. Users after C get hits again.' },
+  ];
+  let ri = 0, quizShown = false;
+  function reset() {
+    origin = 0; cached = false; ri = 0; wfReset(); Object.values(pins).forEach(p => p.classList.add('off'));
+    $('#cLat').textContent = '—'; $('#cLat').className = ''; stats();
+    log.innerHTML = '<div>🕘 Day 1, 09:00. The origin in Virginia holds <b>image.png</b>. Edges: London, São Paulo, Tokyo. *Times are illustrative.</div>';
+  }
+  async function show() {
+    const r = ROUNDS[ri], box = $('#cdnBox'), step = `Request ${ri + 1} of ${ROUNDS.length}`;
+    if (r.pre) {
+      box.innerHTML = `<div class="step">${step}</div><h3>Time passes…</h3><p class="small">The Tokyo edge’s copy came with a 24-hour TTL. Skip ahead past it.</p><div class="row ffbox"><button class="btn primary" id="cdnFF">⏩ Fast-forward 25 hours</button></div>`;
+      await new Promise(res => $('#cdnFF').onclick = res);
+      cached = null; stats(); wfReset();
+      logTo(log, '⏩ Day 2, 10:00. 25 hours later: the Tokyo edge’s copy of image.png has expired.', 'w');
+    }
+    const { row } = await predict(box, { step, title: r.title, options: r.options, correct: r.correct, act: r.act, explain: r.explain, xp: 10 });
+    nextBtn(row, ri < ROUNDS.length - 1 ? 'Next request →' : 'Finish →', () => {
+      ri++;
+      if (ri < ROUNDS.length) return show();
+      box.innerHTML = '<div class="row"><button class="btn" id="cdnReplay">↻ Replay the 3 requests</button></div>';
+      $('#cdnReplay').onclick = () => { reset(); show(); };
+      if (!quizShown) {
+        quizShown = true;
+        quizChain($('#s3quiz'), [
+          { q: 'The Tokyo edge doesn’t have a file a user asked for. Where does it get it?',
+            options: ['From the origin: a web server or S3-style storage', 'From the user’s own browser cache, if it has one', 'From the nearest other user who already has it'],
+            correct: 0,
+            good: 'The edge fetches from the origin, which is your web server or online storage like Amazon S3, then caches the file for next time.',
+            bad: 'Edges fetch missing files from the origin: your web server or online storage like Amazon S3. Then they cache the file for the next user.' },
+          { q: 'What decides how long the edge keeps its copy of a file?',
+            options: ['The TTL, often sent in an HTTP header', 'How many users live near that edge', 'The size of the file in megabytes'],
+            correct: 0,
+            good: 'The origin can send a TTL with the file (in practice, a header like <code>Cache-Control: max-age=86400</code>). The edge keeps the copy until it runs out.',
+            bad: 'It’s the TTL. The origin can send it with the file in an HTTP header (such as <code>Cache-Control: max-age</code>), and the edge keeps the copy until it expires.' },
+        ], () => setTimeout(() => Q.clearStage(3), 600));
+      }
+    });
+  }
+  reset(); show();
+});
+
+/* ================= STAGE 4: CDN gotchas ================= */
+Q.onStage(4, () => {
+  const goals = new Set();
+  const maybeClear = () => { if (goals.size === 2) setTimeout(() => Q.clearStage(4), 900); };
+  const INC = [
+    { e: '🖼️', t: 'The old logo won’t go away', d: 'You shipped a new <code>logo.png</code>. A day later, many users still see the old one.',
+      opts: ['Serve it as logo.png?v=2, or invalidate it', 'Restart the origin web servers tonight', 'Raise the CDN TTL so edges keep it longer'],
+      why: 'The edges hold the old copy until its TTL ends. Change the URL (object versioning, like <code>logo.png?v=2</code>) so edges treat it as a new object, or call the vendor’s invalidation API.' },
+    { e: '💸', t: 'The CDN bill tripled', d: 'Analytics show 70% of the bytes stored on the CDN are old campaign videos that nobody watches.',
+      opts: ['Move rarely used files off the CDN', 'Add more edge locations near users', 'Shorten the TTL on every cached file'],
+      why: 'CDNs charge for data moved in and out. Files that are rarely requested gain little from being at the edge, so serve them from the origin instead.' },
+    { e: '🌩️', t: 'The CDN is down', d: 'Your CDN provider has an outage. Pages load, but with no CSS and no images.',
+      opts: ['Have clients fall back to the origin', 'Wait for the CDN vendor to recover', 'Purge the CDN cache to force a refresh'],
+      why: 'Plan for CDN failure: clients should notice the problem and load the files from the origin. Purging won’t help when the CDN itself is down.' },
+    { e: '📈', t: 'Yesterday’s stock chart', d: 'A stock-price chart image is cached at the edge for 24 hours. Traders see yesterday’s prices.',
+      opts: ['Give it a short expiry, a few seconds', 'Upgrade to a bigger CDN pricing plan', 'Keep a day-long copy in the browser'],
+      why: 'Time-sensitive content needs a short expiry. Too long and it’s stale, too short and edges keep refetching from the origin. For prices, seconds is about right.' },
+  ];
+  let fixed = 0;
+  $('#incs').innerHTML = INC.map((c, i) => `<div class="sort-item" data-i="${i}"><h4>${c.e} ${c.t}</h4><p>${c.d}</p><div class="row">${shuffle(c.opts.map((o, j) => ({ o, j }))).map(({ o, j }) => `<button class="opt" data-j="${j}">${o}</button>`).join('')}</div><div class="explain"></div></div>`).join('');
+  $$('#incs .sort-item').forEach(item => {
+    const c = INC[+item.dataset.i];
+    $$('.opt', item).forEach(b => b.onclick = () => {
+      $$('.opt', item).forEach(x => x.disabled = true);
+      const ok = b.dataset.j === '0';
+      b.classList.add(ok ? 'right' : 'wrong');
+      if (!ok) $('.opt[data-j="0"]', item).classList.add('right');
+      const ex = $('.explain', item); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+      ex.innerHTML = (ok ? '<b>Fixed.</b> ' : '<b>Not that one.</b> ') + c.why;
+      ok ? Q.addXP(10, b) : Q.loseHeart(b);
+      if (++fixed === INC.length && checkGoal('#s4goals', 'inc', goals, 0)) maybeClear();
+    });
+  });
+
+  // architecture: move static assets onto the CDN
+  const ASSETS = [{ k: 'js', label: '📜 JS', bw: 20 }, { k: 'css', label: '🎨 CSS', bw: 10 }, { k: 'img', label: '🖼️ Images', bw: 40 }];
+  let bw = 100;
+  $('#webAssets').innerHTML = ASSETS.map(a => `<button class="asset" draggable="true" data-k="${a.k}" aria-label="Move ${a.label.replace(/^\S+ /, '')} to the CDN">${a.label}</button>`).join('');
+  function move(k) {
+    const b = $(`#webAssets .asset[data-k="${k}"]`); if (!b) return;
+    const a = ASSETS.find(x => x.k === k);
+    b.classList.add('moved'); b.draggable = false; b.disabled = true; b.setAttribute('aria-label', a.label.replace(/^\S+ /, '') + ' now served by the CDN');
+    $('#cdnAssets').appendChild(b);
+    bw -= a.bw;
+    $('#bwVal').textContent = bw + '%';
+    setGauge($('#bwF'), 0, bw, bw > 60 ? 'bad' : bw > 40 ? 'mid' : '');
+    if (!$('#webAssets .asset')) {
+      $('#webAssets').innerHTML = '<span class="small muted">only dynamic pages now</span>';
+      $('#archNote').classList.add('on');
+      if (checkGoal('#s4goals', 'arch', goals, 15)) maybeClear();
+    }
+  }
+  $$('#webAssets .asset').forEach(b => {
+    b.onclick = () => move(b.dataset.k);
+    b.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', b.dataset.k); e.dataTransfer.effectAllowed = 'move'; });
+  });
+  const zone = $('#cdnZone');
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+  zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('over'); move(e.dataTransfer.getData('text/plain')); });
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss'), {
+  name: '👻 The Stale Specter',
+  xp: 15,
+  choices: [
+    { k: 'cache', label: 'Put it in the cache', sub: 'hot data in memory' },
+    { k: 'cdn', label: 'Serve it from a CDN', sub: 'static files near users' },
+    { k: 'origin', label: 'Don’t cache it', sub: 'read the source of truth' },
+    { k: 'expiry', label: 'Fix the expiry', sub: 'TTL, invalidate or version' },
+  ],
+  scenarios: [
+    { e: '👤', t: 'The popular profile', d: 'A user profile is read 1,000 times a second and edited about once a week.', a: 'cache',
+      why: 'Read often, changed rarely: the textbook case for the cache tier. Read-through with a TTL, and the database barely notices the traffic.' },
+    { e: '🌍', t: 'Shoppers on five continents', d: 'Product photos and the JavaScript bundle load slowly for users far from your one data center.', a: 'cdn',
+      why: 'Static files that are the same for everyone, and slow because of distance: put them on CDN edges close to the users.' },
+    { e: '🏦', t: 'The balance after a transfer', d: 'A user checks their account balance right after a transfer. It must be exact, and it changes all the time.', a: 'origin',
+      why: 'It must be exact and changes constantly. A cached copy could be stale, and the hit rate would be poor anyway. Read the source of truth.' },
+    { e: '🚀', t: 'The ghost of app.js', d: 'After a deploy, browsers keep loading the old <code>app.js</code> for hours.', a: 'expiry',
+      why: 'The CDN is doing its job too well: edges keep the old copy until the TTL ends. Version the URL (<code>app.js?v=42</code>, or a hash in the file name) so the new release is a new object, or invalidate it.' },
+    { e: '🏆', t: 'The leaderboard', d: 'A game leaderboard is recomputed once a minute and viewed by millions of players.', a: 'cache',
+      why: 'Hot, the same for everyone, and it changes once a minute. Cache it with a TTL of about a minute: millions of views cost about one DB query a minute.' },
+    { e: '📦', t: 'The one-off export', d: 'A 4 GB data export that one admin downloads exactly once.', a: 'origin',
+      why: 'Nobody will ask for it again, so a cached copy only wastes cache memory or CDN spend. Serve it straight from storage.' },
+    { e: '🧟', t: 'The undead “in stock”', d: 'Product pages still say “in stock” hours after items sell out, because cache entries live for 24 hours.', a: 'expiry',
+      why: 'The data changes much faster than the TTL. Shorten the TTL for stock levels, or delete the cache key when stock changes.' },
+  ],
+  outro: 'The pattern: read-heavy data goes in the cache, static files go to the CDN, must-be-exact data is read from the source, and stale copies mean the expiry needs fixing.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: interview drill ================= */
+Q.onStage(6, () => {
+  const mount = $('#drill'), msg = $('#drillMsg');
+  function go() {
+    msg.innerHTML = '';
+    Q.drill(mount, {
+      prompt: 'The interviewer: <i>"Our database is overloaded by the same reads over and over, and users abroad say images load slowly. What do you add?"</i>',
+      placeholder: 'I’d add two layers. First…',
+      model: '"Two layers. First, a <b>cache tier</b> such as Memcached or Redis between the web servers and the database. The server checks the cache; on a miss it reads the DB, stores the result with a TTL, and returns it. It suits data that’s read a lot and changed rarely, and it’s never the only copy, because memory is volatile. I’d pick the TTL to balance DB load against staleness, use <b>LRU</b> eviction, and run several cache nodes with spare memory so one failure doesn’t stampede the DB. Second, a <b>CDN</b> for static files: the nearest edge serves images, CSS and JS, fetching from the origin on a miss and caching for the TTL. I’d watch the cost, plan a fallback to the origin, and version asset URLs so new releases show up right away."',
+      checks: ['Read-through loop: check, miss → DB → fill the cache', 'When to cache, and that cache memory is volatile', 'The TTL trade-off, plus eviction (LRU)', 'Cache as a SPOF: several nodes, spare memory', 'CDN flow (miss → origin, TTL) + versioning or invalidation'],
+      onDone: n => {
+        if (n >= 4) { Q.clearStage(6); return; }
+        msg.innerHTML = `<div class="callout warn"><b>${n} of 5. Almost.</b> Read the model answer once more, then try again from memory. Four of five clears the stage.</div>`;
+        const b = document.createElement('button'); b.className = 'btn'; b.textContent = '↻ Try again'; b.onclick = go;
+        $('.callout', msg).appendChild(document.createElement('br')); $('.callout', msg).appendChild(b);
+      },
+    });
+  }
+  go();
+});
+
+Q.start();
+})();
+</script>
+</body>
+</html>
