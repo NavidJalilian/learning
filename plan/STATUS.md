@@ -2,18 +2,18 @@
 
 Every chapter of *System Design Interview* Vol. 1 as a world of quests. Ticked = done. Regenerate: `python3 plan/tools/status.py`.
 
-**52 of 83 quests built** · 40 live on the map · 12 built, awaiting world review · 0 being built (draft on disk, not verified) · 31 not started.
+**53 of 83 quests built** · 40 live on the map · 13 built, awaiting world review · 12 being built (draft on disk, not verified) · 18 not started.
 
 Legend: `[x]` done · `[ ]` not done. A world is **done** when every quest is built, the world review has run, its cheat sheet
 exists, and its quests are `ready: true` on the map.
 
 ## ⬜ World 1 · Scale From Zero to Millions of Users — *The Launchpad*
 
-- [ ] `0101` 1.1 · [One Box Wonder](../lessons/0101-scale-one-box-to-load-balancer.html) — not started
-- [ ] `0102` 1.2 · [Copy the Ledger](../lessons/0102-scale-database-replication.html) — not started
+- [ ] `0101` 1.1 · [One Box Wonder](../lessons/0101-scale-one-box-to-load-balancer.html) — being built (unverified draft)
+- [ ] `0102` 1.2 · [Copy the Ledger](../lessons/0102-scale-database-replication.html) — being built (unverified draft)
 - [ ] `0103` 1.3 · [Hot Memory, Near Edge](../lessons/0103-scale-cache-and-cdn.html) — not started
-- [ ] `0104` 1.4 · [Forget Me, Find Me Anywhere](../lessons/0104-scale-stateless-and-data-centers.html) — not started
-- [ ] `0105` 1.5 · [Queues, Gauges & Shards](../lessons/0105-scale-queues-observability-sharding.html) — not started
+- [ ] `0104` 1.4 · [Forget Me, Find Me Anywhere](../lessons/0104-scale-stateless-and-data-centers.html) — being built (unverified draft)
+- [ ] `0105` 1.5 · [Queues, Gauges & Shards](../lessons/0105-scale-queues-observability-sharding.html) — being built (unverified draft)
 - [ ] `0106` BOSS · [Zero to Millions, Live](../lessons/0106-scale-boss-millions-live.html) — not started
 - [ ] World review + cheat sheet
 
@@ -47,9 +47,9 @@ exists, and its quests are `ready: true` on the map.
 
 ## ⬜ World 5 · Design Consistent Hashing — *The Ring Road*
 
-- [ ] `0501` 5.1 · [Ring Math](../lessons/0501-consistent-hashing-ring-math.html) — not started
-- [ ] `0502` 5.2 · [Cracks in the Ring](../lessons/0502-consistent-hashing-cracks-and-riders.html) — not started
-- [ ] `0503` BOSS · [Hash It Live](../lessons/0503-consistent-hashing-boss-hash-it-live.html) — not started
+- [ ] `0501` 5.1 · [Ring Math](../lessons/0501-consistent-hashing-ring-math.html) — being built (unverified draft)
+- [ ] `0502` 5.2 · [Cracks in the Ring](../lessons/0502-consistent-hashing-cracks-and-riders.html) — being built (unverified draft)
+- [ ] `0503` BOSS · [Hash It Live](../lessons/0503-consistent-hashing-boss-hash-it-live.html) — being built (unverified draft)
 - [ ] World review + cheat sheet
 
 ## ✅ World 6 · Design a Key-Value Store — *The Key-Value Vault*
@@ -84,12 +84,12 @@ exists, and its quests are `ready: true` on the map.
 
 ## ⬜ World 9 · Design a Web Crawler — *Spider Web Wilds*
 
-- [ ] `0901` 9.1 · [Release the Spider](../lessons/0901-web-crawler-scope-and-estimates.html) — not started
+- [ ] `0901` 9.1 · [Release the Spider](../lessons/0901-web-crawler-scope-and-estimates.html) — being built (unverified draft)
 - [ ] `0902` 9.2 · [Assemble the Spider](../lessons/0902-web-crawler-components-and-workflow.html) — not started
 - [ ] `0903` 9.3 · [Taming the Frontier](../lessons/0903-web-crawler-url-frontier.html) — not started
-- [ ] `0904` 9.4 · [Fast Fangs, Thick Skin](../lessons/0904-web-crawler-downloader-and-robustness.html) — not started
-- [ ] `0905` 9.5 · [Beware the Spider Traps](../lessons/0905-web-crawler-traps-and-extensibility.html) — not started
-- [ ] `0906` BOSS · [Crawl the Web, Live](../lessons/0906-web-crawler-boss-design-it-live.html) — not started
+- [ ] `0904` 9.4 · [Fast Fangs, Thick Skin](../lessons/0904-web-crawler-downloader-and-robustness.html) — being built (unverified draft)
+- [x] `0905` 9.5 · [Beware the Spider Traps](../lessons/0905-web-crawler-traps-and-extensibility.html) — built · needs world review
+- [ ] `0906` BOSS · [Crawl the Web, Live](../lessons/0906-web-crawler-boss-design-it-live.html) — being built (unverified draft)
 - [ ] World review + cheat sheet
 
 ## ⬜ World 10 · Design a Notification System — *Ping Station*
@@ -103,8 +103,8 @@ exists, and its quests are `ready: true` on the map.
 
 ## ⬜ World 11 · Design a News Feed System — *Feedstream Falls*
 
-- [ ] `1101` 11.1 · [Two Rivers](../lessons/1101-news-feed-scope-and-flows.html) — not started
-- [ ] `1102` 11.2 · [Push, Pull, or Both](../lessons/1102-news-feed-fanout-push-vs-pull.html) — not started
+- [ ] `1101` 11.1 · [Two Rivers](../lessons/1101-news-feed-scope-and-flows.html) — being built (unverified draft)
+- [ ] `1102` 11.2 · [Push, Pull, or Both](../lessons/1102-news-feed-fanout-push-vs-pull.html) — being built (unverified draft)
 - [ ] `1103` 11.3 · [The Fanout Factory](../lessons/1103-news-feed-publishing-pipeline.html) — not started
 - [ ] `1104` 11.4 · [Hydrate the Feed](../lessons/1104-news-feed-retrieval-and-caches.html) — not started
 - [ ] `1105` BOSS · [Design It Live: News Feed](../lessons/1105-news-feed-boss-design-it-live.html) — not started

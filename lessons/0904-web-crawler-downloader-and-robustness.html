@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Fast Fangs, Thick Skin</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: s1 robots.txt checker, s2 throughput lab + host lanes, s3 thread timeline, s4 chaos ring */
+:root {
+  --s0: #5a48f0; --s1: #0d9a96; --s2: #c27400; --s3: #d4423f; --s4: #2f7fd8; --s5: #b8409a; --on-s: #ffffff;
+  --dns: #7a4fe0; --dnswait: #cbbcf7; --net: #2f7fd8; --dl: #1d9a52; --dead: #8f8c9e;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --s0: #8f82ff; --s1: #31d3c8; --s2: #ffb547; --s3: #ff6d6a; --s4: #5aa9ff; --s5: #f07ad0; --on-s: #0e0f1d;
+    --dns: #b49bff; --dnswait: #4a3d85; --net: #5aa9ff; --dl: #43d98a; --dead: #5f5d73;
+  }
+}
+:root[data-theme="dark"] {
+  --s0: #8f82ff; --s1: #31d3c8; --s2: #ffb547; --s3: #ff6d6a; --s4: #5aa9ff; --s5: #f07ad0; --on-s: #0e0f1d;
+  --dns: #b49bff; --dnswait: #4a3d85; --net: #5aa9ff; --dl: #43d98a; --dead: #5f5d73;
+}
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.challenge.boxed:empty { display: none; }
+.bignum { font-family: var(--mono); font-weight: 700; }
+.cap { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+.seg button { min-height: 40px; }
+.qchain > .quiz + .quiz { margin-top: 12px; }
+
+/* ---------- stage 1: robots.txt checker ---------- */
+.rb-cols { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 14px; padding: 14px; }
+@media (max-width: 700px) { .rb-cols { grid-template-columns: 1fr; } }
+.robots { background: var(--code-bg); color: var(--code-ink); border-radius: 14px; padding: 12px 0; font: 13.5px/1.6 var(--mono); align-self: start; }
+.robots .ln { padding: 0 14px; white-space: pre-wrap; word-break: break-all; }
+.robots .cm { color: #8b93c9; }
+.robots .grp { border-left: 4px solid transparent; transition: opacity .3s, border-color .3s, background .3s; padding: 2px 0; }
+.robots .grp.off { opacity: .35; }
+.robots .grp.on { border-left-color: #6ee7a8; background: rgba(110, 231, 168, .08); }
+.robots .k { color: #9fa8ff; }
+.robots .dis { color: #ff8a8a; }
+.robots .alw { color: #6ee7a8; }
+.whoami { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; font-weight: 600; font-size: 14px; }
+.ugrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+@media (max-width: 520px) { .ugrid { grid-template-columns: 1fr; } }
+.ucard { border: 2px solid var(--line); border-radius: 12px; background: var(--panel); padding: 8px 10px; transition: border-color .25s, background .25s; min-width: 0; }
+.ucard .path { font: 600 13px var(--mono); word-break: break-all; display: block; margin-bottom: 6px; }
+.ucard .path small { color: var(--muted); font-weight: 400; }
+.ucard .pick { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.ucard .pick button { min-height: 40px; border-radius: 9px; border: 1px solid var(--line); background: var(--bg); font-size: 13.5px; font-weight: 700; color: var(--muted); }
+.ucard .pick button.on[data-v="A"] { background: var(--good-soft); color: var(--good); border-color: var(--good); }
+.ucard .pick button.on[data-v="B"] { background: var(--bad-soft); color: var(--bad); border-color: var(--bad); }
+.ucard.right { border-color: var(--good); }
+.ucard.wrong { border-color: var(--bad); background: var(--bad-soft); animation: shake .4s; }
+.ucard .why { display: none; font-size: 12.5px; margin-top: 6px; color: var(--muted); }
+.ucard.right .why, .ucard.wrong .why { display: block; }
+.ucard.wrong .why { color: var(--ink); }
+.botstat { display: flex; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.botstat span { padding: 4px 10px; border-radius: 99px; background: var(--bg-2); font-weight: 700; color: var(--muted); }
+.botstat span.done { background: var(--good-soft); color: var(--good); }
+.daypanel { display: none; margin-top: 16px; border: 1px solid var(--line); border-radius: 16px; padding: 14px; background: var(--bg); }
+.daypanel.on { display: block; animation: rise .35s; }
+.counters { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 10px 0; }
+@media (max-width: 560px) { .counters { grid-template-columns: 1fr; } }
+.counters div { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--panel); font-size: 13px; color: var(--muted); }
+.counters b { display: block; font: 700 24px var(--mono); color: var(--ink); }
+.counters .bad b { color: var(--bad); }
+.counters .good b { color: var(--good); }
+
+/* ---------- stage 2: throughput lab ---------- */
+.ctl { display: grid; gap: 12px; padding: 14px; }
+.ctl label { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-weight: 600; font-size: 14px; align-items: center; }
+.ctl label b { font-family: var(--mono); color: var(--accent); }
+.ctl input[type=range] { width: 100%; accent-color: var(--accent); height: 30px; margin: 2px 0 0; }
+.gauge { padding: 14px; border-top: 1px solid var(--line); background: var(--panel); }
+.gtop { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.gtop .big { font: 700 30px var(--mono); transition: color .3s; }
+.gtop .big.ok { color: var(--good); }
+.gtop .big.mid { color: var(--warn); }
+.gbar { position: relative; height: 22px; margin: 28px 0 6px; border-radius: 8px; background: var(--bg-2); border: 1px solid var(--line); }
+.gbar .gf { height: 100%; width: 0; border-radius: 7px; background: linear-gradient(90deg, var(--teal), var(--accent)); transition: width .4s cubic-bezier(.2,.8,.2,1); }
+.gbar .mk { position: absolute; top: -6px; bottom: -6px; width: 3px; margin-left: -1px; background: var(--ink); border-radius: 2px; }
+.gbar .mk span { position: absolute; top: -20px; left: 50%; transform: translateX(-50%); font: 700 11px var(--mono); white-space: nowrap; }
+.found { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.found span { font: 600 13px var(--mono); padding: 6px 10px; border-radius: 10px; background: var(--good-soft); color: var(--good); }
+.lanes { padding: 12px 14px; display: grid; gap: 6px; }
+.lane { display: grid; grid-template-columns: 92px 1fr; gap: 8px; align-items: center; }
+.lane .ln { font: 700 12px var(--mono); color: var(--muted); }
+.lane .tiles { display: flex; flex-wrap: wrap; gap: 4px; min-height: 30px; padding: 4px; border-radius: 10px; background: var(--panel); border: 1px dashed var(--line); }
+.ut { font: 700 11px var(--mono); padding: 4px 7px; border-radius: 7px; color: var(--on-s); line-height: 1.3; }
+.ut.new { animation: deal .45s cubic-bezier(.3,1.5,.5,1); }
+@keyframes deal { from { opacity: 0; transform: translateX(-30px) scale(.6); } }
+.hostkey { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 12.5px; color: var(--muted); padding: 0 14px 10px; }
+.hostkey span { display: inline-flex; gap: 5px; align-items: center; font-family: var(--mono); }
+.hostkey i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+
+/* ---------- stage 3: thread timeline ---------- */
+.toggles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 12px 14px 0; }
+@media (max-width: 560px) { .toggles { grid-template-columns: 1fr; } }
+.tg { min-height: 44px; border-radius: 12px; border: 2px solid var(--line); background: var(--panel); font-weight: 700; font-size: 14px; display: flex; gap: 8px; align-items: center; justify-content: center; }
+.tg .sw { width: 30px; height: 18px; border-radius: 99px; background: var(--line); position: relative; flex: none; transition: background .2s; }
+.tg .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: left .2s; }
+.tg[aria-pressed="true"] { border-color: var(--good); background: var(--good-soft); }
+.tg[aria-pressed="true"] .sw { background: var(--good); }
+.tg[aria-pressed="true"] .sw::after { left: 14px; }
+.tg[disabled] { opacity: .45; cursor: not-allowed; }
+.tl { padding: 12px 14px 4px; }
+.trow { display: grid; grid-template-columns: 26px 1fr; gap: 6px; align-items: center; margin-bottom: 4px; }
+.trow .tn { font: 700 11px var(--mono); color: var(--muted); }
+.track { position: relative; height: 18px; border-radius: 4px; background: var(--bg-2); overflow: hidden; }
+.sg { position: absolute; top: 0; bottom: 0; transition: left .6s cubic-bezier(.2,.8,.2,1), width .6s cubic-bezier(.2,.8,.2,1); border-right: 1px solid var(--bg); }
+.sg.dns { background: var(--dns); } .sg.wait { background: repeating-linear-gradient(135deg, var(--dnswait) 0 4px, var(--dns) 4px 6px); }
+.sg.net { background: var(--net); } .sg.dl { background: var(--dl); } .sg.dead { background: var(--dead); }
+.brk { position: absolute; top: -2px; bottom: -2px; width: 6px; margin-left: -3px; background: var(--bg); border-left: 2px dashed var(--muted); border-right: 2px dashed var(--muted); z-index: 2; }
+.axis { position: relative; height: 18px; margin-left: 32px; font: 600 10.5px var(--mono); color: var(--muted); }
+.axis span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.tlegend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--muted); padding: 4px 14px 10px; }
+.tlegend span { display: inline-flex; gap: 5px; align-items: center; }
+.tlegend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.readouts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 0 14px 12px; }
+@media (max-width: 560px) { .readouts { grid-template-columns: 1fr; } }
+.readouts div { border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; background: var(--panel); font-size: 12.5px; color: var(--muted); }
+.readouts b { display: block; font: 700 20px var(--mono); color: var(--ink); transition: color .3s; }
+.readouts b.good { color: var(--good); }
+.readouts b.bad { color: var(--bad); }
+.share { padding: 0 14px 14px; }
+.share .bar { display: flex; height: 16px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); }
+.share .bar div { height: 100%; transition: width .6s; }
+
+/* ---------- stage 4: chaos ring ---------- */
+.ring svg { max-width: 360px; margin: 0 auto; }
+.ring .base { fill: none; stroke: var(--line); stroke-width: 16; }
+.ring .band { fill: none; stroke-width: 16; opacity: .38; transition: stroke .6s; }
+.ring .hdot { stroke: var(--bg); stroke-width: 2; transition: fill .6s; }
+.ring .halo { fill: none; stroke: var(--ink); stroke-width: 2.5; transform-box: fill-box; transform-origin: center; animation: halo 1.3s ease-out forwards; }
+@keyframes halo { from { opacity: .95; transform: scale(1); } to { opacity: 0; transform: scale(2.8); } }
+.ring .srv circle { stroke: var(--bg); stroke-width: 3; }
+.ring .srv text { fill: var(--on-s); font: 700 15px var(--font); text-anchor: middle; dominant-baseline: central; }
+.ring .srv { transition: opacity .5s; }
+.ring .srv.down { opacity: .18; }
+.ring .cbig { fill: var(--ink); font: 700 26px var(--mono); text-anchor: middle; }
+.ring .csmall { fill: var(--muted); font: 600 13px var(--font); text-anchor: middle; }
+.chaos-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; padding: 12px 14px; align-items: start; }
+@media (max-width: 680px) { .chaos-cols { grid-template-columns: 1fr; } }
+.workers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.wk { border-radius: 10px; padding: 6px 4px; text-align: center; font: 700 12px var(--mono); background: var(--good-soft); color: var(--good); border: 2px solid transparent; transition: background .3s, color .3s; }
+.wk small { display: block; font: 600 10.5px var(--font); }
+.wk.warn { background: var(--warn-soft); color: var(--warn); }
+.wk.dead { background: var(--bad-soft); color: var(--bad); }
+.wk.off { background: var(--bg-2); color: var(--muted); }
+.prog { margin-top: 12px; }
+.prog .pl { display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; margin-bottom: 4px; gap: 8px; flex-wrap: wrap; }
+.prog .pt { position: relative; height: 18px; border-radius: 8px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; }
+.prog .pf { height: 100%; width: 64%; background: linear-gradient(90deg, var(--teal), var(--good)); transition: width .8s cubic-bezier(.2,.8,.2,1), filter .3s; }
+.prog .pt.dark .pf { filter: grayscale(1) brightness(.5); }
+.prog .ck { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ink); opacity: .35; }
+.prog .ck.last { opacity: 1; width: 3px; }
+.chaosbtns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.cbtn { min-height: 52px; border-radius: 12px; border: 2px solid var(--line); background: var(--panel); font-weight: 700; font-size: 14px; text-align: left; padding: 8px 10px; display: flex; gap: 8px; align-items: center; }
+.cbtn:hover:not([disabled]) { border-color: var(--bad); }
+.cbtn.done { border-color: var(--good); background: var(--good-soft); }
+.cbtn.cur { border-color: var(--bad); background: var(--bad-soft); }
+.cbtn .e { font-size: 20px; }
+.shields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.shields .opt { text-align: center; min-height: 48px; font-weight: 700; font-size: 14px; }
+.cmp { display: none; margin-top: 10px; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--panel); font-size: 13.5px; }
+.cmp.on { display: block; animation: rise .35s; }
+.cells { display: flex; flex-wrap: wrap; gap: 3px; margin: 4px 0 8px; }
+.cells i { width: 16px; height: 16px; border-radius: 4px; background: var(--bg-2); border: 1px solid var(--line); }
+.cells i.mv { background: var(--bad); border-color: var(--bad); }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 9.4 · Design a Web Crawler</div>
+    <h1>Fast Fangs, Thick Skin</h1>
+    <p class="lede">Your spider can find pages. Now make it quick without being rude, and tough enough to survive dead servers, power cuts and junk data.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can explain <b>robots.txt</b> and why it's cached, name the <b>four downloader speed-ups</b> with the DNS numbers (10–200 ms per lookup), and list the <b>four robustness measures</b>, including how consistent hashing spreads hosts across downloader servers.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Read the house rules</h2><div class="sub">robots.txt · the Robots Exclusion Protocol</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The <b>HTML Downloader</b> is the box that actually fetches web pages over HTTP. Before it touches a site, a polite crawler first reads that site's <b>robots.txt</b>: a plain text file at the root of the site, like <code>shop.example/robots.txt</code>. The rules it follows are called the <b>Robots Exclusion Protocol</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener">[1]</a></p>
+      <p>The file is split into <b>groups</b>. Each group starts with <code>User-agent:</code> (which bot the rules are for; <code>*</code> means "any bot") and lists paths:</p>
+      <ul>
+        <li><code>Disallow: /cart/</code>: don't fetch any URL whose path <b>starts with</b> <code>/cart/</code>.</li>
+        <li><code>Allow: …</code>: an exception that re-opens part of a blocked path. When two rules match, the <b>longer, more specific</b> one wins.<a class="cite" href="https://www.rfc-editor.org/rfc/rfc9309.html" target="_blank" rel="noopener">[2]</a></li>
+      </ul>
+      <p>One rule trips people up: a bot that has <b>its own group</b> follows <b>only that group</b> and ignores the <code>*</code> group completely.<a class="cite" href="https://developers.google.com/search/docs/crawling-indexing/robots/intro" target="_blank" rel="noopener">[3]</a> The book shows part of a big online retailer's real file, with paths blocked for Googlebot. Ours below is made up.</p>
+
+      <div class="sim">
+        <div class="rb-cols">
+          <div class="robots" aria-label="robots.txt for shop.example">
+            <div class="ln cm"># https://shop.example/robots.txt</div>
+            <div class="grp" id="gStar">
+              <div class="ln"><span class="k">User-agent:</span> *</div>
+              <div class="ln"><span class="dis">Disallow:</span> /cart/</div>
+              <div class="ln"><span class="dis">Disallow:</span> /search</div>
+            </div>
+            <div class="ln">&nbsp;</div>
+            <div class="grp" id="gSpider">
+              <div class="ln"><span class="k">User-agent:</span> SpiderBot</div>
+              <div class="ln"><span class="dis">Disallow:</span> /private/</div>
+              <div class="ln"><span class="alw">Allow:</span> /private/press/</div>
+            </div>
+          </div>
+          <div>
+            <div class="whoami"><span>We are:</span><span class="seg" id="botSeg" role="group" aria-label="Which bot we are"><button data-b="spider" class="on" aria-pressed="true">SpiderBot</button><button data-b="other" aria-pressed="false">OtherBot</button></span></div>
+            <div class="ugrid" id="ugrid"></div>
+          </div>
+        </div>
+        <div class="sim-bar">
+          <button class="btn primary" id="rbCheck" disabled>Check my calls</button>
+          <span class="botstat"><span id="stSpider">SpiderBot: not yet</span><span id="stOther">OtherBot: not yet</span></span>
+        </div>
+        <div class="simlog" id="rbLog"><div>Mark every URL Allowed or Blocked for the bot you are, then press Check. Do it for both bots.</div></div>
+      </div>
+
+      <div class="daypanel" id="dayPanel">
+        <b>🗓️ One day on shop.example.</b> <span class="small muted">If the crawler fetched robots.txt before every page, each page would cost two requests: one for the rules, one for the page.</span>
+        <div class="counters">
+          <div><b id="cPages">0</b>pages fetched today</div>
+          <div class="bad"><b id="cNo">0</b>robots.txt downloads, no cache</div>
+          <div class="good"><b id="cYes">0</b>robots.txt downloads, cached &amp; refreshed daily</div>
+        </div>
+        <div class="row"><button class="btn primary" id="dayRun">▶ Run the day</button></div>
+        <p class="small" style="margin-bottom:0">So the crawler <b>caches</b> each site's robots.txt and downloads a fresh copy now and then. The book keeps it in a cache and refreshes it periodically.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener">[1]</a></p>
+      </div>
+      <div class="callout warn"><b>Honest caveat: it's a sign, not a lock.</b> Good crawlers obey robots.txt, but nothing forces a bad one to. It also doesn't hide a page: a blocked URL can still show up in search results if other sites link to it. The protocol was only written up as a formal standard in 2022 (RFC 9309), which says a crawler generally shouldn't trust a cached copy for more than 24 hours.<a class="cite" href="https://www.rfc-editor.org/rfc/rfc9309.html" target="_blank" rel="noopener">[2]</a></div>
+      <div class="qchain" id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Split the work</h2><div class="sub">Speed-up 1 · distributed crawl</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book's crawler has to fetch about <b>1 billion pages a month</b>. That's roughly <b>400 pages per second</b> on average and <b>800 at peak</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener">[1]</a> One fetch takes hundreds of milliseconds, and most of that time the thread just waits for the network. So one thread manages only a few pages a second.</p>
+      <p>Speed-up 1 is the <b>distributed crawl</b>: spread the crawl jobs over <b>many servers</b>, and run <b>many threads</b> (workers running side by side) on each one. The URL space is cut into pieces, so every downloader owns its own subset of URLs.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener">[1]</a> The rough math: <code>pages/s ≈ servers × threads ÷ seconds per fetch</code>.</p>
+
+      <div class="sim">
+        <div class="ctl">
+          <label for="srvR"><span>Servers</span><b id="srvV">1</b></label>
+          <input type="range" id="srvR" min="1" max="50" step="1" value="1" aria-label="Number of servers">
+          <label for="thrR"><span>Threads per server</span><b id="thrV">10</b></label>
+          <input type="range" id="thrR" min="1" max="200" step="1" value="10" aria-label="Threads per server">
+          <label for="fetR"><span>Average fetch time</span><b id="fetV">1.0 s</b></label>
+          <input type="range" id="fetR" min="1" max="20" step="1" value="10" aria-label="Average fetch time in tenths of a second">
+        </div>
+        <div class="gauge">
+          <div class="gtop"><span class="big" id="rate">10</span><span class="muted">pages / second</span></div>
+          <div class="gbar"><div class="gf" id="gfill"></div><div class="mk" style="left:25%"><span>400 avg</span></div><div class="mk" style="left:50%"><span>800 peak</span></div></div>
+          <div class="small muted">Bar tops out at 1,600 pages/s.</div>
+          <div class="row" style="margin-top:10px"><button class="btn primary" id="saveSet">📌 Save this setting</button><span class="small muted" id="saveMsg">Challenge: with fetch time at <b>1.0 s</b>, find <b>two different</b> server × thread settings that reach the 800 peak.</span></div>
+          <div class="found" id="found"></div>
+        </div>
+      </div>
+
+      <p style="margin-top:18px">How does a URL know which downloader it belongs to? A common choice is to <b>hash the host name</b> (the <code>wiki.example</code> part). Then every URL from one host lands on the same downloader, which also makes it easy for that one server to stay polite to that host.</p>
+      <div class="sim">
+        <div class="lanes" id="lanes"></div>
+        <div class="hostkey" id="hostkey"></div>
+        <div class="sim-bar"><button class="btn primary" id="deal">🂠 Deal 12 URLs</button><span class="small muted" id="dealMsg">Here a URL goes to downloader <code>hash(host) % 4</code>.</span></div>
+      </div>
+      <ul class="checklist" id="s2goals">
+        <li data-g="deal"><span class="box">✓</span><span>Deal a batch: do any host's URLs end up split across lanes?</span></li>
+        <li data-g="set1"><span class="box">✓</span><span>Save a first setting that reaches 800 pages/s at 1.0 s per fetch</span></li>
+        <li data-g="set2"><span class="box">✓</span><span>Save a second, different one</span></li>
+      </ul>
+      <div class="callout tip"><b>Foreshadowing.</b> <code>% 4</code> works until you add or lose a downloader. Then almost every host changes lane. Stage 4 swaps it for the hash ring you met in <a href="0002-consistent-hashing.html">Quest 6.2</a>.</div>
+      <div class="callout"><b>Why it's only rough.</b> The formula assumes every thread is busy all the time. In real life, politeness (one request at a time per host, with gaps) and network bandwidth cap you first. Many modern crawlers also use asynchronous I/O (one thread juggles many open connections) instead of one thread per fetch.</div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Stop asking for directions</h2><div class="sub">Speed-ups 2–4 · DNS cache, locality, short timeout</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Three more speed-ups from the book:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener">[1]</a></p>
+      <ul>
+        <li><b>Cache the DNS resolver.</b> DNS turns a host name into an IP address. One lookup takes about <b>10 to 200 ms</b>. Many DNS interfaces are <b>synchronous</b> (the caller is stuck until the answer comes back), and while one thread waits on a lookup, other threads can be blocked behind it. So keep your own cache of host name → IP. The book refreshes it on a schedule with cron jobs.</li>
+        <li><b>Locality.</b> Put crawl servers in several regions, close to the sites they crawl. A shorter distance means faster downloads. The book applies the same idea to most parts: crawl servers, cache, queue, storage.</li>
+        <li><b>Short timeout.</b> Some servers answer very slowly or never. Set a maximum wait. If the host hasn't answered by then, drop that page and crawl something else.</li>
+      </ul>
+      <p>Below: <b>8 threads</b> fetch <b>40 pages</b> from 9 hosts. Two hosts are far away (Japan, Brazil). Two are <b>black holes</b>: they accept the connection and never send a byte. With no timeout set, our client waits 60 s (some HTTP libraries would wait forever).</p>
+
+      <div class="challenge boxed" id="tlPredict"></div>
+      <div class="sim">
+        <div class="toggles">
+          <button class="tg" data-t="dns" aria-pressed="false" disabled><span class="sw"></span>DNS cache</button>
+          <button class="tg" data-t="local" aria-pressed="false" disabled><span class="sw"></span>Regional crawlers</button>
+          <button class="tg" data-t="timeout" aria-pressed="false" disabled><span class="sw"></span>Timeout = 5 s</button>
+        </div>
+        <div class="tl" id="tl"></div>
+        <div class="axis" id="axis"></div>
+        <div class="tlegend">
+          <span><i style="background:var(--dns)"></i>DNS lookup</span>
+          <span><i style="background:repeating-linear-gradient(135deg,var(--dnswait) 0 3px,var(--dns) 3px 5px)"></i>blocked behind another lookup</span>
+          <span><i style="background:var(--net)"></i>network round trips</span>
+          <span><i style="background:var(--dl)"></i>download</span>
+          <span><i style="background:var(--dead)"></i>waiting on a dead host</span>
+        </div>
+        <div class="readouts">
+          <div><b id="roTotal">—</b>all 40 pages handled</div>
+          <div><b id="roLive">—</b>38 live pages done by</div>
+          <div><b id="roDns">—</b>DNS lookups</div>
+        </div>
+        <div class="share"><div class="cap">Where the threads' time went</div><div class="bar" id="shareBar"></div></div>
+        <div class="simlog" id="tlLog"><div>Make your prediction above to unlock the toggles.</div></div>
+      </div>
+      <ul class="checklist" id="s3goals">
+        <li data-g="dns"><span class="box">✓</span><span>Turn on the <b>DNS cache</b>: watch the lookup count</span></li>
+        <li data-g="local"><span class="box">✓</span><span>Turn on <b>regional crawlers</b>: watch the far-host bars</span></li>
+        <li data-g="timeout"><span class="box">✓</span><span>Turn on the <b>timeout</b>: watch the grey</span></li>
+        <li data-g="all"><span class="box">✓</span><span>All three on at once</span></li>
+      </ul>
+      <div class="callout warn"><b>Honest caveats.</b> Real DNS answers come with a <b>TTL</b> (time-to-live) that says how long they may be cached, and real resolvers follow it rather than a cron schedule. Big crawlers often run their own asynchronous resolver. The Mercator crawler, which the book cites, wrote a custom multi-threaded resolver because the standard library call was synchronous.<a class="cite" href="https://courses.cs.washington.edu/courses/cse454/15wi/papers/mercator.pdf" target="_blank" rel="noopener">[5]</a><a class="cite" href="https://nlp.stanford.edu/IR-book/html/htmledition/dns-resolution-1.html" target="_blank" rel="noopener">[4]</a> And pair a short timeout with <b>retry and back-off</b>: a host that timed out once may just be busy.</div>
+      <div class="qchain" id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Built to survive</h2><div class="sub">Robustness · four defences</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>At web scale, something is always broken. The book lists four defences:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener">[1]</a></p>
+      <ol>
+        <li><b>Consistent hashing</b> spreads hosts across downloader servers. A server can be added or removed and only a small slice of hosts moves.</li>
+        <li><b>Save crawl state and data.</b> Keep writing the crawl's progress and data to storage. A crashed or interrupted crawl restarts by loading what was saved, not from scratch.</li>
+        <li><b>Exception handling.</b> Errors are normal on the web. A bad page or a failed fetch gets caught and dealt with, without crashing the whole system.</li>
+        <li><b>Data validation.</b> Check data at each step, so bad input can't cause system errors further down.</li>
+      </ol>
+      <p>You are the chaos monkey. Press a disaster, then pick the shield that saves the crawl. A wrong shield shows what would have happened and costs a heart.</p>
+
+      <div class="sim ring">
+        <div class="chaos-cols">
+          <div>
+            <svg id="ring" viewBox="0 0 400 400" role="img" aria-label="Hash ring with four downloader servers and sixteen hosts"></svg>
+          </div>
+          <div>
+            <div class="cap">Downloader servers</div>
+            <div class="workers" id="workers"></div>
+            <div class="prog"><div class="pl"><span>Week-long crawl</span><span class="mono" id="progTxt">64% · last checkpoint 60%</span></div><div class="pt" id="progT"><div class="pf" id="progF"></div></div></div>
+            <div class="chaosbtns" id="chaosBtns"></div>
+          </div>
+        </div>
+        <div class="simlog" id="chLog"><div>4 downloaders share 16 hosts on a hash ring. Each host's colour is the server that crawls it.</div></div>
+      </div>
+      <div class="challenge boxed" id="chBox"></div>
+      <div class="cmp" id="cmp"></div>
+      <ul class="checklist" id="s4goals">
+        <li data-g="crash"><span class="box">✓</span><span>Survive a downloader crash</span></li>
+        <li data-g="power"><span class="box">✓</span><span>Survive a power cut</span></li>
+        <li data-g="garbage"><span class="box">✓</span><span>Survive a garbage page</span></li>
+        <li data-g="longurl"><span class="box">✓</span><span>Survive a junk URL</span></li>
+      </ul>
+      <div class="callout tip"><b>Two jobs, one tool.</b> The book files consistent hashing under robustness. It's just as much a <b>politeness</b> tool: hashing by host keeps all of one host's URLs on one server, which is what lets that server space out its requests to the host (the back queues of <i>Quest 9.3</i>).</div>
+      <div class="row" style="margin-top:12px"><button class="btn" id="chReset">↻ Reset the cluster</button></div>
+      <div class="qchain" id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Slow Web Gauntlet</h2><div class="sub">Pick the fix for each slowdown or failure</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Eight reports from the crawl team. For each one, which toolbox fixes it: the <b>robots.txt</b> rules (and caching them), one of the four <b>speed-ups</b>, or one of the four <b>robustness</b> defences?</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">The downloader deep dive</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> A fast, tough crawler can still waste its time: duplicate pages, endless calendar links, spam. That's Quest 9.5, <i>Beware the Spider Traps</i>.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 9 "Design a Web Crawler"</a>, Step 3: the "HTML Downloader" and "Robustness" sections. Both are short. Then read the <a href="https://developers.google.com/search/docs/crawling-indexing/robots/intro" target="_blank" rel="noopener">Google Search Central intro to robots.txt</a>, and if you want the original, §3 of the <a href="https://courses.cs.washington.edu/courses/cse454/15wi/papers/mercator.pdf" target="_blank" rel="noopener">Mercator paper</a> on how its downloader and DNS resolver were built.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <p style="margin-top:0"><b>Crawl-delay isn't standard.</b> You'll see <code>Crawl-delay: 10</code> in many robots.txt files. It isn't part of RFC 9309. Some crawlers honour it, and Google ignores it and sets its own pace from how the server responds.<a class="cite" href="https://developers.google.com/search/docs/crawling-indexing/robots/intro" target="_blank" rel="noopener">[3]</a></p>
+      <p><b>Listen when a site says "slow down".</b> A <code>429 Too Many Requests</code>, or a <code>503</code> with a <code>Retry-After</code> header, is the server asking you to back off.<a class="cite" href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429" target="_blank" rel="noopener">[6]</a> A short timeout plus retries with growing gaps (back-off) is both faster and more polite than hammering.</p>
+      <p style="margin-bottom:0"><b>robots.txt failures have rules too.</b> RFC 9309 says that if robots.txt returns a 4xx error (like 404), the crawler may treat the whole site as allowed. If it returns a 5xx server error, the crawler should assume everything is blocked for now.<a class="cite" href="https://www.rfc-editor.org/rfc/rfc9309.html" target="_blank" rel="noopener">[2]</a></p>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"why not just give every thread its own DNS resolver?"</i> or <i>"how often should a checkpoint be written?"</i>
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener"><i>System Design Interview</i> Vol. 1, Ch. 9 "Design a Web Crawler"</a> (ByteByteGo).</li>
+        <li>IETF, <a href="https://www.rfc-editor.org/rfc/rfc9309.html" target="_blank" rel="noopener">RFC 9309: Robots Exclusion Protocol</a>, 2022.</li>
+        <li>Google Search Central, <a href="https://developers.google.com/search/docs/crawling-indexing/robots/intro" target="_blank" rel="noopener">Introduction to robots.txt</a>.</li>
+        <li>Manning, Raghavan &amp; Schütze, <a href="https://nlp.stanford.edu/IR-book/html/htmledition/dns-resolution-1.html" target="_blank" rel="noopener"><i>Introduction to Information Retrieval</i>, "DNS resolution"</a>.</li>
+        <li>Heydon &amp; Najork, <a href="https://courses.cs.washington.edu/courses/cse454/15wi/papers/mercator.pdf" target="_blank" rel="noopener">"Mercator: A Scalable, Extensible Web Crawler"</a>, 1999.</li>
+        <li>MDN, <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429" target="_blank" rel="noopener">429 Too Many Requests</a>.</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0904',
+  winTitle: 'Fast, polite and crash-proof!',
+  badge: '⚡ Badge: Speed Spinner',
+  cheatsheet: '../reference/ch09-web-crawler-cheatsheet.html',
+});
+const { sleep, shuffle } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ================= shared helpers ================= */
+function hash32(str) {
+  let h = 0x811c9dc5;
+  for (const c of str) { h ^= c.codePointAt(0); h = Math.imul(h, 0x01000193); }
+  h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16;
+  return h >>> 0;
+}
+const SC = i => `var(--s${i})`;
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function pt(cx, cy, r, deg) { const a = deg * Math.PI / 180; return [cx + r * Math.sin(a), cy - r * Math.cos(a)]; }
+const f2 = n => n.toFixed(2);
+function arcD(cx, cy, r, a0, a1) {
+  let sw = ((a1 - a0) % 360 + 360) % 360; if (sw < 0.001) sw = 360;
+  const [x0, y0] = pt(cx, cy, r, a0);
+  if (sw > 359.9) { const [xm, ym] = pt(cx, cy, r, a0 + 180); return `M${f2(x0)} ${f2(y0)}A${r} ${r} 0 1 1 ${f2(xm)} ${f2(ym)}A${r} ${r} 0 1 1 ${f2(x0)} ${f2(y0)}`; }
+  const [x1, y1] = pt(cx, cy, r, a0 + sw);
+  return `M${f2(x0)} ${f2(y0)}A${r} ${r} 0 ${sw > 180 ? 1 : 0} 1 ${f2(x1)} ${f2(y1)}`;
+}
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); if (xp) Q.addXP(xp, li);
+  return true;
+}
+// Ask quizzes one after another in the same mount; clear the stage after the last one.
+function quizChain(mount, list, stage) {
+  let i = 0;
+  const next = () => {
+    if (i >= list.length) { setTimeout(() => Q.clearStage(stage), 900); return; }
+    const q = list[i++];
+    const box = Q.quiz(mount, { ...q, tag: q.tag || `Check ${i} of ${list.length}`, onDone: () => setTimeout(next, 500) });
+    if (i > 1) setTimeout(() => box.scrollIntoView({ behavior: Q.reduced ? 'auto' : 'smooth', block: 'nearest' }), 50);
+  };
+  next();
+}
+function countUp(el, to, ms) {
+  return new Promise(res => {
+    if (Q.reduced || ms <= 1) { el.textContent = to.toLocaleString('en-US'); return res(); }
+    const t0 = performance.now();
+    const fr = now => { const p = Math.min(1, (now - t0) / ms); el.textContent = Math.round(to * p).toLocaleString('en-US'); p < 1 ? requestAnimationFrame(fr) : res(); };
+    requestAnimationFrame(fr);
+  });
+}
+
+/* ================= STAGE 1: robots.txt ================= */
+Q.onStage(1, () => {
+  // A = allowed, B = blocked. Answer key per bot with a reason.
+  const URLS = [
+    { p: '/products/42', spider: ['A', 'No SpiderBot rule starts with /products.'], other: ['A', 'No * rule starts with /products.'] },
+    { p: '/cart/checkout', spider: ['A', 'Disallow /cart/ is in the * group. SpiderBot has its own group, so it ignores the * group.'], other: ['B', 'OtherBot has no group of its own, so it uses *: Disallow /cart/ matches.'] },
+    { p: '/search?q=shoes', spider: ['A', 'Disallow /search is a * rule, and SpiderBot only reads its own group.'], other: ['B', '/search matches the start of /search?q=shoes.'] },
+    { p: '/private/hr', spider: ['B', 'Disallow /private/ in SpiderBot’s group matches.'], other: ['A', 'Disallow /private/ is only in SpiderBot’s group. The * group says nothing about it.'] },
+    { p: '/private/press/launch', spider: ['A', 'Both /private/ and /private/press/ match. The longer rule wins, and it’s an Allow.'], other: ['A', 'The * group has no rule for /private at all.'] },
+    { p: '/blog/post-1', spider: ['A', 'Nothing matches /blog.'], other: ['A', 'Nothing matches /blog.'] },
+    { p: '/searching-tips', spider: ['A', 'SpiderBot ignores the * group’s /search rule.'], other: ['B', 'Rules are prefixes: /search matches the start of /searching-tips too.'] },
+    { p: '/CART/x', spider: ['A', 'Nothing in SpiderBot’s group matches.'], other: ['A', 'Paths are case-sensitive: /CART/ is not /cart/.'] },
+  ];
+  let bot = 'spider';
+  const picks = {}, done = { spider: false, other: false }, missed = { spider: false, other: false };
+  let dayShown = false, dayRan = false, quizShown = false;
+  const grid = $('#ugrid');
+  function render() {
+    grid.innerHTML = URLS.map((u, i) => `<div class="ucard" data-i="${i}"><span class="path"><small>shop.example</small>${Q.esc(u.p)}</span>
+      <div class="pick" role="group" aria-label="${Q.esc(u.p)}"><button data-v="A" aria-pressed="false">✓ Allowed</button><button data-v="B" aria-pressed="false">✕ Blocked</button></div><div class="why"></div></div>`).join('');
+    $$('.ucard', grid).forEach(card => {
+      const i = +card.dataset.i;
+      $$('.pick button', card).forEach(b => b.onclick = () => {
+        picks[i] = b.dataset.v;
+        $$('.pick button', card).forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); });
+        card.classList.remove('right', 'wrong');
+        $('#rbCheck').disabled = Object.keys(picks).length < URLS.length;
+      });
+    });
+    for (const k in picks) delete picks[k];
+    $('#rbCheck').disabled = true;
+    $('#gStar').className = 'grp ' + (bot === 'other' ? 'on' : 'off');
+    $('#gSpider').className = 'grp ' + (bot === 'spider' ? 'on' : 'off');
+  }
+  $$('#botSeg button').forEach(b => b.onclick = () => {
+    if (bot === b.dataset.b) return;
+    bot = b.dataset.b;
+    $$('#botSeg button').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); });
+    render();
+    logTo('rbLog', bot === 'spider' ? 'You are <b>SpiderBot</b>. There’s a group with your name, so that’s the only group you read.' : 'You are <b>OtherBot</b>. No group names you, so you fall back to the <b>*</b> group.');
+  });
+  $('#rbCheck').onclick = () => {
+    let wrong = 0;
+    $$('.ucard', grid).forEach(card => {
+      const u = URLS[+card.dataset.i], [ans, why] = u[bot];
+      const ok = picks[card.dataset.i] === ans;
+      card.classList.remove('right', 'wrong'); void card.offsetWidth;
+      card.classList.add(ok ? 'right' : 'wrong');
+      $('.why', card).textContent = (ok ? '' : `Should be ${ans === 'A' ? 'Allowed' : 'Blocked'}. `) + why;
+      if (!ok) wrong++;
+    });
+    const name = bot === 'spider' ? 'SpiderBot' : 'OtherBot';
+    if (!wrong) {
+      if (!done[bot]) { done[bot] = true; Q.addXP(15, $('#rbCheck')); }
+      $('#st' + (bot === 'spider' ? 'Spider' : 'Other')).textContent = `${name}: all 8 ✓`;
+      $('#st' + (bot === 'spider' ? 'Spider' : 'Other')).classList.add('done');
+      logTo('rbLog', `✓ All 8 right for ${name}.${done.spider && done.other ? '' : ' Now switch bots and do it again.'}`, 'g');
+      if (done.spider && done.other) showDay();
+    } else {
+      logTo('rbLog', `✗ ${wrong} of 8 wrong for ${name}. Read the red cards, fix them, and check again.`, 'e');
+      if (!missed[bot]) { missed[bot] = true; Q.loseHeart($('#rbCheck')); }
+    }
+  };
+  function showDay() {
+    if (dayShown) return; dayShown = true;
+    $('#dayPanel').classList.add('on');
+    setTimeout(() => $('#dayPanel').scrollIntoView({ behavior: Q.reduced ? 'auto' : 'smooth', block: 'nearest' }), 300);
+  }
+  $('#dayRun').onclick = async () => {
+    $('#dayRun').disabled = true;
+    ['#cPages', '#cNo', '#cYes'].forEach(s => $(s).textContent = '0');
+    await Promise.all([countUp($('#cPages'), 50000, 1600), countUp($('#cNo'), 50000, 1600), countUp($('#cYes'), 1, 300)]);
+    $('#dayRun').disabled = false; $('#dayRun').textContent = '↻ Run it again';
+    if (!dayRan) { dayRan = true; logTo('rbLog', 'Without a cache: 100,000 requests to shop.example today, half of them for the same small file. With a daily-refreshed cache: 50,001.', 'g'); }
+    if (!quizShown) {
+      quizShown = true;
+      quizChain($('#s1quiz'), [
+        { q: 'When should the crawler check a site’s robots.txt?',
+          options: ['Before it starts crawling that site', 'After it has downloaded each page', 'Only when the site returns an error'], correct: 0,
+          good: 'Read the house rules before you walk in. The book has the crawler check robots.txt first, then follow its rules.',
+          bad: 'The rules decide which pages you may fetch, so they must be read <b>before</b> crawling the site, not after.' },
+        { q: 'Why does the crawler cache robots.txt?',
+          options: ['To skip re-downloading it for every page', 'Because sites may delete the file later on', 'So that it can skip the rules when it’s busy'], correct: 0,
+          good: 'Fetching it before every page would double the requests to each site. Cache it and refresh it now and then.',
+          bad: 'The cache is about not downloading the same file again and again. You still obey it, and you refresh the cached copy periodically.' },
+      ], 1);
+    }
+  };
+  render();
+});
+
+/* ================= STAGE 2: distributed crawl ================= */
+Q.onStage(2, () => {
+  const goals = new Set();
+  const found = new Set();
+  const val = () => ({ s: +$('#srvR').value, t: +$('#thrR').value, f: +$('#fetR').value / 10 });
+  function upd() {
+    const { s, t, f } = val();
+    const r = s * t / f;
+    $('#srvV').textContent = s; $('#thrV').textContent = t; $('#fetV').textContent = f.toFixed(1) + ' s';
+    const big = $('#rate');
+    big.textContent = Math.round(r).toLocaleString('en-US');
+    big.className = 'big ' + (r >= 800 ? 'ok' : r >= 400 ? 'mid' : '');
+    $('#gfill').style.width = Math.min(100, r / 1600 * 100) + '%';
+  }
+  ['#srvR', '#thrR', '#fetR'].forEach(s => $(s).addEventListener('input', upd));
+  $('#saveSet').onclick = () => {
+    const { s, t, f } = val(), r = s * t / f, btn = $('#saveSet'), msg = $('#saveMsg');
+    if (Math.abs(f - 1) > 0.01) { msg.innerHTML = 'Set the fetch time back to <b>1.0 s</b> for the challenge. (Notice how much a slower fetch hurts, though.)'; Q.toast('fetch must be 1.0 s', btn, 'practice'); return; }
+    if (r < 800) { msg.innerHTML = `${Math.round(r)} pages/s is short of the 800 peak. You need servers × threads ≥ 800.`; Q.toast('not enough yet', btn, 'practice'); return; }
+    const key = `${s}×${t}`;
+    if (found.has(key)) { msg.textContent = 'You already saved that one. Find a different mix.'; return; }
+    found.add(key);
+    $('#found').insertAdjacentHTML('beforeend', `<span>${s} servers × ${t} threads = ${Math.round(r).toLocaleString('en-US')}/s</span>`);
+    checkGoal('#s2goals', found.size === 1 ? 'set1' : 'set2', goals, 10);
+    msg.innerHTML = found.size === 1 ? 'Nice. Now a <b>different</b> mix of servers and threads.' : `Two ways to ${s * t >= 1600 ? 'blow past' : 'hit'} the peak: more servers, or more threads per server. Each fetch takes 1 s, so you need about 800 fetches in flight at once.`;
+    maybeQuiz();
+  };
+  upd();
+
+  // host lanes
+  const HOSTS = ['wiki.example', 'news.example', 'shop.example', 'blog.example', 'maps.example', 'cats.example'];
+  const LANES = 4;
+  const laneOf = h => hash32('host:' + h) % LANES;
+  $('#lanes').innerHTML = Array.from({ length: LANES }, (_, i) => `<div class="lane"><span class="ln">downloader ${i + 1}</span><div class="tiles" data-l="${i}"></div></div>`).join('');
+  $('#hostkey').innerHTML = HOSTS.map((h, i) => `<span><i style="background:${SC(i)}"></i>${h}</span>`).join('');
+  let dealing = false;
+  $('#deal').onclick = async () => {
+    if (dealing) return; dealing = true; $('#deal').disabled = true;
+    $$('#lanes .tiles').forEach(t => t.innerHTML = '');
+    const batch = Array.from({ length: 12 }, (_, k) => { const hi = k < 6 ? k : Math.floor(Math.random() * HOSTS.length); return { hi, path: '/' + Math.random().toString(36).slice(2, 5) }; });
+    for (const u of shuffle(batch)) {
+      const lane = laneOf(HOSTS[u.hi]);
+      $(`#lanes .tiles[data-l="${lane}"]`).insertAdjacentHTML('beforeend', `<span class="ut new" style="background:${SC(u.hi)}" title="${HOSTS[u.hi]}${u.path}">${HOSTS[u.hi].split('.')[0]}${u.path}</span>`);
+      await sleep(Q.reduced ? 0 : 120);
+    }
+    $('#dealMsg').innerHTML = 'Same host, same lane, every time. Each colour sits in exactly one row.';
+    dealing = false; $('#deal').disabled = false; $('#deal').textContent = '🂠 Deal again';
+    if (checkGoal('#s2goals', 'deal', goals, 10)) maybeQuiz();
+  };
+
+  let quizShown = false;
+  function maybeQuiz() {
+    if (quizShown || goals.size < 3) return;
+    quizShown = true;
+    setTimeout(() => quizChain($('#s2quiz'), [
+      { q: 'You run 10 servers × 50 threads, and each fetch takes 0.5 s. Roughly how many pages per second?',
+        options: ['About 250 pages/s', 'About 500 pages/s', 'About 1,000 pages/s', 'About 2,500 pages/s'], correct: 2,
+        good: '500 threads, each finishing 2 fetches a second (1 ÷ 0.5 s) = 1,000 pages/s. That clears the 800 peak.',
+        bad: '10 × 50 = 500 threads. Each one finishes a fetch every 0.5 s, so 2 per second: 500 × 2 = <b>1,000 pages/s</b>.' },
+    ], 2), 400);
+  }
+});
+
+/* ================= STAGE 3: DNS, locality, timeout ================= */
+Q.onStage(3, () => {
+  const HOSTS = [
+    { h: 'news', dns: .06 }, { h: 'wiki', dns: .04 }, { h: 'shop', dns: .12 }, { h: 'blog', dns: .09 }, { h: 'docs', dns: .15 },
+    { h: 'tokyo.jp', far: 1, dns: .18 }, { h: 'loja.br', far: 1, dns: .2 }, { h: 'void-1', dead: 1, dns: .1 }, { h: 'void-2', dead: 1, dns: .08 }];
+  const SEQ = [0, 1, 7, 2, 5, 8, 3, 0, 4, 6, 1, 2, 5, 0, 3, 6, 4, 1, 2, 0, 5, 3, 6, 1, 4, 2, 0, 5, 3, 1, 6, 2, 4, 0, 5, 1, 3, 6, 2, 4];
+  const NT = 8;
+  const on = { dns: false, local: false, timeout: false };
+  const goals = new Set();
+  let predicted = false, quizShown = false;
+  function sim() {
+    const th = Array(NT).fill(0), segs = [];
+    let rf = 0, lookups = 0, live = 0;
+    const ready = {};
+    for (const hi of SEQ) {
+      const host = HOSTS[hi];
+      let k = 0; for (let i = 1; i < NT; i++) if (th[i] < th[k]) k = i;
+      let t = th[k];
+      if (on.dns && ready[hi] !== undefined) {
+        if (ready[hi] > t) { segs.push([k, t, ready[hi], 'wait']); t = ready[hi]; }
+      } else {
+        const s = Math.max(t, rf); // one synchronous resolver: lookups queue behind each other
+        if (s > t) segs.push([k, t, s, 'wait']);
+        const e = s + host.dns; segs.push([k, s, e, 'dns']); rf = e; t = e; lookups++;
+        if (on.dns) ready[hi] = e;
+      }
+      if (host.dead) { const w = on.timeout ? 5 : 60; segs.push([k, t, t + w, 'dead']); t += w; }
+      else {
+        const far = host.far && !on.local;
+        const n = far ? 1.0 : .2, d = far ? 2.0 : .8;
+        segs.push([k, t, t + n, 'net']); t += n; segs.push([k, t, t + d, 'dl']); t += d; live = Math.max(live, t);
+      }
+      th[k] = t;
+    }
+    const tot = { dns: 0, wait: 0, net: 0, dl: 0, dead: 0 };
+    segs.forEach(s => tot[s[3]] += s[2] - s[1]);
+    return { segs, total: Math.max(...th), live, lookups, tot };
+  }
+  // x scale: linear up to 14 s; beyond that the axis is broken and squeezed into the last 14%
+  const BRK = 14;
+  let scale;
+  function makeScale(total) {
+    if (total <= BRK) { const end = Math.max(8, Math.ceil(total + .5)); return { x: t => t / end * 100, ticks: Array.from({ length: Math.floor(end / 2) + 1 }, (_, i) => i * 2), end, brk: null }; }
+    const L = 86;
+    return { x: t => t <= BRK ? t / BRK * L : L + (t - BRK) / (total - BRK) * (100 - L), ticks: [0, 2, 4, 6, 8, 10, 12, 14], end: total, brk: L };
+  }
+  $('#tl').innerHTML = Array.from({ length: NT }, (_, i) => `<div class="trow"><span class="tn">T${i + 1}</span><div class="track" data-t="${i}"></div></div>`).join('');
+  const segEls = [];
+  function draw() {
+    const r = sim();
+    scale = makeScale(r.total);
+    // reuse segment elements so widths animate
+    r.segs.forEach((s, i) => {
+      let el = segEls[i];
+      const tr = $(`#tl .track[data-t="${s[0]}"]`);
+      if (!el) { el = document.createElement('div'); segEls[i] = el; }
+      if (el.parentNode !== tr) tr.appendChild(el);
+      el.className = 'sg ' + s[3];
+      el.style.left = scale.x(s[1]) + '%';
+      el.style.width = Math.max(.15, scale.x(s[2]) - scale.x(s[1])) + '%';
+      el.title = `${s[3]} ${s[1].toFixed(2)}–${s[2].toFixed(2)} s`;
+    });
+    for (let i = r.segs.length; i < segEls.length; i++) segEls[i].remove();
+    segEls.length = r.segs.length;
+    $$('#tl .brk').forEach(b => b.remove());
+    if (scale.brk) $$('#tl .track').forEach(tr => tr.insertAdjacentHTML('beforeend', `<div class="brk" style="left:${scale.brk}%"></div>`));
+    const ticks = scale.ticks.map(t => `<span style="left:${scale.x(t)}%">${t}s</span>`);
+    if (scale.brk) ticks.push(`<span style="left:${Math.min(97, scale.x(r.total))}%">${r.total.toFixed(0)}s</span>`);
+    $('#axis').innerHTML = ticks.join('');
+    const T = $('#roTotal'), L = $('#roLive'), D = $('#roDns');
+    T.textContent = r.total.toFixed(1) + ' s'; T.className = r.total > 30 ? 'bad' : r.total < 8 ? 'good' : '';
+    L.textContent = r.live.toFixed(1) + ' s'; L.className = r.live < 8 ? 'good' : '';
+    D.textContent = r.lookups; D.className = r.lookups < 20 ? 'good' : '';
+    const sum = Object.values(r.tot).reduce((a, b) => a + b, 0);
+    const cols = { dns: 'var(--dns)', wait: 'var(--dnswait)', net: 'var(--net)', dl: 'var(--dl)', dead: 'var(--dead)' };
+    $('#shareBar').innerHTML = Object.entries(r.tot).map(([k, v]) => `<div style="width:${v / sum * 100}%;background:${cols[k]}" title="${k}: ${v.toFixed(1)} thread-seconds"></div>`).join('');
+    return r;
+  }
+  function msg(r, changed) {
+    const parts = [];
+    if (changed === 'dns') parts.push(on.dns ? `DNS cache on: lookups 40 → ${r.lookups}, one per host. A synchronous lookup blocks; caching removes the wait from most fetches.` : 'DNS cache off: every page needs a lookup again, and threads queue behind each other.');
+    if (changed === 'local') parts.push(on.local ? 'Regional crawlers on: the Japan and Brazil pages now cost the same as nearby ones.' : 'Regional crawlers off: far pages pay long round trips again.');
+    if (changed === 'timeout') parts.push(on.timeout ? 'Timeout on: each black hole now costs 5 s, then that thread moves on to other pages.' : 'Timeout off: two threads hang on the black holes for 60 s.');
+    if (!on.timeout && changed !== 'timeout') parts.push(`The finish line is still ${r.total.toFixed(0)} s: the two hung threads set it.`);
+    return parts.join(' ') + ` Total ${r.total.toFixed(1)} s.`;
+  }
+  $$('.tg').forEach(b => b.onclick = () => {
+    if (!predicted) return;
+    const k = b.dataset.t;
+    on[k] = !on[k]; b.setAttribute('aria-pressed', on[k]);
+    const r = draw();
+    logTo('tlLog', msg(r, k), on[k] ? 'g' : '');
+    if (on[k]) checkGoal('#s3goals', k, goals, 5);
+    if (on.dns && on.local && on.timeout && checkGoal('#s3goals', 'all', goals, 10)) logTo('tlLog', `All three on: ${r.total.toFixed(1)} s, down from 60.6 s. The bars are short and mostly green: threads spend their time downloading.`, 'g');
+    maybeQuiz();
+  });
+  const base = draw();
+  logTo('tlLog', `No speed-ups: all 40 pages handled at ${base.total.toFixed(1)} s, with ${base.lookups} DNS lookups.`);
+
+  function runPredict() {
+    const box = $('#tlPredict');
+    const OPTS = ['DNS cache', 'Regional crawlers', 'Timeout = 5 s'], correct = 2;
+    box.innerHTML = `<div class="step">Predict first</div><h3>Which <b>one</b> toggle will cut the total time the most for this workload?</h3><div class="opts"></div><div class="explain"></div>`;
+    OPTS.forEach((o, i) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o;
+      b.onclick = () => {
+        $$('.opt', box).forEach(x => x.disabled = true);
+        const ok = i === correct;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $$('.opt', box)[correct].classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Look at the grey.</b> ') + 'Two threads sit on the black holes for 60 s each: that grey chunk is bigger than all the DNS and distance costs put together. Until something cuts it off, nothing else can move the finish line. Now flip the toggles one at a time and check.';
+        ok ? Q.addXP(20, b) : Q.loseHeart(b);
+        predicted = true;
+        $$('.tg').forEach(t => t.disabled = false);
+        logTo('tlLog', 'Toggles unlocked. Try them one at a time.');
+      };
+      $('.opts', box).appendChild(b);
+    });
+  }
+  runPredict();
+
+  function maybeQuiz() {
+    if (quizShown || goals.size < 4) return;
+    quizShown = true;
+    setTimeout(() => quizChain($('#s3quiz'), [
+      { q: 'Per the book, roughly how long does one DNS lookup take?', xp: 15,
+        options: ['About 10 to 200 milliseconds', 'About 1 to 2 microseconds', 'About 2 to 5 whole seconds'], correct: 0,
+        good: 'The book gives 10 ms to 200 ms per lookup. Tiny for one page, huge when you fetch hundreds of pages a second.',
+        bad: 'The book’s number is <b>10 to 200 ms</b> per lookup. Microseconds would be harmless; seconds would be a broken resolver.' },
+      { q: 'Why does a slow DNS lookup hurt more than just its own time?', xp: 15,
+        options: ['A synchronous lookup can block other threads', 'DNS answers are larger than the page itself', 'Every lookup restarts the whole crawl job'], correct: 0,
+        good: 'Many DNS interfaces are synchronous, so other threads can sit blocked until the first lookup finishes. That’s the striped purple in the timeline.',
+        bad: 'The problem is blocking: with a synchronous resolver, other threads wait until the first lookup finishes. That’s the striped purple in the timeline.' },
+      { q: 'A host hasn’t answered in 30 seconds. What should the crawler do?', xp: 15,
+        options: ['Give up on it and crawl other pages', 'Keep waiting, since it will answer soon', 'Restart the whole downloader server'], correct: 0,
+        good: 'That’s the short timeout: stop the job and crawl something else. You can retry the host later, with back-off.',
+        bad: 'Waiting ties up a thread that could fetch other pages. The book’s fix is a maximum wait: give up on that page and crawl something else.' },
+    ], 3), 400);
+  }
+});
+
+/* ================= STAGE 4: robustness ================= */
+Q.onStage(4, () => {
+  const SV = [{ id: 0, n: 'A', pos: 30 }, { id: 1, n: 'B', pos: 120 }, { id: 2, n: 'C', pos: 205 }, { id: 3, n: 'D', pos: 290 }];
+  const HP = [302, 322, 348, 12, 44, 66, 88, 104, 136, 158, 176, 194, 218, 241, 262, 281];
+  const HN = ['news', 'wiki', 'shop', 'blog', 'maps', 'cats', 'docs', 'jobs', 'food', 'game', 'tech', 'arts', 'cars', 'film', 'golf', 'hike'];
+  const HOSTS = HP.map((p, i) => ({ i, name: HN[i] + '.example', pos: p, h: hash32('h:' + HN[i]) }));
+  const cx = 200, cy = 200, R = 150;
+  const svg = $('#ring');
+  let alive = [1, 1, 1, 1];
+  const owners = new Map();
+  svg.innerHTML = '';
+  S('circle', { class: 'base', cx, cy, r: R }, svg);
+  const bandsG = S('g', {}, svg), hostG = S('g', {}, svg), srvG = S('g', {}, svg), fxG = S('g', {}, svg);
+  const cBig = S('text', { x: 200, y: 200, class: 'cbig' }, svg), cSmall = S('text', { x: 200, y: 224, class: 'csmall' }, svg);
+  const hEl = HOSTS.map(h => { const [x, y] = pt(cx, cy, R, h.pos); const c = S('circle', { class: 'hdot', cx: f2(x), cy: f2(y), r: 8 }, hostG); S('title', {}, c).textContent = h.name; return { c, x, y }; });
+  const sEl = SV.map(s => { const [x, y] = pt(cx, cy, R, s.pos); const g = S('g', { class: 'srv' }, srvG); const c = S('circle', { cx: f2(x), cy: f2(y), r: 18 }, g); c.style.fill = SC(s.id); S('text', { x: f2(x), y: f2(y) }, g).textContent = s.n; return g; });
+  const live = () => SV.filter(s => alive[s.id]).sort((a, b) => a.pos - b.pos);
+  const ownerOf = p => { const l = live(); return l.find(s => s.pos >= p) || l[0]; };
+  function render() {
+    bandsG.innerHTML = '';
+    const l = live();
+    l.forEach((s, i) => { const prev = l[(i - 1 + l.length) % l.length].pos; const p = S('path', { class: 'band', d: arcD(cx, cy, R, prev, s.pos) }, bandsG); p.style.stroke = SC(s.id); });
+    const moved = [];
+    HOSTS.forEach(h => { const o = ownerOf(h.pos).id; if (owners.has(h.i) && owners.get(h.i) !== o) moved.push(h); owners.set(h.i, o); hEl[h.i].c.style.fill = SC(o); });
+    SV.forEach(s => sEl[s.id].classList.toggle('down', !alive[s.id]));
+    moved.forEach(h => { const o = hEl[h.i]; const c = S('circle', { class: 'halo', cx: f2(o.x), cy: f2(o.y), r: 9 }, fxG); setTimeout(() => c.remove(), 1400); });
+    const count = l.length;
+    cBig.textContent = '16 hosts'; cSmall.textContent = `${count} downloader${count === 1 ? '' : 's'}`;
+    return moved;
+  }
+  const W = { 0: 'ok', 1: 'ok', 2: 'ok', 3: 'ok' };
+  function workers() {
+    $('#workers').innerHTML = SV.map(s => {
+      const st = W[s.id];
+      const lab = { ok: 'crawling', warn: '1 skipped', dead: 'crashed', off: 'down' }[st];
+      return `<div class="wk ${st === 'ok' ? '' : st}">dl-${s.n}<small>${lab}</small></div>`;
+    }).join('');
+  }
+  const CK = [10, 20, 30, 40, 50, 60];
+  let prog = 64, lastCk = 60;
+  function progRender() {
+    $('#progF').style.width = prog + '%';
+    $('#progT').querySelectorAll('.ck').forEach(c => c.remove());
+    CK.forEach(c => $('#progT').insertAdjacentHTML('beforeend', `<div class="ck${c === lastCk ? ' last' : ''}" style="left:${c}%"></div>`));
+    $('#progTxt').textContent = `${prog}% · last checkpoint ${lastCk}%`;
+  }
+
+  const SHIELDS = [
+    { k: 'hash', label: '🔁 Consistent hashing' },
+    { k: 'state', label: '💾 Saved crawl state' },
+    { k: 'exc', label: '🧯 Exception handling' },
+    { k: 'valid', label: '🚪 Data validation' },
+  ];
+  const EV = [
+    { k: 'crash', e: '💥', b: 'Downloader D crashes', t: 'Downloader D drops off the network', d: 'D was crawling its own slice of the hosts. Those hosts need a new home, fast, without upsetting everyone else.', a: 'hash',
+      fail: 'Nothing gives D’s hosts a clean new home. If hosts were mapped with <code>hash % N</code>, going from 4 servers to 3 reshuffles most of them, and every downloader drops its per-host queues and starts over.',
+      play: async () => {
+        alive[3] = 0; W[3] = 'off'; workers();
+        const m = render();
+        logTo('chLog', `💥 D is down. Only D’s ${m.length} hosts moved, all to ${'A'} (the next server clockwise). The other 12 didn’t budge.`, 'g');
+        const modMoved = HOSTS.filter(h => h.h % 4 !== h.h % 3);
+        $('#cmp').innerHTML = `<b>Same crash, two ways of assigning hosts</b>
+          <div class="small" style="margin-top:6px">Hash ring: <b class="mono">${m.length} / 16</b> hosts moved</div>
+          <div class="cells">${HOSTS.map(h => `<i class="${m.includes(h) ? 'mv' : ''}" title="${h.name}"></i>`).join('')}</div>
+          <div class="row"><button class="btn" id="cmpMod">Show hash % N instead</button></div>
+          <div id="cmpModOut" style="display:none"><div class="small" style="margin-top:8px"><code>hash(host) % N</code>, N going 4 → 3: <b class="mono">${modMoved.length} / 16</b> hosts moved</div>
+          <div class="cells">${HOSTS.map(h => `<i class="${modMoved.includes(h) ? 'mv' : ''}" title="${h.name}"></i>`).join('')}</div>
+          <div class="small muted">Only hosts whose hash leaves the same remainder for 4 and for 3 stay put: about 1 in 4.</div></div>`;
+        $('#cmp').classList.add('on');
+        $('#cmpMod').onclick = () => { $('#cmpModOut').style.display = 'block'; $('#cmpMod').disabled = true; };
+      } },
+    { k: 'power', e: '🔌', b: 'Power cut to the cluster', t: 'Power cut to the whole cluster', d: 'Every downloader goes dark at once, 64% of the way through a week-long crawl. The frontier and the seen-URL set lived in memory.', a: 'state',
+      fail: 'With nothing saved to disk, the frontier and the record of which URLs were already seen are gone. The crawl starts again at 0%: six days of work lost.',
+      play: async () => {
+        $('#progT').classList.add('dark'); [0, 1, 2, 3].forEach(i => W[i] = alive[i] ? 'off' : W[i]); workers();
+        logTo('chLog', '🔌 Power cut. Everything is dark…', 'w');
+        await sleep(Q.reduced ? 0 : 900);
+        $('#progT').classList.remove('dark'); [0, 1, 2, 3].forEach(i => { if (alive[i]) W[i] = 'ok'; }); workers();
+        prog = lastCk; progRender();
+        logTo('chLog', `💾 Power back. Loaded the saved state from the ${lastCk}% checkpoint. Only the work since then is redone.`, 'g');
+        await sleep(Q.reduced ? 0 : 900);
+        prog = 66; lastCk = 60; progRender();
+      } },
+    { k: 'garbage', e: '🗑️', b: '3 MB of binary garbage', t: 'A page of binary garbage', d: 'A server sends 3 MB of random bytes labelled <code>text/html</code>. The HTML parser on dl-B throws an error halfway through.', a: 'exc',
+      fail: 'A check at the door might catch some junk, but this error happens inside the parser. Nobody catches it, so the whole dl-B worker process dies, along with the hundreds of other pages it was fetching.',
+      play: async () => {
+        W[1] = alive[1] ? 'warn' : W[1]; workers();
+        logTo('chLog', '🧯 dl-B: parse error on 1 page → caught, logged, page marked failed. The worker keeps crawling.', 'g');
+        await sleep(Q.reduced ? 0 : 1400);
+        if (alive[1]) W[1] = 'ok'; workers();
+      } },
+    { k: 'longurl', e: '📏', b: 'A 9,000-character URL', t: 'A 9,000-character "URL"', d: 'The link extractor hands the frontier a URL that is 9,000 characters of nonsense, with spaces and control characters in it.', a: 'valid',
+      fail: 'Nothing checks it, so the junk flows into the frontier and the URL storage. Later a component that assumed sane, short URLs chokes on it, far from where the bad data came in.',
+      play: async () => { logTo('chLog', '🚪 Validator: URL too long and not well-formed → rejected before it reached the frontier. Nothing downstream ever saw it.', 'g'); } },
+  ];
+  const goals = new Set();
+  let busy = false, quizShown = false;
+  function buttons() {
+    $('#chaosBtns').innerHTML = EV.map(e => `<button class="cbtn${goals.has(e.k) ? ' done' : ''}" data-k="${e.k}"><span class="e">${e.e}</span><span>${e.b}${goals.has(e.k) ? ' ✓' : ''}</span></button>`).join('');
+    $$('#chaosBtns .cbtn').forEach(b => b.onclick = () => openEv(b.dataset.k));
+  }
+  function openEv(k) {
+    if (busy) return;
+    const ev = EV.find(e => e.k === k);
+    if (ev.k === 'crash' && !alive[3]) { Q.toast('D is already down: reset first', $(`#chaosBtns [data-k="crash"]`), 'practice'); return; }
+    $$('#chaosBtns .cbtn').forEach(b => b.classList.toggle('cur', b.dataset.k === k));
+    let missed = false;
+    const box = $('#chBox');
+    box.innerHTML = `<div class="step">Chaos event</div><h3>${ev.e} ${ev.t}</h3><p class="small" style="margin:0">${ev.d}</p><div class="shields">${shuffle(SHIELDS).map(s => `<button class="opt" data-s="${s.k}">${s.label}</button>`).join('')}</div><div class="explain"></div>`;
+    box.scrollIntoView({ behavior: Q.reduced ? 'auto' : 'smooth', block: 'nearest' });
+    $$('.shields .opt', box).forEach(b => b.onclick = async () => {
+      if (busy) return;
+      const ok = b.dataset.s === ev.a, ex = $('.explain', box);
+      if (!ok) {
+        b.disabled = true; b.classList.add('wrong');
+        ex.className = 'explain show bad'; ex.innerHTML = `<b>That shield doesn’t cover this.</b> ${ev.fail} Try another shield.`;
+        if (ev.k === 'garbage' && alive[1]) { W[1] = 'dead'; workers(); }
+        if (ev.k === 'power') { prog = 0; progRender(); setTimeout(() => { prog = 64; progRender(); }, Q.reduced ? 0 : 1200); }
+        if (!missed) { missed = true; Q.loseHeart(b); }
+        return;
+      }
+      busy = true;
+      $$('.shields .opt', box).forEach(x => x.disabled = true);
+      b.classList.add('right');
+      ex.className = 'explain show good'; ex.innerHTML = '<b>Shield up.</b> Watch it play out.';
+      if (ev.k === 'garbage' && alive[1]) { W[1] = 'ok'; workers(); }
+      await ev.play();
+      ex.innerHTML = { crash: '<b>Consistent hashing.</b> D’s arc of the ring now belongs to A, the next server clockwise. Only D’s hosts moved: about a quarter. Compare with <code>% N</code> below.',
+        power: '<b>Saved crawl state.</b> Because state and data were written to storage at checkpoints, the crawl reloads them and carries on. You lose minutes, not days.',
+        garbage: '<b>Exception handling.</b> One page failed, one log line was written, and the worker moved on. Errors are normal at web scale, so they must never crash the system.',
+        longurl: '<b>Data validation.</b> Bad data is cheapest to stop at the door. Checking at each step keeps one weird input from turning into a system error later.' }[ev.k];
+      const first = !goals.has(ev.k);
+      if (first) { goals.add(ev.k); const li = $(`#s4goals [data-g="${ev.k}"]`); li.classList.add('done'); if (!missed) Q.addXP(10, li); }
+      busy = false;
+      buttons();
+      if (goals.size === 4 && !quizShown) {
+        quizShown = true;
+        setTimeout(() => quizChain($('#s4quiz'), [
+          { q: 'With consistent hashing, removing one of 4 downloader servers moves roughly what share of the hosts?',
+            options: ['About a quarter of them', 'About half of them', 'Nearly all of them'], correct: 0,
+            good: 'Only the failed server’s own slice moves, so about 1/4. With <code>hash % N</code> going from 4 to 3, nearly all hosts would move.',
+            bad: 'On a ring only the removed server’s slice moves: about 1/4 of the hosts. “Nearly all” is what <code>hash % N</code> does.' },
+          { q: 'What does saving crawl state and data buy you?',
+            options: ['A crash resumes from the last save', 'Every page downloads a bit faster', 'robots.txt never needs re-reading'], correct: 0,
+            good: 'A crashed or interrupted crawl restarts by loading the saved state and data, instead of starting from zero.',
+            bad: 'It’s about recovery, not speed: a disrupted crawl reloads its saved state and data and carries on from there.' },
+        ], 4), 600);
+      }
+    });
+  }
+  $('#chReset').onclick = () => {
+    if (busy) return;
+    alive = [1, 1, 1, 1]; [0, 1, 2, 3].forEach(i => W[i] = 'ok'); prog = 64; lastCk = 60;
+    render(); workers(); progRender(); buttons();
+    $('#chBox').innerHTML = ''; $('#cmp').classList.remove('on');
+    logTo('chLog', '↻ Cluster reset: 4 downloaders, crawl at 64%.');
+  };
+  render(); workers(); progRender(); buttons();
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss'), {
+  name: '🐌 Slow Web Gauntlet',
+  xp: 10,
+  choices: [
+    { k: 'robots', label: 'robots.txt', sub: 'house rules, cached' },
+    { k: 'speed', label: 'Speed-up', sub: 'distribute · DNS · local · timeout' },
+    { k: 'robust', label: 'Robustness', sub: 'hashing · state · errors · checks' },
+  ],
+  scenarios: [
+    { e: '⏳', t: 'Stuck on name lookups', d: 'Profiling shows crawler threads spend 40% of their time waiting for DNS answers.', a: 'speed', why: '<b>Cache DNS.</b> Each lookup costs 10–200 ms and often blocks other threads. Keep a host → IP cache so most fetches skip the lookup.' },
+    { e: '😠', t: 'An angry site owner', d: 'A site owner says we crawled their /admin/ pages, which their file asks bots to stay out of.', a: 'robots', why: 'Read and obey robots.txt <b>before</b> crawling a site. A Disallow on /admin/ means we never fetch those paths.' },
+    { e: '📨', t: 'Twice the requests', d: 'We download robots.txt before every single page, which doubles our request count to every site.', a: 'robots', why: '<b>Cache robots.txt</b> per site and refresh it periodically (RFC 9309 suggests at least once a day), instead of fetching it per page.' },
+    { e: '🗾', t: 'Slow from far away', d: 'Crawling Japanese sites from a US data centre is painfully slow.', a: 'speed', why: '<b>Locality.</b> Put crawl servers in or near Asia. Shorter distance, fewer slow round trips, faster downloads.' },
+    { e: '➕', t: 'One new server, total chaos', d: 'We add a single downloader server, and every host gets reassigned to a different one.', a: 'robust', why: 'That’s <code>hash % N</code>. Use <b>consistent hashing</b>: a new server takes over one slice, and every other host stays put.' },
+    { e: '📅', t: 'Back to day zero', d: 'A week-long crawl crashed on day 6 and restarted from nothing.', a: 'robust', why: '<b>Save crawl state and data</b> to storage as you go, so a crashed crawl reloads its state and resumes.' },
+    { e: '🕳️', t: 'Hosts that never answer', d: 'A handful of hosts never respond and tie up threads for minutes at a time.', a: 'speed', why: '<b>Short timeout.</b> Set a maximum wait. Past it, drop that page, crawl something else, and retry the host later.' },
+    { e: '☠️', t: 'One page kills a worker', d: 'A malformed response makes the whole worker process crash.', a: 'robust', why: '<b>Exception handling.</b> Catch the error for that one page, log it, and move on. Validating data at each step helps too.' },
+  ],
+  outro: 'Rules first (robots.txt, cached). Speed from spreading out, caching DNS, going local and timing out. Survival from hashing, checkpoints, catching errors and validating input.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: drill ================= */
+Q.onStage(6, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"How do you make the downloader fast without being rude, and what keeps it alive when things break?"</i>',
+  placeholder: 'First, it reads robots.txt…',
+  model: '"Before crawling a site, the downloader reads its robots.txt and obeys the disallowed paths. We cache that file and refresh it periodically, so we don\'t fetch it for every page. For speed: distribute the crawl over many servers with many threads each, partitioning URLs by host. Cache DNS, because a lookup takes 10 to 200 milliseconds and is often synchronous, so it blocks threads. Put crawlers in several regions, close to the sites. And use short timeouts so dead servers don\'t tie up threads. For robustness: consistent hashing assigns hosts to downloader servers, so adding or losing one only moves a slice. We checkpoint crawl state and data, so a crash resumes instead of restarting. We handle exceptions per page, so one bad response can\'t crash the system. And we validate data at each step."',
+  checks: ['robots.txt is checked first, and cached', 'All four speed-ups, with the DNS 10–200 ms number', 'All four robustness measures', 'Consistent hashing moves only a slice of hosts'],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

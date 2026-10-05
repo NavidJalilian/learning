@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Push, Pull, or Both</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: push (blue) / pull (orange) colours, social graphs, meters, sort board, histogram dial */
+:root { --push: #2f6fd8; --push-soft: #e2ecfc; --pull: #d9730d; --pull-soft: #fdeedd; --sleep: #a7a3b3; --on-c: #ffffff; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --push: #6ea8ff; --push-soft: #172846; --pull: #ffa04d; --pull-soft: #3a2611; --sleep: #5b5874; --on-c: #0e0f1d; }
+}
+:root[data-theme="dark"] { --push: #6ea8ff; --push-soft: #172846; --pull: #ffa04d; --pull-soft: #3a2611; --sleep: #5b5874; --on-c: #0e0f1d; }
+
+.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.bignum { font-family: var(--mono); font-weight: 700; }
+.bignum.bad { color: var(--bad); }
+.bignum.good { color: var(--good); }
+.bignum.warn { color: var(--warn); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+/* social graphs (stages 1 and 2) */
+.graph svg { max-width: 460px; margin: 0 auto; }
+.graph .edge { stroke: var(--line); stroke-width: 2; }
+.graph .edge.on { stroke: var(--accent); stroke-dasharray: 5 5; }
+.graph .nd circle { fill: var(--push); stroke: var(--bg); stroke-width: 3; transition: fill .4s; }
+.graph .nd.zz circle { fill: var(--sleep); }
+.graph .nd.me circle { fill: var(--accent); }
+.graph .nd.star circle { fill: var(--pull); }
+.graph .nd text.nm { fill: var(--on-c); font: 700 12px var(--font); text-anchor: middle; dominant-baseline: central; }
+.graph .nd.me text.nm { font-size: 14px; }
+.graph .zzz { fill: var(--muted); font: 700 11px var(--mono); }
+.graph .fbox { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; transition: fill .4s, stroke .4s; }
+.graph .fbox.hit { stroke: var(--accent); stroke-width: 2.5; }
+.graph .flabel { fill: var(--muted); font: 600 10px var(--mono); text-anchor: middle; dominant-baseline: central; }
+.graph .chip rect { fill: var(--push); }
+.graph .chip.pull rect { fill: var(--pull); }
+.graph .chip.waste rect { fill: var(--bad); }
+.graph .chip text { fill: var(--on-c); font: 700 10px var(--mono); text-anchor: middle; dominant-baseline: central; }
+.graph .sub { fill: var(--muted); font: 600 11px var(--font); text-anchor: middle; }
+.graph .ring { fill: none; stroke: var(--good); stroke-width: 3; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+@media (max-width: 560px) { .stats { grid-template-columns: 1fr; } }
+.stat { font-size: 13px; color: var(--muted); }
+.stat b { display: block; font-family: var(--mono); font-size: 18px; color: var(--ink); }
+.stat b.bad { color: var(--bad); }
+.stat b.good { color: var(--good); }
+
+/* meters */
+.meter { margin: 8px 0; }
+.meter .lab { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 4px; }
+.meter .lab b { color: var(--ink); font-family: var(--mono); }
+.track { position: relative; height: 16px; border-radius: 8px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; }
+.track .fill { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 7px; background: var(--push); transition: width .3s; }
+.track .fill.pull { background: var(--pull); }
+.track .fill.bad { background: var(--bad); }
+.track .zone { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--good) 22%, transparent); border-left: 2px solid var(--good); border-right: 2px solid var(--good); }
+.track .needle { position: absolute; top: -2px; bottom: -2px; width: 4px; margin-left: -2px; border-radius: 2px; background: var(--ink); transition: left .25s; }
+.track .mark { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--good); }
+
+/* stage 1: Cleo panel */
+.cleo { display: none; padding: 12px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+.cleo.on { display: block; animation: rise .35s; }
+.shards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; }
+.shard { border: 1px solid var(--line); border-radius: 10px; padding: 6px; text-align: center; font: 600 11px var(--mono); color: var(--muted); background: var(--bg); transition: background .3s, border-color .3s; }
+.shard .track { height: 10px; margin-top: 4px; }
+.shard.hot { border-color: var(--bad); background: var(--bad-soft); color: var(--bad); }
+
+/* stage 2: merge strip + slider */
+.mstrip { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); min-height: 50px; align-items: center; }
+.mstrip .lbl { font-size: 13px; font-weight: 700; color: var(--muted); margin-right: 4px; }
+.pc { font: 600 12px var(--mono); padding: 5px 8px; border-radius: 8px; background: var(--push-soft); border: 1px solid var(--push); color: var(--ink); animation: rise .3s; white-space: nowrap; }
+.pc.pull { background: var(--pull-soft); border-color: var(--pull); }
+.slider { display: grid; gap: 4px; margin-top: 10px; }
+.slider label { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-weight: 600; font-size: 14px; }
+.slider input { width: 100%; height: 32px; accent-color: var(--accent); }
+.lab2 { display: none; margin-top: 16px; }
+.lab2.on { display: block; animation: rise .35s; }
+
+/* stage 3: sort board */
+.pool { display: flex; flex-wrap: wrap; gap: 8px; min-height: 48px; padding: 12px; border: 2px dashed var(--line); border-radius: 14px; }
+.pool:empty::after { content: "All cards placed."; color: var(--muted); font-size: 14px; }
+.tcard { text-align: left; border: 2px solid var(--line); background: var(--panel); border-radius: 12px; padding: 9px 12px; font-size: 14px; font-weight: 500; min-height: 44px; max-width: 100%; transition: border-color .2s, transform .1s, background .2s; touch-action: manipulation; }
+.tcard:hover { border-color: var(--accent); }
+.tcard.sel { border-color: var(--accent); background: var(--accent-soft); transform: translateY(-2px); }
+.tcard.bounce { border-color: var(--bad); background: var(--bad-soft); animation: shake .4s; }
+.tcard.placed { cursor: default; font-size: 13px; padding: 7px 9px; min-height: 0; border-width: 1px; width: 100%; }
+.board { display: grid; grid-template-columns: 56px 1fr 1fr; gap: 8px; margin-top: 14px; }
+.board .hd { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); text-align: center; align-self: end; }
+.board .rh { font-weight: 700; display: grid; place-items: center; border-radius: 12px; font-size: 14px; writing-mode: vertical-rl; transform: rotate(180deg); }
+.board .rh.push { background: var(--push-soft); color: var(--push); }
+.board .rh.pull { background: var(--pull-soft); color: var(--pull); }
+.cell { cursor: pointer; min-height: 120px; border: 2px dashed var(--line); border-radius: 12px; padding: 8px; display: flex; flex-direction: column; gap: 6px; align-items: stretch; background: var(--bg); text-align: left; font-size: 12px; color: var(--muted); transition: border-color .2s, background .2s; }
+.cell.ready { border-color: var(--accent); background: var(--accent-soft); }
+.cell.over { border-color: var(--accent); border-style: solid; }
+.cell .ct { font-weight: 700; }
+.cell.full { border-style: solid; border-color: var(--good); }
+@media (max-width: 520px) { .board { grid-template-columns: 34px 1fr 1fr; gap: 6px; } .cell { padding: 6px; } .tcard.placed { font-size: 12px; padding: 6px; } }
+
+/* stage 4: calc + dial */
+.calc { display: grid; gap: 14px; }
+.calc .q { font-weight: 600; margin: 0 0 8px; }
+.calc input { font: 600 16px var(--mono); padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); width: 200px; max-width: 100%; }
+.calc .msg { font-size: 14px; margin-top: 8px; min-height: 20px; }
+.calc .msg.good { color: var(--good); }
+.calc .msg.bad { color: var(--bad); }
+.calc .done input { border-color: var(--good); }
+.hist svg { max-width: 640px; margin: 0 auto; touch-action: pan-y; }
+.hist .axis { stroke: var(--line); stroke-width: 1.5; }
+.hist .tl { fill: var(--muted); font: 600 11px var(--mono); text-anchor: middle; }
+.hist .bar.push { fill: var(--push); }
+.hist .bar.pull { fill: var(--pull); }
+.hist .thr line { stroke: var(--ink); stroke-width: 3; }
+.hist .thr rect { fill: var(--ink); }
+.hist .thr text { fill: var(--bg); font: 700 11px var(--mono); text-anchor: middle; dominant-baseline: central; }
+.hist .thr { cursor: ew-resize; }
+.hist .thr .grab { fill: transparent; }
+.gauges { padding: 6px 14px 12px; display: grid; gap: 4px; }
+.gauges .meter .lab span { max-width: 70%; }
+.gstate { font-weight: 700; }
+.gstate.good { color: var(--good); }
+.gstate.bad { color: var(--bad); }
+.hread { display: none; margin-top: 14px; border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; background: var(--bg); }
+.hread.on { display: block; animation: rise .35s; }
+.lane { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 0; border-bottom: 1px dashed var(--line); }
+.lane:last-child { border-bottom: 0; }
+.lane .lbl { font-size: 13px; font-weight: 700; min-width: 150px; color: var(--muted); }
+.lane .pc.gone { opacity: .25; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 11.2 · Design a News Feed System</div>
+    <h1>Push, Pull, or Both</h1>
+    <p class="lede">Ana posts a photo. When does it land in her friends' feeds: the moment she posts, or the moment they open the app? That one choice decides whether a pop star with 40 million followers can melt your servers.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can explain <b>fanout on write</b> and <b>fanout on read</b> with two pros and two cons each, say why <b>celebrities</b> and <b>inactive users</b> break the push model, and defend the <b>hybrid</b>: push for most users, pull for the very popular.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Push: deliver at write time</h2><div class="sub">Fanout on write</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>In Quest 11.1 you drew the publishing flow: a post is saved, then a <b>fanout service</b> delivers it to friends. <b>Fanout</b> means "spread one thing out to many places". The book's deep dive asks <i>when</i> that spreading happens.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-news-feed-system" target="_blank" rel="noopener">[1]</a></p>
+      <p>Option one is <b>fanout on write</b>, also called the <b>push model</b>. Each user has a ready-made feed: a short list of post IDs kept in a cache (fast memory). The moment Ana publishes, her post ID is <i>pushed</i> into every friend's list. The feed is <b>precomputed</b>: built before anyone asks for it.</p>
+      <p>Ana has 8 friends. Three of them (greyed out, <b>zzz</b>) haven't opened the app in over 40 days.</p>
+
+      <div class="sim graph">
+        <svg id="g1" viewBox="0 0 400 350" role="img" aria-label="Ana in the centre, connected to 8 friends, each with a feed list"></svg>
+        <div class="stats">
+          <div class="stat">Writes at post time<b id="w1">0</b></div>
+          <div class="stat">Reads when Bo opens the app<b id="r1">—</b></div>
+          <div class="stat">Wasted writes (sleepers)<b id="x1">0</b></div>
+        </div>
+        <div class="cleo" id="cleoPanel">
+          <div class="meter"><div class="lab"><span>Feed writes done</span><b><span id="cWrites">0</span> / 40,000,000</b></div><div class="track"><div class="fill bad" id="cFill"></div></div></div>
+          <div class="row small" style="justify-content:space-between"><span>Fanout lag: <span class="bignum" id="cClock">0:00</span></span><span>Still waiting: <span class="bignum" id="cPend">40,000,000</span></span></div>
+          <div class="small muted" style="margin-top:8px">Feed-cache shards (each one holds some followers' feed lists):</div>
+          <div class="shards" id="shards"></div>
+        </div>
+        <div class="sim-bar"><div class="legend"><span><i style="background:var(--push)"></i>active friend</span><span><i style="background:var(--sleep)"></i>asleep 40+ days</span><span><i style="background:var(--bad)"></i>written, may never be read</span></div></div>
+        <div class="simlog" id="log1"><div>Ana is about to post. Each friend's box is their precomputed feed list.</div></div>
+      </div>
+      <div class="challenge boxed" id="p1"></div>
+      <div class="challenge boxed" id="cleo1" style="display:none"></div>
+      <div class="callout warn" id="hotNote" style="display:none"><b>The book calls this the "hotkey problem".</b> Strictly, the pain here is <b>write amplification</b>: one post becomes 40 million writes, and the fanout queue backs up for minutes. A <i>hot key</i> (one single key everyone hammers) is a related but separate issue. Either way, push breaks down for accounts with huge followings.</div>
+      <div id="q1a"></div><div id="q1b"></div>
+      <div class="row" style="margin-top:12px"><button class="btn" id="reset1">↻ Replay with Ana</button></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Pull: build it when asked</h2><div class="sub">Fanout on read</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Option two flips it. In <b>fanout on read</b>, the <b>pull model</b>, nothing is copied when someone posts. The post is saved once, in the author's own list. When Bo opens his home page, the system goes and fetches recent posts from everyone he follows and combines them, <b>on demand</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-news-feed-system" target="_blank" rel="noopener">[1]</a></p>
+      <p>Two words you'll need. <b>Fan-in</b>: gather from many sources into one place. <b>Merge</b>: combine lists that are each already sorted into one sorted list (here: newest first).</p>
+      <p>Same kind of graph, seen from Bo's side now. Bo follows 8 accounts. Each box is that account's <i>own</i> post list, with its newest post time.</p>
+
+      <div class="sim graph">
+        <svg id="g2" viewBox="0 0 400 350" role="img" aria-label="Bo in the centre, connected to the 8 accounts he follows, each with its own post list"></svg>
+        <div class="stats">
+          <div class="stat">Writes when Cleo posts<b id="w2">0</b></div>
+          <div class="stat">Lists read when Bo opens the app<b id="r2">—</b></div>
+          <div class="stat">Feed load time (illustrative)<b id="t2">—</b></div>
+        </div>
+        <div class="mstrip" id="merge2"><span class="lbl">Bo's merged feed:</span><span class="small muted">nothing built yet</span></div>
+        <div class="sim-bar"><button class="btn primary" id="cleoPost2">⭐ Cleo posts</button><span class="small muted">Watch the writes counter.</span></div>
+        <div class="simlog" id="log2"><div>Nothing is precomputed. Posts sit in their authors' lists.</div></div>
+      </div>
+      <div class="challenge boxed" id="p2" style="display:none"></div>
+      <div class="lab2" id="lab2">
+        <div class="boxed">
+          <b>Now crank it up.</b> <span class="small muted">Bo follows more and more accounts. Drag to at least 1,000.</span>
+          <div class="slider"><label for="nIn"><span>Bo follows <span class="bignum" id="nVal">8</span> accounts</span><span class="small muted">10 to 2,000</span></label><input type="range" id="nIn" min="10" max="2000" step="10" value="10" aria-label="How many accounts Bo follows"></div>
+          <div class="meter"><div class="lab"><span>Lists read per feed load</span><b id="nReads">10</b></div><div class="track"><div class="fill pull" id="nReadFill"></div></div></div>
+          <div class="meter"><div class="lab"><span>Writes per post</span><b>1</b></div><div class="track"><div class="fill" style="width:1%"></div></div></div>
+          <div class="meter"><div class="lab"><span>Feed load time (illustrative)</span><b id="nLat">~5 ms</b></div><div class="track"><div class="fill bad" id="nLatFill"></div><div class="mark" style="left:1%" title="push model read"></div></div></div>
+          <p class="small muted" style="margin:6px 0 0">Our toy model: lookups go out in parallel batches of 20, about 5 ms per batch, plus a little time to merge. A push-model read is a single lookup, about 5 ms (green tick).</p>
+          <ul class="checklist" id="s2goals"><li data-g="big"><span class="box">✓</span><span>Make Bo follow at least <b>1,000</b> accounts and watch the read cost</span></li></ul>
+        </div>
+      </div>
+      <div id="q2a"></div><div id="q2b"></div>
+      <div class="row" style="margin-top:12px"><button class="btn" id="reset2">↻ Replay</button></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>The trade-off grid</h2><div class="sub">Sort the pros and cons</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Put the two models side by side. <b>Push</b> does the work at write time. <b>Pull</b> does it at read time. Every pro of one is, more or less, a con of the other.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-news-feed-system" target="_blank" rel="noopener">[1]</a></p>
+      <p><b>Tap a card, then tap the box it belongs in.</b> On a computer you can also drag. A wrong box bounces the card back and costs a heart.</p>
+      <div class="pool" id="pool" aria-label="Unsorted cards"></div>
+      <div class="board" id="board">
+        <div></div><div class="hd">👍 Pro</div><div class="hd">👎 Con</div>
+        <div class="rh push">Push</div>
+        <div class="cell" role="button" tabindex="0" data-cell="push-pro" aria-label="Push, pro: place the selected card here"><span class="ct">Push · pro</span></div>
+        <div class="cell" role="button" tabindex="0" data-cell="push-con" aria-label="Push, con: place the selected card here"><span class="ct">Push · con</span></div>
+        <div class="rh pull">Pull</div>
+        <div class="cell" role="button" tabindex="0" data-cell="pull-pro" aria-label="Pull, pro: place the selected card here"><span class="ct">Pull · pro</span></div>
+        <div class="cell" role="button" tabindex="0" data-cell="pull-con" aria-label="Pull, con: place the selected card here"><span class="ct">Pull · con</span></div>
+      </div>
+      <p class="small muted" id="sortMsg" style="margin-top:10px">0 of 8 placed.</p>
+      <div id="q3"></div>
+      <div class="row" style="margin-top:12px"><button class="btn" id="reset3">↻ Shuffle and replay</button></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>The hybrid dial</h2><div class="sub">Push for most, pull for the famous</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book's fix takes the best of both. Use <b>push</b> for the vast majority of users, so feeds load fast. For <b>celebrities</b>, or anyone with a huge number of friends or followers, <b>don't fan out</b> their posts. Instead, their followers <b>pull</b> those posts at read time and merge them into the feed that was already precomputed.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-news-feed-system" target="_blank" rel="noopener">[1]</a></p>
+      <p>First, feel the numbers. <span class="muted">These are our own illustrative assumptions. The book doesn't do estimation for this chapter.</span></p>
+
+      <div class="calc boxed">
+        <div id="c1">
+          <p class="q">① 10 million daily active users each post about once a day, and the average user has 300 friends. With pure push, how many feed-cache writes per second is that on average?</p>
+          <div class="row"><input id="c1in" inputmode="numeric" placeholder="writes / second" aria-label="Average feed writes per second"><button class="btn primary" id="c1go">Check</button></div>
+          <div class="msg" id="c1msg"></div>
+        </div>
+        <div id="c2">
+          <p class="q">② One news page has 50 million followers and posts once. With pure push, how many feed writes does that single post cause?</p>
+          <div class="row"><input id="c2in" inputmode="numeric" placeholder="writes" aria-label="Writes for one post with 50 million followers"><button class="btn primary" id="c2go">Check</button></div>
+          <div class="msg" id="c2msg"></div>
+        </div>
+      </div>
+
+      <p style="margin-top:20px">Now set the line. Below are 1,000 sample accounts, sorted by follower count (note the log scale: each tick is 10× the last). Accounts <b style="color:var(--push)">left</b> of the line are <b>push</b>. Accounts <b style="color:var(--pull)">right</b> of it are <b>pull</b>. <b>Drag the line</b> (or use the slider) until both gauges sit in their green zones.</p>
+      <div class="sim hist">
+        <svg id="hist" viewBox="0 0 400 230" role="img" aria-label="Histogram of 1,000 accounts by follower count, with a draggable threshold line"></svg>
+        <div class="slider" style="padding:0 14px"><label for="thrIn"><span>Pull everyone with at least <span class="bignum" id="thrVal">100M</span> followers</span><span class="small muted" id="pullCount"></span></label><input type="range" id="thrIn" min="20" max="80" step="1" value="80" aria-label="Follower threshold, log scale"></div>
+        <div class="gauges">
+          <div class="meter"><div class="lab"><span>Peak write burst: the biggest single post we still fan out</span><b id="g1v">—</b></div><div class="track" id="g1t"><div class="zone" id="g1z"></div><div class="needle" id="g1n"></div></div></div>
+          <div class="meter"><div class="lab"><span>Extra lists merged per feed load (Bo follows 300 accounts)</span><b id="g2v">—</b></div><div class="track" id="g2t"><div class="zone" id="g2z"></div><div class="needle" id="g2n"></div></div></div>
+          <div class="small">Status: <span class="gstate" id="gState">—</span></div>
+        </div>
+        <div class="sim-bar"><div class="legend"><span><i style="background:var(--push)"></i>push: fanned out on write</span><span><i style="background:var(--pull)"></i>pull: fetched on read</span><span><i style="background:color-mix(in srgb, var(--good) 40%, transparent)"></i>green zone</span></div></div>
+      </div>
+      <p class="small muted">Why these zones? Green on gauge 1 means no single post triggers more than about 1 million writes, which our toy fanout workers clear in seconds. Green on gauge 2 means a feed load merges at most about 40 extra lists, so reads stay fast (remember stage 2's slider).</p>
+      <ul class="checklist" id="s4goals">
+        <li data-g="c1"><span class="box">✓</span><span>Work out the average write rate</span></li>
+        <li data-g="c2"><span class="box">✓</span><span>Work out the single-post burst</span></li>
+        <li data-g="dial"><span class="box">✓</span><span>Place the threshold so <b>both gauges are green</b></span></li>
+        <li data-g="read"><span class="box">✓</span><span>Open Bo's feed and watch the hybrid read</span></li>
+      </ul>
+      <div class="row" style="margin-top:12px"><button class="btn primary" id="boOpen" disabled>📱 Bo opens his feed</button></div>
+      <div class="hread" id="hread"></div>
+      <div class="callout tip"><b>Plus: spread the load.</b> The book also suggests <b>consistent hashing</b> (the hash ring from <a href="0002-consistent-hashing.html">Quest 6.2</a>) to spread requests and data more evenly across cache nodes, which eases hotspots.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-news-feed-system" target="_blank" rel="noopener">[1]</a> <span class="muted">Honest limit: a ring spreads <i>many</i> keys evenly, but it cannot split <i>one</i> very hot key. Real systems copy hot items to several nodes or cache them locally.</span></div>
+      <div id="q4a"></div><div id="q4b"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Fanout Oracle</h2><div class="sub">Push, pull, or hybrid?</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Six products and situations. For each one, call the fanout model you'd pick. Think about two things: <b>how big can one post's fanout get?</b> and <b>how many of those feeds will actually be read?</b></p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">Defend your fanout</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>For "design a news feed", the fanout choice is the deep-dive question interviewers ask most. Answer out loud, then type it.</p>
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> You picked the model. Now build the machine: auth and rate limits, the five steps the fanout service runs, and why the feed cache stores only IDs. That's Quest 11.3, <i>The Fanout Factory</i>.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-news-feed-system" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 11: Design a News Feed System</a>, Step 3, the "Fanout service" part of the feed-publishing deep dive (about two pages). Then watch Raffi Krikorian's talk <a href="https://www.infoq.com/presentations/Twitter-Timeline-Scalability/" target="_blank" rel="noopener">Timelines at Scale</a> (Twitter, QCon 2012) to see the same trade-off in a real system.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <p style="margin-top:0">Twitter publicly described a hybrid like the book's in 2012. Tweets were fanned out into per-user timelines held in Redis, and tweets from very high-follower accounts were merged in at read time instead.<a class="cite" href="https://www.infoq.com/presentations/Twitter-Timeline-Scalability/" target="_blank" rel="noopener">[2]</a></p>
+      <p>The research version goes finer. <i>Feeding Frenzy</i> (SIGMOD 2010) picks push or pull for each <b>producer–consumer pair</b>, based on how often one posts and the other reads. A busy reader following a quiet poster gets push. A rare reader following a chatty poster gets pull.<a class="cite" href="https://dl.acm.org/doi/10.1145/1807167.1807224" target="_blank" rel="noopener">[3]</a></p>
+      <p style="margin-bottom:0">Two more honest notes. With the book's 5,000-friend cap, pure push is bounded (at most 5,000 writes per post); the celebrity problem really bites when followers are unlimited, as on Twitter or Instagram. And consistent hashing (Karger et al., 1997)<a class="cite" href="https://dl.acm.org/doi/10.1145/258533.258660" target="_blank" rel="noopener">[4]</a> spreads many keys well but can't split one hot key.</p>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"what if a normal user suddenly goes viral and crosses the threshold?"</i> or <i>"should we skip fanout to followers who haven't logged in for a month?"</i>
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 11 "Design a News Feed System", fanout service (ByteByteGo).</li>
+        <li>Raffi Krikorian, "Timelines at Scale", QCon San Francisco 2012 (InfoQ).</li>
+        <li>Silberstein et al., "Feeding Frenzy: Selectively Materializing Users' Event Feeds", SIGMOD 2010.</li>
+        <li>Karger et al., "Consistent Hashing and Random Trees", STOC 1997.</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '1102',
+  winTitle: 'You tamed the celebrity',
+  badge: '⚖️ Badge: Fanout Judge',
+  cheatsheet: '../reference/ch11-news-feed-cheatsheet.html',
+});
+const { sleep, shuffle } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+const f1 = n => (+n).toFixed(1);
+const fmt = n => Math.round(n).toLocaleString('en-US');
+function short(n) {
+  if (n >= 1e6) return (n / 1e6 >= 10 ? Math.round(n / 1e6) : +(n / 1e6).toFixed(1)) + 'M';
+  if (n >= 1e3) return (n / 1e3 >= 10 ? Math.round(n / 1e3) : +(n / 1e3).toFixed(1)) + 'k';
+  return String(Math.round(n));
+}
+function anim(dur, f) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 1) { f(1); return res(); }
+    const t0 = performance.now();
+    const fr = now => { const p = Math.min(1, (now - t0) / dur); f(p); p < 1 ? requestAnimationFrame(fr) : res(); };
+    requestAnimationFrame(fr);
+  });
+}
+const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+const wait = ms => sleep(Q.reduced ? 0 : ms);
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); if (xp) Q.addXP(xp, li);
+  return true;
+}
+// Predict-then-watch: learner picks, the action plays, then the verdict.
+function predict(box, { step, title, options, correct, act, explain, xp = 20 }) {
+  box.innerHTML = `${step ? `<div class="step">${step}</div>` : ''}<h3>${title}</h3><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+  const opts = $('.opts', box);
+  let busy = false;
+  return new Promise(resolve => {
+    shuffle(options.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = async () => {
+        if (busy) return; busy = true;
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        b.classList.add('picked');
+        await act();
+        const ok = i === correct;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-i="${correct}"]`, opts).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + explain;
+        ok ? Q.addXP(xp, b) : Q.loseHeart(b);
+        resolve({ ok, row: $('.row', box) });
+      };
+      opts.appendChild(b);
+    });
+  });
+}
+// Two quizzes in a row, then a callback.
+function twoQuizzes(m1, q1, m2, q2, done) {
+  m1.innerHTML = ''; m2.innerHTML = '';
+  Q.quiz(m1, { ...q1, onDone: () => setTimeout(() => Q.quiz(m2, { ...q2, onDone: () => setTimeout(done, 900) }), 500) });
+}
+
+/* ---------- social graph (stages 1 and 2) ---------- */
+// 8 nodes around a centre; each node has a small list box underneath.
+function makeGraph(svg, people, centre) {
+  svg.innerHTML = '';
+  const C = { x: 200, y: 172 };
+  const pos = people.map((p, i) => { const a = i * Math.PI / 4; return { x: C.x + 150 * Math.sin(a), y: C.y - 122 * Math.cos(a) }; });
+  const edgesG = S('g', {}, svg), boxesG = S('g', {}, svg), nodesG = S('g', {}, svg), fxG = S('g', {}, svg);
+  const edges = pos.map(p => S('line', { class: 'edge', x1: C.x, y1: C.y, x2: f1(p.x), y2: f1(p.y) }, edgesG));
+  const boxes = [], labels = [], nodes = [];
+  people.forEach((p, i) => {
+    const { x, y } = pos[i];
+    const r = S('rect', { class: 'fbox', x: f1(x - 26), y: f1(y + 23), width: 52, height: 20, rx: 5 }, boxesG);
+    const t = S('text', { class: 'flabel', x: f1(x), y: f1(y + 33) }, boxesG); t.textContent = p.box || 'feed';
+    boxes.push(r); labels.push(t);
+    const g = S('g', { class: 'nd' + (p.z ? ' zz' : '') + (p.star ? ' star' : '') }, nodesG);
+    S('circle', { cx: f1(x), cy: f1(y), r: 19 }, g);
+    const nm = S('text', { class: 'nm', x: f1(x), y: f1(y) }, g); nm.textContent = p.n;
+    if (p.z) S('text', { class: 'zzz', x: f1(x + 15), y: f1(y - 16) }, g).textContent = 'zzz';
+    nodes.push({ g, nm });
+  });
+  const cg = S('g', { class: 'nd me' + (centre.star ? ' star' : '') }, nodesG);
+  S('circle', { cx: C.x, cy: C.y, r: 28 }, cg);
+  const cName = S('text', { class: 'nm', x: C.x, y: C.y }, cg); cName.textContent = centre.n;
+  const cSub = S('text', { class: 'sub', x: C.x, y: C.y + 44 }, nodesG); cSub.textContent = centre.sub || '';
+  // Fly a chip from (x0,y0) to (x1,y1). Returns the chip group, left in place.
+  async function fly(from, to, label, cls, dur = 650) {
+    const g = S('g', { class: 'chip ' + (cls || '') }, fxG);
+    const r = S('rect', { x: -18, y: -8, width: 36, height: 16, rx: 4 }, g);
+    S('text', { x: 0, y: 0 }, g).textContent = label;
+    g.setAttribute('transform', `translate(${f1(from.x)} ${f1(from.y)})`);
+    await anim(dur, p => { const e = ease(p); g.setAttribute('transform', `translate(${f1(from.x + (to.x - from.x) * e)} ${f1(from.y + (to.y - from.y) * e)})`); });
+    return g;
+  }
+  return {
+    C, pos, edges, boxes, labels, nodes, cName, cSub, fxG, fly,
+    boxAt: i => ({ x: pos[i].x, y: pos[i].y + 33 }),
+    ring(x, y, r) { const c = S('circle', { class: 'ring', cx: f1(x), cy: f1(y), r }, fxG); return c; },
+    clearFx() { fxG.innerHTML = ''; },
+  };
+}
+
+/* ================= STAGE 1: push ================= */
+Q.onStage(1, () => {
+  const ANA = [{ n: 'Bo' }, { n: 'Cai' }, { n: 'Dee', z: 1 }, { n: 'Eli' }, { n: 'Fay' }, { n: 'Gus', z: 1 }, { n: 'Hal' }, { n: 'Ivy', z: 1 }];
+  const FANS = ANA.map(p => ({ n: 'fan', z: p.z }));
+  let G, predicted = false, cleoDone = false, quizShown = false, busy = false;
+  $('#shards').innerHTML = [0, 1, 2, 3].map(i => `<div class="shard" data-s="${i}">shard ${i}<div class="track"><div class="fill bad"></div></div></div>`).join('');
+
+  function setStats(w, r, x) {
+    $('#w1').textContent = w; $('#r1').textContent = r; $('#x1').textContent = x;
+    $('#x1').className = x && x !== '0' ? 'bad' : '';
+  }
+  function drawAna() {
+    G = makeGraph($('#g1'), ANA, { n: 'Ana', sub: '8 friends' });
+    setStats('0', '—', '0');
+  }
+  async function pushPost(label, people) {
+    const order = people.map((_, i) => i);
+    const flights = order.map(i => (async () => {
+      await wait(i * 90);
+      G.edges[i].classList.add('on');
+      const chip = await G.fly(G.C, G.boxAt(i), label, '', 600);
+      G.labels[i].textContent = '';
+      G.boxes[i].classList.add('hit');
+      return chip;
+    })());
+    const chips = await Promise.all(flights);
+    return chips;
+  }
+
+  function runPredict() {
+    predict($('#p1'), {
+      step: 'Predict, then watch',
+      title: 'Ana presses <b>Post</b>. With the push model, how many feed-cache writes does this one post cause?',
+      options: ['1 write, into Ana’s own list', '5 writes, active friends only', '8 writes, one per friend'],
+      correct: 2,
+      act: async () => {
+        logTo('log1', 'Ana posted → fanout service pushes post ID <b>A1</b> into every friend’s feed list…');
+        const chips = await pushPost('A1', ANA);
+        let w = 0; setStats('8', '—', '0');
+        await wait(300);
+        ANA.forEach((p, i) => { if (p.z) { chips[i].classList.add('waste'); w++; } });
+        setStats('8', '—', String(w));
+        logTo('log1', `8 writes done. ${w} of them went to friends who haven’t logged in for 40+ days. <b>Wasted:</b> nobody may ever read them.`, 'w');
+        await wait(500);
+        const b = G.boxAt(0); G.ring(b.x, b.y, 30);
+        setStats('8', '1 lookup', String(w));
+        logTo('log1', 'Bo opens the app → read his one precomputed list. <b>1 lookup</b>, done.', 'g');
+      },
+      explain: 'One write per friend, <b>including the three sleepers</b>. That is the push model’s deal: do the work up front, so a read is a single cheap lookup and friends see the post in real time. The cost: 3 of those 8 writes (the red ones) may never be read.',
+    }).then(({ row }) => {
+      predicted = true;
+      const b = document.createElement('button'); b.className = 'btn primary'; b.textContent = 'Round 2: enter Cleo the pop star →';
+      b.onclick = () => { b.remove(); startCleo(); };
+      row.appendChild(b);
+    });
+  }
+
+  function startCleo() {
+    G = makeGraph($('#g1'), FANS, { n: 'Cleo', star: true, sub: '40,000,000 followers' });
+    setStats('0', '—', '0');
+    $('#cleoPanel').classList.add('on');
+    $('#cWrites').textContent = '0'; $('#cFill').style.width = '0%'; $('#cClock').textContent = '0:00'; $('#cPend').textContent = '40,000,000';
+    $$('#shards .shard').forEach(s => { s.classList.remove('hot'); $('.fill', s).style.width = '0%'; });
+    logTo('log1', '⭐ Cleo the pop star has 40,000,000 followers. 8 are drawn; the other 39,999,992 are off-screen.', 'w');
+    const box = $('#cleo1'); box.style.display = 'block';
+    box.innerHTML = `<div class="step">Watch</div><h3>Cleo posts once. Our toy fanout workers write 200,000 feed entries per second. Press the button.</h3><div class="row"><button class="btn primary" id="cleoGo">⭐ Cleo posts</button></div>`;
+    $('#cleoGo').onclick = async e => {
+      if (busy) return; busy = true;
+      e.currentTarget.disabled = true;
+      pushPost('C1', FANS);
+      const TOTAL = 40e6, RATE = 2e5, SECS = TOTAL / RATE;
+      const shards = $$('#shards .shard');
+      await anim(5200, p => {
+        const done = TOTAL * p, secs = SECS * p;
+        $('#cWrites').textContent = fmt(done); $('#cFill').style.width = (p * 100) + '%';
+        $('#cPend').textContent = fmt(TOTAL - done);
+        $('#cClock').textContent = `${Math.floor(secs / 60)}:${String(Math.floor(secs % 60)).padStart(2, '0')}`;
+        setStats(fmt(done), '—', '~' + short(done * 0.3));
+        shards.forEach((s, i) => { const load = p < .97 ? Math.min(100, 70 + 25 * Math.abs(Math.sin(p * 9 + i))) : 20; $('.fill', s).style.width = load + '%'; s.classList.toggle('hot', load > 85); });
+      });
+      setStats('40,000,000', '1 lookup', '~12M');
+      shards.forEach(s => s.classList.remove('hot'));
+      logTo('log1', '40,000,000 writes for <b>one</b> post. Fans whose shard was reached last waited <b>3 min 20 s</b> to see it. Every feed-cache shard was swamped meanwhile.', 'e');
+      logTo('log1', 'And if ~30% of those fans are inactive, ~12M of the writes were wasted too.', 'w');
+      $('#hotNote').style.display = 'block';
+      box.innerHTML = `<div class="explain show bad" style="display:block"><b>Push breaks for celebrities.</b> One post turned into 40 million writes and a fanout lag of minutes. Fast reads are still fast, but the write side is drowning. Hold that thought: stage 4 fixes it.</div>`;
+      busy = false;
+      if (!cleoDone) { cleoDone = true; Q.addXP(10, box); }
+      maybeQuiz();
+    };
+  }
+
+  function maybeQuiz() {
+    if (quizShown || !predicted || !cleoDone) return;
+    quizShown = true;
+    setTimeout(() => twoQuizzes($('#q1a'), {
+      q: 'Name one advantage of the push model.',
+      options: ['Reads are fast: the feed is ready', 'A celebrity post is written only once', 'No work is wasted on inactive users'],
+      correct: 0,
+      good: 'The book lists two: the feed is generated in real time and reaches friends immediately, and fetching it is fast because it was precomputed.',
+      bad: 'Those two are pull-model wins. Push’s advantages: real-time delivery, and fast reads because the feed is precomputed.',
+    }, $('#q1b'), {
+      q: 'Why are inactive users a problem for the push model?',
+      options: ['We precompute feeds nobody will read', 'Their feeds can never be cached at all', 'They slow down every other user’s read'],
+      correct: 0,
+      good: 'Push writes into every follower’s feed, whether or not they ever open the app. For people who rarely log in, that’s compute and memory spent for nothing.',
+      bad: 'The issue is waste. Push writes into every follower’s feed, so people who rarely log in cost compute and memory for feeds nobody reads.',
+    }, () => Q.clearStage(1)), 500);
+  }
+
+  $('#reset1').onclick = () => {
+    if (busy) return;
+    $('#cleoPanel').classList.remove('on'); $('#cleo1').style.display = 'none'; $('#cleo1').innerHTML = '';
+    $('#log1').innerHTML = '<div>Ana is about to post. Each friend’s box is their precomputed feed list.</div>';
+    drawAna(); runPredict();
+  };
+  drawAna(); runPredict();
+});
+
+/* ================= STAGE 2: pull ================= */
+Q.onStage(2, () => {
+  // newest post time (minutes since midnight) in each account's own list
+  const ACC = [{ n: 'Ana', t: 580 }, { n: 'Cleo', t: 430, star: 1 }, { n: 'Dev', t: 495 }, { n: 'Eve', t: 545 }, { n: 'Fin', t: 470 }, { n: 'Gia', t: 595 }, { n: 'Hu', t: 390 }, { n: 'Jo', t: 525 }];
+  const hm = m => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
+  const lat = n => Math.ceil(n / 20) * 5 + n * 0.02;
+  let G, accs, posted = false, predicted = false, quizShown = false, busy = false;
+  const goals = new Set();
+
+  function draw() {
+    accs = ACC.map(a => ({ ...a }));
+    G = makeGraph($('#g2'), accs.map(a => ({ n: a.n, star: a.star, box: hm(a.t) })), { n: 'Bo', sub: 'follows 8' });
+    $('#w2').textContent = '0'; $('#r2').textContent = '—'; $('#t2').textContent = '—';
+    $('#merge2').innerHTML = '<span class="lbl">Bo’s merged feed:</span><span class="small muted">nothing built yet</span>';
+  }
+  $('#cleoPost2').onclick = async e => {
+    if (busy || posted) return; busy = true;
+    e.currentTarget.disabled = true;
+    const i = accs.findIndex(a => a.n === 'Cleo');
+    const chip = await G.fly({ x: G.pos[i].x, y: G.pos[i].y }, G.boxAt(i), 'C1', 'pull', 500);
+    accs[i].t = 602; G.labels[i].textContent = ''; chip.remove();
+    G.labels[i].textContent = hm(accs[i].t); G.boxes[i].classList.add('hit');
+    $('#w2').textContent = '1';
+    logTo('log2', '⭐ Cleo posted at 10:02. Saved <b>once</b>, in Cleo’s own list. 40M followers, still just 1 write.', 'g');
+    posted = true; busy = false;
+    runPredict();
+  };
+  function runPredict() {
+    const box = $('#p2'); box.style.display = 'block';
+    predict(box, {
+      step: 'Predict, then watch',
+      title: 'Now Bo opens the app. With the pull model, how many lists does the feed service have to read?',
+      options: ['1 read: Bo’s own feed list', '0 reads: it was all pushed', '8 reads: one per account'],
+      correct: 2,
+      act: async () => {
+        logTo('log2', 'Bo opens the app → fan-in: fetch the newest posts from each of the 8 accounts…');
+        let reads = 0;
+        await Promise.all(accs.map((a, i) => (async () => {
+          await wait(i * 110);
+          G.edges[i].classList.add('on');
+          const c = await G.fly(G.boxAt(i), G.C, hm(a.t), a.star ? 'pull' : '', 650);
+          reads++; $('#r2').textContent = String(reads);
+          $('#t2').textContent = '~' + Math.round(lat(reads)) + ' ms';
+          await wait(150); c.remove();
+        })()));
+        const m = $('#merge2'); m.innerHTML = '<span class="lbl">Bo’s merged feed:</span>';
+        const sorted = accs.slice().sort((a, b) => b.t - a.t);
+        for (const a of sorted) { m.insertAdjacentHTML('beforeend', `<span class="pc${a.star ? ' pull' : ''}">${a.n} ${hm(a.t)}</span>`); await wait(140); }
+        logTo('log2', `8 lists read, merged newest-first. Cleo’s 10:02 post is on top. Load time ≈ ${Math.round(lat(8))} ms (one parallel batch).`, 'g');
+      },
+      explain: 'Bo’s feed is built from scratch: one read for <b>each</b> account he follows, then a merge. With 8 accounts that’s quick. The catch is that this cost grows with every account Bo follows, and it’s paid on <b>every</b> page load.',
+    }).then(() => {
+      predicted = true;
+      $('#lab2').classList.add('on');
+      upd();
+    });
+  }
+  function upd() {
+    const n = +$('#nIn').value, l = lat(n);
+    $('#nVal').textContent = fmt(n); $('#nReads').textContent = fmt(n);
+    $('#nReadFill').style.width = (n / 2000 * 100) + '%';
+    $('#nLat').textContent = '~' + Math.round(l) + ' ms';
+    $('#nLatFill').style.width = Math.min(100, l / 560 * 100) + '%';
+    if (n >= 1000 && predicted && checkGoal('#s2goals', 'big', goals, 10)) {
+      logTo('log2', `Bo follows ${fmt(n)} → ${fmt(n)} lists per load, ~${Math.round(l)} ms. Writes per post: still 1.`, 'w');
+      maybeQuiz();
+    }
+  }
+  $('#nIn').addEventListener('input', upd);
+
+  function maybeQuiz() {
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => twoQuizzes($('#q2a'), {
+      q: 'In the pull model, when is Bo’s feed computed?',
+      options: ['When Bo opens it, on demand', 'When each friend posts something', 'Once a night, in a batch job'],
+      correct: 0,
+      good: 'Fanout on read: the feed is generated at read time, only when someone actually looks. That’s why inactive users cost nothing.',
+      bad: 'Pull means fanout on <b>read</b>: nothing happens at post time. The feed is built when Bo loads his home page.',
+    }, $('#q2b'), {
+      q: 'What is the pull model’s main downside?',
+      options: ['Feed loads are slow: fetch and merge', 'Celebrity posts cause write storms', 'Inactive users waste cache memory'],
+      correct: 0,
+      good: 'The book’s con for pull: fetching the news feed is slow, because it isn’t precomputed. Every load gathers many lists and merges them.',
+      bad: 'Those two are push-model problems, and pull solves both. Pull’s weakness is the read: every load fetches and merges many lists, so it’s slow.',
+    }, () => Q.clearStage(2)), 500);
+  }
+  $('#reset2').onclick = () => {
+    if (busy) return;
+    posted = false; $('#cleoPost2').disabled = false; $('#p2').style.display = 'none'; $('#p2').innerHTML = '';
+    $('#log2').innerHTML = '<div>Nothing is precomputed. Posts sit in their authors’ lists.</div>';
+    draw();
+  };
+  draw();
+});
+
+/* ================= STAGE 3: trade-off grid ================= */
+Q.onStage(3, () => {
+  const CARDS = [
+    { t: 'The feed is ready the moment you open the app', a: 'push-pro', why: 'Precomputed at write time, so a read is one lookup.' },
+    { t: 'Friends get the post in real time', a: 'push-pro', why: 'Push delivers into feeds as soon as the post is published.' },
+    { t: 'A post by someone with millions of followers means millions of writes', a: 'push-con', why: 'Write amplification: the celebrity problem.' },
+    { t: 'Precomputes feeds for people who never log in', a: 'push-con', why: 'Wasted compute and memory on inactive users.' },
+    { t: 'No compute wasted on inactive users', a: 'pull-pro', why: 'Feeds are built only when someone actually looks.' },
+    { t: 'A celebrity post is written only once', a: 'pull-pro', why: 'No fanout at write time, so no write storm.' },
+    { t: 'Every feed load gathers and merges many lists', a: 'pull-con', why: 'The fan-in and merge happen on each read.' },
+    { t: 'Feed loads get slower as you follow more accounts', a: 'pull-con', why: 'Read cost grows with the number of accounts followed.' },
+  ];
+  let sel = null, placed = 0, quizShown = false;
+  const pool = $('#pool');
+  function deal() {
+    sel = null; placed = 0;
+    $$('#board .cell').forEach(c => { c.classList.remove('full', 'ready'); $$('.tcard', c).forEach(x => x.remove()); });
+    pool.innerHTML = '';
+    shuffle(CARDS.map((c, i) => ({ c, i }))).forEach(({ c, i }) => {
+      const b = document.createElement('button'); b.className = 'tcard'; b.textContent = c.t; b.dataset.i = i; b.draggable = true;
+      b.onclick = () => select(b);
+      b.addEventListener('dragstart', ev => { select(b, true); ev.dataTransfer.setData('text/plain', String(i)); ev.dataTransfer.effectAllowed = 'move'; });
+      pool.appendChild(b);
+    });
+    $('#sortMsg').textContent = '0 of 8 placed.';
+  }
+  function select(b, force) {
+    if (b.classList.contains('placed')) return;
+    if (sel === b && !force) { b.classList.remove('sel'); sel = null; } else { $$('.tcard.sel', pool).forEach(x => x.classList.remove('sel')); b.classList.add('sel'); sel = b; }
+    $$('#board .cell').forEach(c => c.classList.toggle('ready', !!sel));
+  }
+  function drop(cell, card) {
+    if (!card) { Q.toast('pick a card first', cell, 'practice'); return; }
+    const c = CARDS[+card.dataset.i], ok = c.a === cell.dataset.cell;
+    card.classList.remove('sel'); sel = null;
+    $$('#board .cell').forEach(x => x.classList.remove('ready'));
+    if (!ok) {
+      card.classList.remove('bounce'); void card.offsetWidth; card.classList.add('bounce');
+      setTimeout(() => card.classList.remove('bounce'), 700);
+      Q.loseHeart(cell);
+      $('#sortMsg').innerHTML = `<span style="color:var(--bad)">Not there.</span> Ask: is it about <b>write</b> time (push) or <b>read</b> time (pull)? And is it good or bad?`;
+      return;
+    }
+    card.classList.add('placed'); card.draggable = false; card.title = c.why;
+    cell.appendChild(card);
+    Q.addXP(5, cell);
+    placed++;
+    if ($$('.tcard', cell).length === 2) cell.classList.add('full');
+    $('#sortMsg').innerHTML = `${placed} of 8 placed. <span class="muted">${c.why}</span>`;
+    if (placed === CARDS.length) finish();
+  }
+  $$('#board .cell').forEach(cell => {
+    cell.onclick = () => drop(cell, sel);
+    cell.addEventListener('keydown', ev => { if (ev.target === cell && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); drop(cell, sel); } });
+    cell.addEventListener('dragover', ev => { ev.preventDefault(); cell.classList.add('over'); });
+    cell.addEventListener('dragleave', () => cell.classList.remove('over'));
+    cell.addEventListener('drop', ev => { ev.preventDefault(); cell.classList.remove('over'); const i = ev.dataTransfer.getData('text/plain'); const card = $(`.tcard[data-i="${i}"]`, pool); if (card) drop(cell, card); });
+  });
+  function finish() {
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => Q.quiz($('#q3'), {
+      tag: 'The deciding fact',
+      q: 'The book’s top priority is that fetching the feed is fast. So which model is the default?',
+      options: ['Push: fanout on write', 'Pull: fanout on read'],
+      correct: 0,
+      xp: 15,
+      good: 'Fast reads win, so push is the default. Pull’s strengths aren’t thrown away, though. Stage 4 uses them for exactly the cases where push hurts.',
+      bad: 'Look at the grid: pull’s cons are both about slow reads. Since fast feed loads matter most, push is the default, and pull is kept for the cases where push hurts.',
+      onDone: () => setTimeout(() => Q.clearStage(3), 900),
+    }), 400);
+  }
+  $('#reset3').onclick = () => { quizShown = false; $('#q3').innerHTML = ''; deal(); };
+  deal();
+});
+
+/* ================= STAGE 4: hybrid dial ================= */
+Q.onStage(4, () => {
+  const goals = new Set();
+  let quizShown = false, readDone = false, busy = false;
+
+  /* --- calculations --- */
+  function parseNum(s) {
+    s = String(s).toLowerCase().replace(/[,\s_]/g, '').replace(/writes?(\/s|persec(ond)?)?$/, '').replace(/\/s$/, '');
+    let m = 1;
+    if (/(billion|bn|b)$/.test(s)) { m = 1e9; s = s.replace(/(billion|bn|b)$/, ''); }
+    else if (/(million|mn|m)$/.test(s)) { m = 1e6; s = s.replace(/(million|mn|m)$/, ''); }
+    else if (/(thousand|k)$/.test(s)) { m = 1e3; s = s.replace(/(thousand|k)$/, ''); }
+    s = s.replace(/^~/, '');
+    const v = Number(s);
+    return isFinite(v) && s !== '' ? v * m : NaN;
+  }
+  function calc(n, test, okMsg, hint, xp) {
+    const inp = $(`#c${n}in`), msg = $(`#c${n}msg`), btn = $(`#c${n}go`);
+    let tries = 0;
+    const go = () => {
+      if (goals.has('c' + n)) return;
+      const v = parseNum(inp.value);
+      if (!isFinite(v)) { msg.className = 'msg bad'; msg.textContent = 'Type a number (commas, “35k” or “50M” are fine).'; return; }
+      if (test(v)) {
+        msg.className = 'msg good'; msg.innerHTML = okMsg;
+        $(`#c${n}`).classList.add('done'); inp.readOnly = true; btn.disabled = true;
+        checkGoal('#s4goals', 'c' + n, goals, xp);
+        maybeQuiz();
+      } else {
+        tries++; Q.loseHeart(btn);
+        msg.className = 'msg bad'; msg.innerHTML = hint(v, tries);
+      }
+    };
+    btn.onclick = go;
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+  }
+  calc(1, v => v >= 30000 && v <= 40000,
+    '✓ 10M × 300 = 3 billion feed writes a day. ÷ 86,400 seconds ≈ <b>34,700 writes/s</b> on average (and peaks run higher). Busy, but steady and spreadable.',
+    (v, t) => t < 2 ? 'Not quite. Writes per day = users × posts × friends. Then divide by the seconds in a day (86,400).' : 'Hint: 10,000,000 × 300 = 3,000,000,000 per day. 3,000,000,000 ÷ 86,400 ≈ ?', 15);
+  calc(2, v => Math.abs(v - 5e7) <= 5e5,
+    '✓ <b>50,000,000 writes</b> from one post. That’s more than the whole system’s average write load for over 20 minutes (50M ÷ ~35k/s ≈ 1,440 s), dumped all at once.',
+    () => 'With push, every follower’s feed gets one write. How many followers?', 10);
+
+  /* --- toy data: 1,000 sample accounts, plus the 300 accounts Bo follows --- */
+  function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  const R = rng(1102);
+  const logU = (lo, hi) => Math.pow(10, lo + (hi - lo) * R());
+  const SAMPLE = [];
+  [[1, 2, 420], [2, 3, 400], [3, 4, 120], [4, 5, 40], [5, 6, 12], [6, 7, 6]].forEach(([lo, hi, k]) => { for (let i = 0; i < k; i++) SAMPLE.push(logU(lo, hi)); });
+  SAMPLE.push(4e7, 5e7); // Cleo (40M) and the 50M news page
+  const BO = [4e7, 5e7];
+  [[6, 7, 4], [5, 6, 8], [4, 5, 20], [Math.log10(3000), 4, 30], [Math.log10(20), Math.log10(3000), 236]].forEach(([lo, hi, k]) => { for (let i = 0; i < k; i++) BO.push(logU(lo, hi)); });
+  const G1_OK = 1e6, G2_OK = 40;
+
+  /* --- histogram --- */
+  const svg = $('#hist');
+  const X0 = 26, X1 = 390, YB = 180, YT = 22, LMIN = 1, LMAX = 8, BW = 0.1;
+  const xOf = l => X0 + (l - LMIN) / (LMAX - LMIN) * (X1 - X0);
+  const bins = Array.from({ length: Math.round((LMAX - LMIN) / BW) }, (_, k) => ({ lo: LMIN + k * BW, n: 0 }));
+  SAMPLE.forEach(v => { const k = Math.min(bins.length - 1, Math.max(0, Math.floor((Math.log10(v) - LMIN) / BW))); bins[k].n++; });
+  const maxN = Math.max(...bins.map(b => b.n));
+  S('line', { class: 'axis', x1: X0, y1: YB, x2: X1, y2: YB }, svg);
+  const barsG = S('g', {}, svg);
+  const barEls = bins.map(b => {
+    const h = b.n ? Math.max(3, Math.sqrt(b.n / maxN) * (YB - YT)) : 0;
+    const w = xOf(b.lo + BW) - xOf(b.lo) - 0.8;
+    return S('rect', { class: 'bar push', x: f1(xOf(b.lo) + 0.4), y: f1(YB - h), width: f1(w), height: f1(h), rx: 1 }, barsG);
+  });
+  ['10', '100', '1k', '10k', '100k', '1M', '10M', '100M'].forEach((t, i) => {
+    const x = xOf(LMIN + i);
+    S('line', { class: 'axis', x1: f1(x), y1: YB, x2: f1(x), y2: YB + 5 }, svg);
+    S('text', { class: 'tl', x: f1(x), y: YB + 18 }, svg).textContent = t;
+  });
+  S('text', { class: 'tl', x: 200, y: YB + 40 }, svg).textContent = 'followers per account (log scale) · bar height: √count';
+  S('text', { class: 'tl', x: f1(xOf(2.3)), y: 14 }, svg).textContent = 'most accounts';
+  S('text', { class: 'tl', x: f1(xOf(7.2)), y: 14 }, svg).textContent = 'the famous few';
+  const thr = S('g', { class: 'thr' }, svg);
+  const tLine = S('line', { x1: 0, y1: YT - 2, x2: 0, y2: YB }, thr);
+  const tHandle = S('rect', { x: -24, y: 28, width: 48, height: 20, rx: 6 }, thr);
+  const tTxt = S('text', { x: 0, y: 38 }, thr);
+  const grab = S('rect', { class: 'grab', x: -22, y: YT - 4, width: 44, height: YB - YT + 8 }, thr);
+
+  const thrIn = $('#thrIn');
+  function setL(l) { thrIn.value = Math.round(Math.max(2, Math.min(8, l)) * 10); render(); }
+  // pointer drag on the SVG
+  let dragging = false;
+  const toL = ev => { const pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY; const p = pt.matrixTransform(svg.getScreenCTM().inverse()); return LMIN + (p.x - X0) / (X1 - X0) * (LMAX - LMIN); };
+  svg.addEventListener('pointerdown', ev => { dragging = true; svg.setPointerCapture(ev.pointerId); setL(toL(ev)); });
+  svg.addEventListener('pointermove', ev => { if (dragging) setL(toL(ev)); });
+  const endDrag = () => { dragging = false; };
+  svg.addEventListener('pointerup', endDrag); svg.addEventListener('pointercancel', endDrag);
+  thrIn.addEventListener('input', render);
+
+  // gauge scales
+  const g1x = v => Math.max(0, Math.min(100, (Math.log10(Math.max(v, 100)) - 2) / 6 * 100)); // 100 .. 100M (log)
+  const g2x = v => Math.max(0, Math.min(100, v / 300 * 100)); // 0 .. 300 lists
+  $('#g1z').style.left = '0%'; $('#g1z').style.width = g1x(G1_OK) + '%';
+  $('#g2z').style.left = '0%'; $('#g2z').style.width = g2x(G2_OK) + '%';
+
+  let state = null;
+  function compute() {
+    const l = +thrIn.value / 10, T = Math.pow(10, l);
+    const push = SAMPLE.filter(v => v < T), pullN = SAMPLE.length - push.length;
+    const burst = push.length ? Math.max(...push) : 0;
+    const extra = BO.filter(v => v >= T).length;
+    return { l, T, burst, pullN, extra, ok1: burst <= G1_OK, ok2: extra <= G2_OK };
+  }
+  function render() {
+    const c = state = compute();
+    const x = xOf(c.l);
+    thr.setAttribute('transform', `translate(${f1(x)} 0)`);
+    tTxt.textContent = short(c.T);
+    bins.forEach((b, k) => barEls[k].setAttribute('class', 'bar ' + (b.lo + BW / 2 < c.l ? 'push' : 'pull')));
+    $('#thrVal').textContent = short(c.T);
+    $('#pullCount').textContent = `${c.pullN} of 1,000 accounts are pull (${(c.pullN / 10).toFixed(1)}%)`;
+    $('#g1v').textContent = fmt(c.burst) + ' writes'; $('#g1v').style.color = c.ok1 ? 'var(--good)' : 'var(--bad)';
+    $('#g2v').textContent = c.extra + ' lists'; $('#g2v').style.color = c.ok2 ? 'var(--good)' : 'var(--bad)';
+    $('#g1n').style.left = g1x(c.burst) + '%'; $('#g2n').style.left = g2x(c.extra) + '%';
+    const st = $('#gState');
+    if (c.ok1 && c.ok2) { st.textContent = '✓ both green: push for the many, pull for the few'; st.className = 'gstate good'; }
+    else if (!c.ok1) { st.textContent = 'a single post still fans out to too many feeds: move the line left'; st.className = 'gstate bad'; }
+    else { st.textContent = 'too many accounts are pull, so reads slow down: move the line right'; st.className = 'gstate bad'; }
+    if (c.ok1 && c.ok2 && !goals.has('dial')) {
+      checkGoal('#s4goals', 'dial', goals, 20);
+    }
+    $('#boOpen').disabled = !(goals.has('dial') && c.ok1 && c.ok2) || busy;
+  }
+  render();
+
+  /* --- hybrid read animation --- */
+  const hm = m => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
+  $('#boOpen').onclick = async () => {
+    if (busy || !state || !(state.ok1 && state.ok2)) return;
+    busy = true; $('#boOpen').disabled = true;
+    const K = state.extra;
+    const pushed = [{ a: 'Ana', t: 588 }, { a: 'Jo', t: 571 }, { a: 'Eve', t: 540 }, { a: 'Dev', t: 512 }, { a: 'Hu', t: 470 }];
+    const pulled = [{ a: 'NewsNow', t: 600, big: '50M' }, { a: 'NewsNow', t: 530, big: '50M' }, { a: 'Cleo', t: 602, big: '40M' }, { a: 'Cleo', t: 495, big: '40M' }];
+    const h = $('#hread'); h.classList.add('on');
+    h.innerHTML = `<div class="small" style="margin-bottom:6px"><b>Bo’s hybrid read</b> at your threshold (${short(state.T)}): <b>1</b> lookup of his precomputed list + <b>${K}</b> pulled list${K === 1 ? '' : 's'}.</div>
+      <div class="lane" id="ln0"><span class="lbl">🔵 Precomputed (1 lookup)</span>${pushed.map(p => `<span class="pc">${p.a} ${hm(p.t)}</span>`).join('')}</div>
+      <div class="lane" id="ln1"><span class="lbl">🟠 Pull: Cleo · 40M</span>${pulled.filter(p => p.a === 'Cleo').map(p => `<span class="pc pull">${p.a} ${hm(p.t)}</span>`).join('')}</div>
+      <div class="lane" id="ln2"><span class="lbl">🟠 Pull: NewsNow · 50M</span>${pulled.filter(p => p.a === 'NewsNow').map(p => `<span class="pc pull">${p.a} ${hm(p.t)}</span>`).join('')}</div>
+      ${K > 2 ? `<div class="lane"><span class="lbl muted">+ ${K - 2} more pulled list${K - 2 === 1 ? '' : 's'}</span><span class="small muted">(other big accounts Bo follows, not drawn)</span></div>` : ''}
+      <div class="lane" id="lnM"><span class="lbl">📱 Merged, newest first</span></div>`;
+    await wait(600);
+    const all = [...pushed.map(p => ({ ...p, pull: false })), ...pulled.map(p => ({ ...p, pull: true }))].sort((a, b) => b.t - a.t);
+    const src = $$('#hread .lane .pc');
+    for (const p of all) {
+      const el = src.find(e => !e.classList.contains('gone') && e.textContent === `${p.a} ${hm(p.t)}`);
+      if (el) el.classList.add('gone');
+      $('#lnM').insertAdjacentHTML('beforeend', `<span class="pc${p.pull ? ' pull' : ''}">${p.a} ${hm(p.t)}</span>`);
+      await wait(220);
+    }
+    h.insertAdjacentHTML('beforeend', `<div class="explain show good" style="display:block">Most of Bo’s feed was already built (blue, pushed at write time). Only the few huge accounts were fetched at read time (orange) and merged in. Cleo’s and NewsNow’s posts cost <b>1 write each</b> instead of 40M and 50M.</div>`);
+    busy = false; render();
+    if (!readDone) { readDone = true; checkGoal('#s4goals', 'read', goals, 10); maybeQuiz(); }
+  };
+
+  function maybeQuiz() {
+    if (quizShown || !['c1', 'c2', 'dial', 'read'].every(g => goals.has(g))) return;
+    quizShown = true;
+    setTimeout(() => twoQuizzes($('#q4a'), {
+      q: 'In the hybrid model, whose posts are <b>not</b> fanned out on write?',
+      options: ['Accounts above a follower threshold', 'Users who post more than once a day', 'New accounts with very few followers'],
+      correct: 0, xp: 15,
+      good: 'Celebrities and other accounts with very many followers are pulled at read time. Everyone else is pushed, so most of each feed is precomputed.',
+      bad: 'The line is drawn by audience size. Accounts with huge followings are pulled at read time; everyone else is pushed.',
+    }, $('#q4b'), {
+      q: 'The book also suggests consistent hashing here. What does it help with?',
+      options: ['Spreading keys and load across cache nodes', 'Deciding which accounts count as celebrities', 'Sorting merged feed posts newest-first'],
+      correct: 0, xp: 15,
+      good: 'A hash ring spreads keys and requests evenly over the cache nodes, which eases hotspots. Remember its limit: it can’t split one single very hot key.',
+      bad: 'Consistent hashing is about placement: it spreads keys and requests evenly over cache nodes to ease hotspots (though it can’t split one single hot key).',
+    }, () => Q.clearStage(4)), 500);
+  }
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss'), {
+  name: '🔮 Fanout Oracle',
+  xp: 15,
+  choices: [
+    { k: 'push', label: 'Push', sub: 'fanout on write' },
+    { k: 'pull', label: 'Pull', sub: 'fanout on read' },
+    { k: 'hybrid', label: 'Hybrid', sub: 'push most, pull the famous' },
+  ],
+  scenarios: [
+    { e: '👫', t: 'Friends only, capped', d: 'A friends-only app. Nobody can have more than 5,000 friends, and fast feed loads are the top priority.', a: 'push', why: 'The cap bounds the fanout: one post means at most 5,000 writes, which is fine. Precomputed feeds give the fast reads you care about. This is the book’s own scope.' },
+    { e: '🐦', t: 'A Twitter-like app', d: 'Most users have about 200 followers. A handful have 100 million.', a: 'hybrid', why: 'Push is great for the 200-follower majority, but one post from a 100M account would mean 100M writes. Push for most, pull for the famous few.' },
+    { e: '🏢', t: 'The quiet intranet', d: 'An internal company app with 2,000 employees. 80% of them open it about once a quarter.', a: 'pull', why: 'Most precomputed feeds would never be read, so push wastes work. And with only 2,000 people, building a feed on demand is cheap enough.' },
+    { e: '🎤', t: 'The 20-minute backlog', d: 'Your push-based fanout queue backs up for 20 minutes every time one pop star posts.', a: 'hybrid', why: 'Stop fanning out her posts. Mark accounts over a follower threshold as pull, and let followers fetch those posts at read time. Everyone else stays on push.' },
+    { e: '⚡', t: 'Real-time and instant', d: 'Friends must see a post in real time, and feed loads must be near-instant. Friend counts are small.', a: 'push', why: 'Real-time delivery and fast reads are exactly push’s two pros. With small friend counts there’s no celebrity problem to worry about.' },
+    { e: '🐢', t: 'The 3-second feed', d: 'You’re on pull. Feed loads take 3 seconds because each one merges 1,500 followed accounts.', a: 'hybrid', why: 'Precompute (push) the posts from normal accounts so most of the feed is one lookup, and pull only the few huge accounts. The merge drops from 1,500 lists to a handful.' },
+  ],
+  outro: 'The pattern: push by default for fast reads, pull when most feeds would go unread, and hybrid the moment a few accounts have huge audiences.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: interview drill ================= */
+Q.onStage(6, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"Push or pull for the news feed? And what about celebrities?"</i>',
+  placeholder: 'There are two options…',
+  minWords: 20,
+  model: '"There are two options. <b>Fanout on write</b> precomputes each follower\'s feed when a post is published: reads are one cheap cache lookup and delivery is real-time, but a user with millions of followers turns one post into millions of writes, and we waste work on people who never log in. <b>Fanout on read</b> builds the feed when it\'s loaded: no wasted work and no write bursts, but every load gathers and merges many lists, so it\'s slow. Fast reads matter most here, so I\'d <b>push for normal users</b> and <b>skip fanout for accounts above a follower threshold</b>. Their followers pull those posts at read time and merge them into the precomputed feed. I\'d also spread the cache keys with consistent hashing to avoid hot shards."',
+  checks: [
+    'I defined both push (fanout on write) and pull (fanout on read)',
+    'I gave a pro and a con for each',
+    'I named the celebrity problem: one post, millions of writes',
+    'I named the waste on inactive users',
+    'I proposed the hybrid with a follower threshold',
+    'I said why fast reads win (push is the default)',
+  ],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

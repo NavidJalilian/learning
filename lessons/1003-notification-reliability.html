@@ -275,7 +275,7 @@ table.score td.v { font-family: var(--mono); font-weight: 700; white-space: nowr
     <div class="stage-b">
       <p>The book's retry rule: when a third-party service fails to send, the notification goes back on the message queue to try again. If the problem keeps happening, an <b>alert</b> goes out to developers. In the final design, workers retry a set number of times.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-notification-system" target="_blank" rel="noopener">[1]</a></p>
       <p>Real systems add one more question: <b>is this failure worth retrying?</b> A <i>transient</i> failure (a timeout, a <code>5xx</code> server error, a <code>429 Too Many Requests</code>) might succeed a moment later. A <i>permanent</i> one (a dead device token, a phone number that doesn't exist) will fail the same way forever, so the fix is to clean up the bad data. And once a message runs out of retries, it goes to a <b>dead-letter queue</b> (DLQ): a side queue where failed messages wait for a human, instead of looping forever.<a class="cite" href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html" target="_blank" rel="noopener">[6]</a></p>
-      <p>Failures are dropping out of the providers. Sort each one. Our retry limit is <b>3 attempts</b>.</p>
+      <p>Failures are dropping out of the providers. Sort each one. Our retry limit is <b>5 attempts</b> in all: the first send plus up to 4 retries.</p>
       <div class="tri" id="tri">
         <div class="provhead"><span>☁️ Providers: APNs · FCM · Twilio · SendGrid</span><span class="mono" id="triCount">1 / 7</span></div>
         <div id="fWrap"></div>
@@ -297,7 +297,7 @@ table.score td.v { font-family: var(--mono); font-weight: 700; white-space: nowr
           <div class="tog"><span class="small"><b>Jitter</b></span><span class="seg" id="jitSeg"><button data-v="0" class="on" aria-pressed="true">Off</button><button data-v="1" aria-pressed="false">On</button></span></div>
           <button class="btn primary" id="boRun" style="padding:8px 14px;font-size:14px">▶ Run the storm</button>
         </div>
-        <div class="simlog bostats" id="boStats"><div>1,000 failed sends, a retry limit of 5 tries, waits capped at 8 s. Press run.</div></div>
+        <div class="simlog bostats" id="boStats"><div>1,000 sends failed on attempt 1. Each gets up to 4 retries (5 attempts in all, the same limit as above), waits capped at 8 s. Press run.</div></div>
       </div>
       <ul class="checklist" id="s4goals">
         <li data-g="tri"><span class="box">✓</span><span>Sort all 7 failures</span></li>
@@ -923,7 +923,7 @@ Q.onStage(4, () => {
     { p: 'Twilio (SMS)', e: '429 Too Many Requests', a: 'retry', why: 'You’re being rate-limited. Slow down and retry later, and respect a Retry-After header if there is one.' },
     { p: 'APNs', e: '410 Unregistered: device token is no longer active', a: 'drop', why: 'The app was deleted or the token changed. Retrying will fail forever, so remove or mark the token.' },
     { p: 'Twilio (SMS)', e: 'Invalid phone number', a: 'drop', why: 'Bad data never fixes itself. Drop the message and flag the contact info for cleanup.' },
-    { p: 'SendGrid', e: '500 Internal Server Error · attempt 3 of 3', a: 'dlq', why: 'It looked transient, but the retry limit is used up. Move it to the dead-letter queue and alert developers, as the book says.' },
+    { p: 'SendGrid', e: '500 Internal Server Error · attempt 5 of 5', a: 'dlq', why: 'It looked transient, but the retry limit is used up. Move it to the dead-letter queue and alert developers, as the book says.' },
     { p: 'SendGrid', e: 'Hard bounce: mailbox does not exist', a: 'drop', why: 'A hard bounce is permanent. Mark the address invalid and stop sending to it. Repeated bounces also hurt your sender reputation.' },
   ];
   const cnt = { retry: 0, drop: 0, dlq: 0 };
@@ -950,7 +950,7 @@ Q.onStage(4, () => {
 
   /* backoff storm */
   function rng(seed) { let s = seed >>> 0; return () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
-  const N = 1000, C = 60, B = 0.25, TT = 24, CAP = 8, MAXA = 5, NB = Math.round(TT / B);
+  const N = 1000, C = 60, B = 0.25, TT = 24, CAP = 8, MAXA = 4, NB = Math.round(TT / B);
   function storm(base, jitter) {
     const r = rng(7), ok = Array(NB).fill(0), rej = Array(NB).fill(0);
     let pend = Array.from({ length: N }, () => ({ t: jitter ? r() * base : base, a: 1 }));

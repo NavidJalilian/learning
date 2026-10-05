@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Copy the Ledger</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: read/write colours, s1 query router + replica slider, s2 benefit match, s3 failover topology, s4 wiring diagrams */
+:root { --rd: #2f7fd8; --rd-soft: #e3effc; --wr: #c96400; --wr-soft: #fdecd9; --on-c: #ffffff; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --rd: #5aa9ff; --rd-soft: #142a44; --wr: #ffad5c; --wr-soft: #3a2610; --on-c: #0e0f1d; }
+}
+:root[data-theme="dark"] { --rd: #5aa9ff; --rd-soft: #142a44; --wr: #ffad5c; --wr-soft: #3a2610; --on-c: #0e0f1d; }
+
+.r-ink { color: var(--rd); font-weight: 700; }
+.w-ink { color: var(--wr); font-weight: 700; }
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.legend { display: flex; gap: 6px 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.legend i { display: inline-block; width: 18px; height: 4px; border-radius: 2px; margin-right: 5px; vertical-align: 3px; }
+.legend i.dash { background: repeating-linear-gradient(90deg, var(--teal) 0 5px, transparent 5px 9px) !important; }
+
+/* ---------- stage 1: router ---------- */
+.deck { padding: 16px 14px 6px; min-height: 116px; display: grid; place-items: center; }
+.qcard { width: 100%; max-width: 520px; border-radius: 14px; padding: 12px 14px; border: 2px solid; font-family: var(--mono); font-size: 13.5px; word-break: break-word; box-shadow: var(--shadow); }
+.qcard.read { border-color: var(--rd); background: var(--rd-soft); }
+.qcard.write { border-color: var(--wr); background: var(--wr-soft); }
+.qcard .verb { display: inline-block; font: 700 11px var(--font); letter-spacing: .1em; text-transform: uppercase; padding: 2px 8px; border-radius: 99px; color: var(--on-c); margin-bottom: 6px; }
+.qcard.read .verb { background: var(--rd); }
+.qcard.write .verb { background: var(--wr); }
+.qcard.fall { animation: fall .45s cubic-bezier(.3,1.4,.5,1); }
+.qcard.shake { animation: shake .4s; }
+.qcard.gone { opacity: 0; transform: translateY(26px) scale(.92); transition: opacity .25s, transform .25s; }
+@keyframes fall { from { opacity: 0; transform: translateY(-40px); } }
+.dbrow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 6px 14px 14px; }
+.dbn { position: relative; border: 2px solid var(--line); background: var(--panel); border-radius: 14px; padding: 10px 6px 10px; text-align: center; min-height: 112px; transition: border-color .2s, transform .1s; }
+.dbn:hover:not([disabled]) { border-color: var(--accent); }
+.dbn:active { transform: translateY(1px); }
+.dbn.m { border-color: color-mix(in srgb, var(--wr) 55%, var(--line)); }
+.dbn.r { border-color: color-mix(in srgb, var(--rd) 55%, var(--line)); }
+.dbn .cyl { width: 30px; height: 30px; margin: 0 auto 2px; display: block; }
+.dbn .nm { display: block; font-weight: 700; font-size: 14px; line-height: 1.2; }
+.dbn .sb { display: block; font-size: 12px; color: var(--muted); }
+.meter { height: 8px; border-radius: 99px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; margin: 8px 6px 0; }
+.meter i { display: block; height: 100%; width: 0; background: var(--good); transition: width .4s, background .3s; }
+.meter i.hot { background: var(--bad); }
+.stamp { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; opacity: 0; }
+.stamp span { transform: rotate(-12deg); border: 3px solid var(--bad); color: var(--bad); font: 700 11px var(--font); letter-spacing: .06em; text-transform: uppercase; padding: 3px 6px; border-radius: 6px; background: var(--panel); }
+.stamp.show { animation: stamp 1.3s; }
+@keyframes stamp { 0% { opacity: 0; transform: scale(1.6); } 15% { opacity: 1; transform: scale(1); } 80% { opacity: 1; } 100% { opacity: 0; } }
+.coach { margin: 0 14px 12px; font-size: 14px; padding: 8px 12px; border-radius: 10px; background: var(--warn-soft); display: none; }
+.coach.show { display: block; animation: rise .3s; }
+.ratio { margin-top: 18px; border: 1px solid var(--line); border-radius: 18px; background: var(--bg); padding: 14px; }
+.ratio label { font-weight: 600; font-size: 15px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.ratio input[type=range] { width: 100%; accent-color: var(--accent); height: 30px; margin: 6px 0 2px; }
+.fleet { display: flex; flex-wrap: wrap; gap: 5px; align-items: flex-end; min-height: 44px; margin-top: 8px; }
+.fleet .u { width: 22px; display: grid; justify-items: center; gap: 2px; font: 600 9px var(--mono); color: var(--muted); animation: rise .3s; }
+.fleet .u b { display: block; width: 18px; height: 24px; border-radius: 9px / 5px; border: 2px solid var(--rd); background: linear-gradient(to top, var(--rd-soft) var(--f, 50%), transparent 0); }
+.fleet .u.m b { border-color: var(--wr); background: linear-gradient(to top, var(--wr-soft) var(--f, 50%), transparent 0); }
+.fleet .gap { width: 10px; }
+.rstats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+.rstats div { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px; text-align: center; }
+.rstats b { display: block; font: 700 18px var(--mono); }
+.rstats span { font-size: 12px; color: var(--muted); }
+
+/* ---------- stage 2: match ---------- */
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+.tile { border: 2px solid var(--line); background: var(--panel); border-radius: 14px; padding: 10px 6px; text-align: center; min-height: 96px; transition: border-color .2s, background .2s; }
+.tile:hover:not([disabled]) { border-color: var(--accent); }
+.tile .e { font-size: 24px; display: block; line-height: 1.1; }
+.tile b { display: block; font-size: 14px; line-height: 1.2; margin-top: 2px; }
+.tile .d { display: block; font-size: 12px; color: var(--muted); line-height: 1.3; margin-top: 2px; }
+.tile .ct { display: block; font: 700 12px var(--mono); color: var(--accent); margin-top: 4px; }
+.tile.full { border-color: var(--good); background: var(--good-soft); }
+.tile.armed { border-style: dashed; border-color: var(--accent); }
+.tile.shake { animation: shake .4s; }
+.incs { display: grid; gap: 8px; margin-top: 14px; }
+.inc { text-align: left; border: 2px solid var(--line); background: var(--bg); border-radius: 12px; padding: 11px 14px; font-size: 15px; display: flex; gap: 10px; align-items: flex-start; min-height: 44px; transition: border-color .2s, background .2s; }
+.inc:hover:not([disabled]) { border-color: var(--accent); }
+.inc[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.inc .ic { font-size: 18px; line-height: 1.3; }
+.inc .tg { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--good); white-space: nowrap; padding-left: 6px; }
+.inc.done { border-color: color-mix(in srgb, var(--good) 50%, var(--line)); opacity: .75; }
+.mfeed { min-height: 24px; margin-top: 10px; font-size: 15px; }
+.mfeed.bad { color: var(--bad); }
+.mfeed.good { color: var(--good); }
+
+/* ---------- stage 3: topology ---------- */
+.topo svg { max-width: 560px; margin: 0 auto; }
+.topo .ln { fill: none; stroke-width: 3; transition: opacity .3s; }
+.topo .ln.w { stroke: var(--wr); }
+.topo .ln.r { stroke: var(--rd); }
+.topo .ln.rep { stroke: var(--teal); stroke-dasharray: 6 5; stroke-width: 2.5; }
+.topo .ln.dead { stroke: var(--bad); stroke-dasharray: 3 6; opacity: .8; }
+.topo .ln.mread { stroke: var(--rd); stroke-dasharray: 8 4; }
+.pkt.w { fill: var(--wr); } .pkt.r { fill: var(--rd); } .pkt.rep { fill: var(--teal); }
+.nd { transition: transform .8s cubic-bezier(.3,.8,.2,1), opacity .5s; }
+.nd rect.bx { fill: var(--panel); stroke-width: 2.5; transition: fill .3s, stroke .3s; }
+.nd.master rect.bx { stroke: var(--wr); }
+.nd.replica rect.bx { stroke: var(--rd); }
+.nd.web rect.bx { stroke: var(--muted); }
+.nd.dead rect.bx { fill: var(--bad-soft); stroke: var(--bad); stroke-dasharray: 5 4; }
+.nd.pick rect.bx { stroke: var(--accent); stroke-width: 4; }
+.nd .nm { fill: var(--ink); font: 700 14px var(--font); text-anchor: middle; }
+.nd .sb { fill: var(--muted); font: 600 11.5px var(--mono); text-anchor: middle; }
+.nd .sb.lag { fill: var(--warn); }
+.nd .sb.ok { fill: var(--good); }
+.nd .x { fill: var(--bad); font: 700 22px var(--font); text-anchor: middle; opacity: 0; transition: opacity .3s; }
+.nd.dead .x { opacity: 1; }
+.nd.dead .nm, .nd.dead .sb { fill: var(--bad); }
+.nd .bar { fill: var(--bg-2); }
+.nd .barf { fill: var(--teal); }
+.nd.gone { opacity: 0; }
+.scns { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 14px; }
+.scn { border: 2px solid var(--line); background: var(--panel); border-radius: 12px; padding: 10px 12px; text-align: left; font-weight: 600; font-size: 14px; min-height: 48px; transition: border-color .2s, background .2s; }
+.scn:hover:not([disabled]) { border-color: var(--accent); }
+.scn small { display: block; font-weight: 500; color: var(--muted); font-size: 12px; }
+.scn.on { border-color: var(--accent); background: var(--accent-soft); }
+.scn.done { border-color: color-mix(in srgb, var(--good) 60%, var(--line)); }
+.scn.done::after { content: " ✓"; color: var(--good); }
+.panel3 { padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); display: none; }
+.panel3.on { display: block; }
+.wlist { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.wlist span { font: 600 12px var(--mono); padding: 4px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg-2); transition: background .3s, border-color .3s, color .3s; }
+.wlist span.lost { border-color: var(--bad); background: var(--bad-soft); color: var(--bad); text-decoration: line-through; }
+.wlist span.fixed { border-color: var(--good); background: var(--good-soft); color: var(--good); text-decoration: none; }
+.phone { max-width: 300px; margin: 8px auto 0; border: 2px solid var(--line); border-radius: 18px; padding: 10px 12px; background: var(--bg); font-size: 14px; }
+.phone .post { font-weight: 700; margin-bottom: 6px; }
+.phone .cm { padding: 6px 8px; border-radius: 10px; background: var(--bg-2); margin-top: 5px; animation: rise .3s; }
+.phone .cm.me { background: var(--good-soft); }
+.phone .miss { margin-top: 8px; color: var(--bad); font-weight: 600; }
+.switch { display: inline-flex; align-items: center; gap: 10px; border: 2px solid var(--line); border-radius: 12px; padding: 8px 12px; background: var(--panel); font-weight: 600; font-size: 14px; text-align: left; min-height: 44px; }
+.switch .kn { width: 38px; height: 22px; border-radius: 99px; background: var(--line); position: relative; flex: none; transition: background .2s; }
+.switch .kn::after { content: ""; position: absolute; left: 3px; top: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .2s; }
+.switch[aria-checked="true"] { border-color: var(--good); }
+.switch[aria-checked="true"] .kn { background: var(--good); }
+.switch[aria-checked="true"] .kn::after { left: 19px; }
+.promo { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.promo .opt { text-align: center; padding: 10px 6px; }
+.promo .opt b { display: block; }
+.promo .opt span { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+
+/* ---------- stage 4: wiring ---------- */
+.wire svg { max-width: 520px; margin: 0 auto; }
+.wire .nb rect { fill: var(--panel); stroke: var(--line); stroke-width: 2; }
+.wire .nb.dbm rect { stroke: var(--wr); }
+.wire .nb.dbr rect { stroke: var(--rd); }
+.wire .nb.lb rect { stroke: var(--accent); }
+.wire .nb text { fill: var(--ink); font: 700 13.5px var(--font); text-anchor: middle; }
+.wire .nb .s { fill: var(--muted); font: 600 11px var(--mono); }
+.wire .ed { fill: none; stroke: var(--line); stroke-width: 2.5; transition: stroke .4s, opacity .4s; }
+.wire .ed.lit { stroke: var(--accent); stroke-width: 3.5; }
+.wire .ed.lit.r { stroke: var(--rd); }
+.wire .ed.lit.w { stroke: var(--wr); }
+.wire .ed.rep { stroke: var(--teal); stroke-dasharray: 5 4; }
+.wire .badge circle { fill: var(--accent); }
+.wire .badge text { fill: #fff; font: 700 12px var(--font); text-anchor: middle; dominant-baseline: central; }
+.wire .badge { animation: rise .3s; }
+.steps { display: grid; gap: 8px; margin-top: 12px; }
+.stepc { text-align: left; border: 2px solid var(--line); background: var(--bg); border-radius: 12px; padding: 10px 14px; font-size: 15px; min-height: 44px; transition: border-color .2s; }
+.stepc:hover:not([disabled]) { border-color: var(--accent); }
+.stepc.shake { animation: shake .4s; border-color: var(--bad); }
+.placed { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; counter-reset: st; }
+.placed li { counter-increment: st; padding: 8px 12px 8px 42px; position: relative; border-radius: 10px; background: var(--good-soft); font-size: 15px; animation: rise .3s; }
+.placed li::before { content: counter(st); position: absolute; left: 10px; top: 8px; width: 22px; height: 22px; border-radius: 50%; background: var(--good); color: #fff; font-weight: 700; font-size: 12px; display: grid; place-items: center; }
+.bugsvg .ed.bug { stroke: var(--muted); }
+.bugsvg .ed.fixed { stroke: var(--good); stroke-width: 3; }
+.bugsvg .ed.cut { opacity: .15; }
+.bugsvg .ed.r { stroke: var(--rd); } .bugsvg .ed.w { stroke: var(--wr); }
+.bugsvg .tap { cursor: pointer; }
+.bugsvg .tap:focus { outline: none; }
+.bugsvg .tap .hit { fill: transparent; }
+.bugsvg .tap .pl { fill: var(--panel); stroke: var(--ink); stroke-width: 1.5; transition: fill .3s, stroke .3s; }
+.bugsvg .tap:hover .pl, .bugsvg .tap:focus .pl { stroke: var(--accent); stroke-width: 3; }
+.bugsvg .tap text { fill: var(--ink); font: 700 12px var(--mono); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.bugsvg .tap.found .pl { fill: var(--good-soft); stroke: var(--good); }
+.bugsvg .tap.found text { fill: var(--good); }
+.bugsvg .tap.okay .pl { fill: var(--bg-2); stroke: var(--line); }
+.bugsvg .tap.okay text { fill: var(--muted); }
+.bugsvg .tap.nope .pl { animation: blink .5s; }
+@keyframes blink { 50% { fill: var(--bad-soft); stroke: var(--bad); } }
+.bugsvg .nb.tapn { cursor: pointer; }
+.bugsvg .nb.tapn:focus { outline: none; }
+.bugsvg .nb.tapn:hover rect, .bugsvg .nb.tapn:focus rect { stroke-width: 3.5; }
+.bugfeed { min-height: 52px; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); font-size: 15px; }
+.bugfeed.good { background: var(--good-soft); }
+.bugfeed.bad { background: var(--warn-soft); }
+@media (max-width: 480px) { .dbn .nm { font-size: 13px; } .tile b { font-size: 13px; } .tile .d { font-size: 11px; } }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 1.2 · Scale From Zero to Millions of Users</div>
+    <h1>Copy the Ledger</h1>
+    <p class="lede">Your app has one database, and that one database can take the whole site down. Make copies, decide which copy answers which question, and then practise what happens when a copy dies, or the original does.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can explain primary/replica replication, route reads and writes correctly, name its three benefits, and answer "what if a replica dies?" and "what if the master dies?" with the honest caveat about lag.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>One writer, many readers</h2><div class="sub">Master/slave in one picture</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>In Quest 1.1 you put a load balancer in front of two web servers, so the web tier survives losing a server. The data tier doesn't. There is still <b>one</b> database. If it dies, every web server is left with nothing to talk to. That is a <b>single point of failure</b> (SPOF): one part whose failure takes everything down. The book points out that this design has no <i>failover</i> (switching to a backup) and no <i>redundancy</i> (spare copies).<a class="cite" href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">[1]</a></p>
+      <p>The fix is <b>database replication</b>: keep copies of the same data on more than one database server.<a class="cite" href="https://en.wikipedia.org/wiki/Replication_(computing)" target="_blank" rel="noopener">[2]</a> The book's setup has one original, the <b>master</b>, and several copies, the <b>slaves</b>. The rules:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">[1]</a></p>
+      <ul>
+        <li>The <b>master</b> handles the <span class="w-ink">writes</span>: every statement that changes data (<code>INSERT</code>, <code>UPDATE</code>, <code>DELETE</code>).</li>
+        <li>Each <b>slave</b> receives a copy of the master's data and handles <span class="r-ink">reads</span> only (<code>SELECT</code>).</li>
+        <li>Most apps read far more than they write, so you usually run <b>more slaves than masters</b>.</li>
+      </ul>
+      <div class="callout"><b>Words.</b> Master/slave is the book's wording and the older term. Most docs today say <b>primary/replica</b> (or leader/follower). Interviewers accept either. This quest says <b>master</b> and <b>replica</b>.</div>
+      <p><b>You're the web server.</b> Each card is a query. Tap the database it should go to. Round 1 is practice, so mistakes don't cost hearts. Get at least 10 of 12 right.</p>
+
+      <div class="sim" id="router">
+        <div class="deck" id="deck"></div>
+        <div class="dbrow" id="dbrow">
+          <button class="dbn m" data-t="m" aria-label="Send to the master database"><svg class="cyl" viewBox="0 0 30 30" aria-hidden="true"><ellipse cx="15" cy="7" rx="11" ry="4" fill="none" stroke="var(--wr)" stroke-width="2.5"/><path d="M4 7v16c0 2.2 4.9 4 11 4s11-1.8 11-4V7" fill="none" stroke="var(--wr)" stroke-width="2.5"/></svg><span class="nm">Master</span><span class="sb">the original</span><div class="meter"><i></i></div><div class="stamp"><span>too busy</span></div></button>
+          <button class="dbn r" data-t="r1" aria-label="Send to replica 1"><svg class="cyl" viewBox="0 0 30 30" aria-hidden="true"><ellipse cx="15" cy="7" rx="11" ry="4" fill="none" stroke="var(--rd)" stroke-width="2.5"/><path d="M4 7v16c0 2.2 4.9 4 11 4s11-1.8 11-4V7" fill="none" stroke="var(--rd)" stroke-width="2.5"/></svg><span class="nm">Replica 1</span><span class="sb">a copy</span><div class="meter"><i></i></div><div class="stamp"><span>read-only replica</span></div></button>
+          <button class="dbn r" data-t="r2" aria-label="Send to replica 2"><svg class="cyl" viewBox="0 0 30 30" aria-hidden="true"><ellipse cx="15" cy="7" rx="11" ry="4" fill="none" stroke="var(--rd)" stroke-width="2.5"/><path d="M4 7v16c0 2.2 4.9 4 11 4s11-1.8 11-4V7" fill="none" stroke="var(--rd)" stroke-width="2.5"/></svg><span class="nm">Replica 2</span><span class="sb">a copy</span><div class="meter"><i></i></div><div class="stamp"><span>read-only replica</span></div></button>
+        </div>
+        <div class="coach" id="coach"></div>
+        <div class="sim-bar"><span id="rRound">Round 1 · practice</span><span>Card <b id="rCard">1</b> / 12 · right first time: <b id="rScore">0</b></span></div>
+        <div class="simlog" id="r1log"><div>The bars show how busy each database is this round.</div></div>
+      </div>
+      <div class="row" id="rAgainRow" style="margin-top:10px;display:none"><button class="btn" id="rAgain">↻ Play another round</button></div>
+
+      <div class="ratio">
+        <label for="ratioIn"><span>Reads per write: <span class="mono" id="ratioVal">1 : 1</span></span><span class="small muted">toy numbers, for illustration</span></label>
+        <input type="range" id="ratioIn" min="0" max="7" step="1" value="0" aria-label="Read to write ratio">
+        <p class="small muted" style="margin:0">Your app makes <b>500 writes/s</b>. Each database server here handles 2,000 queries/s, and you keep every replica under 70% busy. How many replicas do you need?</p>
+        <div class="fleet" id="fleet" aria-live="polite"></div>
+        <div class="rstats"><div><b id="rsReads">500</b><span>reads/s</span></div><div><b id="rsReps">1</b><span>replicas needed</span></div><div><b id="rsM">25%</b><span>master busy</span></div></div>
+        <p class="small muted" style="margin:8px 0 0">Real replicas also replay every write they copy, so each one has a little less room for reads than this toy shows.</p>
+      </div>
+
+      <ul class="checklist" id="s1goals">
+        <li data-g="route"><span class="box">✓</span><span>Route at least <b>10 of 12</b> queries right first time</span></li>
+        <li data-g="ratio"><span class="box">✓</span><span>Drag the slider to a read-heavy app (<b>20 : 1</b> or more) and count the replicas</span></li>
+      </ul>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Why bother?</h2><div class="sub">Three wins of replication</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book lists three advantages of replication.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">[1]</a> Learn to tell them apart, because interviewers like to ask "which one does that give you?"</p>
+      <ul>
+        <li><b>Better performance.</b> All writes go to the master, and reads are spread over many replicas. More queries run <i>in parallel</i> (at the same time on different machines).</li>
+        <li><b>Reliability.</b> If one database server is destroyed (the book's example is a natural disaster such as a typhoon or an earthquake), the data is <b>not lost</b>, because copies live on servers in other places.</li>
+        <li><b>High availability.</b> Because the data is in several places, the site <b>keeps working</b> when one database goes offline. It just reads from another server.</li>
+      </ul>
+      <p class="small muted">The difference between the last two: reliability is about <b>data surviving</b>. Availability is about <b>the site still answering</b>.</p>
+      <p><b>Match each incident to the win it shows.</b> Tap an incident, then tap a benefit.</p>
+      <div class="tiles" id="tiles">
+        <button class="tile" data-b="perf"><span class="e">⚡</span><b>Performance</b><span class="d">more reads in parallel</span><span class="ct">0 / 2</span></button>
+        <button class="tile" data-b="rel"><span class="e">🛡️</span><b>Reliability</b><span class="d">data survives losing a server</span><span class="ct">0 / 2</span></button>
+        <button class="tile" data-b="ha"><span class="e">🟢</span><b>High availability</b><span class="d">site stays up when a DB is down</span><span class="ct">0 / 2</span></button>
+      </div>
+      <div class="incs" id="incs"></div>
+      <div class="mfeed" id="mfeed" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Pull the plug</h2><div class="sub">When a replica or the master dies</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Replication only helps if you know what happens when a server dies. The book covers two cases:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">[1]</a> a <b>replica</b> goes offline, or the <b>master</b> goes offline. One more word first. A replica copies the master's changes a moment <i>after</i> they happen, so it can be a few writes behind. That gap is called <b>replication lag</b>. Each replica below shows how many writes behind it is.</p>
+      <p>Pick a scenario. <b>Predict</b> first, then watch. Run A, B and C (in any order) to unlock the check. The bonus is optional, but the boss will ask about it.</p>
+      <div class="sim topo">
+        <svg id="topo" viewBox="0 0 400 300" role="img" aria-label="A web server, a master database and its replicas"></svg>
+        <div class="sim-bar"><div class="legend"><span><i style="background:var(--wr)"></i>writes</span><span><i style="background:var(--rd)"></i>reads</span><span><i class="dash"></i>copying changes</span></div></div>
+        <div class="panel3" id="p3"></div>
+        <div class="simlog" id="t3log"><div>Pick a scenario below.</div></div>
+      </div>
+      <div class="scns" id="scns">
+        <button class="scn" data-s="A">A · Kill the only replica<small>1 replica</small></button>
+        <button class="scn" data-s="B">B · Kill 1 of 3 replicas<small>3 replicas</small></button>
+        <button class="scn" data-s="C">C · Kill the master<small>3 replicas, some behind</small></button>
+        <button class="scn" data-s="D">Bonus · Read your own write<small>lag bites a user</small></button>
+      </div>
+      <div class="challenge boxed" id="p3box" style="display:none"></div>
+      <ul class="checklist" id="s3goals">
+        <li data-g="A"><span class="box">✓</span><span>A: the only replica dies</span></li>
+        <li data-g="B"><span class="box">✓</span><span>B: one of three replicas dies</span></li>
+        <li data-g="C"><span class="box">✓</span><span>C: the master dies, and you pick who takes over</span></li>
+      </ul>
+      <div class="callout warn" id="c3note" style="display:none"><b>The book's honest note.</b> In real systems, promoting a new master is harder than it looks, because a replica's data may not be up to date. The missing data has to be patched by running <i>data recovery scripts</i>. Other setups, such as <b>multi-master</b> (several servers accept writes)<a class="cite" href="https://en.wikipedia.org/wiki/Multi-master_replication" target="_blank" rel="noopener">[3]</a> and <b>circular replication</b> (each server copies from the one before it, in a loop)<a class="cite" href="https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-replication-multi-master.html" target="_blank" rel="noopener">[4]</a>, can help, but they are more complicated. The book leaves them out of scope, and so do we.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">[1]</a></div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Wire it all up</h2><div class="sub">Load balancer + replication, end to end</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Put Quest 1.1 and this quest together and you get the book's design so far: users, DNS, a load balancer, two web servers, a master and a replica.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">[1]</a> Now the web tier <i>and</i> the data tier both have spares. A quick reminder: <b>DNS</b> (the Domain Name System) turns a name like <code>api.mysite.com</code> into an IP address.</p>
+      <h3 style="margin:18px 0 4px;font-size:17px">Part A · Follow one request</h3>
+      <p class="small muted" style="margin-top:0">Tap the steps in the order they happen. The diagram lights up as you go. Steps 4 and 5 are two separate paths, so either order counts.</p>
+      <div class="sim wire">
+        <svg id="flow" viewBox="0 0 360 330" role="img" aria-label="User, DNS, load balancer, two web servers, master and replica database"></svg>
+      </div>
+      <ol class="placed" id="placed"></ol>
+      <div class="steps" id="steps"></div>
+
+      <h3 style="margin:26px 0 4px;font-size:17px">Part B · Spot the bugs</h3>
+      <p class="small muted" style="margin-top:0">A teammate drew this. It has <b>3 mistakes</b>. Tap a label (or the master) to flag it. Flagging something that's fine costs a heart.</p>
+      <div class="sim wire">
+        <svg id="bugs" class="bugsvg" viewBox="0 0 360 440" role="img" aria-label="A design with planted mistakes"></svg>
+        <div class="sim-bar"><span>Bugs found: <b id="bugCount">0</b> / 3</span><div class="legend"><span><i style="background:var(--wr)"></i>write</span><span><i style="background:var(--rd)"></i>read</span></div></div>
+        <div class="bugfeed" id="bugfeed" aria-live="polite">Look at where each arrow goes.</div>
+      </div>
+      <ul class="checklist" id="s4goals">
+        <li data-g="order"><span class="box">✓</span><span>Put the 5 steps of a request in order</span></li>
+        <li data-g="bugs"><span class="box">✓</span><span>Find all 3 bugs in the drawing</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Ledger Lich</h2><div class="sub">Route it, or fail it over</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The Lich throws seven situations at your database tier. For each one, pick the move you'd make <b>right now</b>.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">The interview answer, in your words</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout" id="drillRetry" style="display:none"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> The web and data tiers now have spares. The next problem is speed: every page still goes all the way to a database. Quest 1.3, <a href="0103-scale-cache-and-cdn.html"><i>Hot Memory, Near Edge</i></a>, adds a cache and a CDN.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 1: "Scale From Zero To Millions Of Users"</a>, the "Database replication" section (about two pages, with the figure of the full design). For the bigger picture, Wikipedia's <a href="https://en.wikipedia.org/wiki/Replication_(computing)" target="_blank" rel="noopener">Replication (computing)</a> covers the main kinds. Chapter 5 of Kleppmann's <i>Designing Data-Intensive Applications</i> (on replication) is the best deep dive when you want one.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <ul style="margin:0;padding-left:20px">
+        <li><b>Failover is more than "promote a replica".</b> You have to detect the failure reliably, make sure the old master can't come back and keep accepting writes (two masters at once is called <i>split brain</i>, and blocking the old one is called <i>fencing</i>), and repoint every client. Managed services such as <a href="https://aws.amazon.com/rds/features/multi-az/" target="_blank" rel="noopener">Amazon RDS Multi-AZ</a> and tools such as <a href="https://github.com/openark/orchestrator" target="_blank" rel="noopener">Orchestrator</a> (MySQL) and <a href="https://github.com/patroni/patroni" target="_blank" rel="noopener">Patroni</a> (PostgreSQL) automate this.</li>
+        <li><b>Async vs sync.</b> With <i>asynchronous</i> replication (the common default) the master confirms a write before any replica has it, so a promoted replica can be missing writes the user was told had succeeded. <i>Synchronous</i> or <a href="https://dev.mysql.com/doc/refman/8.0/en/replication-semisync.html" target="_blank" rel="noopener">semi-synchronous</a> replication waits for a replica too. That narrows the gap, but every write gets slower.</li>
+        <li><b>Read-your-writes.</b> Lag also means a user may not see their own change. Common fixes: send that user's reads to the master for a short while after they write, or read from a replica that has caught up to their write.<a class="cite" href="https://en.wikipedia.org/wiki/Consistency_model" target="_blank" rel="noopener">[5]</a></li>
+        <li><b>Replication scales reads, not writes.</b> Every write still lands on one master, and every replica replays it. When writes outgrow one machine, you need <i>sharding</i>. That's Quest 1.5.</li>
+      </ul>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"how does a replica actually get the changes, row by row or statement by statement?"</i> or <i>"when would I pick multi-master over one master?"</i>
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 1 "Scale From Zero To Millions Of Users", Database replication (ByteByteGo).</li>
+        <li>Wikipedia, "Replication (computing)".</li>
+        <li>Wikipedia, "Multi-master replication".</li>
+        <li>MySQL 5.7 Reference Manual, "NDB Cluster Replication: Bidirectional and Circular Replication".</li>
+        <li>Wikipedia, "Consistency model" (read-your-writes consistency).</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0102',
+  winTitle: 'Your data has backup singers!',
+  badge: '📚 Badge: Replica Wrangler',
+  cheatsheet: '../reference/ch01-scaling-cheatsheet.html',
+});
+const { sleep, shuffle, esc } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+const BOOK = 'https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users';
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function anim(dur, f) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 1) { f(1); return res(); }
+    const t0 = performance.now();
+    const fr = now => { const p = Math.min(1, (now - t0) / dur); f(p); p < 1 ? requestAnimationFrame(fr) : res(); };
+    requestAnimationFrame(fr);
+  });
+}
+const pause = ms => sleep(Q.reduced ? Math.min(ms, 80) : ms);
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); if (xp) Q.addXP(xp, li);
+  return true;
+}
+function keyActivate(el, fn) {
+  el.addEventListener('click', fn);
+  el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(e); } });
+}
+// Predict-then-watch round. Resolves after the learner picks and the action has played.
+function predict(box, { step, title, options, correct, act, explain, xp = 15 }) {
+  box.innerHTML = `${step ? `<div class="step">${step}</div>` : ''}<h3>${title}</h3><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+  const opts = $('.opts', box);
+  let busy = false;
+  return new Promise(resolve => {
+    shuffle(options.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = async () => {
+        if (busy) return; busy = true;
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        b.classList.add('picked');
+        await act();
+        const ok = i === correct;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-i="${correct}"]`, opts).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + explain;
+        ok ? Q.addXP(xp, b) : Q.loseHeart(b);
+        resolve({ ok, row: $('.row', box) });
+      };
+      opts.appendChild(b);
+    });
+  });
+}
+function nextBtn(row, label, fn, primary = true) {
+  const b = document.createElement('button'); b.className = 'btn' + (primary ? ' primary' : ''); b.textContent = label; b.onclick = fn; row.appendChild(b); return b;
+}
+// Run a list of quizzes one after another in the same mount, then call done.
+function quizChain(mount, list, done) {
+  let i = 0;
+  const next = () => {
+    if (i >= list.length) { done(); return; }
+    const cfg = list[i++];
+    Q.quiz(mount, { ...cfg, tag: cfg.tag || `Check ${i} of ${list.length}`, onDone: () => setTimeout(next, 700) });
+  };
+  next();
+}
+
+/* ================= STAGE 1: router + replica slider ================= */
+Q.onStage(1, () => {
+  const READS = [
+    "SELECT * FROM products WHERE id = 42",
+    "SELECT name, avatar FROM users WHERE id = 7",
+    "SELECT * FROM posts ORDER BY created_at DESC LIMIT 20",
+    "SELECT COUNT(*) FROM likes WHERE post_id = 9",
+    "SELECT * FROM orders WHERE user_id = 7",
+    "SELECT price FROM products WHERE sku = 'A1'",
+    "SELECT body FROM comments WHERE post_id = 9",
+    "SELECT city FROM addresses WHERE user_id = 3",
+    "SELECT title FROM posts WHERE author_id = 12",
+  ];
+  const WRITES = [
+    "INSERT INTO orders (user_id, total) VALUES (7, 59.90)",
+    "UPDATE users SET email = 'n@ex.com' WHERE id = 7",
+    "DELETE FROM cart_items WHERE user_id = 7",
+    "INSERT INTO comments (post_id, body) VALUES (9, 'nice')",
+    "UPDATE products SET stock = stock - 1 WHERE id = 42",
+  ];
+  const goals = new Set();
+  let round = 0, deck = [], ci = 0, score = 0, firstTry = true, busy = false, load = {}, quizShown = false;
+  const meter = t => $(`#dbrow .dbn[data-t="${t}"] .meter i`);
+  function paintLoad() {
+    for (const t of ['m', 'r1', 'r2']) { const v = Math.min(100, load[t] * 12); const m = meter(t); m.style.width = v + '%'; m.classList.toggle('hot', v > 70); }
+  }
+  function newRound() {
+    round++; ci = 0; score = 0; load = { m: 0, r1: 0, r2: 0 };
+    deck = shuffle([...shuffle(READS).slice(0, 8).map(q => ({ q, k: 'read' })), ...shuffle(WRITES).slice(0, 4).map(q => ({ q, k: 'write' }))]);
+    $('#rRound').textContent = round === 1 ? 'Round 1 · practice' : `Round ${round} · misroutes cost a heart`;
+    $('#rAgainRow').style.display = 'none';
+    $('#coach').classList.remove('show');
+    $$('#dbrow .dbn').forEach(b => b.disabled = false);
+    paintLoad(); showCard();
+  }
+  function showCard() {
+    firstTry = true;
+    $('#rCard').textContent = Math.min(ci + 1, 12); $('#rScore').textContent = score;
+    const c = deck[ci];
+    $('#deck').innerHTML = `<div class="qcard ${c.k} fall" role="status"><span class="verb">${c.k === 'read' ? 'read' : 'write'}</span><div>${esc(c.q)}</div></div>`;
+  }
+  function stamp(btn) { const s = $('.stamp', btn); s.classList.remove('show'); void s.offsetWidth; s.classList.add('show'); }
+  function miss(btn, msg) {
+    firstTry = false;
+    const coach = $('#coach'); coach.innerHTML = msg; coach.classList.add('show');
+    if (round > 1) Q.loseHeart(btn);
+  }
+  $$('#dbrow .dbn').forEach(btn => btn.onclick = async () => {
+    if (busy || ci >= 12) return;
+    const c = deck[ci], t = btn.dataset.t, card = $('#deck .qcard');
+    if (c.k === 'write' && t !== 'm') {
+      stamp(btn); card.classList.remove('fall', 'shake'); void card.offsetWidth; card.classList.add('shake');
+      logTo('r1log', `✗ ${esc(c.q.split(' ')[0])} bounced off ${t === 'r1' ? 'Replica 1' : 'Replica 2'}: replicas are read-only`, 'e');
+      miss(btn, '<b>Bounced.</b> Replicas only serve reads. Anything that changes data goes to the <b>master</b>. Try again.');
+      return;
+    }
+    busy = true;
+    if (c.k === 'read' && t === 'm') {
+      load.m += 1.5;
+      logTo('r1log', `~ SELECT answered by the master, but it's getting busy`, 'w');
+      miss(btn, '<b>It worked, but…</b> the master can answer reads, but its job is the writes. Send reads to the replicas and keep the master free.');
+    } else {
+      load[t] += 1;
+      if (firstTry) { score++; $('#coach').classList.remove('show'); }
+      logTo('r1log', `✓ ${esc(c.q.split(' ')[0])} → ${t === 'm' ? 'Master' : t === 'r1' ? 'Replica 1' : 'Replica 2'}`, 'g');
+    }
+    paintLoad();
+    card.classList.add('gone');
+    await pause(260);
+    ci++; busy = false;
+    if (ci < 12) return showCard();
+    endRound();
+  });
+  function endRound() {
+    $('#rScore').textContent = score;
+    $$('#dbrow .dbn').forEach(b => b.disabled = true);
+    const ok = score >= 10;
+    $('#deck').innerHTML = `<div class="qcard ${ok ? 'read' : 'write'}" role="status"><span class="verb">round over</span><div>${score} of 12 routed right first time. ${ok ? 'Writes to the master, reads to the replicas.' : 'You need 10. Go again: from now on, misroutes cost a heart.'}</div></div>`;
+    $('#rAgainRow').style.display = '';
+    if (ok && checkGoal('#s1goals', 'route', goals, 20)) maybeQuiz();
+  }
+  $('#rAgain').onclick = newRound;
+  newRound();
+
+  // replica slider (toy model)
+  const RATIOS = [1, 2, 3, 5, 10, 20, 30, 50], WPS = 500, CAP = 2000, MAXR = 0.7;
+  function ratio() {
+    const r = RATIOS[+$('#ratioIn').value], reads = r * WPS, reps = Math.ceil(reads / (CAP * MAXR));
+    const per = Math.round(reads / reps / CAP * 100), mBusy = Math.round(WPS / CAP * 100);
+    $('#ratioVal').textContent = `${r} : 1`;
+    $('#rsReads').textContent = reads.toLocaleString('en-US');
+    $('#rsReps').textContent = reps;
+    $('#rsM').textContent = mBusy + '%';
+    $('#fleet').innerHTML = `<span class="u m" style="--f:${mBusy}%" title="master"><b></b>M</span><span class="gap"></span>` +
+      Array.from({ length: reps }, (_, i) => `<span class="u" style="--f:${per}%" title="replica ${i + 1}: ${per}% busy"><b></b>${i + 1}</span>`).join('');
+    if (r >= 20 && checkGoal('#s1goals', 'ratio', goals, 10)) {
+      logTo('r1log', `📈 ${r}:1 → ${reps} replicas, while the master stays at ${mBusy}%. Reads are what you scale out.`, 'g');
+      maybeQuiz();
+    }
+  }
+  $('#ratioIn').addEventListener('input', ratio);
+  ratio();
+
+  function maybeQuiz() {
+    if (quizShown || goals.size < 2) return;
+    quizShown = true;
+    setTimeout(() => quizChain($('#s1quiz'), [
+      { q: 'Your app runs one master and two replicas. Which of them accept <code>INSERT</code>, <code>UPDATE</code> and <code>DELETE</code>?',
+        options: ['Only the master accepts them', 'Any replica that is idle now', 'Master and replicas alike'],
+        correct: 0,
+        good: 'All data-changing statements go to the master. Replicas get copies of its data and only serve reads.',
+        bad: 'Replicas are read-only copies. Every statement that changes data (insert, update, delete) must go to the master, which is the original.' },
+      { q: 'Why does a typical setup have <b>more replicas than masters</b>?',
+        options: ['Apps read far more than they write', 'Replicas cost less to license', 'A master can hold one table only'],
+        correct: 0,
+        good: 'Most apps read much more often than they write. One master can keep up with the writes, and you add replicas to share out the reads. You saw it on the slider.',
+        bad: 'It comes down to traffic. Most apps read much more often than they write, so one master handles the writes and extra replicas share the reads.' },
+    ], () => setTimeout(() => Q.clearStage(1), 400)), 500);
+  }
+});
+
+/* ================= STAGE 2: match the benefit ================= */
+Q.onStage(2, () => {
+  const NAME = { perf: 'Performance', rel: 'Reliability', ha: 'High availability' };
+  const INC = [
+    { e: '🌋', t: 'An earthquake destroys the server room in one city, and no data is lost.', a: 'rel', why: 'The data survived losing a whole server. That is reliability.' },
+    { e: '⚡', t: 'Five replicas each answer 2,000 reads a second, all at the same time.', a: 'perf', why: 'Many replicas answering in parallel is the performance win.' },
+    { e: '🔁', t: 'One replica is rebooting, but every page still loads.', a: 'ha', why: 'The site kept answering while a database was offline. That is high availability.' },
+    { e: '🌊', t: 'A flood ruins a disk, and a copy of its data survives elsewhere.', a: 'rel', why: 'The data is safe because a copy lives in another place. That is reliability.' },
+    { e: '🚦', t: 'Reads stop queuing behind writes on a single box.', a: 'perf', why: 'Moving reads off the master lets more queries run at once. That is performance.' },
+    { e: '🛠️', t: 'You patch one database node and users notice no downtime.', a: 'ha', why: 'Taking one node offline did not take the site offline. That is high availability.' },
+  ];
+  const done = new Set(), count = { perf: 0, rel: 0, ha: 0 };
+  let sel = null, cleared = false;
+  $('#incs').innerHTML = shuffle(INC.map((x, i) => i)).map(i => `<button class="inc" data-i="${i}" aria-pressed="false"><span class="ic">${INC[i].e}</span><span>${INC[i].t}</span><span class="tg"></span></button>`).join('');
+  const fb = $('#mfeed');
+  function arm(on) { $$('#tiles .tile').forEach(t => t.classList.toggle('armed', on && !t.classList.contains('full'))); }
+  $$('#incs .inc').forEach(b => b.onclick = () => {
+    if (done.has(+b.dataset.i)) return;
+    $$('#incs .inc').forEach(x => x.setAttribute('aria-pressed', 'false'));
+    b.setAttribute('aria-pressed', 'true'); sel = +b.dataset.i; arm(true);
+    fb.className = 'mfeed'; fb.textContent = 'Now tap the benefit it shows.';
+  });
+  $$('#tiles .tile').forEach(t => t.onclick = () => {
+    if (sel === null) { Q.toast('pick an incident first', t, 'practice'); return; }
+    const inc = INC[sel], b = $(`#incs .inc[data-i="${sel}"]`), k = t.dataset.b;
+    if (k !== inc.a) {
+      t.classList.remove('shake'); void t.offsetWidth; t.classList.add('shake');
+      fb.className = 'mfeed bad';
+      fb.innerHTML = `Not ${NAME[k]}. ${k === 'rel' ? 'Reliability is about data <b>surviving</b>.' : k === 'ha' ? 'Availability is about the site <b>still answering</b>.' : 'Performance is about <b>more queries at once</b>.'} Try another tile.`;
+      Q.loseHeart(t);
+      return;
+    }
+    done.add(sel); count[k]++; sel = null; arm(false);
+    b.classList.add('done'); b.disabled = true; b.setAttribute('aria-pressed', 'false');
+    $('.tg', b).textContent = '✓ ' + NAME[k];
+    $('.ct', t).textContent = `${count[k]} / 2`;
+    if (count[k] === 2) t.classList.add('full');
+    fb.className = 'mfeed good'; fb.textContent = inc.why;
+    Q.addXP(10, t);
+    if (done.size === INC.length && !cleared) {
+      cleared = true;
+      fb.innerHTML = 'All six matched. <b>Performance</b> = more reads at once. <b>Reliability</b> = the data survives. <b>Availability</b> = the site keeps answering.';
+      setTimeout(() => Q.clearStage(2), 900);
+    }
+  });
+});
+
+/* ================= STAGE 3: failover topology ================= */
+Q.onStage(3, () => {
+  const svg = $('#topo');
+  const W = 124, H = 54;
+  const WEB = { x: 62, y: 158 }, MS = { x: 220, y: 46 }, RS = [{ x: 298, y: 126 }, { x: 298, y: 194 }, { x: 298, y: 262 }];
+  const linesG = S('g', {}, svg), pktG = S('g', {}, svg), nodesG = S('g', {}, svg);
+  // web server node (static)
+  const web = S('g', { class: 'nd web', style: `transform: translate(${WEB.x}px, ${WEB.y}px)` }, nodesG);
+  S('rect', { class: 'bx', x: -50, y: -26, width: 100, height: 52, rx: 10 }, web);
+  S('text', { class: 'nm', x: 0, y: -3 }, web).textContent = 'Web server';
+  S('text', { class: 'sb', x: 0, y: 15 }, web).textContent = 'your app';
+  let nodes = [];
+  const els = new Map();
+  const pos = n => n.slot === 'M' ? MS : RS[n.slot];
+  function nodeEl(n) {
+    let g = els.get(n.id);
+    if (!g) {
+      g = S('g', { class: 'nd' }, nodesG);
+      S('rect', { class: 'bx', x: -W / 2, y: -H / 2, width: W, height: H, rx: 10 }, g);
+      S('text', { class: 'nm', x: 0, y: -5 }, g);
+      S('text', { class: 'sb', x: 0, y: 14 }, g);
+      S('rect', { class: 'bar', x: -44, y: 18, width: 88, height: 0, rx: 3 }, g);
+      S('rect', { class: 'barf', x: -44, y: 18, width: 0, height: 0, rx: 3 }, g);
+      S('text', { class: 'x', x: W / 2 - 14, y: -8 }, g).textContent = '✕';
+      const p = pos(n); g.style.transform = `translate(${p.x}px, ${p.y}px)`;
+      els.set(n.id, g);
+    }
+    return g;
+  }
+  function paintNode(n) {
+    const g = nodeEl(n), p = pos(n);
+    g.style.transform = `translate(${p.x}px, ${p.y}px)`;
+    g.setAttribute('class', `nd ${n.role}${n.alive ? '' : ' dead'}${n.pick ? ' pick' : ''}`);
+    $('.nm', g).textContent = n.name;
+    const sb = $('.sb', g);
+    const copying = n.copy !== undefined && n.copy < 1;
+    $('.bar', g).setAttribute('height', copying ? 6 : 0);
+    $('.barf', g).setAttribute('height', copying ? 6 : 0);
+    $('.barf', g).setAttribute('width', copying ? 88 * n.copy : 0);
+    if (copying) { sb.setAttribute('y', 8); sb.textContent = 'copying data…'; sb.setAttribute('class', 'sb'); return; }
+    sb.setAttribute('y', 14);
+    if (!n.alive) { sb.textContent = 'offline'; sb.setAttribute('class', 'sb'); }
+    else if (n.role === 'master') { sb.textContent = 'all writes'; sb.setAttribute('class', 'sb'); }
+    else { sb.textContent = `reads · ${n.lag} behind`; sb.setAttribute('class', 'sb ' + (n.lag ? 'lag' : 'ok')); }
+  }
+  const master = () => nodes.find(n => n.role === 'master' && n.alive);
+  const readers = () => nodes.filter(n => n.role === 'replica' && n.alive && !(n.copy < 1));
+  let forceMasterRead = false;
+  function draw() {
+    linesG.innerHTML = '';
+    const m = master();
+    S('path', { class: 'ln w' + (m ? '' : ' dead'), d: `M${WEB.x} ${WEB.y - 26} V${MS.y} H${MS.x - W / 2}`, 'data-k': 'w' }, linesG);
+    const rs = readers();
+    if (rs.length && !forceMasterRead) rs.forEach(r => { const p = pos(r); S('path', { class: 'ln r', d: `M${WEB.x + 50} ${WEB.y} C 175 ${WEB.y}, 175 ${p.y}, ${p.x - W / 2} ${p.y}`, 'data-k': 'r' }, linesG); });
+    else if (m) S('path', { class: 'ln mread', d: `M${WEB.x + 30} ${WEB.y - 26} C ${WEB.x + 40} 100, 150 ${MS.y + 40}, ${MS.x - 30} ${MS.y + H / 2}`, 'data-k': 'r' }, linesG);
+    if (m) nodes.filter(n => n.role === 'replica' && n.alive).forEach(r => { const p = pos(r); S('path', { class: 'ln rep', d: `M${MS.x + W / 2} ${MS.y} H384 V${p.y} H${p.x + W / 2}`, 'data-k': 'rep' }, linesG); });
+    for (const [id, g] of [...els]) if (!nodes.some(n => n.id === id)) { g.remove(); els.delete(id); }
+    nodes.forEach(paintNode);
+  }
+  function setup(list) { nodes = list.map(n => ({ lag: 0, alive: true, ...n })); forceMasterRead = false; for (const g of els.values()) g.remove(); els.clear(); draw(); }
+  const byId = id => nodes.find(n => n.id === id);
+  function travel(path, cls, dur) {
+    if (Q.reduced || !path || !path.isConnected) return Promise.resolve();
+    const L = path.getTotalLength(), c = S('circle', { r: 5, class: 'pkt ' + cls }, pktG);
+    return anim(dur, p => { const pt = path.getPointAtLength(L * p); c.setAttribute('cx', pt.x); c.setAttribute('cy', pt.y); }).then(() => c.remove());
+  }
+  // ambient traffic while the sim is on screen
+  let visible = false;
+  if ('IntersectionObserver' in window) new IntersectionObserver(es => { visible = es[0].isIntersecting; }).observe(svg);
+  setInterval(() => {
+    if (!visible || Q.reduced || document.hidden) return;
+    const w = $('path[data-k="w"]:not(.dead)', linesG);
+    if (w) travel(w, 'w', 700).then(() => $$('path[data-k="rep"]', linesG).forEach(p => travel(p, 'rep', 800)));
+    $$('path[data-k="r"]', linesG).forEach((p, i) => setTimeout(() => travel(p, 'r', 700), 250 + i * 120));
+  }, 1700);
+  async function copyIn(id) {
+    const n = byId(id); n.copy = 0; draw();
+    await anim(1600, p => { n.copy = p; paintNode(n); });
+    n.copy = 1; n.lag = 0; draw();
+  }
+
+  const panel = $('#p3'), box = $('#p3box');
+  const goals = new Set();
+  let busy = false, quizShown = false;
+  function setBusy(b) { busy = b; $$('#scns .scn').forEach(x => x.disabled = b); }
+  function showPanel(html) { panel.innerHTML = html || ''; panel.classList.toggle('on', !!html); }
+  function finish(key, row) {
+    $(`#scns .scn[data-s="${key}"]`).classList.add('done');
+    if (key !== 'D') { checkGoal('#s3goals', key, goals); }
+    if (key === 'C') $('#c3note').style.display = 'block';
+    setBusy(false);
+    if (row) nextBtn(row, '↻ Run it again', () => run(key), false);
+    maybeQuiz();
+  }
+
+  const SCN = {
+    A: async () => {
+      setup([{ id: 'M', name: 'Master', role: 'master', slot: 'M' }, { id: 'R1', name: 'Replica 1', role: 'replica', slot: 1 }]);
+      showPanel('');
+      logTo('t3log', 'Setup: one master, one replica. Reads go to the replica.');
+      const { row } = await predict(box, {
+        step: 'Scenario A', title: 'Your <b>only</b> replica dies. Where do reads go right now?',
+        options: ['To the master, for the time being', 'Nowhere: reads fail until it’s back', 'To another replica in the pool'],
+        correct: 0,
+        act: async () => {
+          byId('R1').alive = false; draw();
+          logTo('t3log', '💀 Replica 1 went offline.', 'e');
+          await pause(900);
+          logTo('t3log', '→ No replica left, so reads go to the <b>master</b> for now.', 'w');
+          await pause(1200);
+          nodes = nodes.filter(n => n.id !== 'R1');
+          nodes.push({ id: 'R1b', name: 'Replica 1′', role: 'replica', slot: 1, alive: true, lag: 0 });
+          logTo('t3log', '🛠️ Issue found: a new replica replaces the old one and copies the data.');
+          await copyIn('R1b');
+          logTo('t3log', '✓ The new replica caught up. Reads move back off the master.', 'g');
+        },
+        explain: 'With just one replica, the book sends reads to the master <b>temporarily</b>. As soon as the problem is found, a new replica replaces the old one. Nothing was lost: the master had all the data.',
+      });
+      finish('A', row);
+    },
+    B: async () => {
+      setup([{ id: 'M', name: 'Master', role: 'master', slot: 'M' }, { id: 'R1', name: 'Replica 1', role: 'replica', slot: 0 }, { id: 'R2', name: 'Replica 2', role: 'replica', slot: 1 }, { id: 'R3', name: 'Replica 3', role: 'replica', slot: 2 }]);
+      showPanel('');
+      logTo('t3log', 'Setup: one master, three replicas sharing the reads.');
+      const { row } = await predict(box, {
+        step: 'Scenario B', title: 'Replica 2 of 3 dies. What happens to the reads it was serving?',
+        options: ['They spread over the other two', 'They all move to the master now', 'They are lost until it reboots'],
+        correct: 0,
+        act: async () => {
+          byId('R2').alive = false; draw();
+          logTo('t3log', '💀 Replica 2 went offline.', 'e');
+          await pause(900);
+          logTo('t3log', '→ Reads now go to Replica 1 and Replica 3. The master still only does writes.', 'w');
+          await pause(1200);
+          nodes = nodes.filter(n => n.id !== 'R2');
+          nodes.push({ id: 'R2b', name: 'Replica 2′', role: 'replica', slot: 1, alive: true, lag: 0 });
+          logTo('t3log', '🛠️ A new database server replaces Replica 2.');
+          await copyIn('R2b');
+          logTo('t3log', '✓ Back to three replicas.', 'g');
+        },
+        explain: 'With several replicas, reads go to the <b>healthy</b> ones, and a new server replaces the dead one. Users notice nothing, as long as the survivors can carry the extra load.',
+      });
+      finish('B', row);
+    },
+    C: async () => {
+      setup([{ id: 'M', name: 'Master', role: 'master', slot: 'M' }, { id: 'R1', name: 'Replica 1', role: 'replica', slot: 0, lag: 2 }, { id: 'R2', name: 'Replica 2', role: 'replica', slot: 1, lag: 5 }, { id: 'R3', name: 'Replica 3', role: 'replica', slot: 2, lag: 0 }]);
+      const WR = ['#1 order 881 paid', '#2 user 7 new email', '#3 stock −1 on A1', '#4 comment on post 9', '#5 order 882 placed'];
+      showPanel(`<b class="small">The master’s last 5 writes</b><div class="wlist" id="wl">${WR.map(w => `<span>${w}</span>`).join('')}</div><div class="row" id="recRow" style="margin-top:8px"></div>`);
+      logTo('t3log', 'Setup: one master, three replicas. They are 2, 5 and 0 writes behind.');
+      box.innerHTML = '<div class="step">Scenario C</div><h3>It’s 3 a.m. and the master’s disk has failed.</h3><p class="small muted" style="margin:0">Watch the writes stop.</p>';
+      await pause(700);
+      byId('M').alive = false; draw();
+      logTo('t3log', '💀 Master offline. Writes have nowhere to go.', 'e');
+      await pause(700);
+      const reps = nodes.filter(n => n.role === 'replica');
+      box.innerHTML = `<div class="step">Scenario C</div><h3>Pick the replica to <b>promote</b> to master.</h3><p class="small muted" style="margin:0 0 10px">“Promote” means it becomes the new master and starts taking writes.</p>
+        <div class="promo">${reps.map(r => `<button class="opt" data-id="${r.id}"><b>${r.name}</b><span>${r.lag} behind</span></button>`).join('')}</div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+      const pick = await new Promise(res => $$('.promo .opt', box).forEach(b => b.onclick = () => { $$('.promo .opt', box).forEach(x => x.disabled = true); res(b); }));
+      const n = byId(pick.dataset.id), lag = n.lag, ok = lag === 0;
+      pick.classList.add(ok ? 'right' : 'wrong');
+      if (!ok) $('.promo .opt[data-id="R3"]', box).classList.add('right');
+      ok ? Q.addXP(20, pick) : Q.loseHeart(pick);
+      // promote
+      nodes = nodes.filter(x => x.id !== 'M');
+      const freed = n.slot;
+      n.role = 'master'; n.slot = 'M'; n.name = 'New master'; n.lag = 0; n.pick = true;
+      draw();
+      logTo('t3log', `⬆️ ${n.id.replace('R', 'Replica ')} promoted. All database operations now run on it.`, 'w');
+      await pause(900);
+      const ex = $('.explain', box);
+      if (lag) {
+        $$('#wl span').slice(5 - lag).forEach(s => s.classList.add('lost'));
+        logTo('t3log', `⚠️ It was ${lag} writes behind: ${lag} acknowledged writes are missing on the new master.`, 'e');
+        ex.className = 'explain show bad';
+        ex.innerHTML = `<b>Risky pick.</b> This replica was <b>${lag} writes behind</b>, so the new master is missing them (red). Users were told those writes succeeded. The book’s answer: run <b>data recovery scripts</b> to patch the gap. Replica 3 was fully caught up, so it was the safe choice.`;
+        const rb = document.createElement('button'); rb.className = 'btn primary'; rb.textContent = '🧰 Run the recovery script';
+        $('#recRow').appendChild(rb);
+        await new Promise(res => rb.onclick = res);
+        rb.remove();
+        $$('#wl span.lost').forEach(s => { s.classList.remove('lost'); s.classList.add('fixed'); });
+        logTo('t3log', `🧰 Recovery script copied the ${lag} missing writes from Replica 3, which had them all.`, 'g');
+        await pause(700);
+      } else {
+        $$('#wl span').forEach(s => s.classList.add('fixed'));
+        ex.className = 'explain show good';
+        ex.innerHTML = '<b>Clean promotion.</b> Replica 3 was <b>0 writes behind</b>, so the new master has every write. In real life you always check which replica is most up to date before promoting.';
+      }
+      n.pick = false;
+      nodes.filter(x => x.role === 'replica').forEach(x => { x.lag = 0; });
+      nodes.push({ id: 'Rn', name: 'New replica', role: 'replica', slot: freed, alive: true, lag: 0 });
+      logTo('t3log', '🛠️ A new replica takes the promoted one’s place and starts copying.');
+      await copyIn('Rn');
+      logTo('t3log', '✓ One master, three replicas again.', 'g');
+      finish('C', $('.row', box));
+    },
+    D: async () => {
+      setup([{ id: 'M', name: 'Master', role: 'master', slot: 'M' }, { id: 'R1', name: 'Replica 1', role: 'replica', slot: 1 }]);
+      const base = ['<div class="cm">Ana: Great write-up!</div>', '<div class="cm">Bo: Saved for later.</div>'];
+      const phone = (mine, missing) => `<div class="phone" aria-live="polite"><div class="post">📝 Post #9 · comments</div>${base.join('')}${mine ? '<div class="cm me">You: Thanks, everyone!</div>' : ''}${missing ? '<div class="miss">😕 Where’s my comment?</div>' : ''}</div>`;
+      showPanel(phone(false, false));
+      logTo('t3log', 'Setup: one master, one replica. You are about to comment on a post.');
+      const { row } = await predict(box, {
+        step: 'Bonus', title: 'You post a comment and reload at once. The reload reads from Replica 1, which is now <b>2 writes behind</b>. Do you see your comment?',
+        options: ['Yes, it shows up right away', 'No, it is missing for now', 'The page shows an error'],
+        correct: 1,
+        act: async () => {
+          await travel($('path[data-k="w"]', linesG), 'w', 700);
+          byId('R1').lag = 2; draw();
+          logTo('t3log', '✍️ Your comment was written to the master. Replica 1 hasn’t copied it yet (2 behind).', 'w');
+          await travel($('path[data-k="r"]', linesG), 'r', 700);
+          showPanel(phone(false, true));
+          logTo('t3log', '🔎 Your reload read from Replica 1, and your comment isn’t there.', 'e');
+        },
+        explain: 'The write went to the master, but the read hit a replica that hadn’t copied it yet. The data isn’t lost, only <b>late</b>. To a user, though, it looks lost. The guarantee you want is called <b>read-your-writes</b>: you always see your own changes.',
+        xp: 10,
+      });
+      await pause(400);
+      byId('R1').lag = 0; draw();
+      const hold = document.createElement('div');
+      hold.style.marginTop = '12px';
+      hold.innerHTML = `<button class="switch" role="switch" aria-checked="false" id="rywSw"><span class="kn"></span><span>Send <b>my</b> reads to the master for a few seconds after I write</span></button>
+        <div class="row" style="margin-top:10px"><button class="btn primary" id="rywGo" disabled>Post again and reload</button></div>`;
+      row.appendChild(hold);
+      const sw = $('#rywSw'), go = $('#rywGo');
+      sw.onclick = () => { const on = sw.getAttribute('aria-checked') !== 'true'; sw.setAttribute('aria-checked', on); go.disabled = !on; };
+      await new Promise(res => go.onclick = res);
+      go.disabled = true; sw.disabled = true;
+      showPanel(phone(false, false));
+      await travel($('path[data-k="w"]', linesG), 'w', 700);
+      byId('R1').lag = 2; forceMasterRead = true; draw();
+      logTo('t3log', '✍️ Comment written to the master. You just wrote, so your reads go to the master.', 'w');
+      await travel($('path[data-k="r"]', linesG), 'r', 700);
+      showPanel(phone(true, false));
+      logTo('t3log', '✓ Your reload read from the master, and your comment is there.', 'g');
+      Q.addXP(10, go);
+      await pause(1400);
+      byId('R1').lag = 0; forceMasterRead = false; draw();
+      logTo('t3log', '⏱️ A few seconds later the replica caught up, and your reads go back to it.');
+      finish('D', row);
+    },
+  };
+  async function run(key) {
+    if (busy) return;
+    setBusy(true);
+    $$('#scns .scn').forEach(x => x.classList.toggle('on', x.dataset.s === key));
+    box.style.display = 'block';
+    $('#t3log').innerHTML = '';
+    try { await SCN[key](); } catch (e) { console.error(e); setBusy(false); }
+  }
+  $$('#scns .scn').forEach(b => b.onclick = () => run(b.dataset.s));
+  setup([{ id: 'M', name: 'Master', role: 'master', slot: 'M' }, { id: 'R1', name: 'Replica 1', role: 'replica', slot: 0 }, { id: 'R2', name: 'Replica 2', role: 'replica', slot: 1 }, { id: 'R3', name: 'Replica 3', role: 'replica', slot: 2 }]);
+
+  function maybeQuiz() {
+    if (quizShown || !['A', 'B', 'C'].every(k => goals.has(k))) return;
+    quizShown = true;
+    setTimeout(() => quizChain($('#s3quiz'), [
+      { q: 'You run <b>one</b> replica, and it goes offline. Where do reads go while a new one is set up?',
+        options: ['To the master, for the time being', 'Nowhere: reads fail until it is back', 'To a cache that holds every table'],
+        correct: 0,
+        good: 'The master has all the data, so it takes the reads <b>temporarily</b>, and a new replica replaces the dead one as soon as the issue is found.',
+        bad: 'The master has all the data, so the book sends reads there <b>temporarily</b>, while a new replica replaces the dead one.' },
+      { q: 'The <b>master</b> goes offline. What does the book say happens?',
+        options: ['A replica is promoted; a new replica is added', 'Writes queue up until the master reboots', 'Every replica starts taking writes at once'],
+        correct: 0,
+        good: 'A replica is promoted to be the new master and all database operations run on it for now. A new replica replaces the promoted one so replication carries on.',
+        bad: 'The book promotes a replica to be the new master (all operations run on it for now) and adds a new replica in its place.' },
+      { q: 'Why is promoting a replica <b>risky</b> in a real system?',
+        options: ['It may be missing the most recent writes', 'Replicas can never run write statements', 'Promotion wipes the replica’s own data'],
+        correct: 0,
+        good: 'Replication lag: the replica may be a few writes behind, so the new master is missing them. The book says to patch the gap with data recovery scripts.',
+        bad: 'The risk is <b>lag</b>. A replica can be a few writes behind, so the new master is missing them until recovery scripts patch the gap.' },
+    ], () => setTimeout(() => Q.clearStage(3), 400)), 600);
+  }
+});
+
+/* ================= STAGE 4: wire it up ================= */
+function nbox(svg, { x, y, w, h, t, s, cls }) {
+  const g = S('g', { class: 'nb ' + (cls || '') }, svg);
+  S('rect', { x: x - w / 2, y: y - h / 2, width: w, height: h, rx: 10 }, g);
+  S('text', { x, y: s ? y - 3 : y + 5 }, g).textContent = t;
+  if (s) S('text', { class: 's', x, y: y + 13 }, g).textContent = s;
+  return g;
+}
+Q.onStage(4, () => {
+  const goals = new Set();
+  let done4 = false;
+  const tryClear = () => { if (!done4 && goals.has('order') && goals.has('bugs')) { done4 = true; setTimeout(() => Q.clearStage(4), 900); } };
+
+  /* ---- Part A: order the request ---- */
+  const fl = $('#flow');
+  const edges = S('g', {}, fl), badges = S('g', {}, fl), nodesA = S('g', {}, fl);
+  const E = {
+    1: [{ d: 'M110 30 H240' }, { d: 'M240 44 H110' }],
+    2: [{ d: 'M60 58 V120 H105' }],
+    3: [{ d: 'M150 142 L100 183' }, { d: 'M210 142 L260 183' }],
+    4: [{ d: 'M130 227 L240 273', c: 'r' }, { d: 'M270 227 V273', c: 'r' }],
+    5: [{ d: 'M90 227 V273', c: 'w' }, { d: 'M240 227 L130 273', c: 'w' }],
+  };
+  const BADGE = { 1: [175, 37], 2: [60, 92], 3: [118, 158], 4: [282, 250], 5: [78, 250] };
+  const pathsA = {};
+  for (const k in E) pathsA[k] = E[k].map(e => S('path', { class: 'ed ' + (e.c || ''), d: e.d }, edges));
+  S('path', { class: 'ed rep', d: 'M150 295 H210' }, edges);
+  S('text', { x: 180, y: 287, 'text-anchor': 'middle', style: 'fill:var(--teal);font:700 10px var(--mono)' }, edges).textContent = 'copies';
+  nbox(nodesA, { x: 60, y: 36, w: 100, h: 44, t: '👤 User' });
+  nbox(nodesA, { x: 290, y: 36, w: 100, h: 44, t: 'DNS', s: 'name → IP' });
+  nbox(nodesA, { x: 180, y: 120, w: 150, h: 44, t: 'Load balancer', s: 'public IP', cls: 'lb' });
+  nbox(nodesA, { x: 90, y: 205, w: 120, h: 44, t: 'Server 1', s: 'private IP' });
+  nbox(nodesA, { x: 270, y: 205, w: 120, h: 44, t: 'Server 2', s: 'private IP' });
+  nbox(nodesA, { x: 90, y: 295, w: 120, h: 44, t: 'Master DB', s: 'writes', cls: 'dbm' });
+  nbox(nodesA, { x: 270, y: 295, w: 120, h: 44, t: 'Replica DB', s: 'reads', cls: 'dbr' });
+  const STEPS = [
+    { n: 1, t: 'The user asks DNS for the site’s address and gets back the load balancer’s IP.' },
+    { n: 2, t: 'The user connects to the load balancer using that IP address.' },
+    { n: 3, t: 'The load balancer passes the HTTP request to Server 1 or Server 2.' },
+    { n: 4, t: 'A web server reads the user’s data from a replica database.' },
+    { n: 5, t: 'A web server sends any write, update or delete to the master database.' },
+  ];
+  let placed = [];
+  async function light(n) {
+    pathsA[n].forEach(p => p.classList.add('lit'));
+    const [bx, by] = BADGE[n], g = S('g', { class: 'badge' }, badges);
+    S('circle', { cx: bx, cy: by, r: 11 }, g); S('text', { x: bx, y: by }, g).textContent = n;
+    if (!Q.reduced) for (const p of pathsA[n]) {
+      const L = p.getTotalLength(), c = S('circle', { r: 5, style: 'fill:var(--accent)' }, badges);
+      anim(700, q => { const pt = p.getPointAtLength(L * q); c.setAttribute('cx', pt.x); c.setAttribute('cy', pt.y); }).then(() => c.remove());
+    }
+  }
+  function renderSteps() {
+    $('#steps').innerHTML = shuffle(STEPS).map(s => `<button class="stepc" data-n="${s.n}">${s.t}</button>`).join('');
+    $$('#steps .stepc').forEach(b => b.onclick = () => {
+      const n = +b.dataset.n;
+      const want = placed.length < 3 ? [placed.length + 1] : [4, 5].filter(k => !placed.includes(k));
+      if (!want.includes(n)) {
+        b.classList.remove('shake'); void b.offsetWidth; b.classList.add('shake');
+        const hint = placed.length === 0 ? 'Before anything else, the user needs an address to connect to.' : placed.length === 1 ? 'Now the user has the IP. What do they connect to?' : placed.length === 2 ? 'The load balancer has the request. Where does it send it?' : 'A server has the request. What does it do with the database?';
+        Q.loseHeart(b);
+        logHint('Not yet. ' + hint);
+        return;
+      }
+      placed.push(n); b.remove();
+      $('#placed').insertAdjacentHTML('beforeend', `<li>${STEPS[n - 1].t}</li>`);
+      light(n); Q.addXP(4, $('#placed li:last-child'));
+      if (placed.length === 5) {
+        logHint('That’s the whole path. Web tier and data tier both have spares now.', true);
+        if (checkGoal('#s4goals', 'order', goals)) tryClear();
+        const r = document.createElement('div'); r.className = 'row'; r.style.marginTop = '8px';
+        r.innerHTML = '<button class="btn">↻ Order them again</button>';
+        r.firstChild.onclick = () => { placed = []; $('#placed').innerHTML = ''; badges.innerHTML = ''; Object.values(pathsA).flat().forEach(p => p.classList.remove('lit')); r.remove(); logHint(''); renderSteps(); };
+        $('#steps').appendChild(r);
+      }
+    });
+  }
+  function logHint(t, good) {
+    let h = $('#stepHint');
+    if (!h) { h = document.createElement('p'); h.id = 'stepHint'; h.className = 'small'; h.setAttribute('aria-live', 'polite'); $('#steps').before(h); }
+    h.style.color = good ? 'var(--good)' : 'var(--warn)'; h.textContent = t;
+  }
+  renderSteps();
+
+  /* ---- Part B: spot the bugs ---- */
+  const bs = $('#bugs');
+  const eG = S('g', {}, bs), nG = S('g', {}, bs), pG = S('g', {}, bs);
+  const ed = (d, c) => S('path', { class: 'ed ' + (c || ''), d }, eG);
+  ed('M180 52 V96'); ed('M140 140 L100 188'); ed('M220 140 L260 188');
+  const eBypass = ed('M235 34 C 340 34, 350 150, 300 188', 'bug');
+  const eUpd = ed('M65 236 L55 375', 'w');
+  const eIns = ed('M115 236 L165 375', 'w');
+  const eFeed = ed('M250 236 L195 375', 'r');
+  const eSel = ed('M300 236 L305 375', 'r');
+  ed('M130 400 H110', 'rep'); ed('M230 400 H250', 'rep');
+  nbox(nG, { x: 180, y: 30, w: 110, h: 44, t: '👤 User' });
+  nbox(nG, { x: 180, y: 118, w: 150, h: 44, t: 'Load balancer', s: 'public IP', cls: 'lb' });
+  nbox(nG, { x: 85, y: 212, w: 120, h: 48, t: 'Server 1', s: '10.0.0.1' });
+  nbox(nG, { x: 275, y: 212, w: 120, h: 48, t: 'Server 2', s: '10.0.0.2' });
+  const repA = nbox(nG, { x: 60, y: 400, w: 100, h: 50, t: 'Replica A', s: 'reads 0/s', cls: 'dbr' });
+  const mNode = nbox(nG, { x: 180, y: 400, w: 100, h: 50, t: 'Master', s: 'all traffic!', cls: 'dbm tapn' });
+  const repB = nbox(nG, { x: 300, y: 400, w: 100, h: 50, t: 'Replica B', s: 'reads 0/s', cls: 'dbr' });
+  const TAPS = [
+    { id: 'bypass', x: 318, y: 112, w: 76, t: '10.0.0.2', bug: true, path: eBypass,
+      fix: () => { eBypass.classList.add('cut'); },
+      label: '✓ via LB',
+      msg: '<b>Bug: the user skips the load balancer.</b> Users should only know the load balancer’s public IP. Web servers sit on private IPs that the internet can’t reach. Going straight to 10.0.0.2 means no failover if Server 2 dies, and no load spreading. Fixed: all traffic enters through the load balancer.' },
+    { id: 'upd', x: 62, y: 282, w: 120, t: 'UPDATE profile', bug: true, path: eUpd,
+      fix: () => { eUpd.setAttribute('d', 'M70 236 C 70 330, 110 370, 132 384'); },
+      label: '✓ → master',
+      msg: '<b>Bug: a write sent to a replica.</b> Replicas are read-only copies. An <code>UPDATE</code> changes data, so it must go to the master, which then copies the change to the replicas. Fixed: rerouted to the master.' },
+    { id: 'feed', x: 229, y: 290, w: 96, t: 'Read feed', bug: true, path: eFeed,
+      fix: () => { eFeed.setAttribute('d', 'M262 236 C 262 320, 270 350, 278 375'); $$('.s', repB)[0].textContent = 'reads busy'; },
+      label: '✓ → replica',
+      msg: '<b>Bug: a read sent to the master while two replicas sit idle.</b> It works, but it wastes what replication is for. Reads belong on the replicas, so the master stays free for writes. Fixed: the feed now reads from Replica B.' },
+    { id: 'lb', x: 180, y: 74, w: 74, t: 'HTTPS', bug: false,
+      msg: '<b>That one’s fine.</b> The user connects to the load balancer’s public IP. That is exactly the right entry point.' },
+    { id: 'ins', x: 152, y: 338, w: 108, t: 'INSERT order', bug: false,
+      msg: '<b>That one’s fine.</b> An <code>INSERT</code> changes data, so it goes to the master. Correct.' },
+    { id: 'sel', x: 304, y: 338, w: 104, t: 'SELECT price', bug: false,
+      msg: '<b>That one’s fine.</b> A <code>SELECT</code> is a read, and it goes to a replica. Correct.' },
+  ];
+  let found = 0, bugsDone = false;
+  const feed = $('#bugfeed');
+  function say(html, cls) { feed.className = 'bugfeed ' + (cls || ''); feed.innerHTML = html; }
+  TAPS.forEach(tp => {
+    const g = S('g', { class: 'tap', tabindex: 0, role: 'button', 'aria-label': `Flag the arrow labelled ${tp.t}` }, pG);
+    S('rect', { class: 'hit', x: tp.x - tp.w / 2 - 2, y: tp.y - 22, width: tp.w + 4, height: 44 }, g);
+    S('rect', { class: 'pl', x: tp.x - tp.w / 2, y: tp.y - 15, width: tp.w, height: 30, rx: 15 }, g);
+    const tx = S('text', { x: tp.x, y: tp.y }, g); tx.textContent = tp.t;
+    keyActivate(g, () => {
+      if (g.classList.contains('found') || g.classList.contains('okay')) { say(tp.msg, tp.bug ? 'good' : ''); return; }
+      if (tp.bug) {
+        g.classList.add('found'); tx.textContent = tp.label; tp.fix(); tp.path.classList.add('fixed');
+        found++; $('#bugCount').textContent = found;
+        say(tp.msg, 'good'); Q.addXP(10, g);
+        if (found === 3 && !bugsDone) {
+          bugsDone = true;
+          $$('.s', mNode)[0].textContent = 'writes only';
+          setTimeout(() => say('<b>All 3 bugs fixed.</b> Users enter through the load balancer, every write goes to the master, and reads are spread over the replicas.', 'good'), 1400);
+          if (checkGoal('#s4goals', 'bugs', goals)) tryClear();
+        }
+      } else {
+        g.classList.add('okay'); g.classList.remove('nope'); void g.getBBox(); g.classList.add('nope');
+        say(tp.msg, 'bad'); Q.loseHeart(g);
+      }
+    });
+  });
+  mNode.setAttribute('tabindex', 0); mNode.setAttribute('role', 'button'); mNode.setAttribute('aria-label', 'Flag the master database');
+  let mFlagged = false;
+  keyActivate(mNode, () => {
+    const msg = '<b>The master itself is fine.</b> One master taking writes from <i>both</i> web servers is exactly the book’s design. Its “all traffic!” label is a symptom. Look at which arrows reach it.';
+    if (!mFlagged) { mFlagged = true; Q.loseHeart(mNode); }
+    say(msg, 'bad');
+  });
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss'), {
+  name: '💀 Ledger Lich',
+  xp: 15,
+  choices: [
+    { k: 'replica', label: 'Read from a replica', sub: 'spread the reads' },
+    { k: 'master', label: 'Send it to the master', sub: 'the source of truth' },
+    { k: 'promote', label: 'Promote a replica', sub: 'make a new master' },
+    { k: 'add', label: 'Add another replica', sub: 'more read capacity' },
+  ],
+  scenarios: [
+    { e: '🛍️', t: 'A shopper opens a product page', d: 'The page needs the product’s name, price and photos. Nothing changes.', a: 'replica', why: 'It’s a plain read, so a replica serves it. That keeps the master free for writes.' },
+    { e: '🔑', t: 'A user changes their password', d: 'The new password hash must be saved.', a: 'master', why: 'It changes data, so it’s a write, and every write goes to the master. Replicas are read-only copies.' },
+    { e: '🌙', t: 'The master’s disk fails at 3 a.m.', d: 'Writes are failing. Three replicas are healthy.', a: 'promote', why: 'Promote a replica to be the new master, then add a new replica in its place. Check which replica is <b>most up to date</b> first, or you may lose the last few writes.' },
+    { e: '🔥', t: 'Replicas at 90% CPU, master idle', d: 'Reads outnumber writes 50 to 1. Both replicas are maxed out while the master sits at 15%.', a: 'add', why: 'The bottleneck is read capacity. Add replicas to share the reads. Moving reads onto the master would only load the one box you can’t easily copy.' },
+    { e: '💬', t: 'Post a comment, reload at once', d: 'The user’s own comment <b>must</b> appear on the reload. The replicas lag by about a second.', a: 'master', why: 'Read-your-writes: a lagging replica might not have the comment yet. Send this user’s reads to the master for a short while after they write.' },
+    { e: '🪦', t: 'Your only replica just died', d: 'Where should read traffic go <b>right now</b>?', a: 'master', why: 'With no replica left, reads go to the master <b>temporarily</b>, while a new replica is set up to replace the dead one.' },
+    { e: '📊', t: 'A nightly report scans every order', d: 'A heavy read that touches the whole <code>orders</code> table.', a: 'replica', why: 'It’s a read, and a heavy one. Run it on a replica so it can’t slow down the writes on the master.' },
+  ],
+  outro: 'The rule: writes go to the master, reads go to replicas, and when the master dies you promote the most up-to-date replica.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: drill ================= */
+Q.onStage(6, () => {
+  const mount = $('#drill'), retry = $('#drillRetry');
+  function go() {
+    retry.style.display = 'none';
+    Q.drill(mount, {
+      prompt: 'The interviewer: <i>"How do you remove the database as a single point of failure? And what happens when the master dies?"</i>',
+      placeholder: 'I’d add replication: one master takes the writes…',
+      model: '"I\'d add replication. One primary takes all the writes, and several read replicas get copies of its data and serve the reads. We read far more than we write, so that spreads the load, keeps copies in more than one place in case a server is lost, and keeps us serving if one node goes down. If a replica dies, its reads move to the other replicas, or to the primary if it was the only one, and we replace it. If the primary dies, we promote a replica and add a new one behind it. The catch is replication lag. The promoted node may be missing the last few writes, so we need recovery steps. And right after a user writes, their own reads may need to go to the primary."',
+      checks: [
+        'Writes to the master, reads to replicas, and more replicas than masters',
+        'The three benefits: performance, reliability, availability',
+        'Replica dies: reads move to other replicas (or the master), then replace it',
+        'Master dies: promote a replica, then add a new replica',
+        'The lag caveat: lost writes on promotion, or read-your-writes',
+      ],
+      onDone: n => {
+        if (n >= 4) { setTimeout(() => Q.clearStage(6), 600); return; }
+        retry.style.display = 'block';
+        retry.innerHTML = `<b>${n} of 5. Not yet.</b> A senior answer hits at least 4 of these. Read the model answer once more, then write it again from memory.<div class="row" style="margin-top:10px"><button class="btn primary" id="drillAgain">↻ Write it again</button></div>`;
+        $('#drillAgain').onclick = () => { go(); mount.scrollIntoView({ behavior: Q.reduced ? 'auto' : 'smooth', block: 'start' }); };
+      },
+    });
+  }
+  go();
+});
+
+Q.start();
+})();
+</script>
+</body>
+</html>
