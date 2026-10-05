@@ -18,9 +18,7 @@ fresh session without re-planning. Current progress: **[STATUS.md](STATUS.md)**.
 
 ## Resuming
 Work through STATUS.md top to bottom:
-- **PARTIAL** quests: their builder was stopped mid-write. Rebuild from scratch with BRIEF.md + the quest json
-  (delete or overwrite the partial file; don't trust it).
-- **not started**: build with BRIEF.md + the quest json.
+- **not started** (unticked): build with BRIEF.md + the quest json.
 - **built, awaiting world review**: when the whole world is built, run the world finisher, then `release.py`.
 - `queue.txt` is the build order the fleet was using; `done.txt` lists quests whose builder reported a verified build.
 

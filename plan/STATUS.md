@@ -2,7 +2,7 @@
 
 Every chapter of *System Design Interview* Vol. 1 as a world of quests. Ticked = done.
 
-**52 of 83 quests built** · 40 live on the map · 12 built, awaiting world review · 6 partial (rebuild) · 25 not started.
+**52 of 83 quests built** · 40 live on the map · 12 built, awaiting world review · 31 not started.
 
 Legend: `[x]` done · `[ ]` not done. A world is **done** when every quest is built, the world review has run, its cheat sheet
 exists, and its quests are `ready: true` on the map.
@@ -123,16 +123,16 @@ exists, and its quests are `ready: true` on the map.
 ## ⬜ World 13 · Design a Search Autocomplete System — *Typeahead Tower*
 
 - [x] `1301` 13.1 · [Every Keystroke Counts](../lessons/1301-autocomplete-scope-and-estimation.html) — built · needs world review
-- [ ] `1302` 13.2 · [Grow the Trie](../lessons/1302-trie-top-k.html) — PARTIAL · rebuild from scratch
-- [ ] `1303` 13.3 · [The Weekly Harvest](../lessons/1303-data-gathering-service.html) — PARTIAL · rebuild from scratch
-- [ ] `1304` 13.4 · [Faster Than a Keystroke](../lessons/1304-query-service.html) — PARTIAL · rebuild from scratch
-- [ ] `1305` 13.5 · [Split the Alphabet](../lessons/1305-scaling-autocomplete.html) — PARTIAL · rebuild from scratch
-- [ ] `1306` BOSS · [Autocomplete Live](../lessons/1306-boss-autocomplete-live.html) — PARTIAL · rebuild from scratch
+- [ ] `1302` 13.2 · [Grow the Trie](../lessons/1302-trie-top-k.html) — not started (partial draft discarded)
+- [ ] `1303` 13.3 · [The Weekly Harvest](../lessons/1303-data-gathering-service.html) — not started (partial draft discarded)
+- [ ] `1304` 13.4 · [Faster Than a Keystroke](../lessons/1304-query-service.html) — not started (partial draft discarded)
+- [ ] `1305` 13.5 · [Split the Alphabet](../lessons/1305-scaling-autocomplete.html) — not started (partial draft discarded)
+- [ ] `1306` BOSS · [Autocomplete Live](../lessons/1306-boss-autocomplete-live.html) — not started (partial draft discarded)
 - [ ] World review + cheat sheet
 
 ## ⬜ World 14 · Design YouTube — *The Stream Machine*
 
-- [ ] `1401` 14.1 · [Size Up the Tube](../lessons/1401-youtube-scope-and-estimate.html) — PARTIAL · rebuild from scratch
+- [ ] `1401` 14.1 · [Size Up the Tube](../lessons/1401-youtube-scope-and-estimate.html) — not started (partial draft discarded)
 - [ ] `1402` 14.2 · [Upload Lane, Watch Lane](../lessons/1402-youtube-upload-and-stream-flows.html) — not started
 - [ ] `1403` 14.3 · [The Format Forge](../lessons/1403-youtube-transcoding-and-dag.html) — not started
 - [ ] `1404` 14.4 · [The Transcoding Factory](../lessons/1404-youtube-transcoding-architecture.html) — not started
@@ -152,7 +152,7 @@ exists, and its quests are `ready: true` on the map.
 
 ## Next steps (in order)
 
-1. [ ] Rebuild the partial quests (13.2–13.5, 13 boss, 14.1) from `plan/quests/quest-<id>.json` with `plan/BRIEF.md`.
+1. [ ] Build 13.2–13.5, 13 boss and 14.1 (their partial drafts were discarded) from `plan/quests/quest-<id>.json` with `plan/BRIEF.md`.
 2. [ ] Build the not-started quests: Worlds 1, 5, 9, 11 and 14.2–14.6.
 3. [ ] Run the world finisher (`plan/WORLD-BRIEF.md`) for Worlds 10, 12, 13, then 1, 5, 9, 11, 14; release each with `plan/tools/release.py <N>`.
 4. [ ] Final pass: quest map + every cheat sheet link, `NOTES.md` update.
