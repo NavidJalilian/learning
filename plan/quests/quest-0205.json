@@ -1,0 +1,128 @@
+{
+ "n": "BOSS",
+ "slug": "boss-estimation-gauntlet",
+ "t": "The Estimation Gauntlet",
+ "d": "Mock interview: estimate a Twitter-like service end to end, then survive the follow-ups",
+ "boss": true,
+ "badge": "🧮 Badge: Napkin Master",
+ "winTitle": "Gauntlet survived",
+ "goal": "Your win today: given 'estimate the scale of a Twitter-like service', you can ask for the right assumptions, lay out the estimation plan, compute write/read QPS, storage, cache and server counts with units, handle 'what if' follow-ups, and say what the numbers mean for the design.",
+ "bookSections": "Whole chapter: powers of two, latency numbers, availability numbers, the Twitter example and every tip (rounding, assumptions, units, commonly asked estimates), framed with the 4-step interview framework from Chapter 3",
+ "stages": [
+  {
+   "title": "Scope it",
+   "sub": "Step 1 · ask for the numbers you need (2–3 min)",
+   "teaches": "Estimation starts like any design question: clarify before computing. Useful questions: How many monthly users? What share is active daily? Posts per user per day? What share have media, and how big? How long do we keep data? How many timeline reads per user per day? What peak factor? Weak questions at this point: 'Which database?' (too early), 'What language?' (doesn't change scale). Write every answer on the assumptions board (book tip). Real-interview note: estimation is usually a few minutes inside a larger design question, and some interviewers skip it; a mock interview isolates it for practice.",
+   "interaction": "Same interview UI as lesson 0008: a sticky interview clock (budget 10 minutes for the whole gauntlet; each stage advances the clock by a fixed amount, turning amber if the learner overspends via wrong answers or hints), an interviewer chat, and a question deck. Interviewer opens: 'Let's do some napkin math. Estimate the scale of a Twitter-like service.' The learner picks questions from a deck of 9 cards (6 useful, 3 weak). Each useful pick makes the interviewer answer in chat and pins a sticky note: 300 million MAU; 50% daily; 2 posts/user/day; 10% with media, ~1 MB average; keep 5 years; each daily user loads their timeline 10 times a day. Weak picks get a polite redirect ('Let's hold that until we know the scale') and cost 15 seconds on the clock. The stage finishes once all 6 notes are pinned. The board stays visible (collapsible) for the rest of the quest.",
+   "check": "Q.quiz lock-in: 'Before any math, what's the single most important habit?' options: 'Say your assumptions out loud and write them down' (correct) / 'Compute everything to two decimal places' / 'Pick the database first so the numbers make sense'."
+  },
+  {
+   "title": "Plan the math",
+   "sub": "Step 2 · lay out what you'll compute, in order",
+   "teaches": "Book tip: commonly asked estimates are QPS, peak QPS, storage, cache, number of servers. A clean order, so each number feeds the next: DAU → write QPS → peak write QPS → read QPS (and peak) → storage per day → storage over retention (× replication) → cache size → number of servers. Saying the plan first gets interviewer buy-in, mirroring Step 2 of the 4-step framework, and shows structure.",
+   "interaction": "Tap-in-order: 8 shuffled step chips (DAU, write QPS, peak write QPS, read QPS, storage/day, 5-year storage, cache size, server count). Learner taps them in a sensible order; each tap draws an arrow on a little dependency graph showing which earlier number it uses. Accept any order that respects dependencies (e.g. read QPS may come before or after storage, but DAU must come first, peak after its average, 5-year after per-day, servers after peak QPS). A wrong tap shakes and shows the missing input ('Server count needs peak QPS first'). Then the interviewer says 'Good plan, go.'",
+   "check": "Q.quiz: 'Which estimate needs peak QPS as an input?' options: 'Number of servers' (correct) / 'Daily media storage' / 'DAU'."
+  },
+  {
+   "title": "Crunch it",
+   "sub": "Step 3 · numbers on the board, with units",
+   "teaches": "Worked answers (tolerances matter more than exact values): DAU = 150 million. Write QPS = 300 million posts ÷ 86,400 ≈ 3,500; peak ≈ 7,000. Read QPS = 150 million × 10 timeline loads = 1.5 billion/day ÷ 86,400 ≈ 17,000 (exact 17,361); peak ≈ 35,000. Read:write ≈ 5:1 by requests (much higher by tweets served, since each timeline load returns many tweets). Media/day = 150 million × 2 × 10% × 1 MB = 30 TB; 5 years ≈ 55 PB; × 3 replicas ≈ 165 PB. Cache: keep the last day's tweet text + metadata hot: 300 million × ~200 bytes ≈ 60 GB, which fits in memory on a couple of cache nodes (media goes to a CDN, not this cache). Servers: interviewer states one stateless app server handles ~1,000 requests/s at peak, so (7,000 + 35,000) ÷ 1,000 ≈ 42 → ~50 with headroom. Bonus: incoming media bandwidth ≈ 30 TB ÷ 86,400 s ≈ 350 MB/s.",
+   "interaction": "A whiteboard with 8 rows matching the stage-2 plan; each row has a number input and a unit dropdown (none, /s, GB, TB, PB, servers). The learner fills them in order; the sticky assumption board is beside it. Grading per row: within ±30% of the model = full marks (green); within 3× = 'right order of magnitude' partial (amber, half XP) with the worked line shown; worse = red, worked line shown, clock loses 20 s. Missing unit = amber with a 'label your units' nudge, even if the number is right. Over-precise entries (more than 3 significant figures) trigger a 'round it' chip, no penalty. A 'hint' button per row reveals the formula only, at a 15 s clock cost. When the server-count row is reached, the interviewer drops the assumption '~1,000 requests/s per app server' into the chat.",
+   "check": "Q.quiz after the board: 'Sanity check: ~3,500 writes/s × 86,400 s ≈ ?' options: 'About 300 million a day, matching our assumption' (correct) / 'About 3 billion a day' / 'About 30 million a day'."
+  },
+  {
+   "title": "Boss: the follow-up barrage",
+   "sub": "Step 3 · 'what if…?' (latency, nines, and changing numbers)",
+   "teaches": "Interviewers poke the estimate to see if you can reuse it. This round pulls in latency numbers (2.2) and availability numbers (2.3) as well as the sensitivity rules (2.4).",
+   "interaction": "Q.boss with per-scenario choices (engine supports scenario.choices), one interviewer emoji per card. (1) '📸 Media share goes to 20%. 5-year media storage?' → 'About 110 PB' / 'About 55 PB' / 'About 1.1 PB'. (2) '🧬 We store 3 replicas. Total?' → 'About 165 PB' / 'About 55 PB, replicas share disks' / 'About 18 PB'. (3) '⚽ World Cup final. Is 2× peak enough?' → 'No: 2× is a rule of thumb; Twitter once hit ~25× its average (143K tweets/s in 2013), so plan for bursts with queues and autoscaling' (correct) / 'Yes, peaks never exceed 2×' / 'Yes, because storage doesn't change'. (4) '🌍 Our US timeline service calls a profile service in Europe 10 times per request, one by one. Latency?' → 'About 1.5 s from round trips alone: batch, or keep profiles in-region' (correct) / 'About 5 ms, it's just network' / 'About 150 ms total'. (5) '🧠 Timeline cache: memory or disk?' → 'Memory: ~100 ns vs a ~10 ms disk seek, and ~60 GB fits in RAM' (correct) / 'Disk: it's cheaper and almost as fast' / 'Neither: read from the database every time'. (6) '🔗 Feed needs 3 services at 99.9% each. What can we promise?' → 'About 99.7% unless we add redundancy' (correct) / '99.9%' / '99.97%'. (7) '🗄️ Can one database server hold all the media?' → 'No: ~55 PB needs object storage, plus a CDN for delivery' (correct) / 'Yes, with a big enough disk' / 'Yes, if we compress it'. Each 'why' shows the math and cites which quest it came from.",
+   "check": "Boss HP bar; first-run hearts at stake; clock adds 20 s per wrong answer."
+  },
+  {
+   "title": "Wrap it up",
+   "sub": "Step 4 · what the numbers mean for the design",
+   "teaches": "An estimate is only useful if it changes a decision. Map each number to a design consequence: ~7,000 peak writes/s → more than one comfortable database primary for long-term growth, so plan to partition (shard) tweets; ~35,000 peak reads/s with a 5:1+ read skew → a cache tier and read replicas; ~60 GB hot set → fits in an in-memory cache; ~55 PB media (165 PB replicated) → blob/object storage plus CDN, never the relational DB; ~350 MB/s media ingest → upload path separate from the tweet-write path; ~50 app servers → stateless tier behind a load balancer. Then: restate assumptions, name the biggest uncertainty (peak factor, media size), and say what you'd measure first. Caveat: single-database write limits vary widely with hardware and schema; say 'a few thousand writes per second per primary' as a rough guide, not a fact.",
+   "interaction": "Match-up: 6 number chips on the left (7K writes/s, 35K reads/s, 60 GB hot set, 55 PB media, 350 MB/s ingest, ~50 servers) and 6 design-consequence cards on the right (shard the tweet store, cache + read replicas, in-memory cache, object storage + CDN, separate upload path, stateless tier + load balancer). Tap one chip then its card to draw a link; wrong links break apart with a hint. Then a 'closing statement' builder: 4 sentence slots (restate assumptions / headline numbers / biggest uncertainty / what I'd do next), each with 3 candidate sentences; one per slot is strong, the others are too vague or too precise. The interview clock stops and shows final time vs the 10-minute budget.",
+   "check": "Q.quiz: 'The interviewer asks: so what? Best answer?' options: 'Media dominates at ~55 PB, so it lives in object storage behind a CDN; the hot tweet set is ~60 GB, so it fits in cache' (correct) / 'The numbers are approximate, so they don't change the design' / 'We need exactly 42 servers'."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "The 90-second estimate + your scorecard",
+   "teaches": "Full recall of the gauntlet, including the chapter's tips.",
+   "interaction": "Q.drill prompt: 'From the top, estimate the scale of a Twitter-like service and tell me what it means.' Model answer: 'I'll state assumptions: 300 million MAU, half daily, 2 posts a day, 10% with ~1 MB media, 10 timeline loads a day, 5-year retention. That's 150 million DAU and 300 million posts a day, so ~3,500 writes per second, ~7,000 at a 2× peak. Reads are 1.5 billion timeline loads a day, ~17,000 per second, ~35,000 at peak. Media is 30 TB a day, ~55 PB over five years, ~165 PB with three replicas, so it goes in object storage behind a CDN. The last day of tweet text is ~60 GB, which fits in an in-memory cache, and memory beats disk by orders of magnitude. At ~1,000 requests per second per server I need ~50 app servers with headroom. My biggest uncertainty is the peak factor: real events have hit 25×, so I'd add queues and autoscaling.' After the drill, a scorecard (like 0008) summarizes: assumptions asked, plan order, rows within tolerance, units labeled, follow-ups won, final clock; stored under a separate localStorage key 'sdq:v1:<id>-interview' following 0008's pattern.",
+   "check": "Self-grade checks: 'Stated assumptions first', 'Gave write and read QPS with peaks', 'Gave storage per day and over 5 years (with replication)', 'Gave cache size and server count', 'Tied at least two numbers to design decisions', 'Labeled units and rounded'."
+  }
+ ],
+ "caveats": [
+  "The book's chapter is a toolkit, not a 'design X' prompt; this boss stretches its Twitter example into a fuller estimate (reads, cache, servers) that the book lists as common asks but does not compute.",
+  "The timeline-loads, per-server capacity (~1,000 requests/s) and ~200-byte cached tweet are interviewer-given assumptions for practice, not facts; real per-server throughput ranges from hundreds to tens of thousands of requests per second depending on the work done.",
+  "In real interviews, estimation usually takes a few minutes inside Step 1 or 2 of a larger design, and some interviewers skip it; the 10-minute budget here is for practice.",
+  "The 2× peak factor is a simplification; real spikes can be ~25× (Twitter, 2013).",
+  "Series availability math assumes independent failures; correlated failures make it worse."
+ ],
+ "sources": [
+  {
+   "label": "System Design Interview, Ch. 2: Back-of-the-envelope Estimation (ByteByteGo)",
+   "url": "https://bytebytego.com/courses/system-design-interview/back-of-the-envelope-estimation"
+  },
+  {
+   "label": "System Design Interview, Ch. 3: A Framework for System Design Interviews (ByteByteGo)",
+   "url": "https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews"
+  },
+  {
+   "label": "Google Pro Tip: Use Back-of-the-Envelope Calculations (High Scalability, book reference [1])",
+   "url": "http://highscalability.com/blog/2011/1/26/google-pro-tip-use-back-of-the-envelope-calculations-to-choo.html"
+  },
+  {
+   "label": "Colin Scott: Latency Numbers Every Programmer Should Know (book reference [3])",
+   "url": "https://colin-scott.github.io/personal_website/research/interactive_latency.html"
+  },
+  {
+   "label": "Twitter Engineering: New Tweets per second record, and how! (2013)",
+   "url": "https://blog.twitter.com/engineering/en_us/a/2013/new-tweets-per-second-record-and-how"
+  },
+  {
+   "label": "Google SRE Book: Embracing Risk",
+   "url": "https://sre.google/sre-book/embracing-risk/"
+  }
+ ],
+ "id": "0205",
+ "file": "0205-boss-estimation-gauntlet.html",
+ "world": 2,
+ "chapterTitle": "Back-of-the-Envelope Estimation",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/back-of-the-envelope-estimation",
+ "cheatsheet": "../reference/ch02-estimation-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "0201",
+   "n": "2.1",
+   "t": "The Byte Ladder",
+   "d": "Powers of two, data units, and doing big multiplications in your head"
+  },
+  {
+   "id": "0202",
+   "n": "2.2",
+   "t": "Nanoseconds to Netherlands",
+   "d": "Latency numbers every programmer should know, and the five lessons in them"
+  },
+  {
+   "id": "0203",
+   "n": "2.3",
+   "t": "Count the Nines",
+   "d": "Availability percentages, SLAs, and how much downtime each nine allows"
+  },
+  {
+   "id": "0204",
+   "n": "2.4",
+   "t": "Tweet Math",
+   "d": "The book's worked example: Twitter's QPS and storage, step by step"
+  },
+  {
+   "id": "0205",
+   "n": "BOSS",
+   "t": "The Estimation Gauntlet",
+   "d": "Mock interview: estimate a Twitter-like service end to end, then survive the follow-ups"
+  }
+ ]
+}

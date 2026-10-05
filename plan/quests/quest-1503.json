@@ -1,0 +1,118 @@
+{
+ "n": "15.3",
+ "slug": "drive-metadata-and-conflicts",
+ "t": "The Metadata Ledger",
+ "d": "Strong consistency, cache invalidation, the metadata schema, and sync conflicts",
+ "boss": false,
+ "badge": "📒 Badge: Ledger Keeper",
+ "winTitle": "Ledger balanced!",
+ "goal": "Your win today: you can explain why Drive's metadata needs strong consistency (and a relational DB), sketch the user/device/namespace/file/file_version/block schema, and say exactly what happens when two people edit the same file at once.",
+ "bookSections": "Step 3 (High consistency requirement, Metadata database); Step 2 (Sync conflicts)",
+ "stages": [
+  {
+   "title": "No two truths",
+   "sub": "Strong consistency, spot-the-bug",
+   "teaches": "Book: the system needs strong consistency by default — it's unacceptable for one file to be shown differently by different clients at the same time. This must hold for the metadata cache and DB layers. Memory caches use an eventual consistency model by default, so: (1) data in cache replicas and the master must be consistent; (2) invalidate caches on database write so cache and DB hold the same value. Choosing the DB: relational databases support ACID natively (Atomicity, Consistency, Isolation, Durability — a write either fully happens or not at all, and readers see committed state); NoSQL databases do not support ACID properties by default, so getting strong consistency would mean programming it into the sync logic. So the book picks a relational database for metadata.",
+   "interaction": "Spot-the-bug simulation with two phones ('Alice laptop', 'Alice phone'), an API server, a metadata cache and a metadata DB. Learner presses 'Save v2 on laptop': the DB row flips to v2 but the code path shown in a little code panel skips 'cache.delete(file_id)'. Phone then reads through the cache and shows v1 while the laptop shows v2 — a red 'TWO TRUTHS' banner. Learner clicks the faulty line in the code panel (3 candidate lines) and chooses the fix: 'invalidate the cache entry on every DB write'. Rerun: both devices show v2. Follow-up toggle: 'store metadata in an eventually consistent NoSQL store' -> the sim shows a window where reads disagree, with the label 'you'd have to build consistency yourself'.",
+   "check": "Q.quiz: 'Why does the book pick a relational DB for metadata?' -> it supports ACID natively, which gives strong consistency for file metadata. Distractors: it's cheaper; it stores large files better; NoSQL can't be sharded."
+  },
+  {
+   "title": "Draw the tables",
+   "sub": "The metadata schema, build-and-trace",
+   "teaches": "Book's simplified schema (only the most important tables): user (user_id, user_name, created_at — basic info like profile, email, photo); device (device_id, user_id, last_logged_in_at — one user can have many devices; device info is stored, e.g. for push notification IDs); namespace (a user's root directory; id, owner); file (id, file_name, relative_path, is_directory, latest_version, checksum, workspace/namespace id, created_at, last_modified — everything about the latest file); file_version (id, file_id, device_id, version_number, last_modified — the version history; existing rows are READ-ONLY to keep revision history intact); block (block_id, file_version_id, block_order — everything about a file block; any version of a file can be reconstructed by joining all its blocks in the correct order). Relationships: user 1-N device, user 1-N namespace, namespace 1-N file, file 1-N file_version, file_version 1-N block.",
+   "interaction": "Two-part. Part A, build: six empty table cards and a tray of field chips (block_order, version_number, relative_path, last_logged_in_at, latest_version, is_directory, checksum, file_version_id, device_id…). Learner drops each field onto the right table; then draws 1-N links by tapping parent then child. Part B, trace: 'Alice opens revision 3 of /reports/q3.pdf' — learner taps tables in the order the server reads them: namespace -> file (by relative_path) -> file_version (version_number = 3) -> block rows (ordered by block_order) -> fetch blocks from S3. Wrong taps highlight what that table can't tell you.",
+   "check": "Q.quiz (spot-the-bug): 'A developer runs UPDATE file_version SET last_modified = now() WHERE id = 42 to fix a timestamp.' What rule did they break? -> file_version rows are read-only to keep revision history intact; add a new version instead."
+  },
+  {
+   "title": "Two hands, one file",
+   "sub": "Sync conflicts, predict-then-watch",
+   "teaches": "Book: with many users, sync conflicts happen when two users modify the same file (or folder) at the same time. Strategy: the first version that gets processed wins; the version processed later receives a conflict. The system then presents both copies of the file to the conflicted user: the user's local copy and the latest version from the server. The user can merge both files or override one version with the other. (Book references Neil Fraser's 'Differential Synchronization' for multi-user editing.) Real-world: Dropbox saves the losing side as a 'conflicted copy' file next to the original instead of silently overwriting.",
+   "interaction": "Predict-then-watch timeline. Two lanes (User 1, User 2) both editing budget.xlsx v5 offline. They come online; packets race to the server — the learner sees User 1's arrives at t=1.02 s and User 2's at t=1.05 s. Predict: which becomes v6? (User 1, first processed.) What happens to User 2? choices: silently overwritten / gets a conflict and sees both copies / server merges cell-by-cell automatically. Watch: User 2's screen shows a split card 'Your local copy' vs 'Server v6' with three buttons: Merge, Keep mine (becomes v7), Keep theirs. Learner picks any; the file_version table on the side grows accordingly (never edits v6 — ties back to read-only versions).",
+   "check": "Q.quiz: 'Why not just let the last write win silently?' -> the first user's edits would vanish without anyone knowing — data loss, breaking the #1 requirement (reliability)."
+  },
+  {
+   "title": "Boss: The Split-Brain Sprite",
+   "sub": "Interview scenarios",
+   "teaches": "Applying consistency, schema and conflict handling.",
+   "interaction": "Q.boss '👾 The Split-Brain Sprite', 4 scenarios. (1) 'After an edit, the phone shows the old file name for a minute while the laptop shows the new one.' -> stale metadata cache; invalidate on write / add more cache replicas / lower the TTL to 59 seconds. (2) 'Interviewer: why not store metadata in Cassandra for scale?' -> possible, but we'd lose native ACID and have to build strong consistency ourselves; relational + sharding fits / Cassandra can't store strings / NoSQL is always slower. (3) 'User wants revision 3 from last week.' -> look up file_version 3 and join its blocks by block_order / restore S3 bucket snapshot / impossible once v4 exists. (4) 'Two coworkers save the same slide deck within 50 ms.' -> first processed wins, second gets a conflict with both copies shown / server picks the bigger file / reject both.",
+   "check": "Boss cleared when all 4 are answered."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "Consistency + conflicts in 45 seconds",
+   "teaches": "Tying consistency, schema and conflicts into one answer.",
+   "interaction": "Q.drill. Prompt: 'Interviewer: how do you keep every device seeing the same file, and what if two people edit it at once?' Model: 'File metadata needs strong consistency — two clients must never see different versions of the same file. So I'd keep metadata in a relational database for native ACID, shard it by user, and invalidate the metadata cache on every write so the cache never serves stale versions. The schema is user, device, namespace, file, file_version and block; versions are append-only and each version maps to an ordered list of block hashes, so any revision can be rebuilt. For concurrent edits, the first change processed wins; the later one gets a conflict and the user sees both their local copy and the server's latest, and can merge or pick one — nothing is silently lost.' Checks: strong consistency; relational/ACID; invalidate cache on write; file_version append-only; blocks ordered; first-processed wins + both copies shown.",
+   "check": "Self-graded checklist."
+  }
+ ],
+ "caveats": [
+  "'Relational because ACID' is the book's simplification. Large real systems use sharded MySQL with custom layers (Dropbox's Edgestore) or globally consistent stores (Google Spanner); some NoSQL stores now offer transactions. The real point is: metadata needs transactions and strong consistency.",
+  "Invalidating the cache on write still leaves tiny race windows (a reader can re-populate the cache with an old value between the DB write and the delete); production systems add versioned cache entries or leases.",
+  "The book's schema is deliberately simplified; it omits sharing/permissions tables even though sharing is an in-scope feature. Say so if the interviewer asks about ACLs.",
+  "'First processed wins' is not merging. Real-time co-editing (Google Docs) uses operational transform / CRDTs, which is out of scope here."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo — Design Google Drive (book chapter)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-google-drive"
+  },
+  {
+   "label": "Neil Fraser — Differential Synchronization",
+   "url": "https://neil.fraser.name/writing/sync/"
+  },
+  {
+   "label": "Dropbox Tech — Rewriting the heart of our sync engine (Nucleus)",
+   "url": "https://dropbox.tech/infrastructure/rewriting-the-heart-of-our-sync-engine"
+  },
+  {
+   "label": "Amazon S3 strong consistency",
+   "url": "https://aws.amazon.com/s3/consistency/"
+  }
+ ],
+ "id": "1503",
+ "file": "1503-drive-metadata-and-conflicts.html",
+ "world": 15,
+ "chapterTitle": "Design Google Drive",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-google-drive",
+ "cheatsheet": "../reference/ch15-google-drive-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "1501",
+   "n": "15.1",
+   "t": "Claim Your Locker",
+   "d": "Scope Google Drive, run the numbers, design the upload/download/revision APIs, outgrow one server"
+  },
+  {
+   "id": "1502",
+   "n": "15.2",
+   "t": "Chop It Into Blocks",
+   "d": "The high-level design, block servers, 4 MB blocks, delta sync, compress-then-encrypt"
+  },
+  {
+   "id": "1503",
+   "n": "15.3",
+   "t": "The Metadata Ledger",
+   "d": "Strong consistency, cache invalidation, the metadata schema, and sync conflicts"
+  },
+  {
+   "id": "1504",
+   "n": "15.4",
+   "t": "Ping When It Changes",
+   "d": "The upload flow, the download flow, long-polling notifications and the offline backup queue"
+  },
+  {
+   "id": "1505",
+   "n": "15.5",
+   "t": "Thrift & Chaos",
+   "d": "Save storage space with dedup, version limits and cold storage, then survive every component failing"
+  },
+  {
+   "id": "1506",
+   "n": "BOSS",
+   "t": "Design Drive Live",
+   "d": "Full mock interview: design Google Drive with the 4-step framework"
+  }
+ ]
+}

@@ -1,0 +1,131 @@
+{
+ "n": "11.3",
+ "slug": "news-feed-publishing-pipeline",
+ "t": "The Fanout Factory",
+ "d": "Inside publishing: auth and rate limits, the five-step fanout workflow, and an ID-only feed cache",
+ "boss": false,
+ "badge": "🏭 Badge: Factory Foreman",
+ "winTitle": "The factory runs itself",
+ "goal": "Your win today: you can walk through publishing step by step: web servers check the token and rate-limit, the fanout service reads friends from a graph DB, filters them using user settings, queues the job, and workers write <post_id, user_id> entries into a capped feed cache; and you can say why IDs only and why a cap.",
+ "bookSections": "Step 3, Feed publishing deep dive: figure 11-4; Web servers (authentication, rate limiting); Fanout service workflow (figure 11-5, steps 1-5: graph DB, user cache + filtering, message queue, fanout workers, news feed cache); news feed cache as <post_id, user_id> mapping (figure 11-6), configurable limit, low cache miss rate",
+ "stages": [
+  {
+   "title": "The bouncers",
+   "sub": "Web servers: auth and rate limiting",
+   "teaches": "Besides talking to clients, the web servers enforce two rules before a post enters the system. Authentication: only signed-in users with a valid auth_token may publish. Rate limiting: cap how many posts one user can make in a time window, to stop spam and abusive content. (World 4 built a full rate limiter; here it's just one box.) Doing these at the edge means bad traffic never reaches the expensive fanout.",
+   "interaction": "Gatekeeper mini-game. Post requests scroll in on a conveyor, one every ~1.5s; each card shows user, token status (valid / expired / missing) and how many posts this user has sent in the last minute. A rule card is shown: 'limit: 5 posts per user per minute'. The learner taps Admit or Reject for each of 12 cards (mix: 6 legit, 2 missing/expired tokens, 4 from a spammer whose count goes 4, 5, 6, 7). Correct: reject bad tokens; admit the spammer's 4th and 5th, reject the 6th and 7th. After the run, a counter shows 'fanout writes avoided: N x 300' to show why filtering early matters.",
+   "check": "At least 10 of 12 correct (each miss costs a heart, max 3). Quiz (2 Qs): 'What two checks happen at the web servers?' (authentication, rate limiting); 'Why do them before fanout?' (blocked posts never trigger hundreds of feed writes)."
+  },
+  {
+   "title": "Five steps to every feed",
+   "sub": "The fanout workflow, in order",
+   "teaches": "Book's fanout workflow (figure 11-5, our wording): (1) Get the poster's friend IDs from the graph database; graph DBs are good at storing friend relationships and powering friend recommendations. (2) Get those friends' info from the user cache and filter by user settings. (3) Put the filtered friend list and the new post ID on a message queue. (4) Fanout workers pull jobs off the queue. (5) Workers write <post_id, user_id> entries into each friend's feed in the news feed cache. Jargon: graph database = a store where data is nodes (users) and edges (friendships), so 'friends of X' is a cheap hop; message queue = a buffer where producers drop jobs and workers pick them up later.",
+   "interaction": "Tap-in-order puzzle over the figure. The figure 11-4 style diagram is shown with its arrows hidden: fanout service, graph DB, user cache, user DB, message queue, fanout workers, news feed cache. 5 step cards are shuffled at the bottom. The learner taps them in order; each correct tap draws the matching arrow and plays a mini-animation (e.g. step 1: a fan of friend IDs returns from the graph DB; step 3: a job envelope 'post p981 -> [u2, u5, u9...]' drops into the queue). Wrong order shakes and costs a heart. Then a 'what breaks?' quick round: 3 cards ask which step fails if (a) the graph DB is slow (step 1, fanout delayed), (b) the user cache is cold (step 2 falls back to the user DB), (c) workers crash mid-job (jobs stay in the queue and are retried).",
+   "check": "Order correct; 3 'what breaks' cards answered. Quiz (1 Q): 'Where does the fanout service get the friend list?' (the graph database)."
+  },
+  {
+   "title": "Not everyone gets it",
+   "sub": "Filtering by user settings",
+   "teaches": "Step 2 isn't just a lookup: friends are filtered by settings. If you mute a friend, their posts stay out of your feed even though you're still friends. A post can also be shared selectively, e.g. only with some friends, or hidden from specific people. Filtering at fanout time means the feed cache never holds posts a user shouldn't see, so reads stay simple. The cost: settings that change after fanout (you unfriend someone, a post's audience changes, a post is deleted) aren't reflected in entries already written, so a real system re-checks at read time too.",
+   "interaction": "Predict-then-watch. Ana posts 'Beach day!' with audience 'Friends except Work'. Her 6 friends appear as cards with settings tags: Bo (normal), Cy (has muted Ana), Dee (in Ana's 'Work' list), Eli (normal), Fay (normal, inactive 60 days), Gus (normal). The learner taps the cards whose feed will receive the post ID. Correct: Bo, Eli, Fay, Gus (Fay still gets it under pure push; Cy muted; Dee excluded by audience). Press Fanout: envelopes fly only to the right cards. Then a twist button 'Next day: Ana removes Gus as a friend'. The learner is asked 'Is the post still in Gus's feed cache?' (yes, the entry was written yesterday) and 'Where do we fix it?' (re-check permissions when hydrating the feed at read time).",
+   "check": "Recipients selected correctly (each wrong tap costs a heart); twist questions answered. Quiz (1 Q): 'You muted Tom. Are you still friends, and do his posts reach your feed?' (still friends; posts filtered out)."
+  },
+  {
+   "title": "Why a queue in the middle?",
+   "sub": "Decouple the poster from the fanout",
+   "teaches": "The message queue + worker pool decouples publishing from fanout. The poster gets 'Posted!' as soon as the post is stored and the job is queued; workers fan out in the background. Benefits: fast response for the poster, spikes absorbed by the queue instead of overloading the cache, workers scale out independently, and a failed write can be retried from the queue. Cost: friends see the post after a short delay (seconds normally, longer under a backlog), i.e. the feed is eventually consistent.",
+   "interaction": "Toggle sim. A 'Post' button and a timer. Mode A 'Fanout inline' (no queue): pressing Post with 2,000 friends makes the poster's spinner run until all 2,000 writes finish (shown as a filling bar, ~4s at the toy rate). Mode B 'Queue + workers': the poster gets 'Posted!' in ~50 ms, a queue depth meter jumps to 2,000 and drains. A worker slider (1-16) changes drain time live (drain time ~= jobs / (workers x rate)). Then a 'Rush hour' button fires 30 posts at once; with inline mode some requests time out (red), with the queue the depth spikes and drains. A 'Kill worker 3' button shows its in-flight job reappearing in the queue and finishing on another worker. Predict first: 'With the queue, does the poster wait for fanout?' (no).",
+   "check": "Prediction made; learner drains a rush-hour spike within 10 seconds by choosing enough workers (target: >= 8 at the toy rate). Quiz (2 Qs): 'Name two benefits of the queue' (fast response, absorbs spikes, independent scaling, retries); 'What's the cost?' (a short delay before friends see the post)."
+  },
+  {
+   "title": "Store IDs, not posts",
+   "sub": "The feed cache diet",
+   "teaches": "The news feed cache is a mapping of <post_id, user_id> per viewer: a list of which posts belong in this user's feed and who wrote them; whenever a post is fanned out, a new entry is appended (figure 11-6). Storing full user and post objects in every friend's feed would blow up memory (the same post copied hundreds of times). So only IDs are stored, and a configurable limit caps each list. The book's reasoning: very few people scroll through thousands of posts; most want the latest, so the cache miss rate stays low. Illustrative math (our assumptions): a pair of 8-byte IDs = 16 bytes; 500 entries per user -> 8 KB; 10M users -> ~80 GB, fits on a small cache cluster. Copying a 1 KB post object instead: 500 KB per user -> ~5 TB.",
+   "interaction": "Two parts. (1) Calculate-and-check: '16 bytes per entry, 500 entries per user, 10 million users: total GB?' accept 75-85 (exact 80); 'Same, but storing a 1 KB post object per entry: total TB?' accept 4.5-5.5. (2) Cap slider sim: a slider for 'max entries per feed' (50 to 5,000). Next to it, a scroll-depth curve (illustrative: most sessions stop within the first 50 posts; very few beyond 500). Two live readouts: cluster memory (grows linearly) and cache miss rate (share of sessions that scroll past the cap, falling steeply then flattening). The learner must set the cap so memory < 100 GB and misses < 1% (works around 300-600). A 'scroll past the cap' button shows what a miss does: the news feed service falls back to the database (or rebuilds the older part of the feed by pulling) and the latency bar jumps.",
+   "check": "Both calculations within tolerance; cap set within both targets. Quiz (2 Qs): 'Why only IDs in the feed cache?' (memory: avoid copying full objects into every friend's feed); 'Why is a cap safe?' (few users scroll that deep, so misses are rare; misses fall back to the DB)."
+  },
+  {
+   "title": "Boss: The Assembly-Line Saboteur",
+   "sub": "Find the broken station",
+   "teaches": "Debugging the publishing pipeline by symptom.",
+   "interaction": "Q.boss with shared choices: 'Web servers (auth / rate limit)' / 'Graph DB + user cache filter' / 'Message queue + fanout workers' / 'News feed cache'. Scenarios: (1) 'A bot posts 400 times a minute and every post fans out to 300 friends' -> Web servers (rate limit). (2) 'People who muted Raj still see his posts' -> Graph DB + user cache filter (settings not applied). (3) 'Posts appear in friends' feeds 25 minutes late after a viral event' -> Message queue + fanout workers (backlog; add workers). (4) 'The feed cache cluster runs out of memory after someone stored full post objects' -> News feed cache (IDs only + cap). (5) 'Logged-out users can publish by replaying an old request' -> Web servers (auth). (6) 'A worker crashes mid-fanout; half the friends never get the post' -> Message queue + fanout workers (ack after write, so the job is retried). (7) 'Users who scroll back 2,000 posts see an empty page' -> News feed cache (past the cap; fall back to DB).",
+   "check": "Boss HP to zero."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "Narrate the factory",
+   "teaches": "A tight walkthrough of the publishing deep dive.",
+   "interaction": "Q.drill. Prompt: 'Interviewer: walk me through what happens after Ana hits Post.' Model answer (paraphrase): 'Web servers check her auth token and rate-limit her. The post service stores the post in the post DB and cache. The fanout service gets her friend IDs from the graph DB, loads their info from the user cache and drops anyone who muted her or isn't in the post's audience. It puts the post ID plus the filtered friend list on a message queue, so Ana gets a quick response. Fanout workers consume the queue and append a <post_id, author_id> entry to each friend's list in the news feed cache. We store IDs only and cap each list at a few hundred entries, because almost nobody scrolls further, and fall back to the DB if they do. Very popular accounts skip this fanout and get pulled at read time.' Checks: 'Auth + rate limiting at the web servers', 'Graph DB for friends', 'Filtering by settings (mute / audience)', 'Message queue + workers and why', 'IDs only in the feed cache', 'Cap + fallback on miss'.",
+   "check": "Drill completed and self-graded."
+  }
+ ],
+ "caveats": [
+  "The book's cache entry is <post_id, user_id>; it's stored per viewer's feed, so the user_id is best read as the post's author (needed to hydrate). Real systems often keep a capped Redis list or a sorted set scored by time.",
+  "Facebook's social graph doesn't live in a classic graph database: it's TAO, a graph-shaped caching layer over sharded MySQL. 'Graph DB' in the book means 'a store that's good at friend edges'.",
+  "Filtering at fanout time goes stale: unfriending, audience changes and deletions after fanout must be re-checked at read time (quest 11.4's hydration step is where that happens).",
+  "A message queue normally gives at-least-once delivery, so a retried job may write the same entry twice; make feed writes idempotent (e.g. a set keyed by post_id).",
+  "The memory and scroll-depth numbers are illustrative assumptions, not the book's."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo: Design a News Feed System (book chapter 11, online version)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-news-feed-system"
+  },
+  {
+   "label": "Bronson et al., TAO: Facebook's Distributed Data Store for the Social Graph (USENIX ATC 2013)",
+   "url": "https://www.usenix.org/conference/atc13/technical-sessions/presentation/bronson"
+  },
+  {
+   "label": "Redis docs: Lists (LPUSH + LTRIM capped lists)",
+   "url": "https://redis.io/docs/latest/develop/data-types/lists/"
+  },
+  {
+   "label": "Apache Kafka documentation: introduction",
+   "url": "https://kafka.apache.org/intro"
+  },
+  {
+   "label": "Neo4j docs: what is a graph database?",
+   "url": "https://neo4j.com/docs/getting-started/graph-database/"
+  }
+ ],
+ "id": "1103",
+ "file": "1103-news-feed-publishing-pipeline.html",
+ "world": 11,
+ "chapterTitle": "Design a News Feed System",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-news-feed-system",
+ "cheatsheet": "../reference/ch11-news-feed-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "1101",
+   "n": "11.1",
+   "t": "Two Rivers",
+   "d": "Scope a news feed, design its two APIs, and sketch the publish and read flows"
+  },
+  {
+   "id": "1102",
+   "n": "11.2",
+   "t": "Push, Pull, or Both",
+   "d": "Fanout on write vs fanout on read, the celebrity problem, and the hybrid fix"
+  },
+  {
+   "id": "1103",
+   "n": "11.3",
+   "t": "The Fanout Factory",
+   "d": "Inside publishing: auth and rate limits, the five-step fanout workflow, and an ID-only feed cache"
+  },
+  {
+   "id": "1104",
+   "n": "11.4",
+   "t": "Hydrate the Feed",
+   "d": "Inside reading: turn post IDs into a full feed, serve media from a CDN, and the five cache layers"
+  },
+  {
+   "id": "1105",
+   "n": "BOSS",
+   "t": "Design It Live: News Feed",
+   "d": "Full mock interview: design a news feed for 10 million daily users"
+  }
+ ]
+}

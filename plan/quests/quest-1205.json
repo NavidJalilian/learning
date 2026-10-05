@@ -1,0 +1,121 @@
+{
+ "n": "12.5",
+ "slug": "chat-online-presence",
+ "t": "The Green Dot",
+ "d": "Online presence: login/logout, heartbeats, and fanning out status changes",
+ "boss": false,
+ "badge": "🟢 Badge: Presence Sentinel",
+ "winTitle": "The dot never lies (much)",
+ "goal": "Your win today: you can explain how presence servers track online status, why marking a user offline on every disconnect is bad, how a heartbeat with a timeout fixes it, and how status changes fan out to friends, plus why that breaks for huge groups.",
+ "bookSections": "Step 3 Online presence: user login (status + last_active_at in KV store), user logout, user disconnection, heartbeat mechanism (5s heartbeat, x = 30s), online status fanout via publish-subscribe channels per friend pair (figure 12-19), large groups (100,000 members), fetching status on group entry",
+ "stages": [
+  {
+   "title": "Login and logout",
+   "sub": "Who flips the dot",
+   "teaches": "Presence servers manage online status and talk to clients over WebSocket. User login: once the WebSocket between client and real-time service is up, A's online status and last_active_at timestamp are saved in the key-value store, and the indicator shows online. User logout: the logout goes through the API servers to the presence servers, and the status in the KV store changes to offline.",
+   "interaction": "A small diagram: A's phone, API servers, presence servers, KV store row {user: A, status, last_active_at}. Buttons: 'Log in' and 'Log out'. Pressing each animates the path and updates the KV row (status flips, last_active_at shows the current time). The learner first predicts which server writes the KV row (presence servers) by tapping it.",
+   "check": "Prediction correct; quiz Q: 'What two fields does the book store at login?' (online status, last_active_at)."
+  },
+  {
+   "title": "The tunnel problem",
+   "sub": "Why 'disconnected = offline' flickers",
+   "teaches": "Naive approach: mark the user offline the moment the connection drops. But mobile connections drop and come back all the time, e.g. driving through a tunnel. The dot flickers green-grey-green, friends get spammed with status changes, and the user experience is poor.",
+   "interaction": "A 2-minute train-ride timeline with three tunnels (4s, 12s and 50s of signal loss). A 'Naive mode' run animates the train; the green dot on a friend's screen flips at every tunnel. A counter shows 'status changes sent to friends: 6'. The learner predicts the count before running (choices 0 / 3 / 6). Right: 6 (offline + online per tunnel).",
+   "check": "Prediction correct (6). Quiz Q: 'What's wrong with flipping status on every disconnect?' (flapping: noisy, wasteful, bad UX for short drops)."
+  },
+  {
+   "title": "Heartbeat",
+   "sub": "Every 5 seconds: still here",
+   "teaches": "The book's fix: an online client periodically sends a heartbeat event to the presence servers. If the server gets a heartbeat within x seconds, the user stays online; otherwise they're marked offline. Book example: the client sends a heartbeat every 5 seconds; after 3 heartbeats it disconnects and doesn't reconnect within x = 30 seconds, so it's marked offline. Trade-off: a shorter timeout notices real departures faster but flickers more; a longer one is calmer but shows ghosts (people who left still look online). Load check: 1M online users / 5s = 200,000 heartbeats per second for the presence tier.",
+   "interaction": "Same train ride, 'Heartbeat mode'. Heartbeat ticks every 5s on a timeline; a countdown ring on the presence server resets to 30 at each tick. In tunnels, ticks stop and the ring drains. The learner predicts for each tunnel (4s, 12s, 50s) whether the friend sees 'offline' (only the 50s tunnel; it crosses 30s with no heartbeat). Then sliders for heartbeat interval (1-30s) and timeout x (5-120s), with live readouts: status flips during the ride, 'ghost seconds' (time shown online after really leaving), heartbeats/s at 1M users. Finally, calculate-and-check: '1,000,000 users, one heartbeat every 5s: heartbeats per second?' Answer 200,000.",
+   "check": "Per-tunnel predictions correct; calculation correct; quiz Q: 'In the book's example, when exactly is the user marked offline?' (after no heartbeat for 30 seconds)."
+  },
+  {
+   "title": "Fan out the dot",
+   "sub": "Pub/sub per friend pair, and the big-group trap",
+   "teaches": "How do friends learn A's status changed? Presence servers use publish-subscribe: each friend pair has a channel. When A's status changes, the event is published to the channels A-B, A-C and A-D, which B, C and D subscribe to, and they receive it over their WebSockets. This works for small groups (WeChat does something similar with its 500 cap). For large groups it's expensive: in a 100,000-member group, every status change creates 100,000 events. The book's fix: only fetch online status when a user enters a group or manually refreshes the friend list. Jargon: publish-subscribe = senders post to a named channel, and everyone subscribed to it receives the post.",
+   "interaction": "Pub/sub sim. Center: user A with friends B, C, D around it, each linked by a labelled channel (A-B, A-C, A-D). Tapping A's status toggle fires three pulses down the channels and the dots flip on B, C and D. A 'group size' slider (4, 100, 500, 100,000) redraws the graph as a dense cloud with a counter 'events per status change'. Predict before sliding to 100,000: events per change? (100,000, the book's number). Then a toggle 'Fetch on group entry / manual refresh': events per change drop to 0 for the big group, and a 'User opens group' button triggers one batch fetch instead. The trade-off is shown in a small label: status can be stale until the next refresh.",
+   "check": "Prediction correct; quiz Q: 'What does the book do for big groups?' (fetch status when entering the group or refreshing, instead of pushing every change)."
+  },
+  {
+   "title": "Boss: The Flicker Phantom",
+   "sub": "Keep the dot honest",
+   "teaches": "Apply presence techniques to scenarios.",
+   "interaction": "Q.boss with one fixed choice set: Heartbeat timeout / Push via pub/sub to friends / Fetch on entry or refresh / Write status to KV store. Scenarios: (1) 'A user's dot flickers every time their train goes under a bridge' -> Heartbeat timeout. (2) 'Bob just opened the app and his 12 friends should see him online' -> Push via pub/sub to friends. (3) 'A 100,000-member fan group wants to show who's online' -> Fetch on entry or refresh. (4) 'The WebSocket for a new login was just established' -> Write status to KV store. (5) 'A phone's battery died mid-chat with no logout' -> Heartbeat timeout (no heartbeat for 30s, so offline). (6) 'Alice taps \"refresh\" on her 2,000-person conference attendee list' -> Fetch on entry or refresh.",
+   "check": "Boss defeated."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "Explain the green dot",
+   "teaches": "Pull it together.",
+   "interaction": "Q.drill. Prompt: 'How do you show whether a friend is online?' Model answer: 'Presence servers hold a WebSocket to each client. On login they write status online and last_active_at to the key-value store; on logout, offline. I wouldn't mark someone offline the moment the connection drops, because mobile connections flap (tunnels, elevators). Instead the client sends a heartbeat every few seconds, say 5, and if none arrives for about 30 seconds they're offline. For fan-out, each friend pair gets a pub/sub channel and status changes go out over WebSocket. That's fine for small groups, but a 100,000-member group would get 100,000 events per change, so there I'd fetch status only when someone opens the group or refreshes.'",
+   "check": "Self-grade checks: 'I explained why not offline-on-disconnect', 'I gave the heartbeat interval and timeout idea', 'I covered pub/sub fan-out and the big-group fix'."
+  }
+ ],
+ "caveats": [
+  "One pub/sub channel per friend pair means millions of tiny channels. Many real systems use one channel per user ('A's presence') that A's friends subscribe to, or batch presence updates. The idea is the same; the bookkeeping is cheaper.",
+  "Heartbeats every 5s cost mobile battery and radio wake-ups. Real apps often stretch the interval in the background, piggyback on other traffic, or rely on OS push and 'last seen' instead of a live dot.",
+  "Presence is eventually consistent by design: a dot can be 30 seconds stale. That's an acceptable trade for a status hint, not something to fix with strong consistency.",
+  "The 200,000 heartbeats/s figure is our worked example (book's 1M concurrent users / 5s), not a number from the book."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo: Design a Chat System (book chapter)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-chat-system"
+  },
+  {
+   "label": "Slack Engineering: Flannel, an application-level edge cache (incl. presence and channel data)",
+   "url": "https://slack.engineering/flannel-an-application-level-edge-cache-to-make-slack-scale/"
+  },
+  {
+   "label": "Redis Pub/Sub documentation",
+   "url": "https://redis.io/docs/latest/develop/interact/pubsub/"
+  }
+ ],
+ "id": "1205",
+ "file": "1205-chat-online-presence.html",
+ "world": 12,
+ "chapterTitle": "Design a Chat System",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-chat-system",
+ "cheatsheet": "../reference/ch12-chat-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "1201",
+   "n": "12.1",
+   "t": "Open the Pipe",
+   "d": "What a chat service does, and polling vs long polling vs WebSocket"
+  },
+  {
+   "id": "1202",
+   "n": "12.2",
+   "t": "The Switchboard",
+   "d": "Stateless vs stateful services, the scaled design, and service discovery"
+  },
+  {
+   "id": "1203",
+   "n": "12.3",
+   "t": "The Message Vault",
+   "d": "Where chat history lives, the message tables, and how to mint message IDs"
+  },
+  {
+   "id": "1204",
+   "n": "12.4",
+   "t": "Special Delivery",
+   "d": "The 1-on-1 message flow, syncing many devices, and small-group fan-out"
+  },
+  {
+   "id": "1205",
+   "n": "12.5",
+   "t": "The Green Dot",
+   "d": "Online presence: login/logout, heartbeats, and fanning out status changes"
+  },
+  {
+   "id": "1206",
+   "n": "BOSS",
+   "t": "Design It Live: Chat",
+   "d": "Full mock interview: design a chat system for 50 million daily users"
+  }
+ ]
+}

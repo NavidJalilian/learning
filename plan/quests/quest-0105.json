@@ -1,0 +1,130 @@
+{
+ "n": "1.5",
+ "slug": "scale-queues-observability-sharding",
+ "t": "Queues, Gauges & Shards",
+ "d": "Message queues to decouple work, logging/metrics/automation, and sharding the database",
+ "boss": false,
+ "badge": "🧩 Badge: Shard Smith",
+ "winTitle": "Decoupled, observed, sharded!",
+ "goal": "Your win today: you can explain how a message queue decouples producers and consumers, name the three levels of metrics, say why scaling the DB up runs out, and shard by a key while naming the three sharding headaches: resharding, celebrities, joins.",
+ "bookSections": "Message queue; Logging, metrics, automation; Adding message queues and different tools; Database scaling (vertical scaling, horizontal scaling/sharding, sharding challenges)",
+ "stages": [
+  {
+   "title": "Drop it in the queue",
+   "sub": "Producers, consumers, decoupling",
+   "teaches": "A message queue is a durable component, stored in memory in the book's description, that supports asynchronous communication: it buffers messages and hands them out. Producers (publishers) create messages and publish them to the queue; consumers (subscribers) connect to it and do the work each message describes. This decoupling is key for a scalable, reliable app: the producer can post when the consumer is busy or down, and the consumer can read even when the producer is unavailable. Book example: a photo app that crops, sharpens and blurs photos, which takes time. Web servers publish photo-processing jobs to the queue; photo-processing workers pick them up and run them asynchronously. Producers and consumers scale independently: when the queue grows, add workers; when it's mostly empty, remove some.",
+   "interaction": "Simulation. Left: 2 web servers emitting photo-job tokens at a rate set by a slider (uploads/sec). Middle: a queue shown as a growing bar with a count. Right: worker boxes, each finishing one job per tick (each job takes 3 ticks). Controls: '+ worker', '− worker'. Phase 1 'Inline mode' (queue disabled): web servers do the filtering themselves and upload requests time out at higher rates (red). Phase 2 'Queue on': uploads return instantly ('job accepted'). The learner must keep the queue under 50 for 60 seconds while the upload rate ramps up and down, adding and removing workers. Phase 3: predict-then-watch 'All workers crash for 10 seconds. Do uploads fail?' (yes / no, they pile up in the queue) → no; the queue grows, then drains when workers return.",
+   "check": "Phase 2 target met and phase 3 prediction entered. Q.quiz, 2 questions: the two roles around a queue (producer/publisher, consumer/subscriber); what you do when the queue keeps growing (add consumers/workers)."
+  },
+  {
+   "title": "Gauges on the dashboard",
+   "sub": "Logging, metrics, automation",
+   "teaches": "Once a site serves a big business, tooling is essential. Logging: watch error logs to find problems; either per server, or (more practical) aggregated into a central service for easy search and viewing. Metrics, at three levels: host level (CPU, memory, disk I/O), aggregated level (e.g. performance of the whole database tier or cache tier), and key business metrics (daily active users, retention, revenue). Automation: when the system gets big and complex, use or build automation tools; continuous integration checks each code check-in automatically to catch problems early, and automating build, test and deploy boosts developer productivity. The design now includes a message queue for loose coupling and failure resilience, plus logging, monitoring, metrics and automation tools.",
+   "interaction": "Sort-into-bins. 10 cards drop into four bins: Host metric / Aggregated metric / Business metric / Not a metric (logging or automation). Cards: 'CPU usage on web-7' (host), 'Disk I/O on db-2' (host), 'Memory on cache-1' (host), 'p99 latency of the whole DB tier' (aggregated), 'Cache tier hit rate' (aggregated), 'Daily active users' (business), 'Week-4 retention' (business), 'Revenue per day' (business), 'Search all servers' error logs in one place' (not a metric: centralized logging), 'Every commit runs the test suite automatically' (not a metric: CI/automation). Then a mini-scenario: '40 servers, one throws 500s, which tool finds it fastest?' with options SSH into each / centralized logs / bigger server → centralized logs.",
+   "check": "All cards placed (retry allowed) and the scenario answered."
+  },
+  {
+   "title": "Bigger box or more boxes?",
+   "sub": "Scaling the database: up vs sharding",
+   "teaches": "Vertical DB scaling means more CPU, RAM, disk. The book notes Amazon RDS offered servers with 24 TB of RAM, and that Stack Overflow in 2013 served 10M+ monthly unique visitors with just one master database. Drawbacks: hardware has limits, so a huge user base outgrows even the biggest server; greater risk of a single point of failure; and high cost, since powerful servers are much more expensive. Horizontal DB scaling, called sharding: split a large DB into smaller, easier-to-manage parts called shards. All shards share the same schema, but each holds different data (no overlap). Book example: users spread across 4 shards with user_id % 4 picking the shard. The sharding key (partition key) is the column or columns that decide where data goes; it lets you route each query to the right DB. Choose one that spreads data evenly.",
+   "interaction": "Calculate-and-route. Four shard boxes labelled 0–3. Five user IDs appear one at a time (e.g. 17, 42, 1000, 7, 2023); the learner types or taps the shard number (17 % 4 = 1, 42 % 4 = 2, 1000 % 4 = 0, 7 % 4 = 3, 2023 % 4 = 3). Each correct answer animates the user row sliding into its shard. Then a 'pick the key' panel: three candidate sharding keys for a users table, each with a live 1,000-user distribution bar chart across 4 shards: user_id (even), country (one shard holds ~45% because most users are in one country), signup month (uneven, plus all new writes hit the newest shard). The learner picks the key that spreads load evenly → user_id.",
+   "check": "All 5 routings correct and user_id chosen. Q.quiz, 2 questions: name two drawbacks of scaling the DB up (hardware limits, SPOF risk, cost); what all shards share (the same schema) and what differs (the data)."
+  },
+  {
+   "title": "Shard trouble",
+   "sub": "Resharding, celebrities, joins",
+   "teaches": "Sharding headaches: (1) Resharding: needed when a shard can't hold more data because of fast growth, or when some shards fill faster than others (shard exhaustion) due to uneven data spread. Resharding means changing the shard function and moving data. Consistent hashing (Chapter 5; World 6 quest 6.2 here) is a common fix. (2) Celebrity / hotspot key problem: heavy traffic to one shard overloads it. If Katy Perry, Justin Bieber and Lady Gaga all land on the same shard of a social app, that shard melts under reads. Fix: give each celebrity its own shard, and those shards may need splitting further. (3) Join and de-normalization: once data lives on many servers, joins across shards are hard. A common workaround is to de-normalize so a query can be answered from one table. Final step in the book: shard the DB tier for growing traffic, and move some non-relational functionality to a NoSQL store to lighten the DB load.",
+   "interaction": "Three-panel sim on the same 4 shards. (a) Resharding: a 'Add shard 5' button with a predict-first prompt: 'With user_id % N, going from 4 to 5 shards, about what share of users must move?' (20% / 50% / 80%) → about 80% (a key stays only when id % 4 equals id % 5). Animation shows rows flying between shards and a counter. A toggle 'Use consistent hashing' re-runs it: about 20% move. (b) Celebrity: the learner marks three users as celebrities; the QPS bar of their shard spikes 20× and turns red. The fix button 'Give each celebrity its own shard' redistributes load. (c) Joins: a query card 'Show posts with author names' needs users (shard 1) and posts (shard 3); the learner chooses between 'cross-shard join in the app', 'de-normalize author_name into posts', 'put everything back on one DB'. De-normalize is accepted, with a note that it costs extra storage and updates when a name changes.",
+   "check": "All three panels completed. Q.quiz, 3 questions: what shard exhaustion means (some shards fill faster due to uneven distribution); book's fix for celebrities (a dedicated shard each, possibly split further); the cost of de-normalizing (duplicated data to keep in sync)."
+  },
+  {
+   "title": "Boss: The Hydra of Hotspots",
+   "sub": "Queue it, watch it, or split it",
+   "teaches": "Picking the right tool among queues, observability and sharding.",
+   "interaction": "Q.boss with choices [{k:'queue', label:'Put a queue in between', sub:'decouple and buffer'}, {k:'observe', label:'Logs, metrics, automation', sub:'see and automate'}, {k:'shard', label:'Shard by a key', sub:'split the data'}, {k:'fixshard', label:'Fix the shard layout', sub:'reshard, isolate, de-normalize'}]. Scenarios (8): (1) photo filters take 8 s and uploads time out → queue. (2) uploads triple for one hour on a holiday and you don't want to triple servers permanently → queue (buffer the burst, scale workers). (3) one of 40 servers throws 500s and on-call is SSH-ing into each → observe (centralized logs). (4) the CEO asks whether last week's release hurt retention → observe (business metrics). (5) the single master DB is on the largest instance and at 95% disk → shard. (6) one celebrity's shard runs at 20× the others' QPS → fixshard (dedicated shard). (7) the feed query joins users and posts that now live on different shards → fixshard (de-normalize). (8) shard 2 fills three times faster because the key is signup country → fixshard (reshard on a better key / consistent hashing).",
+   "check": "Boss cleared."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "The interview answer, in your words",
+   "teaches": "Explaining queues and sharding with their trade-offs.",
+   "interaction": "Q.drill. Prompt: 'Uploads are timing out because image processing runs inline, and the primary DB is running out of room. Talk me through it.' Model answer (paraphrased): 'For uploads, I'd make the web servers producers: they put a processing job on a message queue and return right away, and a pool of workers consumes jobs. That decouples the two sides, so if workers are down jobs wait in the queue, and I scale workers on queue depth. I'd add centralized logging, metrics at host, tier and business level, and CI/CD automation, so we can see what's happening. For the DB, scaling up buys time, but it hits a hardware ceiling, stays a single point of failure and gets expensive, so I'd shard: same schema on each shard, rows routed by a key like user_id that spreads evenly. I'd plan for resharding with consistent hashing, give hot celebrity keys their own shards, and de-normalize to avoid cross-shard joins. Non-relational data can move to a NoSQL store.' Checks: ['Queue: producer/consumer, decoupling, scale workers on depth', 'Observability: logs, 3 metric levels, automation', 'DB scale-up limits', 'Sharding: same schema, sharding key, even spread', 'Three challenges: resharding, hotspots, joins'].",
+   "check": "Self-grade at least 4 of 5 checks."
+  }
+ ],
+ "caveats": [
+  "Real brokers like Kafka, RabbitMQ (durable queues) and SQS persist messages to disk or replicated storage; 'stored in memory' is a simplification. Most give at-least-once delivery, so consumers should be idempotent (processing a job twice is harmless).",
+  "user_id % N is the book's teaching example; production systems prefer consistent hashing, range-based or directory-based sharding so adding a shard doesn't move most of the data.",
+  "Sharding is a last resort for many teams: first try read replicas, caching, archiving cold data and a bigger box, because sharding makes transactions, joins and schema changes much harder.",
+  "The 24 TB RDS and 2013 Stack Overflow figures are the book's dated examples; check current instance sizes before quoting numbers.",
+  "Celebrity-per-shard handles reads but not every hotspot; write hotspots may also need key salting or splitting a key across shards."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo: Scale From Zero To Millions Of Users",
+   "url": "https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users"
+  },
+  {
+   "label": "Nick Craver: What it takes to run Stack Overflow (2013)",
+   "url": "https://nickcraver.com/blog/2013/11/22/what-it-takes-to-run-stack-overflow/"
+  },
+  {
+   "label": "Amazon EC2 High Memory instances",
+   "url": "https://aws.amazon.com/ec2/instance-types/high-memory/"
+  },
+  {
+   "label": "Wikipedia: Shard (database architecture)",
+   "url": "https://en.wikipedia.org/wiki/Shard_(database_architecture)"
+  },
+  {
+   "label": "Wikipedia: Message queue",
+   "url": "https://en.wikipedia.org/wiki/Message_queue"
+  }
+ ],
+ "id": "0105",
+ "file": "0105-scale-queues-observability-sharding.html",
+ "world": 1,
+ "chapterTitle": "Scale From Zero to Millions of Users",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users",
+ "cheatsheet": "../reference/ch01-scaling-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "0101",
+   "n": "1.1",
+   "t": "One Box Wonder",
+   "d": "A single server, splitting off the database, SQL vs NoSQL, scaling up vs out, and the load balancer"
+  },
+  {
+   "id": "0102",
+   "n": "1.2",
+   "t": "Copy the Ledger",
+   "d": "Master/slave database replication: who takes writes, who takes reads, and what happens when one dies"
+  },
+  {
+   "id": "0103",
+   "n": "1.3",
+   "t": "Hot Memory, Near Edge",
+   "d": "A cache tier for hot data and a CDN for static files: how they work and what can go wrong"
+  },
+  {
+   "id": "0104",
+   "n": "1.4",
+   "t": "Forget Me, Find Me Anywhere",
+   "d": "Make the web tier stateless, autoscale it, then spread the system across data centers with GeoDNS"
+  },
+  {
+   "id": "0105",
+   "n": "1.5",
+   "t": "Queues, Gauges & Shards",
+   "d": "Message queues to decouple work, logging/metrics/automation, and sharding the database"
+  },
+  {
+   "id": "0106",
+   "n": "BOSS",
+   "t": "Zero to Millions, Live",
+   "d": "Mock interview: scale a startup's app from one server to millions of users as the traffic climbs"
+  }
+ ]
+}

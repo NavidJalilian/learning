@@ -1,0 +1,135 @@
+{
+ "n": "1.3",
+ "slug": "scale-cache-and-cdn",
+ "t": "Hot Memory, Near Edge",
+ "d": "A cache tier for hot data and a CDN for static files: how they work and what can go wrong",
+ "boss": false,
+ "badge": "⚡ Badge: Cache Keeper",
+ "winTitle": "Fast as a cache hit!",
+ "goal": "Your win today: you can walk through the read-through cache loop, name the five cache considerations (when to use, expiry, consistency, failures, eviction), explain how a CDN fetches and serves a file, and fix a stale-asset problem with versioning.",
+ "bookSections": "Cache (cache tier, considerations for using cache); Content delivery network (CDN) and its considerations; the design after adding cache + CDN",
+ "stages": [
+  {
+   "title": "The read-through loop",
+   "sub": "Cache tier basics",
+   "teaches": "A cache is temporary storage that keeps the results of expensive responses or frequently accessed data in memory, so later requests are served faster. Without it, every page load may fire one or more database calls. The cache tier is a separate, much faster layer between the web servers and the database. The book's strategy, which it calls read-through: the web server checks the cache; on a hit it returns the data; on a miss it queries the database, stores the result in the cache, then returns it. Caches usually have a simple API; with Memcached you set a key with a value and a TTL (the book's example uses 3,600 seconds) and later get it by key.",
+   "interaction": "Simulation. On screen: a web server, a cache box with 6 slots, a DB box, plus a hit-rate gauge and a DB-load gauge. Requests for 8 keys arrive, weighted so 2 keys are hot (most traffic) and the rest are rare. The learner first steps manually: for each request they press 'Check cache'; on miss, they must press 'Query DB' then 'Store in cache' then 'Return' in order (wrong order shakes). After 6 manual requests, an 'Autoplay' button runs 200 requests: hit rate climbs past ~80%, DB load gauge falls. Latency labels (cache ~1 ms, DB ~10 ms) are marked 'illustrative'. A side panel shows the Memcached-style calls being made: set('user:12', {...}, ttl=3600) and get('user:12').",
+   "check": "Manual loop done in the right order. Q.quiz, 2 questions: on a miss, what happens before returning (read DB, then store in cache); what the 3,600 in the set call means (TTL: expire after one hour)."
+  },
+  {
+   "title": "Five cache questions",
+   "sub": "When, how long, how fresh, what if it dies, what to evict",
+   "teaches": "Considerations: (1) When to use: data read often and changed rarely. Cache lives in volatile memory, so it's not for persisting data: a restart wipes it, so important data stays in a persistent store. (2) Expiration policy: once data expires it is removed. Too short means the DB is hit too often; too long means data goes stale. (3) Consistency: keep the store and the cache in sync. Writes to the DB and cache aren't one transaction, so they can drift, and keeping them consistent across regions is hard (see Facebook's 'Scaling Memcache at Facebook'). (4) Mitigating failures: a single cache server is a single point of failure (SPOF: a part whose failure stops the whole system). Use several cache servers across data centers, and overprovision memory by some percentage as a buffer as usage grows. (5) Eviction: when the cache is full, adding an item evicts another. LRU (least recently used) is most popular; others are LFU (least frequently used) and FIFO (first in, first out).",
+   "interaction": "Two mini-games. (a) TTL slider: a 'source data changes every 30 s' clock; the learner drags TTL from 1 s to 1 hour. Two meters react: DB load (high when TTL is short) and stale reads % (high when TTL is long). Goal: get both into the green band (TTL roughly 10 to 30 s in this toy model); a note explains there's no universal right TTL. (b) Eviction predictor: a 3-slot cache and a request sequence A, B, C, A, A, D. The learner predicts which key is evicted when D arrives under LRU (B), LFU (B or C, tie broken by oldest: B), and FIFO (A), then presses 'Run' for each to watch it.",
+   "check": "TTL in the green band and all three eviction predictions made (wrong ones show the trace). Q.quiz, 3 questions: why not store your only copy of order data in the cache (volatile memory); what a single cache server is (a SPOF); most popular eviction policy (LRU)."
+  },
+  {
+   "title": "Edge of the map",
+   "sub": "How a CDN serves a file",
+   "teaches": "A CDN (content delivery network) is a set of servers spread around the world that deliver static content: images, videos, CSS, JavaScript. (Dynamic content caching exists too but is out of scope here.) When a user visits, the CDN server closest to them answers, so the farther a user is from the CDN servers, the slower the load. Workflow: (1) User A requests image.png using a CDN URL (providers give their own domain, e.g. a CloudFront or Akamai hostname). (2) If the CDN server doesn't have it, it fetches it from the origin, which can be a web server or online storage such as Amazon S3. (3) The origin returns image.png, optionally with a TTL header saying how long to cache it. (4) The CDN caches it and returns it to User A, where it stays until the TTL runs out. (5) User B requests the same image. (6) It's served straight from the CDN cache while the TTL is valid.",
+   "interaction": "Predict-then-watch on a world map. Origin server in Virginia; CDN edge nodes in London, São Paulo, Tokyo; users appear as pins. The learner taps 'User A (Tokyo) requests image.png'. Before the run, predict: 'Will Tokyo's edge have it?' (no: first request is a miss). Watch: packet goes Tokyo edge → origin → back, with a slow latency label (illustrative ~300 ms). Then 'User B (Tokyo)': predict hit/miss → hit, ~20 ms. Then a 'Fast-forward past TTL' button and User C: predict → miss again, refetch. A side counter shows origin requests (1, 1, 2).",
+   "check": "All three predictions made. Q.quiz, 2 questions: where does the CDN get a file it doesn't have (the origin: web server or S3-style storage); what decides how long it keeps it (the TTL, often from an HTTP header)."
+  },
+  {
+   "title": "CDN gotchas",
+   "sub": "Cost, expiry, fallback, invalidation",
+   "teaches": "Considerations: (1) Cost: CDNs are run by third parties and charge for data moved in and out; caching rarely used assets gives little benefit, so move them out of the CDN. (2) Cache expiry: for time-sensitive content, set the expiry carefully. Too long and content isn't fresh; too short and the CDN keeps re-fetching from the origin. (3) CDN fallback: think about how the site copes if the CDN fails; clients should detect the problem and request from the origin. (4) Invalidating files before they expire: use the vendor's API to invalidate, or use object versioning, serving a different version of the object by adding a parameter to the URL, e.g. image.png?v=2. After adding cache and CDN, the design changes: static assets (JS, CSS, images) are no longer served by web servers but fetched from the CDN, and database load is lighter thanks to the cache.",
+   "interaction": "Incident cards: 4 short incidents, each with 3 fix options. (a) 'You shipped a new logo but users see the old one for a day' → version the URL (logo.png?v=2) or invalidate via vendor API. (b) 'CDN bill tripled; analytics show 70% of stored bytes are old campaign videos nobody watches' → stop serving rarely used assets from the CDN. (c) 'The CDN provider has an outage and your pages have no CSS' → client fallback to the origin. (d) 'Stock-price chart image is cached for 24 hours' → shorter expiry for time-sensitive content. Then a final drag task: move 'JS/CSS/images' off the web server box onto the CDN cloud in the running architecture diagram, and watch the web server's bandwidth bar drop.",
+   "check": "All 4 incidents fixed and the assets moved."
+  },
+  {
+   "title": "Boss: The Stale Specter",
+   "sub": "Cache it, CDN it, or leave it alone",
+   "teaches": "Choosing the right layer for each piece of data.",
+   "interaction": "Q.boss with choices [{k:'cache', label:'Put it in the cache', sub:'hot data in memory'}, {k:'cdn', label:'Serve it from a CDN', sub:'static files near users'}, {k:'origin', label:'Don't cache it', sub:'read the source of truth'}, {k:'expiry', label:'Fix the expiry', sub:'TTL, invalidate or version'}]. Scenarios (7): (1) a user profile is read 1,000 times a second and edited once a week → cache. (2) product photos and the JS bundle for users on five continents → cdn. (3) an account balance right after a transfer must be exact and changes constantly → origin. (4) after a deploy, browsers keep loading the old app.js for hours → expiry (version the filename/URL). (5) a leaderboard recomputed each minute, viewed by millions → cache (with a TTL around a minute). (6) a 4 GB export downloaded once by one admin → origin (caching one-off large files wastes memory/CDN spend). (7) product pages show 'in stock' hours after items sold out because entries live 24 h → expiry.",
+   "check": "Boss cleared."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "The interview answer, in your words",
+   "teaches": "Explaining both caching layers and their trade-offs.",
+   "interaction": "Q.drill. Prompt: 'The DB is overloaded by repeated reads, and users abroad complain images load slowly. What do you add?' Model answer (paraphrased): 'Two layers. First a cache tier like Memcached or Redis between web servers and the DB: check the cache, on a miss read the DB and fill the cache with a TTL. It suits data that's read a lot and changed rarely, and it's not a place to keep the only copy. I'd pick the TTL to balance DB load against staleness, use LRU eviction, and run several cache nodes with some spare memory so one failure doesn't stampede the DB. Second, a CDN for static files: the nearest edge serves images, CSS and JS, fetching from origin on a miss and caching for the TTL. I'd watch the cost, plan a fallback to origin, and version asset URLs so new releases show up immediately.' Checks: ['Read-through loop: check, miss → DB → fill', 'When to cache + volatile memory', 'TTL trade-off + eviction (LRU)', 'Cache SPOF: multiple nodes, overprovision', 'CDN flow (miss → origin, TTL) + versioning/invalidation'].",
+   "check": "Self-grade at least 4 of 5 checks."
+  }
+ ],
+ "caveats": [
+  "What the book calls a read-through cache, where the app itself checks the cache and loads from the DB on a miss, is usually called cache-aside. In a strict read-through setup the cache library does the DB load itself.",
+  "Invalidating on write is the hard part: a common pattern is update the DB, then delete the cache key. Races can still leave stale values, which is why TTLs are kept as a safety net.",
+  "Thundering herd: when a hot key expires or a cache node dies, many requests miss at once and hit the DB together. Mitigations include request coalescing, staggered TTLs and keeping a stale value while refreshing.",
+  "Many CDNs ignore query strings in the cache key by default, so teams usually put a content hash in the filename (app.3f9a1c.js) rather than ?v=2.",
+  "Modern CDNs also cache dynamic responses and run code at the edge; the book scopes CDNs to static files to keep things simple.",
+  "Latency figures in the simulations are illustrative, not measurements."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo: Scale From Zero To Millions Of Users",
+   "url": "https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users"
+  },
+  {
+   "label": "Nishtala et al., Scaling Memcache at Facebook (NSDI 2013)",
+   "url": "https://www.usenix.org/conference/nsdi13/technical-sessions/presentation/nishtala"
+  },
+  {
+   "label": "CodeAhoy: Caching Strategies and How to Choose the Right One",
+   "url": "https://codeahoy.com/2017/08/11/caching-strategies-and-how-to-choose-the-right-one/"
+  },
+  {
+   "label": "Wikipedia: Cache replacement policies",
+   "url": "https://en.wikipedia.org/wiki/Cache_replacement_policies"
+  },
+  {
+   "label": "Amazon CloudFront: Dynamic content delivery",
+   "url": "https://aws.amazon.com/cloudfront/dynamic-content/"
+  },
+  {
+   "label": "Memcached",
+   "url": "https://memcached.org/"
+  }
+ ],
+ "id": "0103",
+ "file": "0103-scale-cache-and-cdn.html",
+ "world": 1,
+ "chapterTitle": "Scale From Zero to Millions of Users",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users",
+ "cheatsheet": "../reference/ch01-scaling-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "0101",
+   "n": "1.1",
+   "t": "One Box Wonder",
+   "d": "A single server, splitting off the database, SQL vs NoSQL, scaling up vs out, and the load balancer"
+  },
+  {
+   "id": "0102",
+   "n": "1.2",
+   "t": "Copy the Ledger",
+   "d": "Master/slave database replication: who takes writes, who takes reads, and what happens when one dies"
+  },
+  {
+   "id": "0103",
+   "n": "1.3",
+   "t": "Hot Memory, Near Edge",
+   "d": "A cache tier for hot data and a CDN for static files: how they work and what can go wrong"
+  },
+  {
+   "id": "0104",
+   "n": "1.4",
+   "t": "Forget Me, Find Me Anywhere",
+   "d": "Make the web tier stateless, autoscale it, then spread the system across data centers with GeoDNS"
+  },
+  {
+   "id": "0105",
+   "n": "1.5",
+   "t": "Queues, Gauges & Shards",
+   "d": "Message queues to decouple work, logging/metrics/automation, and sharding the database"
+  },
+  {
+   "id": "0106",
+   "n": "BOSS",
+   "t": "Zero to Millions, Live",
+   "d": "Mock interview: scale a startup's app from one server to millions of users as the traffic climbs"
+  }
+ ]
+}

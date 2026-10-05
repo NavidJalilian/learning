@@ -1,0 +1,132 @@
+{
+ "n": "5.2",
+ "slug": "consistent-hashing-cracks-and-riders",
+ "t": "Cracks in the Ring",
+ "d": "The two problems with the basic ring in numbers, why virtual nodes fix one of them, and who runs consistent hashing in production (Dynamo, Cassandra, Discord, Akamai, Maglev)",
+ "boss": false,
+ "badge": "🩺 Badge: Ring Doctor",
+ "winTitle": "Cracks found, ring patched",
+ "goal": "Your win today: you can name the two problems of the basic ring (uneven partitions and uneven keys) and put numbers on them, explain why virtual nodes help and what they cost (spread ~ 1/sqrt(V), more metadata), say honestly what consistent hashing does not fix (one hot key), and name five real systems that use it and what each one hashes.",
+ "bookSections": "Ch. 5: Two issues in the basic approach; Virtual nodes (spread and metadata trade-off); Wrap up (benefits: minimal redistribution, horizontal scaling, hotspot mitigation; real-world systems: Dynamo partitioning, Cassandra, Discord, Akamai CDN, Maglev load balancer).",
+ "stages": [
+  {
+   "title": "Crack #1: the lopsided ring",
+   "sub": "Uneven partitions, with real numbers",
+   "teaches": "Book's first issue: the partition (the arc between two adjacent servers) can't be kept the same size for every server once servers come and go, because positions are set by the hash, not by you. Even a perfect start breaks: 4 servers evenly spaced each own 25%; remove one and its clockwise neighbour now owns 50%, twice everyone else. Beyond the book, the math of random placement: with N servers at random positions, the expected largest arc is H_N / N of the ring, where H_N = 1 + 1/2 + ... + 1/N. For N = 4 that's about 52% (fair share 25%); N = 10, about 29% (fair 10%); N = 100, about 5.2% (fair 1%). So the biggest server is overloaded by a factor of roughly ln N, and it gets worse, not better, as the cluster grows.",
+   "interaction": "A ring with share bars underneath (one bar per server, black line at fair share). Step 1: 4 servers evenly placed; the learner taps one to remove it and watches its neighbour's bar jump to 50%. Step 2 'You place it': a draggable new server; the learner drags it to rebalance (a 'Balance score' shows max share / fair share; reaching 1.0 is possible, placing at the middle of the big arc). Step 3 'The hash places it': a toggle switches to real mode, where the new server's position is hash(name); pressing 'Name a new server' (random names) drops it at a random spot, usually not where it's needed. Step 4 predict-then-watch: 'With 4 servers at random positions, how big is the largest arc on average?' options 'About 25%' / 'About 35%' / 'About 50%' (correct about 50%). Then a 'Roll 1,000 rings' button runs a quick Monte Carlo and shows the average largest arc (about 52%) next to the H_N/N formula; a small N selector (4, 10, 100) updates both.",
+   "check": "Prediction made and the Monte Carlo run; Q.quiz: 'In the book's example, one server is removed from an evenly spaced ring. What happens to its clockwise neighbour?' options 'Its partition doubles' / 'Its partition stays the same; keys spread evenly' / 'It loses its keys to the removed server' -> 'Its partition doubles'."
+  },
+  {
+   "title": "Crack #2: unlucky keys",
+   "sub": "Uneven key distribution, and the hot key the ring can't fix",
+   "teaches": "Book's second issue: even with equal arcs, keys can bunch up, so one server holds most keys and another holds none. With few keys this is pure luck: with 4 equal arcs and 8 random keys, a given server is empty about 10% of the time ((3/4)^8), and at least one of the 4 is empty about 38% of the time; with 20 keys that drops to about 1.3%. Key-count noise shrinks as keys grow (relative spread about 1/sqrt(keys per server)), so with millions of keys, arc SIZE (crack #1) is what dominates. Separate problem: access skew. The book's wrap-up says consistent hashing helps with hotspot keys (e.g. a few celebrity accounts landing on one shard) by spreading data more evenly. Honest caveat (also in Quest 6.2): it helps when the hot data is many keys that happen to cluster; a single very hot key always hashes to exactly one spot, so one server serves it. That needs caching, read replicas or splitting the key, not more ring tricks.",
+   "interaction": "'Throw the keys' sim: 4 servers with exactly equal arcs on a ring. A key-count selector (8 / 40 / 400 / 4,000) and a 'Throw' button scatter that many random keys onto the ring with a quick animation (for 4,000 just show dots fading in) and update per-server count bars plus 'max / average' readout. Predict-then-watch first: 'Throw 8 keys onto 4 equal arcs. How often does at least one server get zero keys?' options 'Almost never (under 5%)' / 'About 1 time in 3' / 'Almost always' -> about 1 in 3; then a 'Throw 1,000 times' button tallies how often a server came up empty (about 38%). Learner then throws 4,000 keys and sees max/average near 1.0. Final card 'The celebrity key': one key glows and receives 60% of all requests (a request-rate bar per server instead of a key-count bar); the learner tries pressing 'Add virtual nodes' and 'Add a server' and sees the hot server's request bar barely move; reveal the fix list (cache the hot key, replicate it, split it).",
+   "check": "Prediction made and simulation run at 4,000 keys; Q.quiz: 'One user's profile gets 50,000 reads per second and overloads one cache server. Does adding virtual nodes fix it?' options 'No: that one key still maps to one server; cache or replicate the key' / 'Yes: virtual nodes spread every key's traffic across all servers' / 'Yes, if you also switch to SHA-1' -> first."
+  },
+  {
+   "title": "The patch, by the numbers",
+   "sub": "How many virtual nodes, and what they cost",
+   "teaches": "Book's fix: virtual nodes (also called replicas or tokens). Each real server is placed on the ring many times; a key goes to the first virtual node clockwise and therefore to its real server. More virtual nodes -> each server owns many small arcs whose sizes average out. The book reports a standard deviation of about 10% of the mean with 100 virtual nodes and about 5% with 200. Rule of thumb for random placement (beyond the book): a server's share is the sum of V random arcs, so its spread is about 1/sqrt(V): V = 25 -> 20%, V = 100 -> 10%, V = 400 -> 5%. Halving the spread costs 4x the virtual nodes. A quick simulation with 10 servers gives about 9% at 100 and about 6% at 200, so the book's 5% figure is on the optimistic side; the direction is the point. Cost: every virtual node is a ring entry that every router stores and that membership updates must ship around. Example: 1,000 servers x 256 virtual nodes = 256,000 entries; at about 24 bytes each (8-byte token + server ID) that's about 6 MB per copy, and lookups take about 18 comparisons. Heterogeneity: give a bigger server proportionally more virtual nodes. This quest does the math; the hands-on slider lab is Quest 6.2 stage 4 (link to lessons/0002-consistent-hashing.html#s4).",
+   "interaction": "Calculate-and-check ladder (three cards, number inputs, tolerance +/-15%): (1) 'Target spread 20%. How many virtual nodes per server?' -> 25. (2) 'Target 5%?' -> 400. (3) 'Your cluster has 500 servers with 400 virtual nodes each. How many ring entries does every router hold?' -> 200,000; follow-up tap: 'about how many comparisons per lookup?' options 18 / 200 / 200,000 -> 18. Then a two-dial 'Trade-off meter': a V slider (1..1,000, log scale) drives two gauges side by side, 'Balance' (1/sqrt(V) spread) and 'Metadata' (entries x 24 bytes for a 1,000-server cluster). The learner must park the slider in a green zone where spread < 10% and metadata < 10 MB (V roughly 100 to 400). A small 'Want to drag real virtual nodes around? Quest 6.2, stage 4' link card.",
+   "check": "All three cards correct and the slider parked in the green zone; Q.quiz: 'You double the virtual nodes per server from 100 to 200. Roughly what happens to the load spread?' options 'It drops by about 30% (from ~10% to ~7%)' / 'It halves exactly' / 'It doesn't change' -> first."
+  },
+  {
+   "title": "Who rides the ring",
+   "sub": "Five real systems, and one that isn't a ring at all",
+   "teaches": "Book's list of real users, with what each hashes: Amazon Dynamo: the partitioning component; the key's MD5 hash picks a coordinator node and the next distinct nodes clockwise hold replicas (the preference list; replication is Quest 6.3). Apache Cassandra: the partition key's Murmur3 token picks the nodes that own it; virtual nodes per node set by num_tokens (default 16 since 4.0, was 256). Discord: its Elixir backend uses a hash ring to decide which machine runs the process for a given server (guild) or user session, and it open-sourced its ring library (ex_hash_ring). Akamai CDN: the 1997 Karger et al. paper came from the MIT group that founded Akamai; the ring maps web objects (URLs) to cache servers so adding a cache doesn't flush everything. Google Maglev: a software network load balancer that hashes a connection's 5-tuple to pick a backend, so all packets of one connection reach the same backend. Twist: Maglev does not use a ring. It builds a fixed-size lookup table (size M, a prime; 65,537 in the paper): each backend has its own pseudo-random preference order of table slots (from an offset and a skip derived from its name), and backends take turns claiming their next free preferred slot. Every backend ends up with M/N slots give or take one (near-perfect balance), at the price of a little more disruption: when a backend leaves, a few slots can change hands between survivors too. Other non-ring alternatives worth naming: rendezvous (highest random weight) hashing and Google's jump consistent hash.",
+   "interaction": "Part A, matching: five system cards (Dynamo, Cassandra, Discord, Akamai, Maglev) to five 'what gets hashed -> what it picks' cards (key -> coordinator + replica nodes; partition key token -> owning nodes; guild/session ID -> which machine runs the process; URL/object -> which cache server; connection 5-tuple -> which backend server). Drag or tap-pair; wrong pair costs a heart with a one-line explanation. Part B, 'Build a Maglev table' mini-sim (toy example, not the paper's numbers): table size M = 7, three backends with preference lists B0 = [5, 0, 2, 4, 6, 1, 3] (offset 5, skip 2), B1 = [2, 1, 0, 6, 5, 4, 3] (offset 2, skip 6), B2 = [0, 3, 6, 2, 5, 1, 4] (offset 0, skip 3). The learner presses 'Next turn'; backends take turns B0, B1, B2, ... each claiming its next preferred slot that is still free. Before the fill, predict how many slots each gets (options '2/2/3 in some order' / '1/1/5' / '0/3/4' -> 2/2/3). Final table: slots 0..6 = B2, B1, B1, B2, B0, B0, B0. Then 'B1 dies' rebuilds with B0 and B2 only: B2, B0, B0, B2, B0, B0, B2. The learner taps slots that changed owner although their backend didn't die -> slot 6 (B0 -> B2). Caption: Maglev buys even balance (4/3 split) with a little extra disruption; a ring buys minimal disruption with less even balance.",
+   "check": "All five matches correct; Maglev prediction and the changed-slot tap done; Q.quiz: 'What does Maglev trade compared with a hash ring?' options 'More even load in exchange for a few extra slots moving when backends change' / 'Fewer keys moved in exchange for worse balance' / 'Nothing; it is a hash ring with a different name' -> first."
+  },
+  {
+   "title": "Boss: The Ring Doctor",
+   "sub": "Diagnose the symptom, prescribe the fix",
+   "teaches": "Telling apart the problems this world covers: the rehashing problem (% N), crack #1 uneven arcs (virtual nodes or smarter token placement), crack #2 / hot key (not the ring's job), and balanced-but-correct situations where the right call is to leave it alone.",
+   "interaction": "Q.boss with 4 choices: { k: 'ring', label: 'Move to a ring', sub: 'stop using hash % N' }, { k: 'vn', label: 'More virtual nodes', sub: 'even out the arcs' }, { k: 'hot', label: 'Fix the hot key', sub: 'cache, replicate or split it' }, { k: 'ok', label: 'Working as designed', sub: 'leave it' }. Seven scenarios (none repeat Quest 6.2's): (1) A 10-node ring with one token each; after a node was decommissioned, one node stores 31% of the data -> vn. (2) A game leaderboard key 'global-top-100' gets 40% of all reads and its cache node runs at 100% CPU, the other nodes at 20% -> hot. (3) A 6-node cluster with 256 virtual nodes each: shares are 16.2%, 16.9%, 17.1%, 16.5%, 16.8%, 16.5% -> ok (fair is 16.7%, all within a few %). (4) A sharded session store uses user_id % 8; adding shard 9 logs every user out -> ring. (5) Brand-new tiny test cluster: 3 nodes, 9 keys, one node holds 6 of them -> ok (only 9 keys: that's luck, it evens out at scale). (6) A node with 2x the disk sits at 30% disk while the others are at 60% -> vn (give it twice the virtual nodes, heterogeneity). (7) When a basic-ring node crashes its neighbour's latency spikes, then the neighbour crashes too -> vn (spread the dead node's arcs across many servers). Outro: 'N changes -> ring. Arcs uneven or servers differ -> virtual nodes. One key on fire -> fix the key. A few percent of noise -> leave it.'",
+   "check": "Q.boss round completed under the engine's hearts rules."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "The honest pitch for consistent hashing",
+   "teaches": "Model answer covering both cracks, the patch with its cost, the hot-key limit and real-world users.",
+   "interaction": "Q.drill. Prompt: the interviewer asks 'Is consistent hashing enough to balance load in our cluster? What can still go wrong?' Model answer (paraphrase freely): 'The basic ring has two problems. Positions come from the hash, so arcs are uneven, and with N random servers the biggest can be ln N times the fair share; removing a server also dumps its arc on one neighbour. And keys can bunch up, though that evens out once there are lots of keys. Virtual nodes fix the arc problem: the spread is about 1 over the square root of the count, so a few hundred per server gets you to around 5 to 10%, at the cost of more ring metadata. Bigger servers get more virtual nodes. What it doesn't fix is a single hot key, which still lives on one server, so I'd cache or replicate that key. Dynamo, Cassandra, Discord and Akamai all use rings; Google's Maglev uses a lookup table instead to get even balance.' Self-check boxes: 'I named both problems of the basic ring', 'I gave virtual nodes with their cost (metadata)', 'I said hot keys still need another fix', 'I named at least two real systems'.",
+   "check": "Drill self-graded."
+  }
+ ],
+ "caveats": [
+  "The H_N / N largest-arc figure and the 1/sqrt(V) spread are idealised maths for random placement. Real systems often place tokens deliberately: Dynamo moved to equal-sized fixed partitions (its 'Strategy 3'), and Cassandra 4.0's token allocation algorithm picks tokens to balance load, which is why 16 tokens per node is enough there.",
+  "The book's '5% at 200 virtual nodes' is on the optimistic side of a simple simulation (about 6 to 7%). Teach the trend (4x virtual nodes to halve the spread), not the exact number.",
+  "The book's wrap-up says consistent hashing mitigates the hotspot-key problem. That is true for many keys that cluster, not for one extremely hot key.",
+  "Discord and Akamai details are kept at the level their public write-ups support: Discord's hash ring routes processes across Elixir nodes; Akamai's roots are the Karger et al. caching work. Their current internals may differ.",
+  "Maglev in the stage is a toy (M = 7). The real table size is a large prime (65,537 in the paper), and Maglev also keeps a connection-tracking table so existing connections usually stick to their backend even when the lookup table changes."
+ ],
+ "sources": [
+  {
+   "label": "Alex Xu, System Design Interview Vol. 1, Ch. 5 'Design Consistent Hashing' (ByteByteGo)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-consistent-hashing"
+  },
+  {
+   "label": "DeCandia et al., 'Dynamo: Amazon's Highly Available Key-value Store', SOSP 2007 (sections 4.2 and 6.2)",
+   "url": "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf"
+  },
+  {
+   "label": "Lakshman and Malik, 'Cassandra: A Decentralized Structured Storage System', LADIS 2009",
+   "url": "https://www.cs.cornell.edu/projects/ladis2009/papers/lakshman-ladis2009.pdf"
+  },
+  {
+   "label": "Apache Cassandra docs, 'Dynamo' architecture page (tokens, num_tokens)",
+   "url": "https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html"
+  },
+  {
+   "label": "Discord Engineering, 'How Discord Scaled Elixir to 5,000,000 Concurrent Users' (2017)",
+   "url": "https://discord.com/blog/how-discord-scaled-elixir-to-5-000-000-concurrent-users"
+  },
+  {
+   "label": "Discord, ex_hash_ring (open-source consistent hash ring for Elixir)",
+   "url": "https://github.com/discord/ex_hash_ring"
+  },
+  {
+   "label": "Roughgarden and Valiant, Stanford CS168 Lecture 1: 'Introduction and Consistent Hashing' (Akamai background)",
+   "url": "https://theory.stanford.edu/~tim/s16/l/l1.pdf"
+  },
+  {
+   "label": "Eisenbud et al., 'Maglev: A Fast and Reliable Software Network Load Balancer', NSDI 2016",
+   "url": "https://www.usenix.org/conference/nsdi16/technical-sessions/presentation/eisenbud"
+  },
+  {
+   "label": "Lamping and Veach, 'A Fast, Minimal Memory, Consistent Hash Algorithm' (jump consistent hash), 2014",
+   "url": "https://arxiv.org/abs/1406.2294"
+  },
+  {
+   "label": "Wikipedia, 'Rendezvous hashing'",
+   "url": "https://en.wikipedia.org/wiki/Rendezvous_hashing"
+  }
+ ],
+ "id": "0502",
+ "file": "0502-consistent-hashing-cracks-and-riders.html",
+ "world": 5,
+ "chapterTitle": "Design Consistent Hashing",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-consistent-hashing",
+ "cheatsheet": "../reference/ch05-consistent-hashing-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "0501",
+   "n": "5.1",
+   "t": "Ring Math",
+   "d": "Count how many keys hash % N really moves, size up the hash space, look a key up in code, and find exactly which keys move when a server joins or leaves"
+  },
+  {
+   "id": "0502",
+   "n": "5.2",
+   "t": "Cracks in the Ring",
+   "d": "The two problems with the basic ring in numbers, why virtual nodes fix one of them, and who runs consistent hashing in production (Dynamo, Cassandra, Discord, Akamai, Maglev)"
+  },
+  {
+   "id": "0503",
+   "n": "BOSS",
+   "t": "Hash It Live",
+   "d": "Full mock interview: design how a growing cache fleet decides which server holds each key"
+  }
+ ]
+}

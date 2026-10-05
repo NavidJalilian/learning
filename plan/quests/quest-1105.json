@@ -1,0 +1,132 @@
+{
+ "n": "BOSS",
+ "slug": "news-feed-boss-design-it-live",
+ "t": "Design It Live: News Feed",
+ "d": "Full mock interview: design a news feed for 10 million daily users",
+ "boss": true,
+ "badge": "👑 Badge: Feed Architect",
+ "winTitle": "You designed a news feed live",
+ "goal": "Your win today: given 'design a news feed', you can scope it, sketch both flows with their APIs, deep-dive into fanout (push / pull / hybrid), the publishing pipeline and hydration with the cache layers, survive 'what happens when X fails?' questions, and wrap up with scaling talking points.",
+ "bookSections": "Whole chapter via the 4-step framework: Step 1 scope; Step 2 APIs + two flows; Step 3 feed publishing deep dive (web servers, fanout service, workflow), newsfeed retrieval deep dive, cache architecture; Step 4 wrap-up (scaling the database: vertical vs horizontal, SQL vs NoSQL, master-slave replication, read replicas, consistency models, sharding; stateless web tier, cache as much as possible, multiple data centers, loose coupling via message queues, monitoring QPS at peak and feed refresh latency)",
+ "stages": [
+  {
+   "title": "Scope it",
+   "sub": "Step 1 · understand the problem (3–10 min)",
+   "teaches": "Same facts as 11.1, now found unprompted under a clock: mobile + web; publish a post and see friends' posts; reverse chronological (by assumption); up to 5,000 friends; 10M DAU; images and videos. A senior adds one or two sharp follow-ups: 'friends (two-way) or followers (one-way, unlimited)?' (changes how bad the celebrity problem is) and 'how fresh must a feed be: seconds or minutes?' (decides how much async fanout lag is acceptable).",
+   "interaction": "Like 0008: a sticky interview clock bar with the 4-step framework strip (Scope / Sketch / Deep dive / Wrap-up) and a chat with the interviewer. The learner picks questions from a deck of 11: 6 core (platforms, features, order, friend limit, DAU, media), 2 senior bonus (friends vs followers -> 'friends, but pages can have millions of followers'; freshness -> 'a few seconds of delay is fine') and 3 wasters ('Which cloud provider?', 'Light or dark mode?', 'Should we build stories too?' (scope creep)). Good questions light requirement tiles; bonus questions add a 'senior signal' star; wasters cost 2 minutes on the clock. Lock-in question: 'Which answer most changes how expensive fanout gets?' (friends vs followers / friend cap).",
+   "check": "All 6 core tiles lit within the 10-minute budget; lock-in correct. Bonus stars noted on the scorecard."
+  },
+  {
+   "title": "Sketch it",
+   "sub": "Step 2 · APIs and both flows (10–15 min)",
+   "teaches": "Two endpoints (POST /v1/me/feed with content + auth_token; GET /v1/me/feed with auth_token) and the two flows: publishing (LB -> web servers -> post service [post cache, post DB], fanout service [news feed cache], notification service) and feed building (LB -> web servers -> news feed service -> news feed cache of IDs).",
+   "interaction": "Speed builder, no hints: (1) fill the two API lines from token tiles (as in 11.1, but timed); (2) assemble the publishing diagram and the feed-building diagram side by side from a shared tray of 11 boxes (2 decoys). (3) Three buy-in questions from the interviewer in the chat, 3 options each: 'Why GET for reading and POST for publishing?' (reads are safe and repeatable, publishing creates a resource); 'Why does the news feed cache hold IDs and not posts?' (memory: no copying full posts into every friend's feed; edits/deletes in one place); 'Why put the notification service in the publishing path?' (friends need to hear about new content even when the app is closed).",
+   "check": "APIs correct, both diagrams correct, 3 buy-in answers correct (each miss costs a heart)."
+  },
+  {
+   "title": "Deep dive: the fanout call",
+   "sub": "Step 3 · the decision the interviewer is waiting for",
+   "teaches": "Push vs pull vs hybrid with pros and cons; the 5-step fanout workflow (graph DB -> user cache + filter -> queue -> workers -> feed cache); IDs only + cap; the 6-step retrieval with hydration and CDN; the five cache layers.",
+   "interaction": "Three timed mini-rounds. (a) 'Defend your fanout': the interviewer states three product facts one at a time ('most users have ~300 friends', 'pages can have 20M followers', 'reads outnumber writes by a lot'); after each, the learner picks Push / Pull / Hybrid and the running choice must end at Hybrid with the threshold idea. (b) 'Fill the pipeline': the figure 11-4 diagram with 5 blank step labels; drag the 5 step cards into place. (c) 'Hydrate one card': a feed card with 6 empty fields (author name, avatar, text, photo, '1.2K likes', 'you liked this') — the learner taps which source fills each: user cache (name, avatar URL), CDN (avatar and photo bytes), post cache (text, photo URL), Counters layer (likes), Action layer ('you liked this'). Each round reveals a model answer with the interviewer's nod.",
+   "check": "All three rounds completed; mistakes cost hearts."
+  },
+  {
+   "title": "Boss: the curveball barrage",
+   "sub": "Step 3 · 'what happens when…?'",
+   "teaches": "Failure and edge-case follow-ups with the expected answers.",
+   "interaction": "Like 0008: a custom curveball deck (Q.boss with per-scenario choices), each card 3 options (one right, two plausible wrong). (1) 'A pop star with 40M followers posts.' Right: her posts aren't fanned out; followers pull and merge them at read time. Wrong: 'add more fanout workers until it's fast'; 'drop followers who are offline'. (2) 'The news feed cache node holding Bo's feed dies.' Right: rebuild his feed on demand (pull from the people he follows / post DB) and re-warm; replicas reduce the hit. Wrong: 'Bo's feed is gone for good'; 'return an error until the node is back'. (3) 'Fanout workers fall 30 minutes behind during a big event.' Right: the queue buffers; scale out workers; posts still exist, just appear late (eventual consistency); prioritise active users. Wrong: 'drop the queued jobs'; 'make posting synchronous again'. (4) 'A user deletes a post that's already in 300 feeds.' Right: mark it deleted in the post store; hydration drops it, optionally clean entries lazily. Wrong: 'can't be done without rewriting all feeds first'; 'leave it'. (5) 'Bo unfriends Ana; her old posts still show.' Right: re-check visibility at read time during hydration. Wrong: 'wait until her posts age out'; 'unfriending must block until all feeds are rewritten'. (6) 'A worker crashes after writing to half the friends.' Right: job wasn't acked, so it's retried; feed writes are idempotent (set by post_id) so duplicates don't appear. Wrong: 'half the friends never get it'; 'use exactly-once delivery so retries can't happen'. (7) 'A user returns after 3 months away.' Right: their feed wasn't kept (inactive users / cap / eviction), so build it on read and cache it. Wrong: 'they see an empty feed'; 'we precomputed it every day just in case'. (8) 'A spam bot posts 1,000 times a minute.' Right: rate limiting at the web servers, before fanout. Wrong: 'filter spam in fanout workers'; 'let the CDN absorb it'.",
+   "check": "Curveball HP to zero; each answer reveals the reasoning."
+  },
+  {
+   "title": "Wrap it up",
+   "sub": "Step 4 · the last 3–5 minutes",
+   "teaches": "The book's wrap-up talking points (our wording). Scaling the database: vertical vs horizontal scaling; SQL vs NoSQL; master-slave (leader-follower) replication; read replicas; consistency models; database sharding. Other points: keep the web tier stateless; cache as much as you can; support multiple data centers; loosely couple components with message queues; monitor key metrics such as QPS at peak hours and latency when users refresh their feed. A good close also names a bottleneck honestly (fanout lag for huge accounts, hot posts) and recaps the push/pull decision.",
+   "interaction": "Build-your-closing. 14 talking-point chips appear: 11 are the book's (the 6 DB-scaling points, stateless web tier, cache as much as you can, multiple data centers, loose coupling via message queues, monitor peak QPS and refresh latency) and 3 are weak closers ('our design has no bottlenecks', 'we'd rewrite it in Rust', 'let's add ranking with a deep dive into the formula now' (rabbit hole at minute 43)). The learner picks any 4 good chips within a 3-minute timer and orders them into a closing; picking a weak one costs a heart and shows the interviewer's raised eyebrow. Then a 1-question check: 'Which two metrics does the book suggest monitoring?' (QPS at peak hours; feed refresh latency).",
+   "check": "4 good chips chosen in time; metric question correct."
+  },
+  {
+   "title": "Say it like a senior + scorecard",
+   "sub": "The whole interview in two minutes",
+   "teaches": "A compressed spoken run-through of the full design, plus a scorecard of the run.",
+   "interaction": "Q.drill. Prompt: 'In 2 minutes, design a news feed for 10M daily users, start to finish.' Model answer (paraphrase): 'Scope: mobile and web, publish posts and read friends' posts newest first, up to 5,000 friends, 10M DAU, images and video. APIs: POST and GET /v1/me/feed with an auth token. Publishing: web servers authenticate and rate-limit; the post service stores the post; the fanout service reads friends from a graph DB, filters by settings like mute, and queues the job; workers append <post_id, author_id> to each friend's capped list in the feed cache; a notification service pings friends. Very popular accounts skip fanout and are pulled at read time: a hybrid, because reads must be fast. Reading: the news feed service takes IDs from the feed cache and hydrates them from the user and post caches, adding likes and actions; media comes from a CDN. Cache layers: news feed, content with a hot tier, social graph, action, counters. To scale: shard the DBs with read replicas, keep web servers stateless, multiple data centers, and monitor peak QPS and refresh latency.' Checks: 'Scoped with numbers', 'Both APIs', 'Both flows', 'Push/pull/hybrid with the why', 'Fanout workflow incl. queue + filter', 'Hydration + CDN', 'Five cache layers', 'Scaling + monitoring wrap-up'. After the drill, a scorecard (stored like 0008 under a separate key, e.g. 'sdq:v1:1105-interview') shows minutes used per step, hearts left, bonus scoping stars and drill ticks.",
+   "check": "Drill completed and self-graded; scorecard shown."
+  }
+ ],
+ "caveats": [
+  "The book's design is a clean interview answer. Real feeds add ranking (candidate generation + ML scoring, as in Twitter's open-sourced pipeline), ads, dedup and heavy pagination.",
+  "Facebook's production feed ('Multifeed') pulls and ranks at read time from in-memory leaf servers rather than pushing IDs into per-user lists; Twitter's timeline service is closer to the book's push + hybrid design.",
+  "Rebuilding a feed after cache loss or for a returning user is a pull: the push and pull models aren't either/or in practice, they're the normal path and the fallback.",
+  "'Master-slave replication' is the book's term; most docs now say leader-follower or primary-replica.",
+  "Message queues give at-least-once delivery; exactly-once end-to-end is rarely worth it here, so idempotent writes are the usual answer."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo: Design a News Feed System (book chapter 11, online version)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-news-feed-system"
+  },
+  {
+   "label": "Facebook Help Center: How News Feed works (book reference)",
+   "url": "https://www.facebook.com/help/327131014036297/"
+  },
+  {
+   "label": "Raffi Krikorian, Timelines at Scale (Twitter, QCon 2012, InfoQ)",
+   "url": "https://www.infoq.com/presentations/Twitter-Timeline-Scalability/"
+  },
+  {
+   "label": "Engineering at Meta: Serving Facebook Multifeed: efficiency, performance gains through redesign (2015)",
+   "url": "https://engineering.fb.com/2015/03/10/production-engineering/serving-facebook-multifeed-efficiency-performance-gains-through-redesign/"
+  },
+  {
+   "label": "Bronson et al., TAO: Facebook's Distributed Data Store for the Social Graph (USENIX ATC 2013)",
+   "url": "https://www.usenix.org/conference/atc13/technical-sessions/presentation/bronson"
+  },
+  {
+   "label": "Silberstein et al., Feeding Frenzy: Selectively Materializing Users' Event Feeds (SIGMOD 2010)",
+   "url": "https://dl.acm.org/doi/10.1145/1807167.1807224"
+  },
+  {
+   "label": "Twitter/X open-sourced recommendation algorithm (the-algorithm on GitHub)",
+   "url": "https://github.com/twitter/the-algorithm"
+  }
+ ],
+ "id": "1105",
+ "file": "1105-news-feed-boss-design-it-live.html",
+ "world": 11,
+ "chapterTitle": "Design a News Feed System",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-news-feed-system",
+ "cheatsheet": "../reference/ch11-news-feed-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "1101",
+   "n": "11.1",
+   "t": "Two Rivers",
+   "d": "Scope a news feed, design its two APIs, and sketch the publish and read flows"
+  },
+  {
+   "id": "1102",
+   "n": "11.2",
+   "t": "Push, Pull, or Both",
+   "d": "Fanout on write vs fanout on read, the celebrity problem, and the hybrid fix"
+  },
+  {
+   "id": "1103",
+   "n": "11.3",
+   "t": "The Fanout Factory",
+   "d": "Inside publishing: auth and rate limits, the five-step fanout workflow, and an ID-only feed cache"
+  },
+  {
+   "id": "1104",
+   "n": "11.4",
+   "t": "Hydrate the Feed",
+   "d": "Inside reading: turn post IDs into a full feed, serve media from a CDN, and the five cache layers"
+  },
+  {
+   "id": "1105",
+   "n": "BOSS",
+   "t": "Design It Live: News Feed",
+   "d": "Full mock interview: design a news feed for 10 million daily users"
+  }
+ ]
+}

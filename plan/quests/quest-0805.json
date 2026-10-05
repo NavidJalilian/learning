@@ -1,0 +1,119 @@
+{
+ "n": "BOSS",
+ "slug": "url-shortener-boss-design-it-live",
+ "t": "Shrink the Internet, Live",
+ "d": "Full mock interview: design a URL shortener in 45 minutes",
+ "boss": true,
+ "badge": "👑 Badge: Link Lord",
+ "winTitle": "Hired! The interviewer is impressed.",
+ "goal": "Your win today: you can run the whole interview, from scoping questions and estimates through API, 301/302, data model, 7-char base-62 codes, both flows and caching, to failure follow-ups and wrap-up, without notes.",
+ "bookSections": "Whole chapter via the 4-step framework: Step 1 scope + estimates; Step 2 API, 301/302, hash table; Step 3 data model, hash length, hash vs base 62, shortening + redirecting deep dives; Step 4 wrap up",
+ "stages": [
+  {
+   "title": "Scope it",
+   "sub": "Step 1 · understand the problem (3–10 min)",
+   "teaches": "Requirements: 100M URLs/day, as short as possible, [0-9a-zA-Z], no delete/update, use cases shorten + redirect, high availability/scalability/fault tolerance. Estimates: ~1,160 writes/s, ~11,600 reads/s, 365B records, 36.5 TB.",
+   "interaction": "Interview chat UI like 0008: the interviewer bubble says 'Design a URL shortener.' The learner gets a timer-styled budget of 5 'question tokens' and a deck of 10 possible questions (mix of strong, weak, and premature-implementation ones). Each strong pick gets an interviewer reply that lands on the requirement board; weak picks cost a token with a coach note. Then a rapid estimate round: four multiple-choice estimates (writes/s, reads/s, records, storage) each with 3 options within an order of magnitude; a 'show work' toggle explains each.",
+   "check": "Requirement board has the 5 key facts; all 4 estimates correct (retry allowed). Scorecard records how many tokens were wasted."
+  },
+  {
+   "title": "Sketch it",
+   "sub": "Step 2 · high-level design and buy-in (10–15 min)",
+   "teaches": "Two endpoints (POST api/v1/data/shorten {longUrl}, GET api/v1/{shortUrl}); redirect via 301 (cached, less load) or 302 (every click hits us, analytics); shortening as a hash function fx mapping longURL → hashValue.",
+   "interaction": "Whiteboard builder: drag boxes (Client, Load balancer, Web servers, Cache, Database, ID generator, Rate limiter, Kafka, CDN) onto a canvas and connect them; the 'interviewer' asks for buy-in at the end. Minimum correct high-level: Client → LB → Web servers → Cache + DB, with ID generator attached to web servers. Extras like Rate limiter are accepted and noted for wrap-up; Kafka/CDN get 'not needed yet; why?' notes. Then the interviewer asks 'Which redirect code?' and the learner must pick 301 or 302 and a reason chip matching the requirement (analytics → 302, load → 301; both accepted if reason matches).",
+   "check": "Diagram has the required boxes and edges; redirect choice paired with a matching reason."
+  },
+  {
+   "title": "Dig in",
+   "sub": "Step 3 · data model, code length, generation",
+   "teaches": "Relational table (id, shortURL, longURL); 62^7 ≈ 3.5T ≥ 365B → 7 chars; hash + collision resolution (first 7 chars, append string, Bloom filter) vs base 62 of a unique ID (no collisions, variable length, guessable); the book picks base 62; shortening flow (check longURL exists → new ID → base 62 → save) and redirect flow (LB → web → cache → DB → 404 if missing).",
+   "interaction": "Three rapid deep-dive panels the interviewer 'zooms into'. (a) Schema: pick the 3 columns. (b) Length: slider n with 62^n readout; lock in n=7. (c) Generation: choose hash+collision or base 62; whichever is chosen, the interviewer pushes back with that approach's weak spot (hash → 'collisions cost DB lookups, now what?' expecting Bloom filter; base 62 → 'I can guess the next link, now what?' expecting scramble/random IDs + rate limit). Then a tap-in-order of the combined shortening flow (6 steps) and redirect flow (5 steps).",
+   "check": "All three panels answered and both flows ordered; pushback answered with an accepted mitigation."
+  },
+  {
+   "title": "Boss: the curveball barrage",
+   "sub": "Step 3 · 'what happens when…?'",
+   "teaches": "Failure and extension follow-ups across the whole design.",
+   "interaction": "Q.boss with choices [{k:'cache', label:'Cache it', sub:'hot reads'}, {k:'data', label:'Replicate / shard', sub:'DB tier'}, {k:'guard', label:'Rate limit / validate', sub:'protect the system'}, {k:'design', label:'Rethink the code scheme', sub:'length/generation'}]. Scenarios (8): one link goes viral → cache; DB primary dies → data; 365B rows don't fit one box → data; bots mass-create links → guard; users enumerate sequential codes → design (scramble/random IDs) and say rate limiting helps too; the interviewer says traffic is 10× (1B URLs/day for 10 years = 3.65T > 62^7) → design (go to 8 chars); a user pastes a link to a known malware site → guard (validate against a blocklist); the cache cluster restarts cold and the DB is hammered → cache (warm up / replicas, plus DB read replicas).",
+   "check": "Boss cleared."
+  },
+  {
+   "title": "Wrap it up",
+   "sub": "Step 4 · the last 3–5 minutes",
+   "teaches": "Wrap-up points: rate limiter, web server scaling (stateless), DB scaling (replication + sharding), analytics, availability/consistency/reliability; plus honest bottleneck call-outs (ID generator as a dependency, Bloom filter size, guessable codes).",
+   "interaction": "Pick-5 from 9 wrap-up cards in 30 seconds (soft timer, no penalty after it runs out except a scorecard note). Strong: rate limiter; stateless web tier; DB replication; DB sharding; analytics; caveat on guessable IDs. Weak: 'rewrite in Rust', 'add blockchain', 'switch to GraphQL'. The interviewer reacts to each pick.",
+   "check": "At least 4 strong picks."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "The 60-second version + your scorecard",
+   "teaches": "The full chapter as one elevator answer.",
+   "interaction": "Q.drill. Prompt: 'You have 60 seconds. Summarise your URL shortener design.' Model: 'Scope: 100M new URLs a day, short codes from 0-9, a-z, A-Z, and links are never edited. That's about 1,160 writes/s, 11,600 reads/s, 365 billion rows and about 36.5 TB over 10 years. API: POST to shorten, GET on the short code to redirect, using 302 if we want click analytics and 301 to offload traffic. Storage: a table of id, shortURL, longURL. Codes: 62^7 is about 3.5 trillion, so 7 characters, made by base-62 encoding a unique ID from a distributed ID generator, so there are no collisions; I'd scramble the ID so codes can't be guessed. Shortening first checks whether the long URL already exists. Redirects go LB → stateless web servers → cache → DB, with a 404 for unknown codes. For scale and safety: a rate limiter, DB replication and sharding by code, and click analytics.' Checks: ['Scope and the four estimates', 'API + 301/302 trade-off', '7 chars from 62^7 and the generation scheme with its trade-off', 'Both flows including cache and existence check', 'Wrap-up: rate limiter, scaling, analytics']. After the drill, show a scorecard (tokens wasted in stage 1, pushback answered, boss hearts, wrap-up picks) and save it under a separate localStorage key 'sdq:v1:<this quest id>-interview', as 0008 does.",
+   "check": "Self-grade via Q.drill; scorecard rendered."
+  }
+ ],
+ "caveats": [
+  "The book picks base 62 conversion for its deep dive but doesn't spell out the guessability fix; interviewers often probe it, so have 'scramble or randomise the ID' ready.",
+  "Real shorteners (bit.ly, TinyURL) use 301 and still collect analytics; the book's 301-vs-302 framing is an interview simplification.",
+  "With 7 characters there is only ~9.6× headroom over 365 billion; if the interviewer scales traffic 10×, you need 8 characters.",
+  "To keep 7-char codes, the ID generator must produce compact counter-style IDs (ticket server or range allocation); a 64-bit Snowflake ID gives 11-char codes."
+ ],
+ "sources": [
+  {
+   "label": "System Design Interview Ch. 8: Design a URL Shortener (ByteByteGo)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-url-shortener"
+  },
+  {
+   "label": "System Design Interview Ch. 3: A Framework for System Design Interviews (ByteByteGo)",
+   "url": "https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews"
+  },
+  {
+   "label": "REST API Tutorial (book reference [1])",
+   "url": "https://www.restapitutorial.com/index.html"
+  },
+  {
+   "label": "Bloom filter, Wikipedia (book reference [2])",
+   "url": "https://en.wikipedia.org/wiki/Bloom_filter"
+  }
+ ],
+ "id": "0805",
+ "file": "0805-url-shortener-boss-design-it-live.html",
+ "world": 8,
+ "chapterTitle": "Design a URL Shortener",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-url-shortener",
+ "cheatsheet": "../reference/ch08-url-shortener-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "0801",
+   "n": "8.1",
+   "t": "Specs for a Shrink Ray",
+   "d": "Scope the prompt, do the napkin math, design the two API calls, and choose 301 or 302"
+  },
+  {
+   "id": "0802",
+   "n": "8.2",
+   "t": "Seven Characters or Bust",
+   "d": "Store the mapping, size the short code, and make hash + collision resolution work"
+  },
+  {
+   "id": "0803",
+   "n": "8.3",
+   "t": "Count in Base 62",
+   "d": "Turn a unique ID into a short code with base 62, and weigh it against hashing"
+  },
+  {
+   "id": "0804",
+   "n": "8.4",
+   "t": "Shorten & Bounce",
+   "d": "Walk the shortening and redirecting flows, add a cache, and scale it out"
+  },
+  {
+   "id": "0805",
+   "n": "BOSS",
+   "t": "Shrink the Internet, Live",
+   "d": "Full mock interview: design a URL shortener in 45 minutes"
+  }
+ ]
+}

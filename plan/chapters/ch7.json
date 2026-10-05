@@ -1,0 +1,345 @@
+{
+  "world": 7,
+  "chapterTitle": "Design a unique ID generator in distributed systems",
+  "worldName": "The ID Mint",
+  "quests": [
+    {
+      "n": "7.1",
+      "slug": "unique-id-scope-and-multi-master",
+      "t": "Numbers Nobody Repeats",
+      "d": "Why auto_increment breaks across servers, the 5 requirements, and multi-master 'count by k'",
+      "boss": false,
+      "badge": "🔢 Badge: Counter Breaker",
+      "winTitle": "Scope locked, first idea tested",
+      "goal": "Your win today: you can list the five requirements for this problem in 30 seconds, say why one database's auto_increment stops working once data is spread across many servers, and explain the 'step by k' trick plus its three weaknesses.",
+      "bookSections": "Ch. 7 intro (auto_increment doesn't work in a distributed environment); Step 1 - Understand the problem and establish design scope; Step 2 - Multi-master replication",
+      "stages": [
+        {
+          "title": "One counter, many servers",
+          "sub": "Why the easy answer stops working",
+          "teaches": "A unique ID is the primary key that names a row (a user, a tweet, an order). On ONE database, auto_increment hands out 1, 2, 3… and is guaranteed unique because one machine owns the counter. The book's opening point: in a distributed system one database isn't big enough, and generating IDs across several databases with minimal delay is hard. Once a table is split (sharded) across databases, each database has its own counter, and they all start at 1. Two shards will happily both issue ID 1. Defined inline: shard = one slice of a table living on its own database server.",
+          "interaction": "Predict-then-watch. On screen: two database boxes, 'Shard A' and 'Shard B', each with its own auto_increment counter showing 0 and an empty row list, plus a merged 'All users' list underneath. Before playing, the learner answers: 'How many inserts (total, any mix) until two users share an ID?' (options: 2, 10, 1,000, never). Then they click 'Insert user' buttons under either shard. Each click adds a row (e.g. 'id 1 · ana') to that shard and to the merged list. As soon as both shards have inserted once, the merged list shows two 'id 1' rows glowing red with a 'COLLISION' label. Correct prediction: 2 (one insert per shard). A follow-up line: 'Your ID is only unique inside one box. The whole system needs it unique everywhere.'",
+          "check": "Q.quiz: (1) Why is auto_increment safe on one database? → one machine owns the counter. (2) What breaks when the table is split across 2 databases? → each has its own counter, so both issue 1, 2, 3… (3) Which is NOT a reason the book gives? distractor: 'auto_increment is slow on SSDs'."
+        },
+        {
+          "title": "Ask before you build",
+          "sub": "Step 1 · scope it like the book's candidate",
+          "teaches": "The book's Step 1 dialogue, word for word in spirit: Q: What are the characteristics of the IDs? A: Unique and sortable. Q: Does the ID go up by 1 for every new record? A: It goes up with time, but not necessarily by 1; IDs created in the evening are larger than IDs created in the morning of the same day. Q: Numbers only? A: Yes. Q: Length? A: Must fit in 64 bits. Q: Scale? A: Over 10,000 IDs per second. Resulting requirements: (1) unique, (2) numerical values only, (3) fit in 64 bits, (4) ordered by date, (5) more than 10,000 unique IDs per second. Why each matters: 64-bit = fits a standard BIGINT/long column, cheap to index; ordered by date = newest-first sorting without an extra created_at index.",
+          "interaction": "Question deck + requirement board (same idea as the 0008 boss, smaller). On screen: 8 question cards: the 5 real questions above plus 3 low-value ones ('Which programming language?', 'Should IDs be pretty?', 'What colour is the admin panel?'). Tapping a card shows the interviewer's answer in a chat bubble; the 5 real ones each light up a slot on a 'Requirements' board. Low-value cards get a polite 'not important for this design' reply and cost no heart, but the board shows 'Signal: 5/5 good questions, 1 wasted' as feedback. Stage clears when all 5 requirement slots are filled.",
+          "check": "Sort mechanic: 6 statements, learner taps 'Requirement' or 'Not required' for each: 'IDs go up by exactly 1' (not required), 'An ID made at 9pm is bigger than one made at 9am the same day' (requirement), 'IDs may contain letters' (not: numbers only), 'IDs fit in 64 bits' (requirement), 'Handle 10,000+ IDs per second' (requirement), 'IDs must be impossible to guess' (not stated)."
+        },
+        {
+          "title": "Count by k",
+          "sub": "Multi-master replication, hands-on",
+          "teaches": "Multi-master replication: keep auto_increment, but each database steps by k instead of 1, where k = number of database servers, and each starts at a different offset. With k = 2: server 1 issues 1, 3, 5, 7…; server 2 issues 2, 4, 6, 8…. No two servers ever produce the same number. MySQL exposes exactly these two knobs: auto_increment_increment (the step) and auto_increment_offset (the start). It's unique, numeric and fits in 64 bits. The book's three drawbacks: (1) hard to scale with multiple data centers, (2) IDs do not go up with time across multiple servers, (3) it does not scale well when a server is added or removed.",
+          "interaction": "Driven simulation. On screen: k servers (start k = 2) drawn as boxes with their sequences, a wall clock, and a 'Timeline' strip. The learner clicks servers to generate IDs; each click stamps the ID onto the timeline in click order. Scripted moment 1 ('time order'): the sim auto-plays server 1 generating three IDs (1, 3, 5) then server 2 generating one (2) a second later; the learner is asked 'Is the newest ID the biggest?' → No: 2 was made after 5. Scripted moment 2 ('add a server'): button 'Add server C' sets k = 3 with offset 3. Before revealing, the learner predicts whether C's first IDs are safe. C emits 3, 6, 9; the sim highlights 3 and 9 (already issued by server 1: 1,3,5,7,9) and 6 (already issued by server 2) in red. Lesson: changing k means re-planning every server's step and offset at once, carefully, which is why adding/removing servers hurts.",
+          "check": "Q.quiz: (1) With k = 4 servers, server 3 (offset 3) issues: 3, 7, 11, 15. (2) Which requirement does multi-master break? → ordered by date (across servers). (3) Why is a new server painful? → every server's step must change together or IDs collide."
+        },
+        {
+          "title": "Check the scorecard",
+          "sub": "Does count-by-k pass the five requirements?",
+          "teaches": "Habit for the whole chapter: test every candidate design against the requirement list out loud. Multi-master: unique ✓, numeric ✓, 64-bit ✓, ordered by date ✗ (only within one server), 10k/s ✓ but scaling the fleet ✗ (adding servers and multiple data centers are hard). This scorecard is reused and extended in 7.2.",
+          "interaction": "A 5-row scorecard for 'Multi-master'. Each row has a ✓ / ✗ toggle the learner sets, then hits 'Check'. Wrong cells shake and show a one-line reason. A greyed-out preview of the full 4-approach table (UUID, Ticket server, Snowflake columns locked as '?' teasers, but not actually gated) hints at what comes next.",
+          "check": "All 5 cells correct to clear (hearts lost per wrong check)."
+        },
+        {
+          "title": "Boss: The Duplicate Hydra",
+          "sub": "Keep the counter, or not?",
+          "teaches": "Applying the trade-off: single-database auto_increment is fine when one database really is enough; multi-master works when the server count is small and stable and time-ordering across servers doesn't matter; neither fits a growing multi-data-center system that needs time order.",
+          "interaction": "Q.boss with choices: { k: 'single', label: 'One DB auto_increment', sub: 'keep it simple' }, { k: 'multi', label: 'Multi-master, step k', sub: 'offsets per server' }, { k: 'other', label: 'Neither fits', sub: 'need a new idea' }. Scenarios (6): an internal tool with 50 writes/day on one Postgres → single; two MySQL primaries in one data center, fixed forever, IDs never sorted → multi; IDs must sort by creation time across 8 shards → other; you will add shards every quarter → other (re-stepping all servers is painful); two primaries, need simple numeric IDs, small fixed fleet, ordering doesn't matter → multi; one DB but it's out of disk and must split → other/multi debate, answer 'other' with why: the split needs a design that tolerates growth.",
+          "check": "Boss HP bar, hearts on wrong picks, 'why' line after each card."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "Scope + first idea in 45 seconds",
+          "teaches": "Model answer: 'Before designing, I'd confirm: IDs must be unique, numeric, fit in 64 bits, roughly ordered by creation time, and we need over 10,000 per second. A single database's auto_increment can't scale past one box. One option is multi-master: each of k databases steps by k with its own offset, so they never collide. But IDs aren't time-ordered across servers, and changing k or spanning data centers is painful, so I'd keep looking.'",
+          "interaction": "Q.drill: free-recall textarea with prompt 'The interviewer says: design a unique ID generator. Give your first 45 seconds.' Then reveal the model answer and a self-grade checklist: named all 5 requirements; said why auto_increment fails; explained step-by-k; named at least 2 multi-master drawbacks.",
+          "check": "Self-grade checklist (4 items)."
+        }
+      ],
+      "caveats": [
+        "The book treats 'sortable' as 'ordered by date'. In practice nobody can promise exact time order across machines; 'roughly time-ordered' is what real systems deliver (covered in 7.4).",
+        "Multi-master here is really a configuration trick (auto_increment_increment / auto_increment_offset in MySQL), not about replicating data. It's named after the setup where it's commonly used: several writable primaries replicating to each other.",
+        "Changing auto_increment_increment on a live MySQL server doesn't renumber existing rows; the next value is computed from the current maximum, so live reconfiguration needs care. The sim simplifies this to 'new server starts at its offset'."
+      ],
+      "sources": [
+        { "label": "ByteByteGo: Design a Unique ID Generator in Distributed Systems (book chapter 7)", "url": "https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems" },
+        { "label": "MySQL docs: auto_increment_increment and auto_increment_offset", "url": "https://dev.mysql.com/doc/refman/8.0/en/replication-options-source.html" },
+        { "label": "Flickr: Ticket Servers, Distributed Unique Primary Keys on the Cheap", "url": "https://code.flickr.net/2010/02/08/ticket-servers-distributed-unique-primary-keys-on-the-cheap/" }
+      ]
+    },
+    {
+      "n": "7.2",
+      "slug": "uuid-and-ticket-server",
+      "t": "Dice or the Ticket Booth",
+      "d": "UUIDs (random, no coordination) vs a central ticket server (numeric, single point of failure)",
+      "boss": false,
+      "badge": "🎟️ Badge: Ticket Taker",
+      "winTitle": "Two ideas weighed and found wanting",
+      "goal": "Your win today: you can explain why UUIDs almost never collide yet still fail this prompt, how Flickr's ticket server works and why it's a single point of failure, and fill in the four-approach scorecard from memory.",
+      "bookSections": "Step 2 - UUID; Step 2 - Ticket Server",
+      "stages": [
+        {
+          "title": "Roll a UUID",
+          "sub": "128 random-ish bits, no coordination",
+          "teaches": "A UUID (universally unique identifier) is a 128-bit number, usually written as 32 hex digits in 8-4-4-4-12 groups, e.g. 09c93e62-50b4-468d-bf8a-c07e1040bfb2 (the book's example). The common version 4 is random: 122 random bits plus 6 bits that mark version and variant (the third group always starts with '4'). Each web server makes its own IDs, no talking to anyone. Book pros: simple; no coordination between servers, so no synchronization issues; easy to scale because each web server generates the IDs it consumes. Book cons: 128 bits but we need 64; IDs don't go up with time; IDs can be non-numeric.",
+          "interaction": "On screen: a 'Generate UUID' button (uses crypto.randomUUID(), with a fallback) and a growing list. A bit-meter shows '128 bits' as a bar overflowing a '64-bit budget' box in red. Mini-game 1: 'Tap the digit that never changes' across 5 generated UUIDs → the first character of the third group ('4'). Mini-game 2 (predict-then-watch): the sim generates 5 UUIDs one second apart, labelled with their creation time, then asks 'Sort these by value: will the order match creation time?' The learner predicts yes/no, then the list sorts lexically and the creation-time labels come out scrambled.",
+          "check": "Q.quiz: (1) Bits in a UUID? → 128. (2) Which requirements does UUID v4 break? → 64-bit, time-ordered, numeric (choose all three). (3) Why is it easy to scale? → no coordination; each server makes its own."
+        },
+        {
+          "title": "The birthday odds",
+          "sub": "How unlikely is 'unlikely'?",
+          "teaches": "Collisions follow the birthday paradox: with n random IDs drawn from 2^122 values, P(any duplicate) ≈ n² / (2 × 2^122). 50% odds need about 2.71 × 10^18 UUIDs. The book quotes Wikipedia: generating 1 billion UUIDs every second for about 100 years would bring the chance of a single duplicate to 50% (the math gives ~86 years). At this prompt's 10,000 IDs/s, reaching 50% takes about 8.6 million years. Takeaway: UUID uniqueness is not the problem; size and ordering are. Real-world catch: 'random' assumes a good random source; bad RNGs (cloned VMs, weak seeding) have caused real duplicates.",
+          "interaction": "Calculate-and-check with a slider toy. On screen: rate selector (10k/s, 1M/s, 1B/s) and a years slider (1 to 10^7, log scale); a probability gauge updates live using the formula. Challenge 1: 'At 1 billion/s, slide to where the odds hit 50%' (accept 75–100 years; reveal 86 and the book's 'about 100'). Challenge 2: 'At our 10,000/s, how many years to 50%?' typed answer, accept 5–12 million; reveal ≈ 8.6 million years.",
+          "check": "Both challenges within tolerance; a one-line quiz: 'So is collision the reason we reject UUID here?' → No, size (128 > 64) and no time order are."
+        },
+        {
+          "title": "The ticket booth",
+          "sub": "Flickr's central counter",
+          "teaches": "Ticket server (Flickr, 2010): one dedicated MySQL database whose only job is auto_increment. A web server asks it for the next number (Flickr's trick: REPLACE INTO Tickets64 (stub) VALUES ('a'); SELECT LAST_INSERT_ID(); so the table stays one row). Book pros: numeric IDs; easy to implement; works for small to medium-scale applications. Book con: single point of failure (SPOF, defined: one component whose failure takes the whole feature down). Adding more ticket servers to fix it brings new problems, like keeping them in sync. Flickr's actual fix: two ticket servers, one issuing odd numbers and one even (auto_increment_increment = 2, offsets 1 and 2), the same count-by-k trick from 7.1, accepting that IDs aren't perfectly ordered across the two. Every ID also costs a network round trip.",
+          "interaction": "Driven sim. On screen: 4 web-server boxes on the left, one ticket-server box on the right, animated request/response dots. 'Run traffic' sends requests; IDs come back neatly as 1, 2, 3… and a 'Time-ordered ✓' badge stays green. Then the learner clicks 'Kill ticket server' after predicting what happens (options: web servers fall back to local IDs / every new signup fails / only one web server is affected). Correct: every request fails (red X on all 4). Then 'Add a second ticket server' asks: 'How do you stop the two from issuing the same number?' choices: random IDs / odd-even (step 2, offsets 1 and 2) / lock a shared row. Correct: odd-even. The sim restarts with two servers (1,3,5… and 2,4,6…) and the 'Time-ordered' badge turns amber, because you've rebuilt multi-master.",
+          "check": "Q.quiz: (1) What's a SPOF? (2) Flickr's fix for the SPOF reuses which idea from 7.1? → step by k. (3) Cost every ID pays with a ticket server? → a network round trip to the central server."
+        },
+        {
+          "title": "The four-way scorecard",
+          "sub": "Fill the table the interviewer is grading you on",
+          "teaches": "The comparison the book builds up to. Rows = requirements, columns = approaches. Multi-master: unique ✓, numeric ✓, 64-bit ✓, time-ordered ✗, easy to scale/no SPOF ✗. UUID: unique ✓ (probabilistic), numeric ✗, 64-bit ✗, time-ordered ✗, scales ✓. Ticket server: unique ✓, numeric ✓, 64-bit ✓, time-ordered ✓ (with one server), no SPOF ✗. Snowflake (next quest): all ✓. Saying this table out loud is how you justify the final pick.",
+          "interaction": "Grid of 3 columns × 5 rows with tap-to-cycle cells (✓ / ✗). The Snowflake column is shown pre-filled with '?' and flips to all-green once the grid is checked, as a teaser. 'Check' marks wrong cells with a reason tooltip; hearts lost on wrong checks.",
+          "check": "All 15 cells correct."
+        },
+        {
+          "title": "Boss: The Coin-Flip Golem",
+          "sub": "UUID, ticket server, or count-by-k?",
+          "teaches": "UUID is a great answer when the prompt allows 128-bit, non-sortable IDs (idempotency keys, file names, client-generated IDs, offline mobile apps). A ticket server is great for small/medium apps on one data center. Multi-master is fine for a fixed small fleet without ordering needs.",
+          "interaction": "Q.boss with choices: { k: 'uuid', label: 'UUID', sub: 'random, no coordination' }, { k: 'ticket', label: 'Ticket server', sub: 'one central counter' }, { k: 'multi', label: 'Multi-master', sub: 'step by k' }. Scenarios (6): offline-first mobile app must create records with no network → uuid; small startup wants short numeric order numbers, one data center, can tolerate brief outages → ticket; two DB primaries, fixed, need numeric IDs, no central box → multi; idempotency keys for payment requests, any format → uuid; the ticket server goes down and signups stop, what were you using? → ticket (spot the SPOF); global system across 5 data centers that must not coordinate on every ID and can store 128-bit keys → uuid.",
+          "check": "Boss HP bar, 'why' line per card."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "Reject two designs in 40 seconds",
+          "teaches": "Model answer: 'UUIDs need no coordination and practically never collide, but they're 128 bits, not 64, and they don't sort by time. A ticket server, a single auto_increment database like Flickr's, gives numeric ordered IDs but is a single point of failure, and fixing that with more servers brings back synchronization or loses ordering. So none of the three simple options meets all five requirements.'",
+          "interaction": "Q.drill: prompt 'Why not just use UUIDs? And why not a ticket server?' Free recall, then model answer and self-grade checklist: 128 vs 64 bits; not time-ordered; ticket server = SPOF; extra ticket servers = sync or lost ordering.",
+          "check": "Self-grade checklist (4 items)."
+        }
+      ],
+      "caveats": [
+        "The book predates RFC 9562 (2024), which standardised UUID version 7: a 48-bit Unix-millisecond timestamp followed by random bits. UUIDv7 IS time-ordered, which fixes one of the book's cons, but it's still 128 bits, so it still fails this prompt's 64-bit rule.",
+        "Random (v4) UUIDs as database primary keys scatter inserts across a B-tree index, causing page splits and poor cache use. That's a practical reason teams avoid them beyond the book's list.",
+        "The book's 'about 100 years at 1 billion/s' figure is rounded; the birthday-paradox math gives about 86 years for 50% odds.",
+        "The book presents the ticket server's SPOF as unsolved; Flickr's own post runs two ticket servers (odd/even), trading strict ordering for availability. Real ticket-style systems also hand out ID ranges in batches to avoid one round trip per ID."
+      ],
+      "sources": [
+        { "label": "ByteByteGo: Design a Unique ID Generator in Distributed Systems (book chapter 7)", "url": "https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems" },
+        { "label": "Wikipedia: Universally unique identifier (book reference [1])", "url": "https://en.wikipedia.org/wiki/Universally_unique_identifier" },
+        { "label": "Flickr: Ticket Servers, Distributed Unique Primary Keys on the Cheap (book reference [2])", "url": "https://code.flickr.net/2010/02/08/ticket-servers-distributed-unique-primary-keys-on-the-cheap/" },
+        { "label": "RFC 9562: Universally Unique IDentifiers (UUIDv7)", "url": "https://www.rfc-editor.org/rfc/rfc9562" }
+      ]
+    },
+    {
+      "n": "7.3",
+      "slug": "snowflake-bit-layout",
+      "t": "Anatomy of a Snowflake",
+      "d": "Twitter Snowflake's 64-bit layout: mint an ID, decode one, and do the 69-year math",
+      "boss": false,
+      "badge": "❄️ Badge: Snowflake Smith",
+      "winTitle": "64 bits, fully understood",
+      "goal": "Your win today: you can draw 1 | 41 | 5 | 5 | 12 from memory, say what each section is for, decode an ID back to its timestamp, and justify '69 years' and '4,096 per millisecond' with arithmetic.",
+      "bookSections": "Step 2 - Twitter snowflake approach; Step 3 - Design deep dive (Timestamp, Sequence number), incl. Figure 7-7 decode example",
+      "stages": [
+        {
+          "title": "Divide the 64 bits",
+          "sub": "Divide and conquer, one field at a time",
+          "teaches": "Snowflake's idea is divide and conquer: instead of one counter, split the 64-bit ID into sections, each solving one requirement. Layout (most significant bit first): sign bit 1 bit (always 0, reserved for future use; keeps the number positive in signed 64-bit integers like Java's long) | timestamp 41 bits (milliseconds since a chosen epoch) | datacenter ID 5 bits (2^5 = 32 datacenters) | machine ID 5 bits (32 machines per datacenter) | sequence number 12 bits (counter for IDs made on that machine in the same millisecond; resets to 0 every millisecond). Mapping to requirements: timestamp first → sorts by time; datacenter + machine → no two generators ever produce the same bits, so no coordination; sequence → many IDs per millisecond; total 64 → fits.",
+          "interaction": "Build-the-layout puzzle. On screen: a 64-cell bit bar (cells small, grouped visually every 8) and 5 field tiles (Sign, Timestamp, Datacenter ID, Machine ID, Sequence). The learner taps tiles in the order they appear left to right (left = most significant), then chooses each field's size from a dropdown (1, 5, 10, 12, 41, 42). A running 'bits used: n / 64' counter turns green at exactly 64. 'Check' compares to 1 | 41 | 5 | 5 | 12. Wrong order (e.g. sequence first) gets a hint: 'What should decide sort order: the time or the counter?'",
+          "check": "Q.quiz: (1) Why is the timestamp the leftmost real field? → leftmost bits dominate numeric comparison, so IDs sort by time. (2) Why can two machines generate without talking? → datacenter+machine bits differ. (3) What's the sign bit set to? → always 0."
+        },
+        {
+          "title": "Mint an ID",
+          "sub": "Watch the bits fill in",
+          "teaches": "Generating an ID = gluing numbers with bit shifts: id = (timestamp << 22) | (datacenterId << 17) | (machineId << 12) | sequence. 22 = 5 + 5 + 12 bits to the right of the timestamp. Datacenter and machine IDs are chosen at startup and normally fixed; timestamp and sequence change while running. Within the same millisecond the sequence goes 0, 1, 2…; when the millisecond ticks, sequence resets to 0 and the timestamp grows, so the new ID is bigger than every ID from earlier milliseconds on any machine.",
+          "interaction": "Predict-then-watch with a slowed-down clock. On screen: the 64-bit bar coloured by section, datacenter and machine number pickers (0–31), a 'slow clock' that ticks one 'millisecond' every 2 seconds, a 'Generate' button, and a log of minted IDs (decimal + coloured binary). Round 1: 'You'll click Generate 3 times within one tick. Which section changes?' (timestamp / machine / sequence) → sequence: 0, 1, 2. Round 2: 'The clock ticks, then you click once. Sequence becomes?' → 0. Round 3: two side-by-side machines (machine 1 and machine 30) generate in the same tick vs the next tick; predict which ID is larger → the later tick wins regardless of machine number; in the same tick, the higher machine number wins (not by real time).",
+          "check": "All 3 predictions answered; wrong ones cost a heart and replay the animation."
+        },
+        {
+          "title": "Decode the past",
+          "sub": "Figure 7-7: from bits back to a date",
+          "teaches": "Reverse it: timestamp = id >> 22; datacenterId = (id >> 17) & 31; machineId = (id >> 12) & 31; sequence = id & 4095. The timestamp is relative to Twitter's default epoch 1288834974657 ms (Nov 04, 2010, 01:42:54 UTC). Book Figure 7-7 example: timestamp bits = 297616116568; add the epoch → 1586451091225 ms → 2020-04-09 16:51:31.225 UTC. Takeaway: anyone holding a Snowflake ID can tell when it was created.",
+          "interaction": "Calculate-and-check, step by step. Given the ID 1248292468186091525 (built from timestamp 297616116568, datacenter 3, machine 17, sequence 5), the learner fills four boxes: (a) timestamp = id >> 22 (a 'shift' button animates the right 22 bits falling off) → 297616116568; (b) add epoch → 1586451091225; (c) pick the date from 4 options (2020-04-09 16:51 UTC correct; distractors 2010-11-04, 1979-06-…, 2080-07-10); (d) datacenter 3, machine 17, sequence 5 read off the coloured segments. Afterwards, a free 'decoder toy' input accepts any 64-bit ID (BigInt) and shows its fields and date.",
+          "check": "All four boxes correct (exact integers; the builder must use BigInt because these exceed 2^53)."
+        },
+        {
+          "title": "How long, how many?",
+          "sub": "The 69-year math and the throughput math",
+          "teaches": "Lifetime: max timestamp = 2^41 − 1 = 2,199,023,255,551 ms ≈ 69.7 years (the book says ~69 years). From Twitter's 2010 epoch that runs out around July 2080. Picking a custom epoch close to today maximises the time before overflow; after ~69 years you need a new epoch or another way to migrate IDs. Capacity: 32 datacenters × 32 machines = 1,024 generators. Sequence: 2^12 = 4,096 IDs per millisecond per machine, about 4.1 million per second per machine; the whole fleet tops out near 4.19 billion per second. Our requirement (10,000/s) fits on one machine with ~400× headroom. The sequence is 0 for most IDs unless a machine makes more than one ID in a millisecond.",
+          "interaction": "Calculate-and-check cards, one at a time, each with a 'show working' hint. (1) 2^41 ms in years? typed, accept 69–70. (2) Overflow year with Twitter's 2010 epoch? accept 2079–2081. (3) Generators possible? → 1024. (4) Max IDs per second per machine? accept 4,000,000–4,200,000. (5) Machines needed for 10,000/s? → 1. A 'custom epoch' slider (2010 → 2030) then shows the overflow date moving later as the epoch moves later, to make the point visually.",
+          "check": "5 numeric answers within tolerance."
+        },
+        {
+          "title": "Boss: The Bit Wraith",
+          "sub": "Which section is responsible?",
+          "teaches": "Reasoning about IDs by section: what differs between two IDs tells you how they were made.",
+          "interaction": "Q.boss with choices: { k: 'ts', label: 'Timestamp', sub: '41 bits' }, { k: 'node', label: 'Datacenter + machine', sub: '10 bits' }, { k: 'seq', label: 'Sequence', sub: '12 bits' }, { k: 'sign', label: 'Sign bit', sub: '1 bit' }. Scenarios (7): two IDs made by the same machine in the same ms differ only in → seq; two IDs made at the same ms on different machines differ in → node; the newest tweet always has the biggest ID because of → ts; the ID stays positive in a Java long thanks to → sign; the system will stop working in ~69 years because of → ts; you can only run 32 machines per datacenter because of → node; one machine can't exceed 4,096 IDs per ms because of → seq.",
+          "check": "Boss HP bar, 'why' line per card."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "Draw it, then defend it",
+          "teaches": "Model answer: 'I'd use a Snowflake-style 64-bit ID: 1 sign bit, 41 bits of milliseconds since a custom epoch, 5 bits datacenter, 5 bits machine, 12 bits sequence. Timestamp first means IDs sort by time. Datacenter and machine bits make every generator's output disjoint, so there's no coordination. 12 bits gives 4,096 IDs per millisecond per machine, far above 10,000 a second, and 41 bits of milliseconds lasts about 69 years from the epoch.'",
+          "interaction": "Q.drill: prompt 'Walk the interviewer through your 64 bits and the numbers behind them.' Self-grade checklist: correct layout 1|41|5|5|12; why timestamp is first; why no coordination is needed; 4,096/ms; ~69 years; custom epoch.",
+          "check": "Self-grade checklist (6 items)."
+        }
+      ],
+      "caveats": [
+        "Snowflake IDs exceed JavaScript's safe integer limit (2^53 − 1), so a JS client parsing them as numbers silently corrupts them. Twitter's API added string versions (id_str) for this reason; Discord's API sends its snowflakes as strings too. The builder must use BigInt in the lesson for the same reason.",
+        "Twitter's original code calls the 10 middle bits datacenterId (5) + workerId (5), matching the book. Other 'snowflakes' differ: Instagram used 41-bit time + 13-bit shard ID + 10-bit sequence generated inside PostgreSQL; Discord uses a 42-bit timestamp from a 2015 epoch; Sony's Sonyflake uses 39 bits of 10 ms units (~174 years) + 8-bit sequence + 16-bit machine ID.",
+        "Snowflake IDs leak information: creation time (as decoded here) and roughly how many IDs a machine produces. Don't use them as secret or unguessable tokens.",
+        "'Sortable' is only rough across machines. Inside one millisecond, IDs order by datacenter/machine number, not real time, and clock differences between machines blur order further (7.4)."
+      ],
+      "sources": [
+        { "label": "ByteByteGo: Design a Unique ID Generator in Distributed Systems (book chapter 7)", "url": "https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems" },
+        { "label": "Twitter Engineering: Announcing Snowflake (book reference [3])", "url": "https://blog.twitter.com/engineering/en_us/a/2010/announcing-snowflake.html" },
+        { "label": "twitter-archive/snowflake (original Scala implementation)", "url": "https://github.com/twitter-archive/snowflake" },
+        { "label": "Instagram Engineering: Sharding & IDs at Instagram", "url": "https://instagram-engineering.com/sharding-ids-at-instagram-1cf5a71e5a5c" },
+        { "label": "Discord developer docs: Snowflakes", "url": "https://discord.com/developers/docs/reference#snowflakes" },
+        { "label": "sony/sonyflake", "url": "https://github.com/sony/sonyflake" }
+      ]
+    },
+    {
+      "n": "7.4",
+      "slug": "snowflake-clocks-and-tuning",
+      "t": "When Clocks Lie",
+      "d": "Sequence overflow, clocks running backwards, rough ordering, re-tuning the bits, keeping it available",
+      "boss": false,
+      "badge": "⏱️ Badge: Time Keeper",
+      "winTitle": "The clock can't fool you now",
+      "goal": "Your win today: you can answer the follow-ups that come after the Snowflake sketch: what happens past 4,096 IDs in a millisecond, what happens when a clock jumps back, why the order is only rough, how you'd re-split the bits, and how you keep the generator available.",
+      "bookSections": "Step 3 - Design deep dive (datacenter/machine IDs fixed at startup, sequence number); Step 4 - Wrap up (clock synchronization, section length tuning, high availability)",
+      "stages": [
+        {
+          "title": "The 4,097th ID",
+          "sub": "What happens when the sequence runs out?",
+          "teaches": "12 bits gives 4,096 sequence values (0–4095) per millisecond per machine. The book stops at 'max 4,096 per ms'. What real code does: if the sequence would wrap back to 0 within the same millisecond, the generator waits (spins) until the clock reaches the next millisecond, then resets the sequence to 0. Wrapping without waiting would reissue IDs already handed out in that millisecond, which means duplicates. Cost: a tiny stall under extreme bursts, never a duplicate.",
+          "interaction": "Predict-then-watch. On screen: one machine with a 4,096-cell sequence meter (drawn as a 64×64 dot grid filling up), a frozen millisecond clock, and a burst slider (1,000 / 4,096 / 5,000 requests in one ms). Before firing 5,000, the learner picks what request #4,097 should do: (a) wrap sequence to 0 now, (b) wait for the next millisecond, (c) borrow bits from the machine ID. Then they toggle a 'naive mode' switch to see (a) play out: the log shows request #4,097 receiving the exact same ID as request #1, flashing red. With (b), the clock ticks, the meter empties, and the remaining 904 get fresh IDs in the next ms.",
+          "check": "Q.quiz: (1) Max IDs per ms per machine? → 4,096. (2) Correct behaviour past that? → wait for next ms. (3) Why is wrapping wrong? → reissues IDs from the same ms."
+        },
+        {
+          "title": "Time runs backwards",
+          "sub": "NTP corrections and duplicate IDs",
+          "teaches": "The book assumes all ID servers share the same clock, and admits that isn't true with multiple machines (or even multiple cores); Network Time Protocol (NTP, defined: a protocol where machines periodically ask time servers for the correct time and correct their clocks) is the most popular fix. But NTP can STEP a clock backwards to correct drift, and leap seconds have caused similar jumps. If the clock goes back 5 ms, the generator re-enters milliseconds it already used and can reissue IDs. Fixes: remember the last timestamp used; if now < last, refuse or wait until the clock catches up (Twitter's original code throws 'Clock moved backwards. Refusing to generate id for N milliseconds'); configure NTP to slew (speed up/slow down gradually) rather than step; alert on large jumps.",
+          "interaction": "Driven sim. On screen: a machine with its local clock, a 'last timestamp' register, a log of minted IDs, and an 'NTP correction: −5 ms' button. The learner generates a few IDs, then presses the NTP button, then predicts: 'Next ID will be: (a) fine, (b) possibly a duplicate of an earlier ID, (c) larger than all previous'. Watch: with the guard OFF the new ID collides with one already in the log (red). Then the learner flips the 'clock guard' toggle ON and repeats: generation pauses with 'waiting 5 ms for clock to catch up', then resumes with fresh IDs.",
+          "check": "Q.quiz: (1) What does NTP do? (2) Why can it break Snowflake? → it can move the clock backwards. (3) Pick two valid defences (multi-select): refuse/wait while now < last timestamp; slew instead of step. Distractor: 'reset the sequence to 0'."
+        },
+        {
+          "title": "Roughly in order",
+          "sub": "Clock skew between machines",
+          "teaches": "Even with NTP, machines' clocks differ by a few milliseconds (skew). Twitter's own announcement calls Snowflake IDs 'roughly sortable' (k-sorted: each ID is close to its correct position, not exactly there). So 'ordered by date' really means ordered within about the clock skew; inside one millisecond, order follows datacenter/machine bits, not real time. That's fine for 'newest first' feeds; it's not fine for 'who clicked first' contests or strict event ordering, where you need a single sequencer or a logical clock.",
+          "interaction": "Sort/order mechanic. On screen: a real-time timeline with 6 events (E1–E6) happening on 3 machines; machine B's clock runs 3 ms fast. Each event shows its minted ID. Step 1: learner drags the IDs into ascending order. Step 2: the sim draws lines from ID order to real-time order; the learner taps the pairs that 'cross' (events that happened earlier but got a larger ID). Correct answer: the pairs involving machine B's events that happened within 3 ms before an event on A or C. A skew slider (0–10 ms) then shows more crossings as skew grows and none at 0.",
+          "check": "All crossing pairs identified (no false ones); 1-question quiz: 'Twitter's word for this ordering?' → roughly sortable (k-sorted)."
+        },
+        {
+          "title": "Tune the bits",
+          "sub": "Section length tuning",
+          "teaches": "Wrap-up talking point from the book: section lengths aren't sacred. Example from the book: fewer sequence bits and more timestamp bits suit low-concurrency, long-lived applications. The 63 usable bits are a budget shared by lifetime (timestamp), fleet size (datacenter+machine) and burst size (sequence). Numbers: 42 timestamp bits ≈ 139 years; 39 bits in 10 ms units ≈ 174 years (Sonyflake); 11 sequence bits = 2,048/ms. Also from the deep dive: datacenter and machine IDs are chosen at startup and generally fixed; changing them needs careful review because an accidental change (two machines with the same ID) causes ID conflicts. Real systems hand out machine IDs from a coordinator (Twitter's original used ZooKeeper) or config.",
+          "interaction": "Slider lab. On screen: 63-bit budget bar with 4 draggable boundaries (timestamp, datacenter, machine, sequence) plus a 'timestamp unit' toggle (1 ms / 10 ms). Live readouts: lifetime in years, max datacenters, max machines per DC, max IDs/ms/machine, and a red warning if the total ≠ 63. Three missions, each checked live: (1) 'A billing system with 20 servers, 50 IDs/second, must last 100+ years' (valid if lifetime ≥ 100 and machines ≥ 20 and sequence ≥ 1/ms); (2) 'A flash-sale service: 8 machines, bursts of 20,000 IDs in a single millisecond on one machine' (needs sequence ≥ 15 bits, any valid lifetime ≥ 10 years); (3) 'Back to the book's default' (1|41|5|5|12).",
+          "check": "All three missions satisfied; then a quiz: 'Two machines boot with the same machine ID. What happens?' → they can mint identical IDs in the same ms."
+        },
+        {
+          "title": "Boss: The Chrono Lich",
+          "sub": "Diagnose the incident",
+          "teaches": "Final book wrap-up point: an ID generator is a mission-critical system, so it must be highly available. Running the generator as a library inside every app server (no network hop, no central box) avoids a SPOF; a separate ID service needs multiple instances, each with a unique machine ID, behind a load balancer.",
+          "interaction": "Q.boss with choices: { k: 'clock', label: 'Clock guard / NTP', sub: 'time went wrong' }, { k: 'bits', label: 'Re-tune the bits', sub: 'budget is wrong' }, { k: 'ids', label: 'Fix machine-ID assignment', sub: 'two nodes share an ID' }, { k: 'ha', label: 'Add redundancy', sub: 'single point of failure' }. Scenarios (7): duplicate IDs right after an NTP sync → clock; duplicates after a VM was cloned from a snapshot and both copies kept running → ids; the company needs IDs valid until 2120 → bits; the single ID-service box restarts and every write fails for 40 s → ha; a leap-second event coincides with a burst of duplicates → clock; one machine needs 10,000 IDs per millisecond → bits; autoscaling launches 40 machines in one datacenter → bits (only 32 fit with 5 machine bits; or ids, but 'bits' is the structural fix — explain).",
+          "check": "Boss HP bar, 'why' line per card."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "Survive the follow-ups",
+          "teaches": "Model answer: 'Past 4,096 IDs in a millisecond the generator waits for the next millisecond rather than wrap. Clocks are the real risk: NTP keeps them close, but if a clock steps backwards I refuse or wait until it passes the last timestamp I used. Ordering is only rough across machines, within the clock skew. If our needs differ I'd re-split the bits, say more timestamp bits for a long-lived low-traffic system. Machine IDs are assigned once at startup and must never be duplicated. And since every write depends on IDs, I'd run the generator inside each service or as a replicated service, never one box.'",
+          "interaction": "Q.drill: prompt 'The interviewer asks: what can go wrong with Snowflake, and what do you do about it?' Self-grade checklist: sequence overflow → wait; clock backwards → guard; NTP; roughly sorted; section tuning example; unique machine IDs; high availability.",
+          "check": "Self-grade checklist (7 items)."
+        }
+      ],
+      "caveats": [
+        "The book never says what happens past 4,096 IDs in a millisecond or when a clock moves backwards; the behaviour taught here comes from Twitter's original implementation (wait for the next millisecond; refuse while the clock is behind).",
+        "NTP keeps clocks within milliseconds on a good network, not perfectly together. Systems that need tight bounds use special hardware (e.g. Google's TrueTime with GPS and atomic clocks), which is far beyond what this prompt needs.",
+        "'Multiple cores' in the book: on one machine all cores normally read the same system clock; the real issue is separate processes or threads sharing one machine ID. Each process needs its own worker ID or a shared, locked generator."
+      ],
+      "sources": [
+        { "label": "ByteByteGo: Design a Unique ID Generator in Distributed Systems (book chapter 7)", "url": "https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems" },
+        { "label": "Wikipedia: Network Time Protocol (book reference [4])", "url": "https://en.wikipedia.org/wiki/Network_Time_Protocol" },
+        { "label": "Twitter Engineering: Announcing Snowflake ('roughly sortable')", "url": "https://blog.twitter.com/engineering/en_us/a/2010/announcing-snowflake.html" },
+        { "label": "twitter-archive/snowflake (clock-moved-backwards and next-millisecond handling)", "url": "https://github.com/twitter-archive/snowflake" },
+        { "label": "Cloudflare: How and why the leap second affected Cloudflare DNS", "url": "https://blog.cloudflare.com/how-and-why-the-leap-second-affected-cloudflare-dns/" },
+        { "label": "sony/sonyflake (alternative bit split: 39-bit time in 10 ms units)", "url": "https://github.com/sony/sonyflake" }
+      ]
+    },
+    {
+      "n": "BOSS",
+      "slug": "boss-mint-it-live",
+      "t": "Mint It Live",
+      "d": "Full mock interview: design a unique ID generator in distributed systems",
+      "boss": true,
+      "badge": "👑 Badge: Master of the Mint",
+      "winTitle": "Interview cleared: IDs minted at scale",
+      "goal": "Your win today: you can run the whole interview yourself: scope it in under 5 minutes, compare four approaches with the scorecard, land on Snowflake with the 1|41|5|5|12 layout and its numbers, survive the 'what if' questions, and wrap up with the book's three talking points.",
+      "bookSections": "Whole chapter: Step 1 scope, Step 2 four approaches, Step 3 deep dive (timestamp, sequence), Step 4 wrap-up (clock sync, section length tuning, high availability)",
+      "stages": [
+        {
+          "title": "Scope it",
+          "sub": "Step 1 · understand the problem (3–10 min)",
+          "teaches": "The interviewer opens with only 'Design a unique ID generator in distributed systems.' The candidate must pull out: unique; sortable by time (not +1); numeric only; 64 bits; 10,000+ IDs/s. Good bonus questions: single or multiple data centers? how long must the system run? Strong candidates restate the requirements before designing.",
+          "interaction": "Same structure as 0008 stage 1: a sticky interview clock bar (Step 1/2/3/4 with elapsed fake minutes), a chat with the interviewer, and a deck of 10 question cards (5 core, 2 good bonus: 'multiple data centers?' → yes; 'how long should it run?' → years, design for decades; 3 weak: 'which language?', 'what DB brand?', 'pretty URLs?'). Each card asked advances the clock 1 minute; the requirement board fills as core answers arrive. Weak questions cost clock time, not hearts. Clear when all 5 requirements are on the board; bonus finds give +XP.",
+          "check": "Board complete; then a 'restate the requirements' tap-in-order of 5 chips the learner must select (no distractors accepted)."
+        },
+        {
+          "title": "Sketch it",
+          "sub": "Step 2 · four options, one pick",
+          "teaches": "Present the alternatives briefly and reject them with the scorecard: multi-master (not time-ordered across servers, hard to scale/multi-DC), UUID (128 bits, not time-ordered, may be non-numeric), ticket server (SPOF; fixing it brings sync problems), then Snowflake (all five ✓). Interviewers reward naming the options and the reason each loses, not jumping straight to the answer.",
+          "interaction": "Approach cards in a row: Multi-master, UUID, Ticket server, Snowflake. The learner proposes each in turn by tapping it; the interviewer pushes back in chat with a challenge ('What's the ID length?' for UUID, 'What if that box dies?' for ticket server, 'Are these ordered across servers?' for multi-master) and the learner picks which requirement is broken from the five chips. Wrong pick = heart lost. After three rejections, 'Propose Snowflake' unlocks the buy-in message ('Sounds good. Show me the bits.'). Proposing Snowflake first is allowed but the interviewer asks 'Why not something simpler?' and the learner must still reject the other three.",
+          "check": "Each pushback answered with the correct broken requirement."
+        },
+        {
+          "title": "Show me the bits",
+          "sub": "Step 3 · deep dive on timestamp and sequence",
+          "teaches": "Layout 1 | 41 | 5 | 5 | 12. Datacenter and machine IDs fixed at startup; timestamp and sequence produced at runtime. Timestamp: 41 bits of ms since a custom epoch → 2^41 − 1 ms ≈ 69 years; Twitter's epoch 1288834974657 (Nov 04, 2010 01:42:54 UTC). Sequence: 12 bits → 4,096 per ms per machine, reset each ms. Capacity: 1,024 generators; 10,000/s is easy.",
+          "interaction": "Three timed mini-tasks against the interview clock: (1) fill the 64-bit bar with fields and sizes (drag tiles, as in 7.3 stage 1, faster); (2) answer the interviewer's 'How long until it overflows?' and 'How many per millisecond per machine?' as calculate-and-check (accept 69–70 years; 4096); (3) decode one ID's timestamp: given timestamp bits 297616116568, pick the correct UTC date (2020-04-09 16:51 UTC) after adding the Twitter epoch.",
+          "check": "All three tasks correct; hearts lost on wrong numeric answers."
+        },
+        {
+          "title": "Boss: the curveball barrage",
+          "sub": "Step 3 · 'what happens when…?'",
+          "teaches": "The follow-ups: sequence exhaustion (wait for next ms), clock moving backwards (guard: refuse/wait; NTP slew), clock skew (roughly sorted), two machines with the same ID (duplicates; assign IDs carefully at startup, e.g. a coordinator), JavaScript clients (send IDs as strings; 2^53 limit), overflow after 69 years (custom epoch / re-tune), more than 32 machines per datacenter (re-tune bits), generator outage (high availability: embed in each service or replicate), using IDs as secret tokens (bad: they reveal creation time).",
+          "interaction": "Q.boss with choices: { k: 'clock', label: 'Guard the clock', sub: 'NTP, refuse/wait if time goes back' }, { k: 'tune', label: 'Re-tune the bits', sub: 'change section lengths or epoch' }, { k: 'ops', label: 'Ops & assignment', sub: 'unique machine IDs, redundancy' }, { k: 'api', label: 'Change how IDs are used', sub: 'format, exposure, expectations' }. Scenarios (8): NTP stepped a server back 20 ms → clock; 'we need to run past 2080' → tune; 'the web app shows IDs ending in 000' (JS precision loss) → api; autoscaler wants 60 machines in one DC → tune; ID service box reboots and writes fail → ops; two containers started with machine ID 7 → ops; product wants IDs as unguessable password-reset tokens → api (use a random token instead); 'why did event B get a smaller ID though it happened 2 ms later?' → clock (skew; roughly sorted).",
+          "check": "Boss HP bar; 'why' line per card naming the exact mechanism."
+        },
+        {
+          "title": "Wrap it up",
+          "sub": "Step 4 · the last 3–5 minutes",
+          "teaches": "The book's three wrap-up talking points: clock synchronization (servers don't share one clock; NTP is the most popular fix), section length tuning (e.g. fewer sequence bits, more timestamp bits for low-concurrency long-lived apps), high availability (the generator is mission-critical). Also good: recap the design in two sentences and mention what you'd monitor (clock offset, sequence exhaustion waits, duplicate-ID alarms).",
+          "interaction": "Pick-the-talking-points: 8 cards, learner selects the best 3 to say in the remaining time (clock synchronization, section length tuning, high availability are the book's; distractors: 'switch to UUIDv4', 'add a cache in front of the generator', 'use a blockchain', 'shard the ticket server', 'rewrite in Rust'). Then a 'recap' card: tap the three facts that belong in a two-sentence summary (64-bit Snowflake layout, roughly time-ordered without coordination, ~69 years / 4,096 per ms).",
+          "check": "Exactly the book's 3 points chosen; recap facts correct."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "The 90-second version + your scorecard",
+          "teaches": "Model answer: 'Requirements: unique, numeric, 64-bit, time-ordered, 10k+ per second. Multi-master isn't time-ordered and scales badly; UUIDs are 128-bit and unordered; a ticket server is a single point of failure. So I'd use Snowflake: 1 sign bit, 41 bits of milliseconds since a custom epoch for about 69 years, 5 datacenter and 5 machine bits so 1,024 generators never coordinate, and 12 sequence bits for 4,096 IDs per millisecond per machine. Risks are clocks: NTP, and refuse or wait if time goes backwards; ordering is only rough across machines. I'd tune the bit sections to our lifetime and burst needs, assign machine IDs carefully, and run it highly available.'",
+          "interaction": "Q.drill with a 90-second timer and free recall, then the model answer and a scorecard (stored under a separate key like 0008 did, e.g. 'sdq:v1:<id>-interview'): requirements stated; 3 alternatives rejected with reasons; layout and numbers correct; clock risks + defences; wrap-up points; total score out of 10 shown on the victory card.",
+          "check": "Self-grade scorecard (10 points)."
+        }
+      ],
+      "caveats": [
+        "The book's design is Twitter's 2010 Snowflake; modern alternatives exist (UUIDv7 for 128-bit time-ordered IDs, Sonyflake, database-native sequences with range allocation). If an interviewer allows 128 bits, UUIDv7 is a strong answer.",
+        "'Ordered by date' should be stated as 'roughly time-ordered' in the interview; claiming strict global order invites a clock-skew follow-up.",
+        "The book's high-availability point is one line; in practice the simplest HA design is a generator library embedded in each service (no network hop) with machine IDs assigned at deploy time."
+      ],
+      "sources": [
+        { "label": "ByteByteGo: Design a Unique ID Generator in Distributed Systems (book chapter 7)", "url": "https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems" },
+        { "label": "Twitter Engineering: Announcing Snowflake", "url": "https://blog.twitter.com/engineering/en_us/a/2010/announcing-snowflake.html" },
+        { "label": "Flickr: Ticket Servers, Distributed Unique Primary Keys on the Cheap", "url": "https://code.flickr.net/2010/02/08/ticket-servers-distributed-unique-primary-keys-on-the-cheap/" },
+        { "label": "Wikipedia: Universally unique identifier", "url": "https://en.wikipedia.org/wiki/Universally_unique_identifier" },
+        { "label": "Wikipedia: Network Time Protocol", "url": "https://en.wikipedia.org/wiki/Network_Time_Protocol" },
+        { "label": "RFC 9562: Universally Unique IDentifiers (UUIDv7)", "url": "https://www.rfc-editor.org/rfc/rfc9562" }
+      ]
+    }
+  ],
+  "cheatsheetOutline": "One page, 'The ID Mint' (World 7). Header: the prompt + the 5 requirements (unique; numeric; 64-bit; ordered by date, roughly; 10,000+/s). Section 7.1 Numbers Nobody Repeats: why single-DB auto_increment fails once sharded; multi-master step-by-k (k = server count, offsets 1..k; e.g. k=2 → 1,3,5 / 2,4,6) and its 3 drawbacks (not time-ordered across servers, hard multi-DC, painful to add/remove servers). Section 7.2 Dice or the Ticket Booth: UUID 128-bit, 8-4-4-4-12 hex, v4 = 122 random bits; birthday odds (~2.71e18 for 50%; book: 1B/s for ~100 yrs, math ~86); pros (no coordination, scales) / cons (128 bits, unordered, non-numeric); ticket server (Flickr REPLACE INTO + LAST_INSERT_ID, numeric, easy, SPOF; Flickr runs odd/even pair); the 4-approach scorecard table. Section 7.3 Anatomy of a Snowflake: bit diagram 1 | 41 | 5 | 5 | 12; id = (ts<<22)|(dc<<17)|(machine<<12)|seq; decode with >>22 and masks; Twitter epoch 1288834974657 = 2010-11-04 01:42:54 UTC; Figure 7-7 example 297616116568 + epoch = 1586451091225 → 2020-04-09 16:51:31 UTC; key numbers: 2^41−1 ms ≈ 69.7 yrs (to ~2080 from Twitter epoch), 32 DCs × 32 machines = 1,024 generators, 4,096 IDs/ms/machine ≈ 4.1M/s, fleet ≈ 4.19B/s. Section 7.4 When Clocks Lie: sequence exhausted → wait for next ms; clock backwards → refuse/wait, NTP slew vs step, leap seconds; roughly sortable (k-sorted) within clock skew; section length tuning table (42-bit ts ≈ 139 yrs; Sonyflake 39×10 ms ≈ 174 yrs; 11-bit seq = 2,048/ms); machine IDs fixed at startup and never duplicated; HA (embed library or replicate service). Boss section: the 4-step interview script with timings, the curveball → mechanism table, the 3 wrap-up points (clock sync, section length tuning, high availability). Footer: honest caveats (UUIDv7 exists now; JS 2^53 → send IDs as strings; IDs leak creation time; book omits overflow/backwards-clock handling) and sources."
+}

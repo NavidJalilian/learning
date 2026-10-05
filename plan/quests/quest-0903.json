@@ -1,0 +1,141 @@
+{
+ "n": "9.3",
+ "slug": "web-crawler-url-frontier",
+ "t": "Taming the Frontier",
+ "d": "Why BFS beats DFS but still isn't enough, and how front queues (priority) and back queues (politeness) fix it, plus freshness and storage",
+ "boss": false,
+ "badge": "🧭 Badge: Frontier Marshal",
+ "winTitle": "Polite, prioritised and fresh!",
+ "goal": "Your win today: you can explain why plain BFS is impolite and priority-blind, draw the two-layer URL frontier (front queues for priority, back queues for politeness with a host-to-queue mapping), name two recrawl strategies, and justify the memory-buffer-plus-disk storage.",
+ "bookSections": "Step 3 deep dive: DFS vs BFS; URL frontier (politeness, priority, freshness, storage for URL frontier)",
+ "stages": [
+  {
+   "title": "Deep or wide?",
+   "sub": "DFS vs BFS on the web graph",
+   "teaches": "The web is a directed graph: pages are nodes, hyperlinks are edges. Depth-first search is usually a bad fit because the web can be extremely deep, so DFS can wander down one endless chain. Breadth-first search is the usual choice, implemented with a FIFO queue: URLs are fetched in the order they were found. But plain BFS has two problems. (1) Impolite: most links on a page point back to the same host (on Wikipedia nearly every link is internal), so a FIFO queue fires a burst of requests at one host. (2) No priority: every URL is treated the same, though pages differ hugely in quality and importance. The rest of this quest fixes both.",
+   "interaction": "Predict-then-watch. A graph with a home node linking to 3 hosts; one host (wiki) has a 'rabbit hole' chain 30 pages deep, with each page linking mostly to more wiki pages. Toggle DFS / BFS. Before running, predict: 'After 15 fetches with DFS, how many different hosts have we visited?' (1 / 2 / 4) → 1 (stuck down the wiki hole). Run DFS: a stack visual grows and the crawler disappears down the chain. Run BFS: a queue visual; hosts are covered more evenly early, BUT a per-host request meter above wiki spikes red as 8 wiki URLs are fetched back-to-back. Caption: 'BFS fixes depth, but floods one host and ignores importance.'",
+   "check": "Both runs watched and the prediction made. Q.quiz with 2 questions: 'Which data structure implements BFS?' → FIFO queue; 'Name the two problems with plain BFS for crawling' → impolite bursts to one host; no prioritisation."
+  },
+  {
+   "title": "Don't knock too fast",
+   "sub": "Politeness · back queues",
+   "teaches": "Politeness means not sending many requests to the same host in a short time; done badly it looks like (or is) a denial-of-service attack. The book's rule: download one page at a time per host, and add a delay between two downloads from the same host. Implementation (back queues): a Queue router puts each URL into the FIFO queue for its host, using a Mapping table from host to queue (e.g. wikipedia.com → b1, apple.com → b2, …, nike.com → bn), so each queue b1…bn holds URLs from one host only. A Queue selector maps each worker thread to one queue; the worker downloads that queue's URLs one by one, pausing between them. Because a host's URLs are in one queue served by one worker, two workers can never hit the same host at once.",
+   "interaction": "Live simulation. Left: a single incoming stream of 20 URLs (hosts colour-coded: wiki ×10, apple ×4, nike ×3, bbc ×3). Middle: the learner first runs 'Naive FIFO + 4 workers': each host has a 'server mood' face and a requests-per-second gauge; wiki's face turns angry and shows a red 'Too many requests' badge. Then the learner builds the polite version: drag the Queue router, Mapping table and 4 back queues (b1–b4) into slots, then fill in the mapping table by dragging host chips onto queue labels (any one-to-one mapping accepted). A 'delay' slider (0–2 s) sets the pause per worker. Run again: each host gets at most one in-flight request, faces stay calm, and a total-throughput counter shows the crawl still moves because the 4 hosts run in parallel. Challenge: 'Set the delay as low as possible while every face stays green' (threshold built into the sim at ~0.5 s).",
+   "check": "Polite run completes with no angry faces. Q.quiz with 3 questions: 'What guarantees two workers never hit the same host at once?' → each host maps to exactly one queue and each queue to one worker; 'What does the mapping table store?' → host → queue; 'Why add a delay between downloads?' → spread requests out so the host isn't overloaded."
+  },
+  {
+   "title": "Important pages first",
+   "sub": "Priority · front queues",
+   "teaches": "Not all pages are equal: a random forum post that mentions Apple matters far less than Apple's home page, even though both contain the keyword. So crawl useful pages first, judged by signals such as PageRank, website traffic and how often the page changes. The book's Prioritizer takes URLs in and computes a priority; there are front queues f1…fn, one per priority level; a Queue selector picks a queue at random but biased toward higher-priority queues. Biased random (not strict 'always highest first') means low-priority queues still make progress instead of starving.",
+   "interaction": "Prioritizer game + selector sim. Part A: 8 URL cards with tiny stat badges (PageRank-ish score, daily traffic, change rate), e.g. 'apple.com/' (high/high/medium), 'randomforum.net/thread/88213' (low/low/low), 'bbc.co.uk/news' (high/high/very high), 'someblog.io/2014/old-post' (low/low/never). The learner drops each into f1 (high), f2 (medium) or f3 (low); answers accept the obvious placements with ±1 tolerance on borderline cards. Part B: the selector. A weight slider per queue (default 6:3:1). Press 'Pick 100' and watch a histogram of which queue each pick came from. Toggle 'strict priority' to see f3 picked 0 times: a 'starving' warning appears on f3. Prompt: 'Why biased random instead of strict?' → so lower queues still get crawled.",
+   "check": "Part A placements accepted; Part B run in both modes. Q.quiz with 2 questions: 'Name two signals for priority' → any two of PageRank, traffic, update frequency; 'What does the queue selector in the front layer do?' → picks a queue at random, weighted toward higher priority."
+  },
+  {
+   "title": "Stack the two layers",
+   "sub": "Front queues + back queues = the URL frontier",
+   "teaches": "The full frontier design has two modules. Front queues handle prioritisation: Prioritizer → f1…fn → biased front selector. Back queues handle politeness: back queue router → mapping table → b1…bn (one host each) → back selector → worker threads, each downloading one page at a time with a delay. URLs flow top to bottom: priority decides what comes out of the front; politeness decides when a host may be hit. Beyond the book (from the Mercator design described in the IR textbook): there are far more hosts than back queues, so when a back queue empties it's refilled with a new host pulled from the front queues, and a heap tracks the earliest time each host may be contacted again.",
+   "interaction": "Drag-to-assemble diagram: 9 tiles (Prioritizer, Front queues f1…fn, Front queue selector, Back queue router, Mapping table, Back queues b1…bn, Back queue selector, Worker threads, plus a distractor 'Load balancer') into a vertical slot diagram. Then an animated run: 12 URLs enter, colour-coded by host and with priority stars. The learner steps through with 'Next tick' and, at three paused moments, answers inline: 'Which layer decided apple.com/ comes out before the forum post?' (front); 'Why is the second wiki URL waiting even though a worker is free?' (back: wiki's queue is in its delay window); 'Queue b3 just emptied: what happens?' (router refills it with a new host from the front queues).",
+   "check": "Diagram assembled correctly (distractor left out) and three paused questions answered. Q.quiz 1 question: 'Which module manages politeness?' → back queues."
+  },
+  {
+   "title": "Keep it fresh, keep it stored",
+   "sub": "Recrawl strategy + where the frontier lives",
+   "teaches": "Freshness: pages are constantly added, edited and deleted, so the crawler must recrawl, but recrawling everything is slow and expensive. Two strategies from the book: recrawl based on each page's update history (pages that change often get revisited often), and prioritise, recrawling important pages first and more frequently. Storage: in a real search crawl the frontier can hold hundreds of millions of URLs. All in memory is neither durable nor scalable; all on disk is too slow and becomes the bottleneck. Hybrid: keep most URLs on disk (space is no problem) and keep in-memory buffers for enqueue and dequeue, flushing the buffer to disk periodically.",
+   "interaction": "Two mini-labs. Lab A (freshness): 6 page cards each with a 'change history' sparkline (news front page changes hourly, a company About page yearly, a sports score page every few minutes during games, an old blog post never, a product page weekly, a government notice monthly). The learner has a budget of 20 recrawls per day to spread across them with +/- steppers; a 'staleness' score (sum of time each page is out of date, weighted by importance) updates live. Target: beat the naive 'equal split' score by 30%. Lab B (storage): three buttons 'All in RAM', 'All on disk', 'Disk + memory buffers'. Each runs a 10-second sim of 1 million enqueues/dequeues with a crash event at second 7: RAM is fastest but the crash wipes the frontier (counter drops to 0); disk survives but the throughput gauge crawls; hybrid stays fast and loses only the unflushed buffer (a small sliver).",
+   "check": "Lab A target beaten; Lab B all three run. Q.quiz with 2 questions: 'Two recrawl strategies?' → update history; importance-first/more often; 'Why not keep the whole frontier in memory?' → too big and lost on a crash (not durable, not scalable)."
+  },
+  {
+   "title": "Boss: The Frontier Warden",
+   "sub": "Which part of the frontier handles it?",
+   "teaches": "Mapping frontier problems to front queues, back queues, recrawl policy or storage.",
+   "interaction": "Q.boss with choices [{k:'front', label:'Front queues', sub:'priority'}, {k:'back', label:'Back queues', sub:'politeness'}, {k:'fresh', label:'Recrawl policy', sub:'freshness'}, {k:'store', label:'Frontier storage', sub:'memory + disk'}]. Scenarios (8): 'A small blog's owner complains about 20 requests per second from us' → back; 'The crawler spends its first week on spam forums while news sites wait' → front; 'Search results show prices from three months ago' → fresh; 'The frontier server restarted and 200 million URLs vanished' → store; 'Two worker threads were both downloading from apple.com at the same time' → back (one host, one queue, one worker); 'Low-priority URLs haven't been crawled in months' → front (strict priority starving: use biased random); 'Breaking-news homepages change every few minutes but we revisit them monthly' → fresh; 'Enqueues are blocked waiting on disk writes' → store (memory buffers, periodic flush).",
+   "check": "Boss cleared."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "The frontier in 60 seconds",
+   "teaches": "The deep-dive answer interviewers most often probe.",
+   "interaction": "Q.drill. Prompt: 'Your crawler is a BFS. What's wrong with that, and how does your URL frontier fix it?' Placeholder: 'BFS is the right start, but…'. Model: 'BFS beats DFS because the web is too deep for DFS, but plain BFS has two problems: most links point back to the same host, so we'd hammer it, and it treats every URL as equally important. So the frontier has two layers. Front queues handle priority: a prioritizer scores URLs by things like PageRank, traffic and update frequency and puts them in queues by priority, and a selector picks randomly but biased toward high priority so nothing starves. Back queues handle politeness: a router uses a host-to-queue mapping so each queue holds one host, each worker owns a queue, downloads one page at a time and waits between requests. For freshness I recrawl based on update history and recrawl important pages more often. The frontier is too big for memory, so it lives on disk with in-memory buffers for enqueue and dequeue.' Checks: ['I said why DFS is a poor fit and BFS has two problems', 'I described front queues with biased selection', 'I described back queues with host→queue mapping, one worker per queue, and delay', 'I covered freshness and disk + memory buffer storage'].",
+   "check": "Self-grade via Q.drill."
+  }
+ ],
+ "caveats": [
+  "The book's figure shows one queue per host, but there are hundreds of millions of hosts. Mercator-style frontiers keep a bounded number of back queues (Mercator suggested about three times the number of crawler threads) and reassign them to new hosts as they empty.",
+  "Politeness is really per server, not per host name: thousands of small sites can share one IP on a hosting provider, so careful crawlers also limit by IP. Mercator also scaled the delay with how slow the host was (wait several times the last download time) rather than using a fixed pause.",
+  "'One page at a time per host' is conservative. Big sites can take more, and Google adjusts its crawl rate per site based on how fast and error-free the server is.",
+  "PageRank is the book's example signal; modern search engines use many signals and keep the details private. Treat the prioritizer as 'some scoring function', not a known algorithm.",
+  "Freshness research (Cho & Garcia-Molina) found a surprising result: revisiting pages strictly in proportion to how often they change can do worse than you'd expect, because pages that change constantly go stale again almost immediately. 'Recrawl what changes often' is a good first answer, not the last word."
+ ],
+ "sources": [
+  {
+   "label": "System Design Interview Ch. 9: Design a Web Crawler (ByteByteGo)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-web-crawler"
+  },
+  {
+   "label": "Manning, Raghavan & Schütze, Introduction to IR: The URL frontier (book reference)",
+   "url": "https://nlp.stanford.edu/IR-book/html/htmledition/the-url-frontier-1.html"
+  },
+  {
+   "label": "Heydon & Najork, 'Mercator: A Scalable, Extensible Web Crawler'",
+   "url": "https://courses.cs.washington.edu/courses/cse454/15wi/papers/mercator.pdf"
+  },
+  {
+   "label": "Olston & Najork, 'Web Crawling' survey",
+   "url": "http://infolab.stanford.edu/~olston/publications/crawling_survey.pdf"
+  },
+  {
+   "label": "PageRank, Wikipedia (book reference)",
+   "url": "https://en.wikipedia.org/wiki/PageRank"
+  },
+  {
+   "label": "Google Search Central: Crawl budget management for large sites",
+   "url": "https://developers.google.com/search/docs/crawling-indexing/large-site-managing-crawl-budget"
+  }
+ ],
+ "id": "0903",
+ "file": "0903-web-crawler-url-frontier.html",
+ "world": 9,
+ "chapterTitle": "Design a Web Crawler",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-web-crawler",
+ "cheatsheet": "../reference/ch09-web-crawler-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "0901",
+   "n": "9.1",
+   "t": "Release the Spider",
+   "d": "What a crawler is for, the three-step loop, scoping questions, the four traits of a good crawler, and the napkin math"
+  },
+  {
+   "id": "0902",
+   "n": "9.2",
+   "t": "Assemble the Spider",
+   "d": "The eleven boxes of the high-level design, the two 'seen?' checks, and the step-by-step crawl workflow"
+  },
+  {
+   "id": "0903",
+   "n": "9.3",
+   "t": "Taming the Frontier",
+   "d": "Why BFS beats DFS but still isn't enough, and how front queues (priority) and back queues (politeness) fix it, plus freshness and storage"
+  },
+  {
+   "id": "0904",
+   "n": "9.4",
+   "t": "Fast Fangs, Thick Skin",
+   "d": "robots.txt, four speed-ups for the downloader (distribute, cache DNS, go local, time out), and four ways to survive failures"
+  },
+  {
+   "id": "0905",
+   "n": "9.5",
+   "t": "Beware the Spider Traps",
+   "d": "Plug-in modules for new content, dodging duplicates, spider traps and noise, and the wrap-up extras like rendering JavaScript"
+  },
+  {
+   "id": "0906",
+   "n": "BOSS",
+   "t": "Crawl the Web, Live",
+   "d": "Full mock interview: design a web crawler in 45 minutes"
+  }
+ ]
+}

@@ -1,0 +1,153 @@
+{
+ "n": "14.5",
+ "slug": "youtube-optimizations-and-errors",
+ "t": "Faster, Safer, Cheaper",
+ "d": "Speed, safety and cost optimisations, plus the book's error-handling playbook",
+ "boss": false,
+ "badge": "⚙️ Badge: Tuning Wizard",
+ "winTitle": "Faster, safer, cheaper, and still standing",
+ "goal": "Your win today: you can list the book's optimisations by category (speed, safety, cost), explain pre-signed URLs and the long-tail CDN strategy, and answer 'what happens if X goes down?' for every component.",
+ "bookSections": "Step 3 deep dive: System optimizations (speed: parallelize video uploading, upload centers close to users, parallelism everywhere; safety: pre-signed upload URL, protect your videos; cost-saving); Error handling (recoverable vs non-recoverable, per-component table)",
+ "stages": [
+  {
+   "title": "Upload speed run",
+   "sub": "Chunks, resumes and nearby upload centers",
+   "teaches": "Speed optimisations for uploads (book): (1) Parallelize video uploading: split the video into smaller chunks by GOP alignment; this allows fast, resumable uploads when a previous upload failed. The splitting can be done by the client. (2) Place upload centers close to users, e.g. North America users upload to a North American center; the book suggests using the CDN as upload centers. Resumable = after a failure, continue from the last finished chunk instead of from byte 0.",
+   "interaction": "Upload race simulation. A 1 GB file, a 50 Mbit/s link, and a scripted network drop at 70%. Lane A: single upload; the drop resets it to 0% and it restarts. Lane B: 10 chunks of 100 MB, 4 at a time; the drop kills only the chunks in flight, which restart. Before pressing Go, the learner predicts which lane finishes first and roughly how much time Lane A wastes (choices). Then a second toggle: upload center 'far' (200 ms round trip) vs 'near' (20 ms); the learner predicts the effect on per-chunk handshake time, then watches Lane B speed up.",
+   "check": "Q.quiz (2 Qs): (1) What two benefits does chunked upload give? -> parallel transfer and resuming after failure. (2) Why put upload centers near users? -> shorter round trips and fewer hops make uploads faster and more reliable."
+  },
+  {
+   "title": "Queues between everything",
+   "sub": "Loose coupling for parallelism",
+   "teaches": "Parallelism everywhere (book): build a loosely coupled system with high parallelism by putting message queues between modules. Before: the encoding module must wait for the download module's output. After: modules no longer wait on each other directly; if there are events in the queue, the encoding module can process them in parallel. Message queue = a buffer where producers drop messages and consumers pick them up at their own pace.",
+   "interaction": "Before/after pipeline. Three modules (Download -> Encoding -> Upload to storage) process a stream of 10 videos with random durations. Toggle 'No queues': each module waits for the previous one to hand over directly; idle time shows as grey bars on a timeline; total time is displayed. Toggle 'Queues': a queue icon sits between modules; encoders pull whenever work is available and two encoding workers run at once. The learner predicts the new total time (choice of 3) before switching. Bonus: a 'burst' button drops 20 uploads at once; with queues the backlog grows then drains, without queues the download module is blocked.",
+   "check": "Q.quiz (2 Qs): (1) What does the queue let the encoding module stop doing? -> waiting synchronously for the download module. (2) Name one cost of adding queues. -> more moving parts and harder end-to-end debugging/latency tracking."
+  },
+  {
+   "title": "Lock the vault",
+   "sub": "Pre-signed URLs and protecting videos",
+   "teaches": "Safety optimisations. Pre-signed upload URL: so only authorised users upload videos to the right location. Flow: (1) the client makes an HTTP request to the API servers to fetch a pre-signed URL, which grants access permission to the object identified in the URL; (2) the API servers respond with the pre-signed URL; (3) the client uploads the video directly to storage using that URL. 'Pre-signed URL' is the Amazon S3 term; Azure Blob Storage calls it a 'Shared Access Signature'. Protect your videos (book's three options): Digital Rights Management (DRM) systems: Apple FairPlay, Google Widevine, Microsoft PlayReady; AES encryption: encrypt the video and configure an authorisation policy, it is decrypted on playback so only authorised users can watch; visual watermarking: an image overlay on the video with identifying info such as your company logo or name.",
+   "interaction": "Two parts. Part 1 'Bouncer': a sequence diagram plays the 3-step flow. Then 4 upload attempts arrive at the storage door, each showing a URL with fields (object key, expiry, signature, method): (a) valid; (b) expired 10 minutes ago; (c) object key changed from user123/video.mp4 to user999/video.mp4 with the old signature; (d) valid URL but sent to a different bucket. The learner stamps ACCEPT or REJECT (403) on each; explanation: the signature covers key + expiry + method, so any tampering breaks it. Part 2 'Threat match': 3 threats ('someone downloads and re-uploads the full movie', 'a stranger uploads to another user's folder', 'a leaked clip shows up on another site and you need to know where it came from') matched to defenses (DRM/AES encryption, pre-signed URL, watermark).",
+   "check": "Q.quiz (2 Qs): (1) Does the video file pass through the API servers with pre-signed URLs? -> no, the client uploads directly to storage; API servers only issue the URL. (2) Name the three big DRM systems. -> FairPlay, Widevine, PlayReady."
+  },
+  {
+   "title": "Tame the long tail",
+   "sub": "Cut the $150k/day CDN bill",
+   "teaches": "Cost-saving (book): the CDN is crucial but expensive (recall $150,000/day). YouTube video streams follow a long-tail distribution: a few popular videos are watched very often, and most videos have few or no viewers. Optimisations: (1) only serve the most popular videos from the CDN, and other videos from high-capacity storage video servers; (2) for less popular content you may not need many encoded versions; short videos can be encoded on demand; (3) some videos are popular only in certain regions, so don't distribute them to other regions; (4) build your own CDN like Netflix and partner with Internet Service Providers (ISPs): a giant project, but it can make sense for large streaming companies; ISPs are close to users, so it improves viewing and cuts bandwidth charges. All of these depend on content popularity, user access patterns and video size: analyse historical viewing patterns before optimising.",
+   "interaction": "Cost dashboard. A long-tail chart of 1,000 videos sorted by views (steep head, flat tail). A slider 'top X% of videos on the CDN' (0-100%) recolours bars as CDN vs origin video servers. Two meters update: daily cost (starting at the book's $150k with 100% on CDN) and 'average viewer latency'. Tactic toggles add their own savings: 'fewer encodings for the tail', 'encode short videos on demand' (adds a first-view delay warning), 'region-only distribution', 'own CDN + ISP partnership' (big savings but a 'multi-year build' badge and a fixed cost). Before moving the slider, the learner predicts what share of views the top 10% of videos gets (choices; the sim's Zipf data gives about 80%). Goal: get cost under a target (e.g. $60k/day, illustrative) while keeping latency green.",
+   "check": "Q.quiz (2 Qs): (1) Why does the long tail make 'popular-only on CDN' work? -> most views hit a small set of videos, so caching those covers most traffic. (2) What must you do before choosing these optimisations? -> analyse historical viewing patterns (popularity, region, size)."
+  },
+  {
+   "title": "Incident pager",
+   "sub": "The book's error-handling playbook",
+   "teaches": "Two error types: recoverable (e.g. a video segment fails to transcode: retry a few times; if it keeps failing and the system thinks it's not recoverable, return a proper error code to the client) and non-recoverable (e.g. a malformed video format: stop the tasks for that video and return an error code). Book's per-component playbook: upload error -> retry a few times; split video error -> if older clients can't split by GOP, pass the whole video to the server and split it there; transcoding error -> retry; preprocessor error -> regenerate the DAG; DAG scheduler error -> reschedule the task; resource manager queue down -> use a replica; task worker down -> retry the task on a new worker; API server down -> API servers are stateless, so send requests to a different API server; metadata cache server down -> data is replicated, so read from other nodes and bring up a new cache server to replace the dead one; metadata DB server down -> if the master is down, promote one of the slaves (replicas) to master; if a slave is down, read from another slave and bring up a replacement.",
+   "interaction": "Timed incident feed. First, a quick sort of 6 errors into Recoverable vs Non-recoverable (timeout, segment fails once, malformed file, network blip, unsupported/corrupt container, worker crash). Then the 'pager' goes off: 11 alerts arrive one at a time on a phone-style screen (e.g. 'PAGE: metadata DB primary unreachable'). For each the learner picks the fix from 3 cards within 15 seconds (timer is soft: running out costs XP, not a heart; wrong fix costs a heart). A status board of the architecture turns each component red then green as it's fixed. After the run, a recap table shows the full playbook.",
+   "check": "Q.quiz (2 Qs): (1) Why can any API server take any request? -> they're stateless; state lives in the DB/cache. (2) The metadata DB primary dies. Book's move? -> promote a replica to primary."
+  },
+  {
+   "title": "Boss: The Penny-Pinching Pirate",
+   "sub": "Speed, safety, cost, failure",
+   "teaches": "Mixed scenarios across all optimisations and failures.",
+   "interaction": "Q.boss() with 6 cards. (1) 'Users in India say uploads crawl and often restart from zero.' -> GOP/chunked resumable uploads + upload centers near users. (2) 'Someone uploads to another user's folder using a URL they found.' -> pre-signed URLs scoped to that object and with a short expiry. (3) 'Finance: the CDN bill is out of control.' -> serve only the popular head from the CDN, tail from video servers; fewer renditions for the tail; regional distribution. (4) 'A premium film is being pirated as full files.' -> DRM (Widevine/FairPlay/PlayReady) or AES encryption with an authorisation policy; watermark to trace leaks. (5) 'A task worker crashed mid-encode.' -> retry the task on a new worker. (6) 'Uploaded file is not a valid video.' -> non-recoverable: stop the tasks and return an error code; don't retry forever.",
+   "check": "Pass at 5/6."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "Optimise out loud",
+   "teaches": "Recall.",
+   "interaction": "Q.drill(): prompt 'The interviewer asks: how would you make this faster, safer and cheaper, and what happens when parts fail?' Checklist: speed: parallel chunked (GOP) resumable uploads, upload centers near users / CDN as upload centers, message queues between modules; safety: pre-signed URLs (SAS on Azure), DRM (FairPlay/Widevine/PlayReady), AES encryption, visual watermark; cost: long tail, popular-only on CDN, fewer encodings/on-demand for the tail, regional distribution, own CDN + ISPs (Netflix), analyse viewing history first; errors: recoverable -> retry then error code; non-recoverable -> stop and error code; stateless API failover, replica promotion, cache rebuild, re-queue tasks.",
+   "check": "Self-grade per checklist line."
+  }
+ ],
+ "caveats": [
+  "Real uploaders usually chunk by bytes, not by GOP (S3 multipart upload, YouTube's resumable upload protocol), and leave GOP-aware splitting to the server. The book's client-side GOP splitting is possible, but less common.",
+  "'Use the CDN as upload centers' really means edge ingest (for example S3 Transfer Acceleration routing uploads through CloudFront edges). Not every CDN offers it.",
+  "AES encryption without a DRM system (e.g. HLS AES-128 with a key URL) is weaker than real DRM: anyone who can fetch the key can decrypt. Visual watermarks deter and trace leaks; they don't block copying. Nothing stops someone filming a screen with a camera.",
+  "Promoting a replica to primary can lose the last few writes if replication was asynchronous. Retries need backoff and idempotent tasks.",
+  "Netflix gives its Open Connect appliances to ISPs for free; YouTube has a similar program (Google Global Cache). The savings in the cost sim are illustrative, not real figures."
+ ],
+ "sources": [
+  {
+   "label": "System Design Interview Vol. 1, Ch. 14: Design YouTube (ByteByteGo)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-youtube"
+  },
+  {
+   "label": "AWS: Uploading objects with presigned URLs",
+   "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/PresignedUrlUploadObject.html"
+  },
+  {
+   "label": "Microsoft: Delegate access with a shared access signature",
+   "url": "https://learn.microsoft.com/en-us/rest/api/storageservices/delegate-access-with-shared-access-signature"
+  },
+  {
+   "label": "AWS: Uploading and copying objects using multipart upload",
+   "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html"
+  },
+  {
+   "label": "YouTube Data API: resumable uploads",
+   "url": "https://developers.google.com/youtube/v3/guides/using_resumable_upload_protocol"
+  },
+  {
+   "label": "Google Widevine DRM",
+   "url": "https://www.widevine.com/"
+  },
+  {
+   "label": "Apple FairPlay Streaming",
+   "url": "https://developer.apple.com/streaming/fps/"
+  },
+  {
+   "label": "Netflix Open Connect (Netflix's own CDN, placed inside ISPs)",
+   "url": "https://openconnect.netflix.com/"
+  },
+  {
+   "label": "Cheng, Dale, Liu: Understanding the Characteristics of Internet Short Video Sharing: A YouTube-based Measurement Study",
+   "url": "https://arxiv.org/abs/0707.3670"
+  }
+ ],
+ "id": "1405",
+ "file": "1405-youtube-optimizations-and-errors.html",
+ "world": 14,
+ "chapterTitle": "Design YouTube",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-youtube",
+ "cheatsheet": "../reference/ch14-youtube-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "1401",
+   "n": "14.1",
+   "t": "Size Up the Tube",
+   "d": "Scope a YouTube clone and do the napkin maths for storage and CDN cost"
+  },
+  {
+   "id": "1402",
+   "n": "14.2",
+   "t": "Upload Lane, Watch Lane",
+   "d": "The high-level design: CDN, API servers, the video upload flow and the streaming flow"
+  },
+  {
+   "id": "1403",
+   "n": "14.3",
+   "t": "The Format Forge",
+   "d": "Why videos are transcoded, containers vs codecs, adaptive bitrate, and the DAG model"
+  },
+  {
+   "id": "1404",
+   "n": "14.4",
+   "t": "The Transcoding Factory",
+   "d": "Preprocessor, DAG scheduler, resource manager, task workers, temporary storage"
+  },
+  {
+   "id": "1405",
+   "n": "14.5",
+   "t": "Faster, Safer, Cheaper",
+   "d": "Speed, safety and cost optimisations, plus the book's error-handling playbook"
+  },
+  {
+   "id": "1406",
+   "n": "BOSS",
+   "t": "Design YouTube Live",
+   "d": "Full mock interview: design a video upload and streaming service"
+  }
+ ]
+}

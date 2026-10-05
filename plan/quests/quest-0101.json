@@ -1,0 +1,125 @@
+{
+ "n": "1.1",
+ "slug": "scale-one-box-to-load-balancer",
+ "t": "One Box Wonder",
+ "d": "A single server, splitting off the database, SQL vs NoSQL, scaling up vs out, and the load balancer",
+ "boss": false,
+ "badge": "📦 Badge: Box Splitter",
+ "winTitle": "Out of the single box!",
+ "goal": "Your win today: you can trace a request from DNS to JSON, explain why the database moves to its own tier, say when NoSQL beats a relational DB, explain why scaling out beats scaling up past a point, and show how a load balancer adds failover.",
+ "bookSections": "Single server setup; Database (which databases to use); Vertical scaling vs horizontal scaling; Load balancer",
+ "stages": [
+  {
+   "title": "Follow the request",
+   "sub": "Everything on one machine",
+   "teaches": "At the start, one server runs everything: web app, database, cache. A request travels: (1) the user types a domain such as api.mysite.com; (2) DNS (the internet's phone book, usually a paid third-party service, not something you host) returns an IP address, e.g. 15.125.23.214; (3) the browser or app sends HTTP requests straight to that IP; (4) the server answers with an HTML page (web) or JSON (mobile). Traffic comes from two kinds of clients: a web app (server-side code for business logic and storage, plus HTML/CSS/JS in the browser) and a mobile app, which talks HTTP and usually gets JSON back because it is light and simple. Example: GET /users/12 returns the user object with id 12 as JSON.",
+   "interaction": "Tap-in-order with animation. On screen: a phone, a laptop, a DNS cloud and one server box labelled 'web + DB + cache'. Four shuffled step cards: 'Type api.mysite.com', 'DNS answers 15.125.23.214', 'Send HTTP request to that IP', 'Server returns HTML or JSON'. The learner taps them in order; each correct tap animates a packet along the matching arrow. Then a mini-toggle: 'Client: laptop / phone'. With the phone selected, sending GET /users/12 shows a small JSON response card {id: 12, firstName, lastName, address...} (invented field values); with the laptop it shows an HTML page thumbnail.",
+   "check": "Q.quiz, 3 questions: who usually runs DNS (a third-party provider you pay; you don't host it); what DNS gives back (an IP address); what a mobile client typically receives (JSON over HTTP)."
+  },
+  {
+   "title": "Split off the data",
+   "sub": "Web tier, data tier, and which database",
+   "teaches": "Once users grow, one server isn't enough: split into a web/mobile tier (handles requests) and a data tier (the database), so each can scale on its own. Relational databases (RDBMS/SQL: MySQL, Oracle, PostgreSQL) store data in tables and rows and support joins across tables; they've been around for 40+ years and are the sensible default. Non-relational (NoSQL) examples the book names: CouchDB, Neo4j, Cassandra, HBase, Amazon DynamoDB. Four NoSQL families: key-value stores, graph stores, column stores, document stores; joins are usually not supported. NoSQL may be the right pick when: you need super-low latency; your data is unstructured or has no relationships; you only need to serialize/deserialize data (JSON, XML, YAML…); or you store a massive amount of data.",
+   "interaction": "Two-part sort. Part A: drag the single 'web + DB' box apart; it splits into 'Web server' and 'Database' with an arrow between them, and two independent 'scale' knobs appear (just visual reward). Part B: 7 app cards to drop into 'Relational' or 'NoSQL' bins: bank transfers between accounts with reports joining customers and orders → Relational; session lookups by ID in under a millisecond → NoSQL (low latency, key-value); petabytes of clickstream events → NoSQL (massive data); friends-of-friends recommendations → NoSQL (graph); an online shop's orders, products and customers with joins → Relational; storing user preference blobs as JSON, never queried inside → NoSQL (just serialize/deserialize); a small internal HR app → Relational (default). Wrong drops show the book's criterion that applies. Bonus row: match the 4 NoSQL families to an example (key-value → DynamoDB, graph → Neo4j, column → Cassandra/HBase, document → CouchDB).",
+   "check": "All 7 cards sorted (retry allowed) and the 4 families matched. Q.quiz, 2 questions: the main reason to split web and data tiers (scale them independently); which DB type is the default for most developers (relational)."
+  },
+  {
+   "title": "Up or out?",
+   "sub": "Vertical vs horizontal scaling",
+   "teaches": "Vertical scaling (scale up): give the one server more CPU and RAM. Simple, and fine while traffic is low. Two big limits: there's a hardware ceiling (you can't add CPU/RAM forever), and there's no failover or redundancy: if that one server goes down, the whole site or app goes down. Horizontal scaling (scale out): add more servers to the pool. It's the better fit for large-scale applications, but it needs something to spread traffic. Also, with no load balancer, users connect straight to the web server; if it's offline, they can't reach the site, and if too many connect at once it slows down or fails.",
+   "interaction": "Predict-then-watch sim. A traffic dial (users/sec) slowly climbs; one server shows a CPU bar. An 'Upgrade' button bumps it through tiers (small → medium → large → XL → 'max size') with a monthly price tag that climbs faster than capacity (made-up illustrative prices, labelled as such). At 'max size' the button greys out with 'hardware ceiling'. Before pressing 'Pull the plug', the learner predicts what share of users see errors (0% / 50% / 100%); the answer is 100% and the screen flashes a 'site down' banner. Then an 'Add a second server' button appears: a second box shows up, but users still only know one IP, so the new box gets zero traffic, which sets up the next stage ('Who sends users to server 2?').",
+   "check": "Prediction entered and the plug pulled. Q.quiz, 2 questions: name the two big drawbacks of scaling up (hard limit; no failover); why the new server got no traffic (clients only know the first server's IP; you need a load balancer)."
+  },
+  {
+   "title": "Hire a bouncer",
+   "sub": "The load balancer",
+   "teaches": "A load balancer (LB) spreads incoming traffic across the web servers in its pool. Users connect to the LB's public IP (book's figure: 88.88.88.1). Web servers now only have private IPs (e.g. 10.0.0.1, 10.0.0.2), reachable inside the same network but not from the internet, which is better for security; the LB talks to them over private IPs. Wins: if server 1 goes offline, all traffic goes to server 2, so the site stays up, and you add a healthy server to rebalance; if traffic outgrows two servers, just add more to the pool and the LB starts sending them requests. This fixes failover and availability for the web tier only; the database is still a single box (next quest).",
+   "interaction": "Live sim. Dots (users) flow into an LB box labelled with public IP 88.88.88.1, then fan out to Server 1 (10.0.0.1) and Server 2 (10.0.0.2). Controls: 'Kill server 1', 'Revive', 'Add server', and a traffic slider. Predict-then-watch: before killing server 1, the learner predicts 'What happens to users?' (they all get errors / half get errors / they're quietly moved to server 2). Correct: moved (after a brief blip for in-flight requests). Then the learner pushes traffic until both servers turn red and must add a third to turn them green. A hidden 'try it' card: tapping a private IP from a 'user' shows 'unreachable from the internet'.",
+   "check": "Server killed and recovered, a third server added under load. Q.quiz, 3 questions: which IP the user connects to (LB public IP); why web servers get private IPs (not reachable from the internet, safer); what tier is still a single point of failure (the database)."
+  },
+  {
+   "title": "Boss: The Growth Gremlin",
+   "sub": "Pick the right first move",
+   "teaches": "Choosing between the moves from this quest in concrete situations.",
+   "interaction": "Q.boss with choices [{k:'up', label:'Scale up', sub:'bigger machine'}, {k:'out', label:'Scale out + LB', sub:'more machines behind a balancer'}, {k:'split', label:'Split web and data tiers', sub:'own DB server'}, {k:'nosql', label:'Pick a NoSQL store', sub:'for this data'}]. Scenarios (6): (1) app and MySQL share a box and a nightly DB backup makes pages crawl; you want to grow web and DB separately → split. (2) a two-person side project at 40% of a mid-size VM, no uptime promise, traffic growing slowly → up (simplest thing that works; caveat: plan the exit). (3) already on the biggest instance your cloud sells, still pegged at 95% CPU → out. (4) the investor demo died because the only server rebooted for a kernel patch → out (scale-up gives no failover). (5) you store session blobs by ID and need sub-millisecond lookups, no joins → nosql (key-value). (6) terabytes of semi-structured event logs per day, appended and read back as JSON → nosql (massive data, no relations). Each 'why' cites the book's criterion.",
+   "check": "Boss cleared."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "The interview answer, in your words",
+   "teaches": "Summarising the first steps of scaling out loud.",
+   "interaction": "Q.drill. Prompt: 'The interviewer says: we're one server today. Walk me through your first two moves and why.' Model answer (paraphrased): 'Today DNS hands users one IP and that single box does everything. First I'd move the database onto its own server so the web and data tiers can grow independently; I'd default to a relational DB unless we need very low latency, have unstructured data, or store huge volumes, where a NoSQL store fits. Scaling the one box up is fine short-term, but it has a hardware ceiling and no failover. So the next move is scaling out: a load balancer with a public IP in front of several web servers on private IPs. If one dies, traffic shifts to the others; if load grows, I add servers. The database is now the remaining single point of failure.' Checks: ['DNS → IP → HTTP flow', 'Separate web and data tiers + SQL vs NoSQL criteria', 'Scale-up limits: ceiling, no failover', 'LB: public vs private IPs, failover, add servers', 'Names the DB as the next SPOF'].",
+   "check": "Self-grade at least 4 of 5 checks."
+  }
+ ],
+ "caveats": [
+  "Scaling up is underrated: many big sites ran on surprisingly few large machines for years, and a bigger box is often the cheapest first fix. Horizontal scaling adds operational complexity.",
+  "A single load balancer is itself a single point of failure. Real setups run LBs in redundant pairs or use a managed cloud LB, which is redundant under the hood.",
+  "The SQL vs NoSQL line is blurrier today: PostgreSQL stores and indexes JSON, and distributed SQL databases (Spanner, CockroachDB) scale horizontally. Pick on access patterns and consistency needs, not on labels.",
+  "IP addresses in this quest (15.125.23.214, 88.88.88.1, 10.0.0.x) are illustrative, as in the book's diagrams."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo: Scale From Zero To Millions Of Users (the chapter)",
+   "url": "https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users"
+  },
+  {
+   "label": "Wikipedia: Hypertext Transfer Protocol",
+   "url": "https://en.wikipedia.org/wiki/Hypertext_Transfer_Protocol"
+  },
+  {
+   "label": "Wikipedia: Single point of failure",
+   "url": "https://en.wikipedia.org/wiki/Single_point_of_failure"
+  },
+  {
+   "label": "Wikipedia: Load balancing (computing)",
+   "url": "https://en.wikipedia.org/wiki/Load_balancing_(computing)"
+  }
+ ],
+ "id": "0101",
+ "file": "0101-scale-one-box-to-load-balancer.html",
+ "world": 1,
+ "chapterTitle": "Scale From Zero to Millions of Users",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users",
+ "cheatsheet": "../reference/ch01-scaling-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "0101",
+   "n": "1.1",
+   "t": "One Box Wonder",
+   "d": "A single server, splitting off the database, SQL vs NoSQL, scaling up vs out, and the load balancer"
+  },
+  {
+   "id": "0102",
+   "n": "1.2",
+   "t": "Copy the Ledger",
+   "d": "Master/slave database replication: who takes writes, who takes reads, and what happens when one dies"
+  },
+  {
+   "id": "0103",
+   "n": "1.3",
+   "t": "Hot Memory, Near Edge",
+   "d": "A cache tier for hot data and a CDN for static files: how they work and what can go wrong"
+  },
+  {
+   "id": "0104",
+   "n": "1.4",
+   "t": "Forget Me, Find Me Anywhere",
+   "d": "Make the web tier stateless, autoscale it, then spread the system across data centers with GeoDNS"
+  },
+  {
+   "id": "0105",
+   "n": "1.5",
+   "t": "Queues, Gauges & Shards",
+   "d": "Message queues to decouple work, logging/metrics/automation, and sharding the database"
+  },
+  {
+   "id": "0106",
+   "n": "BOSS",
+   "t": "Zero to Millions, Live",
+   "d": "Mock interview: scale a startup's app from one server to millions of users as the traffic climbs"
+  }
+ ]
+}

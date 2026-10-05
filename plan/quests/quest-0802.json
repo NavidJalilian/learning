@@ -1,0 +1,127 @@
+{
+ "n": "8.2",
+ "slug": "url-shortener-hash-and-collisions",
+ "t": "Seven Characters or Bust",
+ "d": "Store the mapping, size the short code, and make hash + collision resolution work",
+ "boss": false,
+ "badge": "🧬 Badge: Collision Wrangler",
+ "winTitle": "Seven characters, zero clashes!",
+ "goal": "Your win today: you can explain why the short code needs 7 base-62 characters (62^7 ≈ 3.5 trillion > 365 billion), how hash + collision resolution works, and why a Bloom filter saves database lookups.",
+ "bookSections": "Step 3 deep dive: Data model; Hash function: Hash value length; Hash + collision resolution (CRC32/MD5/SHA-1, first 7 chars, append a predefined string, Bloom filter)",
+ "stages": [
+  {
+   "title": "Out of RAM, into a table",
+   "sub": "Data model",
+   "teaches": "The in-memory hash table from Step 2 isn't feasible at this size: memory is limited and expensive. The better choice is to store <shortURL, longURL> mappings in a relational database. The book's simplified table 'url' has three columns: id (primary key), shortURL, longURL.",
+   "interaction": "Schema builder: the learner drags column chips (id, shortURL, longURL, createdAt, userId, clickCount, password) into an empty 'url' table. The target is the book's three columns; extras like createdAt/userId are accepted as 'nice to have, mention in wrap-up' (yellow), while password is rejected with a reason. Then a preview shows three sample rows, including the book's example (2009215674938, zn9edcu, https://en.wikipedia.org/wiki/Systems_design).",
+   "check": "Q.quiz with 2 questions: why move from memory to a DB (memory is limited and costly; 36.5 TB+); which column the redirect path looks up by (shortURL, so it needs an index)."
+  },
+  {
+   "title": "How many characters?",
+   "sub": "Find the smallest n with 62^n ≥ 365 billion",
+   "teaches": "The hashValue uses [0-9, a-z, A-Z]: 10 + 26 + 26 = 62 characters. We need the smallest n such that 62^n ≥ 365 billion. Book table: n=1 → 62; 2 → 3,844; 3 → 238,328; 4 → 14,776,336; 5 → 916,132,832; 6 → 56,800,235,584 (56.8B, too small); 7 → 3,521,614,606,208 (≈3.5 trillion, enough); 8 → 218,340,105,584,896. So n = 7.",
+   "interaction": "Predict, then climb: the learner first enters their guess for n. Then a 'length ladder' slider n = 1…8 shows a log-scale bar for 62^n next to a fixed red line at 365 billion, with the exact number printed. When the bar first crosses the line (n=7), it glows green and a counter shows the headroom (3.52T / 365B ≈ 9.6×). A toggle 'only lowercase + digits (36 chars)' shows that you'd need 8 characters (36^7 ≈ 78B < 365B, 36^8 ≈ 2.8T), to show why the alphabet matters.",
+   "check": "Guess entered and slider explored to n=7. Q.quiz with 2 questions: 62^6 ≈ ? (56.8 billion, not enough); why 62 (digits + lower + upper)."
+  },
+  {
+   "title": "Hash it and chop it",
+   "sub": "CRC32, MD5, SHA-1, then the first 7 characters",
+   "teaches": "A straightforward approach is to use a well-known hash function. Book example for https://en.wikipedia.org/wiki/Systems_design: CRC32 = 5cb54054 (8 chars), MD5 = 5a62509a84df9ee03fe1230b9df8b84e (32 chars), SHA-1 = 0eeae7916c06853901d9ccbefbfcaf4de57ed85b (40 chars). Even the shortest is longer than 7, so take the first 7 characters of the hash. That causes collisions: two different long URLs can share the first 7 characters.",
+   "interaction": "Hash lab: an input box pre-filled with the book's Wikipedia URL. Three output rows show CRC32, MD5 and SHA-1 with their length; on the book URL they must match the values above exactly (builder: implement CRC32 inline, SHA-1 via crypto.subtle.digest, and either a small inline MD5 or a precomputed value for the book URL plus 'MD5 not computed live' for other input). A pair of scissors cuts each hash at 7 characters and highlights the kept part. Spot-the-bug panel: 'These hashes are hexadecimal: only 0-9 and a-f. How many 7-character codes does that give?' The learner computes 16^7 = 268,435,456 (accepted within ±5%) and sees that at 100M URLs/day the space fills in under 3 days, unless the hash bits are re-encoded in base 62.",
+   "check": "16^7 calculation correct. Q.quiz with 2 questions: why chopping causes collisions (many inputs share a 7-char prefix); what to do about hex (encode the hash bits in base 62 or use more characters)."
+  },
+  {
+   "title": "Collision lab",
+   "sub": "Append a predefined string and try again",
+   "teaches": "Book's collision resolution: take the first 7 chars of the hash; look the short URL up in the DB; if it already exists (collision), append a predefined string to the long URL and hash again; repeat until there is no collision, then save. It removes collisions, but every attempt is a database query, which is expensive.",
+   "interaction": "Shrunk-down simulation so collisions are visible: the 'short code' is only 2 characters from a 6-symbol alphabet (36 slots in a grid). The learner adds long URLs from a list (or types their own); each is hashed to a slot with a visible flowchart: hash → 'exists in DB?' → yes: append '#salt' and rehash (slot changes, arrow shows the retry) → no: save. A 'DB queries' counter increments on every lookup. A 'Bulk add 20' button shows the counter climbing faster as the grid fills (show average queries per insert). Predict prompt before bulk add: 'When the grid is 80% full, will an insert take about 1, 2 or 5 lookups on average?' (answer ≈5, since 1/(1−0.8) = 5).",
+   "check": "Prediction made and bulk add run. Q.quiz with 2 questions: what the 'predefined string' does (changes the input so the hash changes); the hidden cost (a DB lookup per attempt, more as the table fills)."
+  },
+  {
+   "title": "The Bloom bouncer",
+   "sub": "Skip the DB when the answer is 'definitely not'",
+   "teaches": "A Bloom filter is a space-efficient probabilistic technique to test whether an element is in a set. It answers 'definitely not in the set' or 'probably in the set': false positives are possible, false negatives are not. Put it in front of the collision check: 'definitely not' means skip the DB query and use the code; 'probably' means check the DB. It works with adds only, and that fits because our URLs are never deleted.",
+   "interaction": "Interactive Bloom filter: a row of 32 bits, 3 hash functions. 'Add code' sets 3 bits (animated arrows). 'Check code' lights the 3 bits: if any is 0, a green 'Definitely new, skip the DB' badge; if all are 1, an amber 'Maybe taken, ask the DB' badge. After adding ~8 codes, the learner is challenged to find a false positive: a pre-made list of unused codes, one of which collides on all 3 bits. They predict which badge each will get before checking. A counter shows 'DB queries saved'.",
+   "check": "Found the false positive. Q.quiz with 2 questions: can a Bloom filter say 'no' wrongly? (no, never a false negative); what happens on 'maybe'? (fall back to the DB check)."
+  },
+  {
+   "title": "Boss: The Collision Hydra",
+   "sub": "Every head you cut grows two more",
+   "teaches": "Applying length, hashing and collision handling under pressure.",
+   "interaction": "Q.boss with choices [{k:'len', label:'Change code length', sub:'size the space'}, {k:'retry', label:'Append & rehash', sub:'resolve the clash'}, {k:'bloom', label:'Bloom filter', sub:'skip the DB check'}]. Scenarios (6): 'We launched with 6-char codes and 10-year projections say 365B URLs' → len (62^6 = 56.8B too small); 'Two long URLs produced the same first 7 chars' → retry; 'Collision checks make up 60% of DB reads at insert time' → bloom; 'The team uses the first 7 hex chars of MD5 and it's colliding constantly after two days' → len (hex gives only 268M; re-encode in base 62 or lengthen); 'Insert latency spikes as the table fills: more retries, each a DB query' → bloom; 'A new long URL hashes to an existing code; what does the write path do next?' → retry.",
+   "check": "Boss cleared."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "Length plus collisions in 45 seconds",
+   "teaches": "The hash-based answer, compact.",
+   "interaction": "Q.drill. Prompt: 'How long is your short code, and how do you generate it from the long URL?' Placeholder: 'With 62 characters…'. Model: 'I'd store the mapping in a relational table: id, shortURL, longURL. The code uses 62 characters, 0-9, a-z, A-Z. 62^6 is about 56.8 billion, which is short of 365 billion, and 62^7 is about 3.5 trillion, so 7 characters. One way is to hash the long URL with something like MD5 and keep 7 characters. That collides, so on a clash I'd append a predefined string and rehash until it's unique. Each check is a DB query, so I'd put a Bloom filter in front: if it says the code definitely isn't used, I skip the DB.' Checks: ['I did 62^n vs 365 billion and landed on 7', 'I explained collisions and append-and-rehash', 'I used a Bloom filter to avoid DB lookups and said it only has false positives'].",
+   "check": "Self-grade via Q.drill."
+  }
+ ],
+ "caveats": [
+  "The book's 'take the first 7 characters' of a hex hash quietly shrinks the space: hex has 16 symbols, so 16^7 ≈ 268 million codes, which is under 3 days of traffic. A real design base-62-encodes enough hash bits (≈42 bits for 7 chars).",
+  "Even with a full 62^7 space, the birthday effect bites: by year 10 (365B of 3.5T slots used), about 1 in 10 new URLs collides on its first try, so retries are routine, not rare.",
+  "A Bloom filter for 365 billion entries at a 1% false-positive rate needs ≈9.6 bits per entry ≈ 440 GB. That's much smaller than the data but not a toy; it must be sharded or kept per partition and rebuilt on restart.",
+  "Hash-based codes are deterministic, so the same long URL always gets the same code. That is handy for de-duplication, but it means two users shortening the same URL share one link (and its stats) unless you salt with the user ID.",
+  "A unique index on shortURL lets the DB itself reject a duplicate insert, which closes the race where two writers pass the 'does it exist?' check at the same moment."
+ ],
+ "sources": [
+  {
+   "label": "System Design Interview Ch. 8: Design a URL Shortener (ByteByteGo)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-url-shortener"
+  },
+  {
+   "label": "Bloom filter, Wikipedia (book reference [2])",
+   "url": "https://en.wikipedia.org/wiki/Bloom_filter"
+  },
+  {
+   "label": "Birthday problem, Wikipedia",
+   "url": "https://en.wikipedia.org/wiki/Birthday_problem"
+  },
+  {
+   "label": "Bloom, 'Space/Time Trade-offs in Hash Coding with Allowable Errors' (1970)",
+   "url": "https://dl.acm.org/doi/10.1145/362686.362692"
+  }
+ ],
+ "id": "0802",
+ "file": "0802-url-shortener-hash-and-collisions.html",
+ "world": 8,
+ "chapterTitle": "Design a URL Shortener",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-url-shortener",
+ "cheatsheet": "../reference/ch08-url-shortener-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "0801",
+   "n": "8.1",
+   "t": "Specs for a Shrink Ray",
+   "d": "Scope the prompt, do the napkin math, design the two API calls, and choose 301 or 302"
+  },
+  {
+   "id": "0802",
+   "n": "8.2",
+   "t": "Seven Characters or Bust",
+   "d": "Store the mapping, size the short code, and make hash + collision resolution work"
+  },
+  {
+   "id": "0803",
+   "n": "8.3",
+   "t": "Count in Base 62",
+   "d": "Turn a unique ID into a short code with base 62, and weigh it against hashing"
+  },
+  {
+   "id": "0804",
+   "n": "8.4",
+   "t": "Shorten & Bounce",
+   "d": "Walk the shortening and redirecting flows, add a cache, and scale it out"
+  },
+  {
+   "id": "0805",
+   "n": "BOSS",
+   "t": "Shrink the Internet, Live",
+   "d": "Full mock interview: design a URL shortener in 45 minutes"
+  }
+ ]
+}

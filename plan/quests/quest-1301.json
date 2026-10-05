@@ -1,0 +1,121 @@
+{
+ "n": "13.1",
+ "slug": "autocomplete-scope-and-estimation",
+ "t": "Every Keystroke Counts",
+ "d": "Scope autocomplete, do the envelope math, and see why one SQL table can't keep up",
+ "boss": false,
+ "badge": "⌨️ Badge: Keystroke Counter",
+ "winTitle": "Problem scoped, numbers crunched",
+ "goal": "Your win today: in the first 5 minutes you can pin down what autocomplete must do (prefix match, top 5, ranked by popularity, under 100 ms), derive ~24,000 QPS / ~48,000 peak / 0.4 GB a day out loud, and explain why a frequency table queried with LIKE 'prefix%' collapses at that scale.",
+ "bookSections": "Step 1 – Understand the problem and establish design scope (requirements, back-of-the-envelope estimation); Step 2 – Propose high-level design and get buy-in (data gathering service, query service, frequency table + SQL query)",
+ "stages": [
+  {
+   "title": "Ask before you build",
+   "sub": "The requirements interview",
+   "teaches": "Autocomplete (also called typeahead, search-as-you-type, incremental search): as you type, the box suggests the most likely full queries. The book's scoping Q&A pins down: (1) matching only at the BEGINNING of a query (prefix match), not in the middle; (2) return 5 suggestions; (3) ranked by popularity = historical query frequency; (4) no spell check or autocorrect; (5) English queries only (multi-language is a nice-to-have later); (6) all lowercase alphabetic characters, no capitals or special characters; (7) 10 million daily active users (DAU = distinct people using it per day). Asking these first is what turns a vague prompt into a solvable one.",
+   "interaction": "Top: a fake search box with a dropdown. Below: 9 question cards the learner can 'ask the interviewer'. 7 are useful (match at start or anywhere? how many suggestions? how are they ranked? spell check? which languages? capitals/special chars? how many users?) and each reveals the book's answer onto a pinned 'Requirements board'. 2 are time-wasters ('What font should the dropdown use?', 'Which cloud provider?') — tapping one shows the interviewer's eyebrow-raise, costs a heart. When all 7 are asked, the board is complete and the fake search box comes alive: typing 't' then 'tw' shows exactly 5 suggestions and a request log underneath printing one line per keystroke (GET /autocomplete?q=t, GET /autocomplete?q=tw). End with a 3-question Q.quiz.",
+   "check": "Quiz: (1) User types 'peak' — should 'twin peak' be suggested under the book's rules? (No: matching is only at the beginning.) (2) What decides the order of the 5 suggestions? (Historical query frequency.) (3) User types 'twiter' — does the system fix the typo? (No, spell check is out of scope.)"
+  },
+  {
+   "title": "What 'fast' means",
+   "sub": "Non-functional requirements",
+   "teaches": "Non-functional requirements (how well, not what): FAST — results must appear as fast as the user types; the book cites Facebook's typeahead write-up: within 100 milliseconds, or the box stutters. RELEVANT — suggestions relate to the prefix. SORTED — ranked by the popularity model. SCALABLE — handles high traffic. HIGHLY AVAILABLE — stays up and fast when part of the system is offline, slows down, or hits network errors.",
+   "interaction": "Predict-then-watch latency sim. A ghost typist types 'dinner' at one character every 150 ms. A slider sets server response time (20 ms → 600 ms). Before playing, the learner predicts the slowest setting that still 'feels instant' (choices: 50, 100, 300, 600 ms). Play: at ≤100 ms each keystroke's suggestions appear before the next key; above that, responses arrive out of date (suggestions for 'din' showing while the box says 'dinne'), drawn with a red 'stale' tag. Then a sort mechanic: drag 5 cards (Fast, Relevant, Sorted, Scalable, Highly available) onto their one-line definitions.",
+   "check": "Right prediction: 100 ms (the book's target). Sort must match all 5 cards; wrong drops bounce back."
+  },
+  {
+   "title": "Envelope math",
+   "sub": "Calculate, then check",
+   "teaches": "Back-of-the-envelope estimation (rough maths to size the system): 10M DAU; an average person makes 10 searches a day; an average query is 20 bytes (ASCII = 1 byte per character; ~4 words × ~5 characters). The client sends a request for EVERY character typed, so one search ≈ 20 requests ('dinner' alone sends q=d, q=di, q=din, q=dinn, q=dinne, q=dinner). QPS = 10,000,000 × 10 × 20 / 24 h / 3600 s ≈ 24,000 (exactly ~23,150; the book rounds up). Peak QPS = 2 × QPS ≈ 48,000. Storage: assume 20% of daily queries are new → 10,000,000 × 10 × 20 bytes × 20% = 0.4 GB of new data per day.",
+   "interaction": "Calculate-and-check worksheet, four rows unlocked in order on screen but all editable: (a) requests per search, (b) average QPS, (c) peak QPS, (d) new storage per day. Each row has a number input, a 'Check' button and a 'Hint' button (hint reveals the formula with the learner's own numbers substituted). Accept ±10% (so 21,000–26,000 for QPS). A live 'dinner' animation above row (a) shows six request bubbles flying off as letters appear, so the learner can count them. After all four are right, a summary card prints the four numbers in big type for the cheat sheet.",
+   "check": "(a) ~20, (b) ~24,000 QPS, (c) ~48,000, (d) ~0.4 GB/day. Wrong answers show which factor was missed (e.g. forgot × 20 requests per search → 1,157 QPS)."
+  },
+  {
+   "title": "Two boxes and a table",
+   "sub": "The high-level design, and where it breaks",
+   "teaches": "At a high level the system is two services. DATA GATHERING SERVICE: collects user queries and aggregates them in real time into a frequency table (columns: query, frequency). QUERY SERVICE: given a prefix, returns the 5 most frequent queries, e.g. with SQL: SELECT * FROM frequency_table WHERE query LIKE 'tw%' ORDER BY frequency DESC LIMIT 5. Book example table: twitter 35, twitch 29, twilight 25, twin peak 21, twitch prime 18, twitter search 14, twillo 10, twin peak sf 8 → typing 'tw' returns twitter, twitch, twilight, twin peak, twitch prime. This is fine for small data, but at scale the database becomes the bottleneck: every keystroke runs a prefix scan plus sort, ~48,000 times a second at peak, while every completed search also writes to the same table.",
+   "interaction": "Two-panel sim. Left (Data gathering): buttons for searches 'twitch', 'twitter', 'twitter', 'twillo'; each click bumps a row's frequency in a live table (new rows insert at 1). Right (Query service): learner types 'tw'; the SQL query is shown, matching rows glow, sort animates, top 5 get a gold border. Then a 'Scale it' slider: table size 1K → 1M → 1B rows and traffic 10 → 48,000 QPS. A DB-load gauge climbs into red; a request queue piles up under it. Predict first: 'At what point does this design fail — the number of rows, the number of requests, or both?'",
+   "check": "Prediction answer: both (more rows to scan and sort per request × tens of thousands of requests a second, plus write contention). Short Q.quiz: which LIMIT value? (5) Which keyword makes this a prefix match? (LIKE 'tw%')."
+  },
+  {
+   "title": "Boss: The Scope Creeper",
+   "sub": "Interviewer scenarios",
+   "teaches": "Applying scope and estimates under pressure.",
+   "interaction": "Q.boss() with 5 scenario cards, 3 choices each: (1) Interviewer: 'Should we also autocorrect typos?' → right: confirm it's out of scope for now, note it as an extension. (2) 'Your QPS seems high — why 20 requests per search?' → right: a request per character, average query 20 characters. (3) 'Traffic doubles at peak — what do you size for?' → ~48,000 QPS. (4) 'Why not just keep using the SQL frequency table?' → per-keystroke prefix scans and sorts can't hit 100 ms at 48k QPS. (5) 'How much new data per day?' → ~0.4 GB (20% of queries are new × 20 bytes).",
+   "check": "Engine-scored; wrong pick costs a heart and shows a one-line explanation."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "The first five minutes, in your words",
+   "teaches": "Free recall of scope + estimates + naive design.",
+   "interaction": "Q.drill(): prompt 'You've been asked to design search autocomplete. Give your first 5 minutes: the requirements you'd confirm, the numbers, and the first-cut design.' Learner types an answer, then self-grades against a checklist.",
+   "check": "Checklist: prefix-only matching; top 5; ranked by historical frequency; no spell check, English, lowercase; 10M DAU; <100 ms; ~24k QPS, ~48k peak; 0.4 GB/day new; two services (data gathering + query); frequency table + LIKE query works small, bottlenecks at scale."
+  }
+ ],
+ "caveats": [
+  "The 20-requests-per-search figure assumes a request on every keystroke. Real clients usually 'debounce' (wait until the user pauses for a few tens of milliseconds before sending), so real request counts are lower. The book's number is a deliberately pessimistic upper bound.",
+  "10,000,000 × 10 × 20 / 86,400 is about 23,150; the book rounds to ~24,000. Rounding up is normal in envelope math — say so out loud.",
+  "The 0.4 GB/day counts only the new query strings. It leaves out frequency counters, raw logs, and the per-node top-k lists added later, which are much bigger.",
+  "The 100 ms target comes from Facebook's typeahead article. It's a common rule of thumb, not a universal standard."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo — Design a Search Autocomplete System (book chapter)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system"
+  },
+  {
+   "label": "Facebook Engineering — The Life of a Typeahead Query",
+   "url": "https://www.facebook.com/notes/facebook-engineering/the-life-of-a-typeahead-query/389105248919/"
+  },
+  {
+   "label": "ByteByteGo — Back-of-the-envelope estimation",
+   "url": "https://bytebytego.com/courses/system-design-interview/back-of-the-envelope-estimation"
+  }
+ ],
+ "id": "1301",
+ "file": "1301-autocomplete-scope-and-estimation.html",
+ "world": 13,
+ "chapterTitle": "Design a Search Autocomplete System",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system",
+ "cheatsheet": "../reference/ch13-autocomplete-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "1301",
+   "n": "13.1",
+   "t": "Every Keystroke Counts",
+   "d": "Scope autocomplete, do the envelope math, and see why one SQL table can't keep up"
+  },
+  {
+   "id": "1302",
+   "n": "13.2",
+   "t": "Grow the Trie",
+   "d": "The trie data structure, top-k search, and two tricks that make it O(1)"
+  },
+  {
+   "id": "1303",
+   "n": "13.3",
+   "t": "The Weekly Harvest",
+   "d": "Logs, aggregators, workers: how the trie gets built, stored and updated"
+  },
+  {
+   "id": "1304",
+   "n": "13.4",
+   "t": "Faster Than a Keystroke",
+   "d": "The query path, browser caching, data sampling, and the filter layer"
+  },
+  {
+   "id": "1305",
+   "n": "13.5",
+   "t": "Split the Alphabet",
+   "d": "Shard the trie, balance hot letters, and handle languages, countries and trends"
+  },
+  {
+   "id": "1306",
+   "n": "BOSS",
+   "t": "Autocomplete Live",
+   "d": "Full mock interview: design search autocomplete"
+  }
+ ]
+}

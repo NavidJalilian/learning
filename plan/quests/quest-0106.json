@@ -1,0 +1,129 @@
+{
+ "n": "BOSS",
+ "slug": "scale-boss-millions-live",
+ "t": "Zero to Millions, Live",
+ "d": "Mock interview: scale a startup's app from one server to millions of users as the traffic climbs",
+ "boss": true,
+ "badge": "🚀 Badge: Million-User Architect",
+ "winTitle": "Millions served. The interviewer is impressed.",
+ "goal": "Your win today: given 'scale this app', you can scope it, sketch the starting point, add each component at the right moment with the reason and its failure follow-up, and close with the chapter's eight scaling rules from memory.",
+ "bookSections": "Whole chapter, framed with the 4-step interview framework: single server → DB split → LB → replication → cache → CDN → stateless web tier → data centers → message queue → logging/metrics/automation → sharding; 'Millions of users and beyond' summary",
+ "stages": [
+  {
+   "title": "Scope it",
+   "sub": "Step 1 · understand the problem (3–10 min)",
+   "teaches": "The prompt isn't a 'design X' system, so scoping is about workload shape: how many users now and the target; read:write ratio (drives replicas and caching); how much is static media (drives CDN); where users live (drives multi-DC); slow background work (drives queues); consistency needs (how stale may reads be); availability expectations. The scenario used throughout: a photo-sharing app with web and mobile clients, now on one server, expecting to grow from a few thousand to tens of millions of users, reads far outnumber writes, users worldwide, and uploads get filters applied (the book's photo-processing example).",
+   "interaction": "Interview chat UI like 0008. The interviewer says: 'You're our first infrastructure hire. Our photo app runs on one server. We want to reach millions of users. How would you scale it?' The learner has 5 question tokens and a deck of 10 questions. Strong: 'How many users now, and what's the target?', 'What's the read:write ratio?', 'How much traffic is images and video?', 'Where are users located?', 'Is any request doing slow work, like image processing?', 'How fresh must reads be?'. Weak/premature: 'Should we use Kubernetes?', 'Which language is the backend in?', 'Can we use microservices?', 'What's the logo colour?'. Each strong pick gets an answer that pins a fact to a 'Requirements' board (e.g. '~10:1 reads to writes', '60% of bytes are images', 'users on 3 continents', 'filters take a few seconds'). Weak picks spend a token with a coach note.",
+   "check": "At least 4 strong facts on the board. Scorecard records wasted tokens."
+  },
+  {
+   "title": "Sketch the start",
+   "sub": "Step 2 · high-level design and buy-in",
+   "teaches": "Start from where the company is and say it out loud: DNS → one server running web app + DB. First obvious move: split web and data tiers; default to a relational DB, with NoSQL for specific needs. Then get buy-in before adding complexity: 'I'll grow this step by step as traffic grows; stop me if you want to go deep somewhere.'",
+   "interaction": "Whiteboard builder. Palette: Client (web), Client (mobile), DNS, Web server, Database, Load balancer, Cache, CDN, Message queue, Shards. The interviewer asks for 'today's system, plus your first change'. Accepted answer: clients → DNS → web server → separate database. If the learner drags in Cache/CDN/Shards now, the interviewer says 'Not yet; what problem would that solve today?' and the box greys out with a note (not a penalty, a scorecard mark for premature complexity). Then a buy-in moment: pick the best line to say from 3 options (the step-by-step framing above is best; 'Here's the final architecture with 14 boxes' and 'Let's start with sharding' are weaker).",
+   "check": "Starting diagram correct and buy-in line chosen."
+  },
+  {
+   "title": "The traffic ramp",
+   "sub": "Step 3 · deep dive as the users climb",
+   "teaches": "The chapter's order is an order of pain: each component fixes the symptom that appears next. 1K–10K users: single server overloaded / SPOF → LB + multiple web servers. DB is now the SPOF and reads dominate → master/slave replication. Same hot data fetched repeatedly → cache tier. Faraway users load images slowly → CDN. Users logged out after adding servers / autoscaling blocked → stateless web tier with a shared session store. International growth and DC outage risk → multiple data centers with GeoDNS. Slow work inside requests → message queue + workers. Can't see what's failing → logging, metrics, automation. Primary DB out of room/writes → sharding (+ move some data to NoSQL).",
+   "interaction": "The core sim. A user counter climbs through milestones (1K → 10K → 100K → 500K → 1M → 3M → 5M → 10M → 20M, labels illustrative). At each milestone the dashboard shows a symptom alarm, and the learner picks a fix from a toolbox of 10 components; the diagram grows with each correct pick. Milestones and symptoms in order: (1) web box at 98% CPU, and a reboot took the site down → Load balancer + 2 web servers. (2) DB at 90% CPU, 10:1 reads, and it's the last SPOF → Replication. (3) the same profile/feed queries thousands of times per second → Cache. (4) users in Asia wait 2 s for images → CDN. (5) after enabling autoscaling, users are randomly logged out → Stateless + session store. (6) a regional outage took everything down for an hour; EU users are slow → Second data center + GeoDNS. (7) uploads time out while filters run → Message queue + workers. (8) a 500 storm and nobody knows which server → Logging/metrics/automation. (9) primary DB at 95% disk on the biggest instance → Sharding. Wrong picks get the interviewer's 'why not' (e.g. sharding at 10K users: big complexity, no payoff yet). After each correct pick, the interviewer throws one follow-up as a 3-option mini-question: after LB → 'what if the LB dies?' (redundant pair / managed LB); after replication → 'master dies?' (promote a replica; watch for missing writes); after cache → 'cache node dies?' (multiple nodes, overprovision; DB must survive the miss spike); after CDN → 'shipped a new logo, users see the old one?' (version or invalidate); after stateless → 'where do sessions live?' (shared NoSQL/Redis store); after multi-DC → 'failover, user's data missing?' (cross-DC replication); after queue → 'workers crash?' (jobs wait, scale workers); after sharding → 'one celebrity's shard is hot?' (dedicated shard).",
+   "check": "All 9 milestones resolved with their follow-ups. The scorecard records wrong picks and premature components."
+  },
+  {
+   "title": "Boss: the curveball barrage",
+   "sub": "Step 3 · 'what happens when…?'",
+   "teaches": "Failure and growth follow-ups across the whole final design.",
+   "interaction": "Q.boss with choices [{k:'redundancy', label:'Add redundancy / failover', sub:'no single point of failure'}, {k:'cache', label:'Cache or CDN', sub:'serve it closer and faster'}, {k:'async', label:'Decouple with a queue', sub:'do it later'}, {k:'data', label:'Rework the data tier', sub:'replicas, shards, de-normalize'}]. Scenarios (8): (1) the one load balancer's machine fails → redundancy. (2) the only Memcached box reboots and the DB is flooded with misses → redundancy (several cache nodes, overprovision memory). (3) one viral photo's page gets 50,000 hits a second → cache. (4) thumbnails load slowly in Brazil → cache (CDN). (5) sending a welcome email makes signup take 4 seconds → async. (6) the primary database dies → redundancy (promote a replica). (7) the writes outgrow the biggest primary → data (shard). (8) the posts table now lives on 8 shards and the feed needs author names → data (de-normalize).",
+   "check": "Boss cleared."
+  },
+  {
+   "title": "Wrap it up",
+   "sub": "Step 4 · the eight rules (last 3–5 min)",
+   "teaches": "The book's closing checklist for scaling to millions and beyond (paraphrased): keep the web tier stateless; build redundancy at every tier; cache data as much as you can; support multiple data centers; host static assets on a CDN; scale the data tier by sharding; split tiers into separate services; monitor the system and use automation tools. Past millions, you keep optimizing and decouple further into smaller services.",
+   "interaction": "Pick-8 from 12 rule cards against a soft 45-second timer (no penalty after expiry, just a scorecard note). Strong: the 8 rules above. Decoys: 'Always start with microservices', 'Shard on day one', 'Put every query result in the CDN', 'Keep sessions on the web server for speed'. After picking, the learner drags each of the 8 rules onto the component it explains in the final diagram (e.g. 'stateless' → web tier + session store; 'sharding' → DB shards; 'redundancy' → LB pair, replicas, multi-DC).",
+   "check": "At least 7 of 8 rules picked and all placed on the diagram."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "The 60-second version + your scorecard",
+   "teaches": "The whole chapter as one story of growing pains.",
+   "interaction": "Q.drill. Prompt: 'You have 60 seconds: how do you take this app from one server to millions of users?' Model answer (paraphrased): 'I grow it in response to pain. Split the database off the web server first. Then scale out with a load balancer in front of stateless web servers, keeping sessions in a shared store so we can autoscale. Add a primary with read replicas, since reads dominate and the DB shouldn't be a single point of failure; if the primary dies we promote a replica. Put a cache in front of the DB for hot reads, and a CDN for images and other static files. Go multi-region with GeoDNS and cross-region replication once users are global, and move slow work like photo filters onto a message queue with workers. Add centralized logs, metrics and deployment automation throughout. When the primary runs out of room, shard by user ID, watching for hot keys, resharding and cross-shard joins. Rule of thumb: redundancy at every tier, and no complexity before the traffic needs it.' Checks: ['DB split → LB + stateless web tier + session store', 'Replication with failover', 'Cache + CDN', 'Multi-DC with GeoDNS, message queue', 'Observability/automation + sharding with its challenges', 'Grows in step with traffic (no premature complexity)']. After the drill, show the scorecard (tokens wasted, premature components, wrong ramp picks, boss hearts), stored under a separate key like 0008 does.",
+   "check": "Self-grade at least 5 of 6 checks."
+  }
+ ],
+ "caveats": [
+  "The chapter isn't a 'design X' prompt, so real interviews use it as background: you'll rarely be asked to 'scale from zero', but every later design reuses these blocks. This boss mirrors an interviewer who keeps saying 'now traffic is 10× bigger'.",
+  "User-count milestones in the ramp are illustrative. Real tipping points depend on the workload; plenty of apps serve millions of users on a handful of large servers.",
+  "'Split tiers into individual services' is the book's nod to microservices; that's an org and operations trade-off, not a free scaling win.",
+  "Order is flexible: many teams add a CDN and managed load balancer on day one because they're cheap, and put off multi-region for a long time because it's costly and complex."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo: Scale From Zero To Millions Of Users",
+   "url": "https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users"
+  },
+  {
+   "label": "ByteByteGo: A Framework For System Design Interviews",
+   "url": "https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews"
+  },
+  {
+   "label": "Netflix Tech Blog: Active-Active for Multi-Regional Resiliency",
+   "url": "https://netflixtechblog.com/active-active-for-multi-regional-resiliency-c47719f6685b"
+  },
+  {
+   "label": "Nishtala et al., Scaling Memcache at Facebook (NSDI 2013)",
+   "url": "https://www.usenix.org/conference/nsdi13/technical-sessions/presentation/nishtala"
+  },
+  {
+   "label": "Nick Craver: What it takes to run Stack Overflow (2013)",
+   "url": "https://nickcraver.com/blog/2013/11/22/what-it-takes-to-run-stack-overflow/"
+  }
+ ],
+ "id": "0106",
+ "file": "0106-scale-boss-millions-live.html",
+ "world": 1,
+ "chapterTitle": "Scale From Zero to Millions of Users",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users",
+ "cheatsheet": "../reference/ch01-scaling-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "0101",
+   "n": "1.1",
+   "t": "One Box Wonder",
+   "d": "A single server, splitting off the database, SQL vs NoSQL, scaling up vs out, and the load balancer"
+  },
+  {
+   "id": "0102",
+   "n": "1.2",
+   "t": "Copy the Ledger",
+   "d": "Master/slave database replication: who takes writes, who takes reads, and what happens when one dies"
+  },
+  {
+   "id": "0103",
+   "n": "1.3",
+   "t": "Hot Memory, Near Edge",
+   "d": "A cache tier for hot data and a CDN for static files: how they work and what can go wrong"
+  },
+  {
+   "id": "0104",
+   "n": "1.4",
+   "t": "Forget Me, Find Me Anywhere",
+   "d": "Make the web tier stateless, autoscale it, then spread the system across data centers with GeoDNS"
+  },
+  {
+   "id": "0105",
+   "n": "1.5",
+   "t": "Queues, Gauges & Shards",
+   "d": "Message queues to decouple work, logging/metrics/automation, and sharding the database"
+  },
+  {
+   "id": "0106",
+   "n": "BOSS",
+   "t": "Zero to Millions, Live",
+   "d": "Mock interview: scale a startup's app from one server to millions of users as the traffic climbs"
+  }
+ ]
+}

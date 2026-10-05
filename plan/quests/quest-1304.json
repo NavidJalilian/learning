@@ -1,0 +1,125 @@
+{
+ "n": "13.4",
+ "slug": "query-service",
+ "t": "Faster Than a Keystroke",
+ "d": "The query path, browser caching, data sampling, and the filter layer",
+ "boss": false,
+ "badge": "⚡ Badge: Speed Typist",
+ "winTitle": "Suggestions before the next key",
+ "goal": "Your win today: you can trace one keystroke through load balancer → API servers → Trie Cache (→ Trie DB on a miss), name the three speed tricks (AJAX, browser caching with Cache-Control: private, max-age=3600, data sampling) and their costs, and explain how a filter layer removes harmful suggestions right away while the DB is cleaned asynchronously.",
+ "bookSections": "Step 3 – Design deep dive: Query service (improved design, AJAX, browser caching, data sampling); Trie operations (delete, filter layer)",
+ "stages": [
+  {
+   "title": "Follow one keystroke",
+   "sub": "The read path, hit and miss",
+   "teaches": "Improved query service: (1) the search query goes to the LOAD BALANCER (spreads traffic across servers); (2) the LB routes to an API server; (3) API servers get trie data from the TRIE CACHE and build the suggestions; (4) if the data isn't in the cache (a cache miss), it's loaded from the TRIE DB and put back into the cache so the next request for that prefix is fast. Misses happen when a cache server is out of memory or offline.",
+   "interaction": "Animated packet sim across 5 boxes: Browser → Load balancer → API server → Trie Cache → Trie DB. The learner types a prefix. Before each run they predict the path by tapping boxes in order. Run 1 (warm cache): the packet stops at Trie Cache, ~5 ms. Then press 'Restart cache server' (cache empties) and Run 2: the packet goes on to Trie DB, the latency counter jumps, and a 'replenish' arrow writes the prefix's top-k back into the cache. Run 3 is fast again. A latency strip shows all three runs side by side.",
+   "check": "Predicted paths must match: hit = Browser → LB → API → Cache; miss = … → Cache → DB → back into Cache. Q.quiz: 'When does the query service read the Trie DB?' (only on a cache miss)."
+  },
+  {
+   "title": "Three speed tricks",
+   "sub": "AJAX and the browser cache",
+   "teaches": "Lightning-fast speed is the top priority, so the book adds: AJAX REQUEST — the page sends and receives autocomplete data in the background without reloading the whole page. BROWSER CACHING — suggestions rarely change within a short time, so the browser stores them. The book notes Google uses the response header Cache-Control: private, max-age=3600. 'private' means only the user's own browser may cache it, not shared proxies or CDNs. 'max-age=3600' means it stays fresh for 3600 seconds = 1 hour. DATA SAMPLING (next stage) — log only 1 of every N requests.",
+   "interaction": "Browser-cache sim. A search box plus a network panel like DevTools. The learner types 'dinner', backspaces to 'din', then retypes 'dinner'. First pass: 6 network rows (blue). Second pass: every prefix shows 'from browser cache' (green) and the server request counter doesn't move. A 'Fast-forward 1 hour' button ages the cache; the next keystroke goes back to the network. A header inspector lets the learner toggle 'private' ↔ 'public' and see a shared office proxy icon start (public) or stop (private) storing a copy. A 'Full page reload' vs 'AJAX' toggle shows the whole page flashing white vs just the dropdown updating.",
+   "check": "Q.quiz: (1) 'max-age=3600 means?' (fresh for 1 hour). (2) 'Why private?' (only the user's browser caches it, not shared caches). (3) 'How many requests reach the server on the second pass?' (0)."
+  },
+  {
+   "title": "Log 1 in N",
+   "sub": "Data sampling, and what it loses",
+   "teaches": "Logging every query takes a lot of processing power and storage. With data sampling, only 1 out of every N requests is logged. Counts scale back up roughly ×N, and the ranking of popular queries stays the same. The cost: rare long-tail queries may never be sampled, or their counts get noisy.",
+   "interaction": "Slider N = 1, 10, 100, 1000 over a simulated week of 'tw' searches (twitter 35k, twitch 29k, twilight 25k, twin peak 21k, twitch prime 18k, twitter search 14k, twillo 10k, twin peak sf 80). For each N: a 'logged rows/day' counter (calculated from 10M × 10 searches / N), storage saved, and the top-5 for 'tw' recomputed from the sample, plus a bar showing 'twin peak sf' estimated count jumping around or hitting 0. Calculate-and-check: 'With N = 10, how many searches a day get logged?' (10,000,000 × 10 / 10 = 10,000,000).",
+   "check": "Answer 10 million (±5%). Learner notes the top 5 stays stable up to large N while the rare query's estimate degrades."
+  },
+  {
+   "title": "The filter layer",
+   "sub": "Deleting what must never appear",
+   "teaches": "DELETE: we must remove hateful, violent, sexually explicit, or dangerous autocomplete suggestions. Add a FILTER LAYER in front of the Trie Cache (between the API servers and the cache) to drop unwanted suggestions. It's flexible: different filter rules can be swapped in. The unwanted entries are then PHYSICALLY removed from the database asynchronously, so the next weekly build uses a clean data set.",
+   "interaction": "Read-path diagram with a new 'Filter' box. The learner types a prefix; suggestions include a few placeholder rows tagged [harmful] (shown as redacted grey bars with a category label, e.g. 'violent', no real offensive text). Toggling rule chips (violent, hateful, explicit, dangerous) makes the filter strip them live. Then a 'what if' panel: three buttons: 'filter only', 'DB purge only', 'both'. Each plays one week: filter-only leaves the bad entry in the DB forever (it reappears if the rule is turned off); DB-purge-only leaves it visible until the next rebuild; 'both' hides it immediately and removes it for good.",
+   "check": "The learner must pick 'both' as the book's design and explain via Q.quiz why: filter = instant, async purge = permanent and clean next build."
+  },
+  {
+   "title": "Boss: The Spinner of Doom",
+   "sub": "Query-path scenarios",
+   "teaches": "Applying query-service ideas to follow-ups.",
+   "interaction": "Q.boss() with 5 cards: (1) 'p99 latency spikes every Monday morning' → the weekly cache snapshot/swap is causing misses; warm the cache before switching. (2) 'Users retype the same prefixes; server load is high' → browser caching with max-age. (3) 'Logging is eating storage' → sample 1 of N. (4) 'A harmful suggestion is trending — remove it NOW' → filter layer rule, then async DB purge. (5) 'Why not cache suggestions at a shared CDN with public?' → book uses private; results may later be personalized/regional, and shared caching can serve one user's results to others (good trade-off to discuss).",
+   "check": "Engine-scored."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "The read path, out loud",
+   "teaches": "Free recall.",
+   "interaction": "Q.drill(): 'Trace a keystroke from the browser to the dropdown, and name everything you did to keep it under 100 ms and safe.'",
+   "check": "Checklist: LB → API servers → Trie Cache, miss → Trie DB + replenish; AJAX; Cache-Control: private, max-age=3600 (1 hour); sample 1 in N (loses long tail); filter layer in front of the cache for harmful suggestions + async physical delete from DB."
+  }
+ ],
+ "caveats": [
+  "The 'Google uses Cache-Control: private, max-age=3600' detail is a snapshot from when the book was written. Treat it as an example of the technique, not a current fact about Google.",
+  "Sampling keeps popular rankings but distorts rare queries. That's acceptable for a top-5-by-popularity product and bad for anything that needs exact counts.",
+  "A filter layer is a blocklist on the read path. Real moderation (e.g. Google's published autocomplete policies) also uses classifiers, human review and appeals, which the book doesn't cover.",
+  "Browser caching means a removed suggestion can linger in a user's browser for up to max-age. That's a small consistency trade-off worth naming."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo — Design a Search Autocomplete System (book chapter)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system"
+  },
+  {
+   "label": "MDN — Cache-Control header",
+   "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cache-Control"
+  },
+  {
+   "label": "Google Search Help — How Google autocomplete predictions work (policies)",
+   "url": "https://support.google.com/websearch/answer/7368877"
+  },
+  {
+   "label": "Google blog — How Google autocomplete works in Search",
+   "url": "https://blog.google/products/search/how-google-autocomplete-works-search/"
+  }
+ ],
+ "id": "1304",
+ "file": "1304-query-service.html",
+ "world": 13,
+ "chapterTitle": "Design a Search Autocomplete System",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system",
+ "cheatsheet": "../reference/ch13-autocomplete-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "1301",
+   "n": "13.1",
+   "t": "Every Keystroke Counts",
+   "d": "Scope autocomplete, do the envelope math, and see why one SQL table can't keep up"
+  },
+  {
+   "id": "1302",
+   "n": "13.2",
+   "t": "Grow the Trie",
+   "d": "The trie data structure, top-k search, and two tricks that make it O(1)"
+  },
+  {
+   "id": "1303",
+   "n": "13.3",
+   "t": "The Weekly Harvest",
+   "d": "Logs, aggregators, workers: how the trie gets built, stored and updated"
+  },
+  {
+   "id": "1304",
+   "n": "13.4",
+   "t": "Faster Than a Keystroke",
+   "d": "The query path, browser caching, data sampling, and the filter layer"
+  },
+  {
+   "id": "1305",
+   "n": "13.5",
+   "t": "Split the Alphabet",
+   "d": "Shard the trie, balance hot letters, and handle languages, countries and trends"
+  },
+  {
+   "id": "1306",
+   "n": "BOSS",
+   "t": "Autocomplete Live",
+   "d": "Full mock interview: design search autocomplete"
+  }
+ ]
+}

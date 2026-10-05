@@ -1,0 +1,128 @@
+{
+ "n": "13.3",
+ "slug": "data-gathering-service",
+ "t": "The Weekly Harvest",
+ "d": "Logs, aggregators, workers: how the trie gets built, stored and updated",
+ "boss": false,
+ "badge": "🌾 Badge: Log Harvester",
+ "winTitle": "Pipeline built, trie refreshed",
+ "goal": "Your win today: you can draw the data gathering pipeline (analytics logs → aggregators → aggregated data → workers → trie DB → trie cache), explain why the trie is NOT updated on every search, compare document-store vs key-value storage for the trie, and explain weekly rebuild vs in-place updates.",
+ "bookSections": "Step 3 – Design deep dive: Data gathering service (analytics logs, aggregators, aggregated data, workers, trie cache, trie DB: document store vs key-value store); Trie operations (create, update)",
+ "stages": [
+  {
+   "title": "Why not update live?",
+   "sub": "Predict, then watch the trie choke",
+   "teaches": "In the high-level design, every search updated the data in real time. The book calls this impractical for two reasons: (1) users enter billions of queries a day, and updating the trie on every one (including every ancestor's cached top-k list) would slow down the query service; (2) once the trie is built, the top suggestions barely change from hour to hour, so constant updates buy almost nothing.",
+   "interaction": "Predict-then-watch. A trie with cached lists sits under a stream of incoming searches (dots flying in). Toggle: 'Update trie on every search' vs 'Batch updates'. Learner first predicts what happens to read latency with live updates at 48,000 QPS (stays flat / rises a little / blows past 100 ms). Play: in live mode each search flashes its full ancestor path for a write, reads queue behind those writes, and a latency needle crosses the 100 ms line. A side panel shows 'top 5 for tw' before and after 10,000 searches: in live mode it's identical, so all that work changed nothing visible.",
+   "check": "Prediction: blows past 100 ms. Q.quiz: 'Give the two reasons the book rejects real-time updates.' (volume of writes slows reads; the top-k barely changes)."
+  },
+  {
+   "title": "Lay the pipeline",
+   "sub": "Tap the stages in order",
+   "teaches": "The redesigned data gathering service: ANALYTICS LOGS store raw search queries (query, time). They are append-only and not indexed. AGGREGATORS crunch the huge logs into counts; the interval depends on the product (Twitter-style real-time products need short intervals; for most autocomplete, weekly is fine). AGGREGATED DATA is a table (query, time = start of the week, frequency). WORKERS are servers that run async jobs on a schedule: they build the trie and store it in the TRIE DB (persistent storage). The TRIE CACHE is a distributed cache that keeps the trie in memory for fast reads and takes a weekly snapshot of the DB.",
+   "interaction": "Order mechanic: six shuffled component tiles (Analytics logs, Aggregators, Aggregated data, Workers, Trie DB, Trie cache). Tap them in the order data flows. Each correct tap draws an arrow and opens a one-line role card; a wrong tap shakes and costs a heart ('Workers need aggregated data first'). When finished, the full diagram stays on screen with a tiny sample row flowing through it.",
+   "check": "Correct order: Analytics logs → Aggregators → Aggregated data → Workers → Trie DB → Trie cache (weekly snapshot)."
+  },
+  {
+   "title": "Squash the logs",
+   "sub": "Raw rows into weekly counts",
+   "teaches": "Logs are huge and not in the right shape, so aggregate first. Raw rows look like (tree, 2019-10-01 22:01:01), (try, 2019-10-01 22:01:05), (tree, 2019-10-01 22:01:30)... Aggregated rows look like (tree, week of 2019-10-01, 12000), (tree, week of 2019-10-08, 15000), (toy, week of 2019-10-01, 8500). Choosing the aggregation interval is a freshness-vs-cost trade-off.",
+   "interaction": "Left: a scrolling raw log of ~30 (query, timestamp) rows across two weeks (tree, toy, try, true). Learner clicks 'Run aggregator', and rows fly into buckets and collapse into an aggregated table with per-week counts (scaled up ×1000 for realism). Then an interval slider (real-time / hourly / daily / weekly) shows two meters: 'freshness' (how fast a new trend shows up) and 'compute cost' (how often the trie must be rebuilt). Learner then picks the interval for 3 product cards: a general web search box (weekly is fine per the book), a Twitter-like trending feed (short/real-time), an internal docs search (weekly or longer).",
+   "check": "Aggregated count for 'tree' in week 1 must match the raw rows. Product picks: weekly, short interval, weekly/longer."
+  },
+  {
+   "title": "Store the trie",
+   "sub": "Document store or key-value store?",
+   "teaches": "The Trie DB has two options. (1) DOCUMENT STORE: a new trie is built weekly, so serialize the whole snapshot and store it as documents; MongoDB is the book's example. (2) KEY-VALUE STORE: turn the trie into a hash table: every prefix becomes a key, and that node's data (its cached top-k list) becomes the value. E.g. key 'be' → value [best:35, bet:29, bee:20, be:15, beer:10]. The key-value form is what makes a single-lookup read possible.",
+   "interaction": "Drag-to-map. A small cached trie (root, b, be, bee, beer, bes, best, bet) on the left; an empty key-value table on the right. The learner drags each node into the table; it lands as a row with key = its prefix and value = its top-k list. After 4 rows, the rest auto-fill. Then a 2-question 'pick the store' round: 'You rebuild the whole trie every Sunday and just need to save and load it' → document store; 'You want to fetch one prefix's answers in one lookup, and maybe shard by key' → key-value.",
+   "check": "Every row's key must equal the node's prefix string. Both store picks right."
+  },
+  {
+   "title": "Swap or patch?",
+   "sub": "Create and update the trie",
+   "teaches": "CREATE: workers build the trie from aggregated data. UPDATE option 1 (the book's choice): build a brand-new trie weekly and swap it in to replace the old one. UPDATE option 2: update individual nodes in place. Avoid this because it's slow, though it's OK if the trie is small. When you update a node, every ancestor up to the root must also update, because ancestors cache their children's top queries. Example: 'beer' goes 10 → 30. Its parents' lists must be re-ranked, e.g. 'be' becomes [best:35, beer:30, bet:29, bee:20, be:15].",
+   "interaction": "Spot-the-bug patch sim. Event card: 'beer: 10 → 30'. The learner patches the trie in place by tapping each node whose cached list must change, then pressing 'Done'. The engine then plays reads for prefixes 'b', 'be', 'bee', 'beer': any node the learner forgot shows a STALE list (beer still at 10, wrong order) highlighted in red. Second mode, 'Weekly swap': press 'Build new trie', and a fresh trie assembles off to the side, then slides in atomically while reads continue on the old one with no stale reads. Final Q.quiz.",
+   "check": "Nodes to tap: beer, bee, be, b, root (everything on the path; nodes off the path must not be tapped). Quiz: 'Why does the book prefer weekly rebuild?' (simpler and avoids per-node ancestor-ripple writes; the top-k barely changes within a week anyway)."
+  },
+  {
+   "title": "Boss: The Backlog Golem",
+   "sub": "Pipeline scenarios",
+   "teaches": "Applying the data pipeline to follow-ups.",
+   "interaction": "Q.boss() with 5 cards: (1) 'Logs are terabytes — query them directly for suggestions?' → no: aggregate offline first; logs are append-only and unindexed. (2) 'Product wants Twitter-style freshness' → shorten the aggregation interval (and see trending in 13.5). (3) 'Where do workers write, and where do reads come from?' → workers write the Trie DB; reads hit the Trie Cache, which snapshots the DB weekly. (4) 'Trie Cache node dies' → rebuild from the persistent Trie DB (that's why the DB exists). (5) 'One query's count changed mid-week; patch it?' → only if the trie is small; must update all ancestors; otherwise wait for the weekly rebuild.",
+   "check": "Engine-scored."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "Walk the pipeline out loud",
+   "teaches": "Free recall.",
+   "interaction": "Q.drill(): 'Walk me from a user hitting Enter on a search to that query showing up in someone else's suggestions.'",
+   "check": "Checklist: analytics log (append-only, unindexed) → aggregators (weekly for most cases) → aggregated table (query, week, frequency) → workers build trie → Trie DB (document snapshot or prefix→top-k KV) → Trie Cache weekly snapshot; not real-time because of write volume + stable top-k; update by weekly swap; in-place updates must touch every ancestor."
+  }
+ ],
+ "caveats": [
+  "Weekly is the book's example interval. Big search engines refresh much more often and run a separate fresh/trending path. Weekly is a starting point, not best practice.",
+  "The book's figures date from 2019 (the aggregated table uses 2019 weeks). The numbers are illustrative, not real Google data.",
+  "Swapping in a whole new trie needs enough memory for two tries at once during the switchover. This is worth mentioning if the interviewer asks about memory.",
+  "Storing the trie as prefix → top-k rows in a key-value store loses the tree shape. That's fine for reads, but rebuilding is done from the aggregated data, not from the KV rows."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo — Design a Search Autocomplete System (book chapter)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system"
+  },
+  {
+   "label": "Wikipedia — MongoDB (the book's document-store example)",
+   "url": "https://en.wikipedia.org/wiki/MongoDB"
+  },
+  {
+   "label": "Ramabhadran et al. — Prefix Hash Tree: An Indexing Data Structure over Distributed Hash Tables",
+   "url": "https://people.eecs.berkeley.edu/~sylvia/papers/pht.pdf"
+  }
+ ],
+ "id": "1303",
+ "file": "1303-data-gathering-service.html",
+ "world": 13,
+ "chapterTitle": "Design a Search Autocomplete System",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system",
+ "cheatsheet": "../reference/ch13-autocomplete-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "1301",
+   "n": "13.1",
+   "t": "Every Keystroke Counts",
+   "d": "Scope autocomplete, do the envelope math, and see why one SQL table can't keep up"
+  },
+  {
+   "id": "1302",
+   "n": "13.2",
+   "t": "Grow the Trie",
+   "d": "The trie data structure, top-k search, and two tricks that make it O(1)"
+  },
+  {
+   "id": "1303",
+   "n": "13.3",
+   "t": "The Weekly Harvest",
+   "d": "Logs, aggregators, workers: how the trie gets built, stored and updated"
+  },
+  {
+   "id": "1304",
+   "n": "13.4",
+   "t": "Faster Than a Keystroke",
+   "d": "The query path, browser caching, data sampling, and the filter layer"
+  },
+  {
+   "id": "1305",
+   "n": "13.5",
+   "t": "Split the Alphabet",
+   "d": "Shard the trie, balance hot letters, and handle languages, countries and trends"
+  },
+  {
+   "id": "1306",
+   "n": "BOSS",
+   "t": "Autocomplete Live",
+   "d": "Full mock interview: design search autocomplete"
+  }
+ ]
+}

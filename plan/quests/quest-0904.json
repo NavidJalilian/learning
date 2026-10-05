@@ -1,0 +1,134 @@
+{
+ "n": "9.4",
+ "slug": "web-crawler-downloader-and-robustness",
+ "t": "Fast Fangs, Thick Skin",
+ "d": "robots.txt, four speed-ups for the downloader (distribute, cache DNS, go local, time out), and four ways to survive failures",
+ "boss": false,
+ "badge": "⚡ Badge: Speed Spinner",
+ "winTitle": "Fast, polite and crash-proof!",
+ "goal": "Your win today: you can explain robots.txt and why it's cached, name the four downloader optimisations with the DNS numbers (10–200 ms per lookup), and list the four robustness measures, including how consistent hashing spreads hosts across downloader servers.",
+ "bookSections": "Step 3 deep dive: HTML Downloader (Robots.txt, performance optimisation: distributed crawl, cache DNS resolver, locality, short timeout); Robustness (consistent hashing, save crawl states and data, exception handling, data validation)",
+ "stages": [
+  {
+   "title": "Read the house rules",
+   "sub": "robots.txt · the Robots Exclusion Protocol",
+   "teaches": "The HTML Downloader fetches pages over HTTP. Before crawling a site, a crawler should fetch that site's robots.txt (at the root, e.g. example.com/robots.txt) and obey it. The file tells crawlers which paths they may not download, grouped by User-agent (which bot the rules apply to) with Disallow lines (path prefixes, sometimes with wildcards). The book shows part of a large retailer's real robots.txt with Disallow rules for Googlebot. To avoid downloading robots.txt again before every page, the crawler caches it and refreshes the cached copy periodically.",
+   "interaction": "Rule-checker sim with a made-up file (not copied from any real site): 'User-agent: *  Disallow: /cart/  Disallow: /search  ·  User-agent: SpiderBot  Disallow: /private/  Allow: /private/press/'. On the right, 8 URL cards on shop.example: /products/42, /cart/checkout, /search?q=shoes, /private/hr, /private/press/launch, /blog/post-1, /searching-tips, /CART/x. A toggle chooses which bot we are ('SpiderBot' or 'OtherBot'). The learner marks each card Allowed or Blocked for the current bot, then presses 'Check'. Teaching moments: a bot that has its own group uses only that group, not the '*' group (so SpiderBot may fetch /cart/ here); '/search' as a prefix also blocks '/searching-tips'; paths are case-sensitive so '/CART/x' isn't blocked; Allow can carve out an exception (/private/press/). Finally a counter panel: 'Pages fetched from shop.example today: 50,000. robots.txt downloads without cache: 50,000; with a cache refreshed daily: 1.'",
+   "check": "All 8 cards correct for both bots (retries allowed). Answer key, SpiderBot (uses only its own group): Blocked = /private/hr; Allowed = everything else including /cart/checkout, /search?q=shoes and /private/press/launch. OtherBot (falls back to *): Blocked = /cart/checkout, /search?q=shoes, /searching-tips; Allowed = /products/42, /private/hr, /private/press/launch, /blog/post-1, /CART/x. Q.quiz with 2 questions: 'When must the crawler check robots.txt?' → before crawling a site; 'Why cache it?' → avoid re-downloading it for every page."
+  },
+  {
+   "title": "Split the work",
+   "sub": "Speed-up 1 · distributed crawl",
+   "teaches": "To go fast, crawl jobs are spread over many servers, and each server runs many threads. The URL space is partitioned so each downloader handles its own subset of URLs. This is where scale comes from: the 400–800 pages/s target is far more than one thread could manage when each fetch takes hundreds of milliseconds.",
+   "interaction": "Throughput calculator + sim. Sliders: servers (1–50), threads per server (1–200), average fetch time (100 ms–2 s). A live readout: pages/s ≈ servers × threads ÷ fetch time. Goal markers at 400 (average) and 800 (peak). The learner must find two different settings that clear 800 pages/s with fetch time fixed at 1 s (e.g. 8 servers × 100 threads; 4 × 200). A small animation shows URL tiles being dealt to server lanes by hash of host, so all of a host's URLs land in the same lane (this foreshadows consistent hashing in stage 5).",
+   "check": "Two valid settings found. Q.quiz 1 question: 'Pages/s with 10 servers × 50 threads and 0.5 s per fetch?' → 1,000."
+  },
+  {
+   "title": "Stop asking for directions",
+   "sub": "Speed-ups 2–4 · DNS cache, locality, short timeout",
+   "teaches": "Cache the DNS resolver: DNS is a bottleneck because many DNS interfaces are synchronous, so a lookup blocks, and a DNS answer takes roughly 10 ms to 200 ms. While one crawler thread waits on a lookup, other threads can be blocked too. Keeping a DNS cache (host name → IP) avoids most lookups; the book refreshes it periodically with cron jobs. Locality: place crawl servers in different regions so they're close to the sites they crawl; shorter distance means faster downloads. Locality applies to most parts of the system: crawl servers, cache, queue, storage. Short timeout: some servers answer very slowly or never. Set a maximum wait; if a host doesn't respond in time, give up on that page and crawl something else.",
+   "interaction": "Three-toggle race. A timeline view of 8 worker threads fetching 40 pages from a mix of hosts (some repeat hosts, a few far-away, two 'black hole' hosts that never answer). Three toggles: 'DNS cache', 'Regional crawlers', 'Timeout = 5 s'. Each segment of a thread's bar is coloured: DNS (purple), network round trip (blue), download (green), waiting on a dead host (grey). Before the learner turns anything on, they predict which single toggle will cut total time the most for this workload (choices: DNS / locality / timeout) → timeout (the two black-hole hosts freeze two threads for the whole run, the biggest chunk of grey). Then they flip toggles one at a time and the total time readout drops; with all three the bars become short and mostly green. A DNS side panel: 'Lookups without cache: 40; with cache: 9 (one per unique host).' Caption on DNS: 'a synchronous lookup blocks; caching removes the wait from most fetches'.",
+   "check": "Prediction made and all toggles tried. Q.quiz with 3 questions: 'Typical DNS response time per the book?' → 10–200 ms; 'Why does slow DNS hurt more than its own time?' → synchronous lookups can block other threads; 'A host hasn't answered in 30 s, what should the crawler do?' → time out and move on to other pages."
+  },
+  {
+   "title": "Built to survive",
+   "sub": "Robustness · four defences",
+   "teaches": "Four ways the book makes the crawler robust. (1) Consistent hashing spreads the load across downloader servers, so a server can be added or removed and only a small slice of hosts moves (callback to World 6). (2) Save crawl state and data: write the crawl's progress and data to storage, so a crashed or interrupted crawl restarts by loading the saved state instead of from scratch. (3) Exception handling: errors are normal on the web, so a bad page or a failed fetch must be caught and handled without crashing the whole system. (4) Data validation: check data at each step to stop bad input from causing system errors.",
+   "interaction": "Chaos-monkey panel. A running mini-crawl with 4 downloader servers drawn on a hash ring (hosts as dots on the ring). The learner presses chaos buttons and picks the defence that saves the day from 4 shield buttons before the outcome plays. 'Server D crashes' → consistent hashing: only D's arc of hosts moves to the next server clockwise (animated), others untouched; contrast toggle 'hash mod N' shows nearly every host reshuffling. 'Power cut to the whole cluster' → saved state: crawl resumes from the last checkpoint with a progress bar that keeps most of its fill. 'A page returns 3 MB of binary garbage labelled text/html' → exception handling: that one task fails, the worker logs and moves on. 'A URL field arrives as 9,000 characters of nonsense' → data validation: rejected at the door. Wrong shield shows what would have happened (e.g. the whole worker process dies).",
+   "check": "All 4 chaos events defended. Q.quiz with 2 questions: 'Removing one of 4 downloader servers with consistent hashing moves about what share of hosts?' → about a quarter (vs nearly all with mod N); 'What does saving crawl state buy you?' → restart from where you were after a failure."
+  },
+  {
+   "title": "Boss: The Slow Web Gauntlet",
+   "sub": "Pick the fix for each slowdown or failure",
+   "teaches": "Choosing between robots.txt, the four speed-ups and the four defences.",
+   "interaction": "Q.boss with choices [{k:'robots', label:'robots.txt (cached)', sub:'house rules'}, {k:'speed', label:'Speed-up', sub:'distribute · DNS cache · locality · timeout'}, {k:'robust', label:'Robustness', sub:'hashing · checkpoints · exceptions · validation'}]. Scenarios (8): 'Profiling shows threads spend 40% of their time waiting on name lookups' → speed (DNS cache); 'A site owner says we crawled /admin/ pages they asked bots to avoid' → robots; 'We fetch robots.txt before every single page and it doubles our request count' → robots (cache it); 'Crawling Japanese sites from a US data centre is slow' → speed (locality); 'One downloader server is added and every host gets reassigned' → robust (consistent hashing); 'A week-long crawl crashed on day 6 and restarted from zero' → robust (save state); 'A few hosts never answer and tie up threads for minutes' → speed (short timeout); 'A malformed response kills the whole worker process' → robust (exception handling).",
+   "check": "Boss cleared."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "The downloader deep dive",
+   "teaches": "Downloader plus robustness, compact.",
+   "interaction": "Q.drill. Prompt: 'How do you make the downloader fast without being rude, and what keeps it alive when things break?' Placeholder: 'First, it reads robots.txt…'. Model: 'Before crawling a site the downloader reads its robots.txt and obeys the disallowed paths; we cache that file and refresh it periodically so we don't fetch it per page. For speed: distribute the crawl over many servers with many threads each, partitioning URLs by host; cache DNS, because lookups take 10 to 200 milliseconds and are often synchronous, so they block threads; put crawlers in several regions close to the sites; and use short timeouts so dead servers don't tie up threads. For robustness: consistent hashing assigns hosts to downloader servers so adding or losing one only moves a slice; we checkpoint crawl state and data so a crash resumes instead of restarting; we handle exceptions per page so one bad response can't crash the system; and we validate data.' Checks: ['robots.txt checked first and cached', 'all four speed-ups, with the DNS 10–200 ms number', 'all four robustness measures', 'consistent hashing explained as moving only a slice'].",
+   "check": "Self-grade via Q.drill."
+  }
+ ],
+ "caveats": [
+  "robots.txt is a convention, not a lock: well-behaved crawlers obey it, bad ones ignore it, and it does not hide pages from being linked or indexed by URL. It was only formally standardised in 2022 as RFC 9309, which also says crawlers should not cache it for more than 24 hours in general.",
+  "The common 'Crawl-delay' line is not part of the standard. Some crawlers honour it, and Google ignores it and sets its own rate based on how the server responds.",
+  "The book refreshes the DNS cache with cron jobs. Real resolvers respect each record's TTL (time-to-live) instead, and big crawlers often run their own asynchronous resolver; Mercator famously wrote a custom multi-threaded DNS resolver because the standard library call was synchronous.",
+  "'Short timeout' must be paired with retry and back-off: a host that timed out once might just be busy. Status codes like 429 (Too Many Requests) and 503 with a Retry-After header are the site asking you to slow down, which is politeness again.",
+  "Consistent hashing by host also keeps all of a host's URLs on one server, which is what makes per-host politeness enforceable in a distributed crawl. The book lists it under robustness, but it is equally a politeness tool."
+ ],
+ "sources": [
+  {
+   "label": "System Design Interview Ch. 9: Design a Web Crawler (ByteByteGo)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-web-crawler"
+  },
+  {
+   "label": "RFC 9309: Robots Exclusion Protocol",
+   "url": "https://www.rfc-editor.org/rfc/rfc9309.html"
+  },
+  {
+   "label": "Google Search Central: Introduction to robots.txt",
+   "url": "https://developers.google.com/search/docs/crawling-indexing/robots/intro"
+  },
+  {
+   "label": "Manning, Raghavan & Schütze, Introduction to IR: DNS resolution",
+   "url": "https://nlp.stanford.edu/IR-book/html/htmledition/dns-resolution-1.html"
+  },
+  {
+   "label": "Heydon & Najork, 'Mercator: A Scalable, Extensible Web Crawler' (book reference)",
+   "url": "https://courses.cs.washington.edu/courses/cse454/15wi/papers/mercator.pdf"
+  },
+  {
+   "label": "MDN: 429 Too Many Requests",
+   "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+  }
+ ],
+ "id": "0904",
+ "file": "0904-web-crawler-downloader-and-robustness.html",
+ "world": 9,
+ "chapterTitle": "Design a Web Crawler",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-web-crawler",
+ "cheatsheet": "../reference/ch09-web-crawler-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "0901",
+   "n": "9.1",
+   "t": "Release the Spider",
+   "d": "What a crawler is for, the three-step loop, scoping questions, the four traits of a good crawler, and the napkin math"
+  },
+  {
+   "id": "0902",
+   "n": "9.2",
+   "t": "Assemble the Spider",
+   "d": "The eleven boxes of the high-level design, the two 'seen?' checks, and the step-by-step crawl workflow"
+  },
+  {
+   "id": "0903",
+   "n": "9.3",
+   "t": "Taming the Frontier",
+   "d": "Why BFS beats DFS but still isn't enough, and how front queues (priority) and back queues (politeness) fix it, plus freshness and storage"
+  },
+  {
+   "id": "0904",
+   "n": "9.4",
+   "t": "Fast Fangs, Thick Skin",
+   "d": "robots.txt, four speed-ups for the downloader (distribute, cache DNS, go local, time out), and four ways to survive failures"
+  },
+  {
+   "id": "0905",
+   "n": "9.5",
+   "t": "Beware the Spider Traps",
+   "d": "Plug-in modules for new content, dodging duplicates, spider traps and noise, and the wrap-up extras like rendering JavaScript"
+  },
+  {
+   "id": "0906",
+   "n": "BOSS",
+   "t": "Crawl the Web, Live",
+   "d": "Full mock interview: design a web crawler in 45 minutes"
+  }
+ ]
+}

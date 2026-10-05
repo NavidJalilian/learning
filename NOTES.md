@@ -10,6 +10,11 @@
 - Global style pref: plain language, define jargon inline, honest caveats.
 
 ## Open threads
+- **Whole-book build (2026-10-05):** every remaining chapter (1–5, 7–15) was planned by a subagent fleet and ~half built.
+  Plan, briefs, per-quest assignments, tools and playthrough tests live in `plan/` — see `plan/README.md` and
+  `plan/STATUS.md`. Live on the map: Worlds 2, 3, 4, 6, 7, 8, 15. Built but not yet world-reviewed: 10, 12, 13.1.
+  Partial/not started: Worlds 1, 5, 9, 11, 13 (rest), 14. Quest ids are chapter×100+k; `Quest.WORLDS` drives the map.
+- The fleet stopped because the user asked (not a failure). Resume from `plan/STATUS.md`.
 - **World 6 complete (2026-10-06):** lessons 0001–0008 built (0002–0008 by a fleet of 7 subagents on the shared engine; brief kept in the session scratchpad). User had cleared 0001 (1★) before the rebuild — review mode picks that up.
 - Chapter cheat sheet `reference/kv-store-cap-cheatsheet.html` now covers 6.1–6.7 + the boss (one section per quest).
 - Honest caveats taught in-lesson (revisit if the user asks): book's CP blocks the majority side (0001→paid off in 0004); W+R>N breaks under sloppy quorum (0004, 0006); "quorum consensus" ≠ Raft/Paxos (0004); async replication really means W acks then background (0003); real preference lists > N (0003); Cassandra uses last-write-wins not vector clocks (0005, 0008); commit log is fsynced periodically by default (0007); Cassandra reads merge all candidate SSTables, not first-hit (0007); Dynamo's Table 1 has a gossip row the book drops (0008).

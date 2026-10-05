@@ -1,0 +1,117 @@
+{
+ "n": "BOSS",
+ "slug": "boss-autocomplete-live",
+ "t": "Autocomplete Live",
+ "d": "Full mock interview: design search autocomplete",
+ "boss": true,
+ "badge": "👑 Badge: Typeahead Tyrant",
+ "winTitle": "Interview cleared: top 5 in under 100 ms",
+ "goal": "Your win today: you can run a full 45-minute autocomplete interview from memory: scope and estimates, two-service high-level design, trie deep dive with the final architecture, answers to failure and scaling curveballs, and a strong close with the book's three extensions.",
+ "bookSections": "Whole chapter: Step 1 scope + estimation, Step 2 high-level design, Step 3 deep dive (trie, data gathering, query service, trie operations, scale the storage), Step 4 wrap up",
+ "stages": [
+  {
+   "title": "Scope it",
+   "sub": "Step 1 · understand the problem (3–10 min)",
+   "teaches": "Same 4-step framework and game clock as 0008: every move costs game-minutes and earns or loses 'signal' (the evidence an interviewer writes down). The requirements to recover: prefix match only, 5 suggestions, ranked by historical frequency, no spell check, English, lowercase, 10M DAU, <100 ms, relevant, sorted, scalable, highly available. Then the numbers: ~24,000 QPS, ~48,000 peak, 0.4 GB/day.",
+   "interaction": "Requirements board like 0008: 10 question cards (7 good, 3 time-wasters such as 'What's the logo?', 'Which programming language?', 'Do we need a mobile app?'). Good questions fill the board; time-wasters cost 3 game-minutes and signal. Then a quick 3-field estimate panel (QPS, peak, storage/day) with ±10% tolerance; a wrong answer costs 2 minutes and shows the formula.",
+   "check": "All 7 key requirements on the board; 3 estimates within tolerance."
+  },
+  {
+   "title": "Sketch it",
+   "sub": "Step 2 · high-level design and buy-in (10–15 min)",
+   "teaches": "Two services: data gathering (queries → frequency table) and query service (prefix → top 5 via SQL LIKE 'prefix%' ORDER BY frequency DESC LIMIT 5). Then name its limit out loud before the interviewer does: it doesn't scale to tens of thousands of keystroke requests a second.",
+   "interaction": "Blank whiteboard; tap components into place (User, Data gathering service, Frequency table, Query service). The arrows draw themselves when dependencies are already present; placing a component before what it depends on costs a minute. Decoy tiles ('Spell checker', 'Recommendation ML model', 'Message queue between user and query service') cost a heart. Then a buy-in moment: the interviewer asks 'Will this hold at 48k QPS?' with 3 replies; the best one says no, and why, and proposes moving to a trie.",
+   "check": "4 components placed, no decoys; buy-in answer = 'No: prefix scan + sort per keystroke; I'll replace the table with a trie and cache top-k'."
+  },
+  {
+   "title": "Draw the final design",
+   "sub": "Step 3 · deep dive (10–25 min)",
+   "teaches": "The chapter's final architecture. Write side: Analytics logs → Aggregators → Aggregated data → Workers → Trie DB → Trie Cache (weekly snapshot). Read side: Browser (AJAX + browser cache) → Load balancer → API servers → Filter layer → Trie Cache → Trie DB on a miss. Plus a shard map manager across sharded tries. The trie lookup is O(1) thanks to the prefix cap + top-k cached per node.",
+   "interaction": "Two-lane whiteboard (write path on top, read path below) with 11 shuffled component tiles. The learner taps each tile in its lane's flow order. Then the 'technique map' (like 0008 stage 3): for each requirement/problem the learner picks the mechanism: Fast lookup → trie with top-k per node + prefix cap; Fewer requests → browser caching; Huge logs → aggregation + sampling; Fresh-enough data → weekly rebuild by workers; Harmful suggestions → filter layer + async delete; Doesn't fit on one box → sharding + shard map manager; Survive cache loss → persistent Trie DB.",
+   "check": "Both lanes in the right order; all 7 technique-map rows correct (some mechanisms used twice is fine)."
+  },
+  {
+   "title": "Boss: the curveball barrage",
+   "sub": "Step 3 · 'what happens when…?'",
+   "teaches": "Mixed follow-ups from 13.1–13.5.",
+   "interaction": "Q.boss()-style barrage of 9 curveballs, each right answer costs 1.5 minutes, wrong costs a heart + 1 minute: (1) Trie Cache server crashes → misses fall through to Trie DB, replenish the cache; DB is the source of truth. (2) Monday-morning latency spike after the weekly swap → pre-warm the new cache before switching. (3) 'beer' count changes mid-week → wait for the rebuild, or patch the node + all ancestors. (4) The 's' shard is hot → shard map manager, split on the second letter. (5) Harmful suggestion goes viral → filter rule now, async DB purge. (6) Logs too big → aggregate weekly + sample 1 in N. (7) Query service DB melts with LIKE queries → that's why we moved to the trie. (8) Users hammer the same prefixes → browser cache, max-age=3600. (9) Typing 'peak' doesn't suggest 'twin peak' → by design: prefix-only matching.",
+   "check": "Engine-scored; scorecard stored under a separate key like 0008 (sdq:v1:<id>-interview)."
+  },
+  {
+   "title": "Wrap it up",
+   "sub": "Step 4 · the last 3–5 minutes",
+   "teaches": "The book's closing follow-ups: multi-language (Unicode nodes), country-specific results (per-country tries on CDNs), and real-time trending (weekly rebuild too slow → recency weighting, shard to shrink data, streaming with Kafka / Spark Streaming / Storm). A strong close also names the design's honest weak spots: ranking by frequency only (no personalization or freshness), no spell correction, up to a week stale, and an uneven letter distribution.",
+   "interaction": "Pick exactly 3 closing moves from 7 cards, then 'Deliver my close'. Strong cards: 'Extend to other languages with Unicode trie nodes', 'Per-country tries on CDNs', 'Trending: add a streaming path and recency weighting', 'Name the bottleneck: weekly staleness and hot shards'. Weak cards: 'Rewrite the trie in Rust for speed', 'Add more servers' (no reasoning), 'Say we're done'. The scorecard rolls up time used, hearts and signal into a hire / lean-hire / no-hire verdict with per-step feedback.",
+   "check": "3 strong cards = full signal; the verdict screen lists any missed requirement or technique-map row to review, with links to 13.1–13.5."
+  }
+ ],
+ "caveats": [
+  "The 4-step minute ranges are the book's guide for a ~45-minute session; the game clock is our framing. Real interviews vary.",
+  "The book's design ranks by popularity only. In a real interview, mentioning personalization, freshness and location as future ranking signals is a strong close, but don't build them unless asked.",
+  "Weekly rebuild + browser cache with max-age=3600 means suggestions can be up to a week (plus an hour) stale. Own that trade-off rather than hiding it."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo — Design a Search Autocomplete System (book chapter)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system"
+  },
+  {
+   "label": "ByteByteGo — A Framework for System Design Interviews",
+   "url": "https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews"
+  },
+  {
+   "label": "Facebook Engineering — The Life of a Typeahead Query",
+   "url": "https://www.facebook.com/notes/facebook-engineering/the-life-of-a-typeahead-query/389105248919/"
+  },
+  {
+   "label": "Prefixy team — How We Built Prefixy",
+   "url": "https://medium.com/@prefixyteam/how-we-built-prefixy-a-scalable-prefix-search-service-for-powering-autocomplete-c20f98e2eff1"
+  }
+ ],
+ "id": "1306",
+ "file": "1306-boss-autocomplete-live.html",
+ "world": 13,
+ "chapterTitle": "Design a Search Autocomplete System",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system",
+ "cheatsheet": "../reference/ch13-autocomplete-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "1301",
+   "n": "13.1",
+   "t": "Every Keystroke Counts",
+   "d": "Scope autocomplete, do the envelope math, and see why one SQL table can't keep up"
+  },
+  {
+   "id": "1302",
+   "n": "13.2",
+   "t": "Grow the Trie",
+   "d": "The trie data structure, top-k search, and two tricks that make it O(1)"
+  },
+  {
+   "id": "1303",
+   "n": "13.3",
+   "t": "The Weekly Harvest",
+   "d": "Logs, aggregators, workers: how the trie gets built, stored and updated"
+  },
+  {
+   "id": "1304",
+   "n": "13.4",
+   "t": "Faster Than a Keystroke",
+   "d": "The query path, browser caching, data sampling, and the filter layer"
+  },
+  {
+   "id": "1305",
+   "n": "13.5",
+   "t": "Split the Alphabet",
+   "d": "Shard the trie, balance hot letters, and handle languages, countries and trends"
+  },
+  {
+   "id": "1306",
+   "n": "BOSS",
+   "t": "Autocomplete Live",
+   "d": "Full mock interview: design search autocomplete"
+  }
+ ]
+}

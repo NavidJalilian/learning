@@ -1,0 +1,128 @@
+{
+ "n": "4.3",
+ "slug": "window-algorithms",
+ "t": "Windows of Time",
+ "d": "Fixed window, sliding window log, and sliding window counter",
+ "boss": false,
+ "badge": "🪟 Badge: Window Warden",
+ "winTitle": "Time windows tamed",
+ "goal": "Your win today: you can show the fixed-window edge exploit (10 requests through a 5/min limit), walk the sliding-log example step by step, compute a sliding-window-counter estimate (3 + 5 × 0.7 = 6.5) and compare all five algorithms on accuracy, memory and bursts.",
+ "bookSections": "Step 2 'Algorithms for rate limiting': fixed window counter, sliding window log, sliding window counter (with pros/cons and the Cloudflare figure)",
+ "stages": [
+  {
+   "title": "Exploit the edge",
+   "sub": "Fixed window counter and its loophole",
+   "teaches": "Fixed window counter: divide the timeline into fixed-size windows and keep a counter per window. Each request increments the counter by one; once it reaches the threshold, new requests are dropped until the next window starts. Book example 1: window = 1 second, max 3 requests per second. Problem: a burst at the window edges lets more than the quota through. Book example 2: max 5 requests per minute, quota resets at the round minute; 5 requests between 2:00:00 and 2:01:00 and 5 more between 2:01:00 and 2:02:00 — but the one-minute span 2:00:30–2:01:30 contains 10 requests, twice the limit. Pros: memory efficient; easy to understand; resetting quota at the end of a unit fits some use cases. Cons: spikes at window edges can let through more than the quota.",
+   "interaction": "Timeline sim from 2:00:00 to 2:02:00, split into two 1-minute windows with counters (limit 5/min). The learner taps on the timeline to drop requests at chosen times; each one shows green (allowed) or red (dropped) and the window's counter increments. A draggable 60-second 'ruler' (a translucent band) can slide anywhere; it shows how many allowed requests fall inside it. Challenge: 'Get 10 allowed requests inside one 60-second ruler position.' Success requires placing ~5 late in window 1 and ~5 early in window 2. On success, the ruler snaps to 2:00:30–2:01:30 and the book's caption appears. A 'Show me' button auto-plays the book example for anyone stuck (no XP).",
+   "check": "Challenge solved or auto-played; quiz: 'Limit 5/min, fixed windows. Max requests that can pass in some 60-second span?' → 10."
+  },
+  {
+   "title": "Keep a log",
+   "sub": "Sliding window log, step by step",
+   "teaches": "Sliding window log fixes the edge problem by tracking each request's timestamp, usually in a cache such as a Redis sorted set (a set ordered by a score — here the timestamp). On a new request: remove all timestamps older than the start of the current window (now − window length); add the new request's timestamp to the log; if the log size is ≤ the allowed count, accept, otherwise reject. Book example (limit 2 requests per minute): 1:00:01 — log empty, accepted. 1:00:30 — log size 2, accepted. 1:00:50 — log size 3 > 2, rejected, but its timestamp stays in the log. 1:01:40 — window is [1:00:40, 1:01:40); 1:00:01 and 1:00:30 are outdated and removed; log is [1:00:50, 1:01:40], size 2 → accepted. Pros: very accurate — in any rolling window, requests never exceed the limit. Cons: lots of memory, since it stores a timestamp per request, even rejected ones.",
+   "interaction": "Step-through predict game. A log panel (vertical list of timestamp chips) and a clock. For each of the four book requests, the learner first taps 'Accept' or 'Reject', then the sim plays the three steps visibly: grey out and remove expired chips, add the new chip, compare size vs limit. Correct predictions earn XP. On request 3, a highlighted note shows the rejected chip staying in the log. On request 4, the learner must also tap which chips will be evicted (1:00:01 and 1:00:30) before the animation. Finally a memory meter: 'Limit 500/hour, 1M users, each timestamp ~8 bytes' → learner computes worst-case log memory ≈ 500 × 8 B × 1M = 4 GB (accept 3.5–4.5 GB), to make the memory con concrete.",
+   "check": "Four predictions + the eviction pick + the memory estimate; quiz: 'Why does the log use more memory than it seems to need?' → it stores timestamps even for rejected requests."
+  },
+  {
+   "title": "Blend two windows",
+   "sub": "Sliding window counter: calculate and check",
+   "teaches": "Sliding window counter is a hybrid of fixed window counter and sliding log. Estimate requests in the rolling window = requests in current window + requests in previous window × overlap percentage of the rolling window and the previous window. Book example: limit 7 per minute, 5 requests in the previous minute, 3 in the current; a new request arrives 30% into the current minute → 3 + 5 × 0.7 = 6.5, rounded down to 6 (round up or down depending on the use case) → under 7, so the request goes through; the limit will be reached after one more. Pros: smooths spikes because the rate uses the average of the previous window; memory efficient (two counters per key). Cons: only works for a not-so-strict look-back window; it is an approximation that assumes requests in the previous window were evenly spread. Cloudflare's experiments: only 0.003% of requests were wrongly allowed or rate limited among 400 million requests.",
+   "interaction": "Slider calculator. A bar shows the previous window (5 requests) and current window (3 requests) with a 60-second rolling band whose position is controlled by a slider (0–100% into the current minute). Live readout: overlap % with previous = 100 − position; estimate = current + previous × overlap. Then 4 calculate-and-check rounds where the learner types the estimate and Allow/Reject (rule shown: round down; allow if estimate < limit): R1 book example (limit 7, prev 5, cur 3, 30%) → 6.5 → 6 → allow. R2 limit 10, prev 8, cur 4, 25% → 4 + 8×0.75 = 10 → reject. R3 limit 10, prev 8, cur 4, 75% → 4 + 2 = 6 → allow. R4 limit 100, prev 120, cur 30, 50% → 30 + 60 = 90 → allow. After R4, a 'What if' card: previous window's 5 requests all came in its last second — the estimate still says 3.5, but reality had 5 in the rolling window: the approximation's blind spot.",
+   "check": "At least 3 of 4 rounds correct for full XP; quiz: 'What does sliding window counter assume about the previous window?' → its requests were evenly distributed."
+  },
+  {
+   "title": "The algorithm draft",
+   "sub": "Five algorithms, one table",
+   "teaches": "Summary from the book: token bucket (easy, memory efficient, allows bursts; two params hard to tune; Amazon, Stripe). Leaking bucket (memory efficient, fixed outflow; bursts fill the queue with old requests, two params; Shopify). Fixed window counter (memory efficient, easy, resets at round times; edge spikes). Sliding window log (very accurate; memory hungry). Sliding window counter (smooths spikes, memory efficient; approximate, assumes even distribution).",
+   "interaction": "Matching board: 5 algorithm columns; 10 shuffled trait cards (each algorithm's main pro and main con). The learner taps a card then a column. Wrong placements shake and cost no heart but no XP for that card. When done, the board turns into a reference table that stays visible. Then a 'Which would you pick?' mini-round with 3 one-line situations: 'must be exact, small user base' → sliding window log; 'billions of keys, approximate is fine' → sliding window counter; 'quota resets at midnight for a daily plan' → fixed window.",
+   "check": "Board complete; three picks answered."
+  },
+  {
+   "title": "Boss: The Clock Wraith",
+   "sub": "Window curveballs",
+   "teaches": "Applying the window algorithms under interview pressure.",
+   "interaction": "Q.boss with 5 scenarios. Examples: 'A user gets 2× their per-minute quota through by timing calls around :00. Which algorithm are you on?' → fixed window counter; 'Fix it with the least memory' → sliding window counter (not sliding log); 'Auditors require that no rolling 60-second span ever exceeds the limit' → sliding window log; 'Sliding log memory exploded during an attack. Why?' → rejected requests are still logged; 'Cloudflare's sliding window counter was wrong for what share of 400M requests?' → 0.003%.",
+   "check": "Boss defeated."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "Windows in 60 seconds",
+   "teaches": "Interview-ready comparison of the three window algorithms.",
+   "interaction": "Q.drill. Prompt: 'Walk me through fixed window, sliding log, and sliding window counter — and which you'd ship.' Model answer: fixed window counts per round window, cheap, but edges allow 2× (5/min → 10 in 2:00:30–2:01:30); sliding log stores timestamps in a sorted set, exact, but memory-heavy including rejected ones; sliding window counter = current + previous × overlap (3 + 5 × 0.7 = 6.5), two counters per key, approximate (Cloudflare 0.003% error); ship sliding window counter or token bucket for most APIs, sliding log when exactness matters and volumes are small. Checks: edge problem with numbers; log memory con; the formula; a reasoned pick.",
+   "check": "Self-graded drill completed."
+  }
+ ],
+ "caveats": [
+  "The book says round 6.5 'down' in its example but notes you could round either way; real implementations vary (Cloudflare compares the unrounded weighted rate to the limit).",
+  "The 0.003% figure comes from Cloudflare's own traffic; other traffic shapes (very bursty clients) can make the approximation worse.",
+  "The book's sliding log adds a rejected request's timestamp to the log. Some implementations only log accepted requests, which saves memory but means a client that keeps hammering isn't penalized for the rejected attempts."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo — Design a Rate Limiter (book chapter)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter"
+  },
+  {
+   "label": "Cloudflare — How we built rate limiting capable of scaling to millions of domains",
+   "url": "https://blog.cloudflare.com/counting-things-a-lot-of-different-things/"
+  },
+  {
+   "label": "ClassDojo — Better rate limiting with Redis sorted sets",
+   "url": "https://engineering.classdojo.com/blog/2015/02/06/rolling-rate-limiter/"
+  },
+  {
+   "label": "Google Cloud — Rate-limiting strategies and techniques",
+   "url": "https://cloud.google.com/architecture/rate-limiting-strategies-techniques"
+  },
+  {
+   "label": "Redis — Sorted sets",
+   "url": "https://redis.io/docs/latest/develop/data-types/sorted-sets/"
+  }
+ ],
+ "id": "0403",
+ "file": "0403-window-algorithms.html",
+ "world": 4,
+ "chapterTitle": "Design a Rate Limiter",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter",
+ "cheatsheet": "../reference/ch04-rate-limiter-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "0401",
+   "n": "4.1",
+   "t": "Bouncer at the Door",
+   "d": "What a rate limiter is, why you need one, how to scope it, and where it should sit"
+  },
+  {
+   "id": "0402",
+   "n": "4.2",
+   "t": "Token Tycoon",
+   "d": "The two bucket algorithms: token bucket and leaking bucket"
+  },
+  {
+   "id": "0403",
+   "n": "4.3",
+   "t": "Windows of Time",
+   "d": "Fixed window, sliding window log, and sliding window counter"
+  },
+  {
+   "id": "0404",
+   "n": "4.4",
+   "t": "The Counter Room",
+   "d": "Redis counters, rule files, 429 headers, and the detailed design"
+  },
+  {
+   "id": "0405",
+   "n": "4.5",
+   "t": "Many Doors, One Count",
+   "d": "Race conditions, syncing many limiters, multi-data-center speed, and monitoring"
+  },
+  {
+   "id": "0406",
+   "n": "BOSS",
+   "t": "Throttle It Live",
+   "d": "Full mock interview: design a rate limiter"
+  }
+ ]
+}

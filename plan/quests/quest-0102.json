@@ -1,0 +1,125 @@
+{
+ "n": "1.2",
+ "slug": "scale-database-replication",
+ "t": "Copy the Ledger",
+ "d": "Master/slave database replication: who takes writes, who takes reads, and what happens when one dies",
+ "boss": false,
+ "badge": "📚 Badge: Replica Wrangler",
+ "winTitle": "Your data has backup singers!",
+ "goal": "Your win today: you can explain primary/replica replication, route reads and writes correctly, name its three benefits, and answer 'what if a replica dies?' and 'what if the master dies?' with the honest caveat about lag.",
+ "bookSections": "Database replication (master/slave model, advantages, failure handling); the combined design after load balancer + replication",
+ "stages": [
+  {
+   "title": "One writer, many readers",
+   "sub": "Master/slave in one picture",
+   "teaches": "Database replication usually means a master (primary) and one or more slaves (replicas). The master holds the original and accepts only data-changing operations (insert, update, delete). Each slave receives copies of the master's data and serves only reads. Most apps read far more than they write, so you typically run more slaves than masters. (Modern docs say primary/replica; the book uses master/slave.)",
+   "interaction": "Router game. A stream of query cards falls from the top: SELECT cards (blue) and INSERT/UPDATE/DELETE cards (orange). The learner flicks each one into either the Master DB or one of two Slave DBs. Writes sent to a slave bounce back with a 'read-only replica' stamp (gentle shake, no heart loss on first round). Reads sent to the master are accepted but a 'master load' bar rises, and a coach note says reads should go to replicas. After 12 cards, a read:write ratio slider (1:1 to 50:1) shows how many replicas you'd want to keep each one under 70% load (simple proportional model, labelled illustrative).",
+   "check": "At least 10 of 12 routed correctly. Q.quiz, 2 questions: which node accepts writes (master only); why there are usually more slaves than masters (reads outnumber writes)."
+  },
+  {
+   "title": "Why bother?",
+   "sub": "Three wins of replication",
+   "teaches": "Advantages: (1) Better performance: reads are spread across many replicas and run in parallel, while all writes go to the master. (2) Reliability: if one database server is destroyed (the book's example is a natural disaster such as a typhoon or earthquake), data is still preserved because copies live on servers in several locations. (3) High availability: since data is copied to several places, the site keeps working even if one database goes offline, by reading from another server.",
+   "interaction": "Match-the-benefit. Three benefit tiles (Performance / Reliability / High availability) and six short incident cards to drop on them: 'An earthquake destroys the server room in one city, no data lost' → Reliability; '5 replicas each answer 2,000 reads/s in parallel' → Performance; 'One replica is rebooting but pages still load' → High availability; 'A flood takes out a disk, copy survives elsewhere' → Reliability; 'Reads stop queuing behind writes on one box' → Performance; 'Maintenance on one DB node with no downtime' → High availability.",
+   "check": "All six matched (retry allowed)."
+  },
+  {
+   "title": "Pull the plug",
+   "sub": "When a replica or the master dies",
+   "teaches": "If a slave goes offline: with only one slave, reads go to the master temporarily; a new slave is brought up to replace the old one as soon as the issue is found. With several slaves, reads go to the remaining healthy slaves and a replacement is added. If the master goes offline: a slave is promoted to be the new master, all DB operations temporarily run on it, and a new slave replaces the promoted one for replication. Book's honest note: in production, promotion is harder, because the slave's data may not be up to date; missing data must be patched with data-recovery scripts. Other replication setups such as multi-master and circular replication can help, but they're more complicated. Related trap (not in the book's list, but asked in interviews): replication lag means a user who just wrote something may not see it when the read lands on a lagging replica (read-your-writes).",
+   "interaction": "Predict-then-watch with three scenario buttons. Topology on screen: Master + 1 or 3 slaves (toggle), live read/write arrows, and each slave showing a 'replication lag' counter in writes behind. Scenario A 'Kill the only slave': learner predicts where reads go (master / nowhere / other slave) → master temporarily, then a new slave spins up and copies data. Scenario B 'Kill a slave of three' → reads spread to the other two. Scenario C 'Kill the master': learner picks which slave to promote; each slave shows how many writes it is behind (0, 2, 5). Promoting the one 0 behind is clean; promoting one 2 behind shows two writes 'lost' in red with a 'run recovery script' button that patches them. Bonus card 'Read-your-writes': user posts a comment, read hits a replica 2 writes behind, comment is missing; toggle 'read own writes from master for a few seconds' fixes it.",
+   "check": "All three scenarios run and predictions entered. Q.quiz, 3 questions: with one slave, where do reads go when it dies (master, temporarily); what happens when the master dies (a slave is promoted, a new slave added); why promotion is risky (the promoted slave may be missing recent writes)."
+  },
+  {
+   "title": "Wire it all up",
+   "sub": "Load balancer + replication, end to end",
+   "teaches": "The design so far: (1) the user gets the load balancer's IP from DNS; (2) the user connects to the LB with it; (3) the request is routed to server 1 or server 2; (4) a web server reads user data from a slave DB; (5) a web server sends any data-changing operation (write, update, delete) to the master DB. The web tier and data tier now both have redundancy.",
+   "interaction": "Two parts. Part A: tap-in-order of the 5 steps (shuffled cards), animating a request through the diagram. Part B: spot-the-bug. A diagram with 3 planted mistakes: (a) an arrow labelled 'UPDATE profile' pointing at a slave; (b) a user arrow going directly to a web server's private IP 10.0.0.2, skipping the LB; (c) a 'Read feed' arrow that goes to the master while two idle slaves sit unused. The learner taps each wrong element; tapping reveals the fix. Non-bugs (e.g., two web servers both talking to the same master) give 'that's fine' feedback.",
+   "check": "Order correct and all 3 bugs found."
+  },
+  {
+   "title": "Boss: The Ledger Lich",
+   "sub": "Route it, or fail it over",
+   "teaches": "Applying routing and failover rules under pressure.",
+   "interaction": "Q.boss with choices [{k:'replica', label:'Read from a replica', sub:'spread the reads'}, {k:'master', label:'Send it to the master', sub:'the source of truth'}, {k:'promote', label:'Promote a replica', sub:'new master'}, {k:'add', label:'Add another replica', sub:'more read capacity'}]. Scenarios (7): (1) a shopper opens a product page → replica. (2) a user changes their password → master. (3) the master's disk fails at 3 a.m. → promote (mention checking which replica is most up to date). (4) read:write is 50:1; both replicas sit at 90% CPU while the master idles → add. (5) a user posts a comment and instantly reloads, and the comment must appear → master (read-your-writes; replicas may lag). (6) you run one replica and it dies: where does read traffic go right now? → master (temporarily, while a new replica is built). (7) a nightly report scans the whole orders table → replica (keeps heavy reads off the master).",
+   "check": "Boss cleared."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "The interview answer, in your words",
+   "teaches": "Explaining replication and its failure modes.",
+   "interaction": "Q.drill. Prompt: 'The interviewer asks: how do you remove the database as a single point of failure, and what happens when the master dies?' Model answer (paraphrased): 'I'd add replication: one primary takes all writes, and several read replicas get copies and serve reads. Since we read far more than we write, that spreads load, keeps copies in more than one place in case a server is lost, and keeps us serving if one node goes down. If a replica dies, reads move to the others, or to the primary if it was the only one, and we replace it. If the primary dies, we promote a replica. The catch is replication lag: the promoted node may be missing the last few writes, so we need recovery steps, and right after a user writes, their own reads may need to hit the primary.' Checks: ['Writes to master, reads to replicas, more replicas than masters', 'Three benefits: performance, reliability, availability', 'Replica failure handling', 'Master failure: promote + replace', 'Lag caveat: lost writes / read-your-writes'].",
+   "check": "Self-grade at least 4 of 5 checks."
+  }
+ ],
+ "caveats": [
+  "Real failover needs more than 'promote a slave': you must detect the failure reliably, stop the old master from coming back and accepting writes (split brain / fencing), and repoint every client. Managed services (e.g. Amazon RDS Multi-AZ) or tools like Orchestrator and Patroni automate this.",
+  "With asynchronous replication (the common default), a promoted replica can be missing acknowledged writes. Synchronous or semi-synchronous replication narrows that gap at the cost of slower writes.",
+  "Replication lag also breaks read-your-writes: route a user's reads to the primary briefly after they write, or read from a replica that has caught up.",
+  "The book's master/slave wording is the older term; most current docs say primary/replica or leader/follower."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo: Scale From Zero To Millions Of Users",
+   "url": "https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users"
+  },
+  {
+   "label": "Wikipedia: Replication (computing)",
+   "url": "https://en.wikipedia.org/wiki/Replication_(computing)"
+  },
+  {
+   "label": "Wikipedia: Multi-master replication",
+   "url": "https://en.wikipedia.org/wiki/Multi-master_replication"
+  },
+  {
+   "label": "MySQL 5.7 docs: NDB Cluster Replication, Multi-Master and Circular Replication",
+   "url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-replication-multi-master.html"
+  }
+ ],
+ "id": "0102",
+ "file": "0102-scale-database-replication.html",
+ "world": 1,
+ "chapterTitle": "Scale From Zero to Millions of Users",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users",
+ "cheatsheet": "../reference/ch01-scaling-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "0101",
+   "n": "1.1",
+   "t": "One Box Wonder",
+   "d": "A single server, splitting off the database, SQL vs NoSQL, scaling up vs out, and the load balancer"
+  },
+  {
+   "id": "0102",
+   "n": "1.2",
+   "t": "Copy the Ledger",
+   "d": "Master/slave database replication: who takes writes, who takes reads, and what happens when one dies"
+  },
+  {
+   "id": "0103",
+   "n": "1.3",
+   "t": "Hot Memory, Near Edge",
+   "d": "A cache tier for hot data and a CDN for static files: how they work and what can go wrong"
+  },
+  {
+   "id": "0104",
+   "n": "1.4",
+   "t": "Forget Me, Find Me Anywhere",
+   "d": "Make the web tier stateless, autoscale it, then spread the system across data centers with GeoDNS"
+  },
+  {
+   "id": "0105",
+   "n": "1.5",
+   "t": "Queues, Gauges & Shards",
+   "d": "Message queues to decouple work, logging/metrics/automation, and sharding the database"
+  },
+  {
+   "id": "0106",
+   "n": "BOSS",
+   "t": "Zero to Millions, Live",
+   "d": "Mock interview: scale a startup's app from one server to millions of users as the traffic climbs"
+  }
+ ]
+}

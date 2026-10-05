@@ -1,0 +1,121 @@
+{
+ "n": "11.2",
+ "slug": "news-feed-fanout-push-vs-pull",
+ "t": "Push, Pull, or Both",
+ "d": "Fanout on write vs fanout on read, the celebrity problem, and the hybrid fix",
+ "boss": false,
+ "badge": "⚖️ Badge: Fanout Judge",
+ "winTitle": "You tamed the celebrity",
+ "goal": "Your win today: you can explain fanout on write and fanout on read with two pros and two cons each, say why celebrities and inactive users break the push model, and defend the hybrid: push for most users, pull for the very popular.",
+ "bookSections": "Step 3, Feed publishing deep dive: Fanout service — fanout on write (push model), fanout on read (pull model), pros and cons of each, the hybrid approach, consistent hashing for hotkeys",
+ "stages": [
+  {
+   "title": "Push: deliver at write time",
+   "sub": "Fanout on write",
+   "teaches": "Fanout on write (push model): the feed is precomputed when a post is written. As soon as Ana publishes, her post ID is appended to every friend's feed in the cache. Pros (book): the feed is built in real time and reaches friends immediately; reading is fast because the work is already done. Cons (book): if a user has very many friends or followers, fetching that list and writing into every feed is slow and heavy (the book calls this the hotkey problem; it's really write amplification: one post becomes N writes); and for inactive users, who rarely log in, precomputing their feeds wastes compute and memory.",
+   "interaction": "Predict-then-watch on a social graph. Center node Ana; around her 8 friend nodes, each with a small 'feed' stack. 3 friends are greyed with a 'zzz' badge (last login 40+ days ago). Before 'Post', the learner predicts: 'How many cache writes does this post cause?' (1 / 8 / 5). Correct: 8 (one per friend, including the sleepers). Animation: 8 ID chips fly out; counters show 'writes at post time: 8', 'reads when Bo opens app: 1 lookup'. The 3 sleeper writes turn red with label 'wasted: may never be read'. Second round: swap Ana for 'Cleo the pop star' with a follower counter at 40,000,000; pressing Post shows the counter of pending writes climbing with a progress bar crawling; a 'fanout lag' clock ticks into minutes and one cache shard glows red ('hot').",
+   "check": "Prediction made. Quiz (2 Qs): 'Name one push-model pro' (fast reads / real-time delivery); 'Why are inactive users a problem for push?' (we pay to precompute feeds nobody reads)."
+  },
+  {
+   "title": "Pull: build it when asked",
+   "sub": "Fanout on read",
+   "teaches": "Fanout on read (pull model): nothing happens to friends' feeds at write time; the post is just stored. When Bo loads his home page, the system fetches recent posts from each person he follows and merges them newest-first, on demand. Pros (book): no wasted work on inactive users (feeds are built only when someone actually looks); no write-time hotkey, since a celebrity's post is written once. Con (book): reading is slow, because the feed isn't precomputed: every page load is a fan-in across many authors plus a merge. Jargon: fan-in = gather from many sources into one; merge = combine already-sorted lists into one sorted list.",
+   "interaction": "Predict-then-watch, mirrored from stage 1. Same graph, now from Bo's side: Bo follows 8 people. Pressing 'Cleo posts' writes one chip into Cleo's own post list only (writes: 1). Then the learner predicts: 'When Bo opens the app, how many lists does the service read?' (1 / 8 / 0). Correct: 8. Animation: 8 lookups fan in, then a merge animation interleaves chips newest-first. A latency bar grows with each lookup (illustrative: ~2 ms per lookup in parallel batches plus merge). A slider 'Bo follows N accounts' (10 to 2,000) makes the read cost and latency bar grow while write cost stays 1.",
+   "check": "Prediction made. Quiz (2 Qs): 'Pull model: when is the feed computed?' (at read time, on demand); 'Name the pull model's main con' (slow feed loads)."
+  },
+  {
+   "title": "The trade-off grid",
+   "sub": "Sort the pros and cons",
+   "teaches": "Side by side: push does the work at write time (fast reads, real-time, but wasted work on sleepers and huge write bursts for popular users); pull does it at read time (no waste, no write burst, but slow reads). The deciding fact from the book: fetching the feed fast is crucial, which is why push is the default.",
+   "interaction": "Sort board: a 2x2 grid (rows Push / Pull, columns Pro / Con). 8 cards to drag: 'Feed is ready the moment you open the app' (Push-Pro), 'Friends get the post in real time' (Push-Pro), 'A post with millions of followers means millions of writes' (Push-Con), 'Precomputes feeds for people who never log in' (Push-Con), 'No compute wasted on inactive users' (Pull-Pro), 'A celebrity post is written only once' (Pull-Pro), 'Every feed load gathers and merges many lists' (Pull-Con), 'Feed loads get slower as you follow more accounts' (Pull-Con). Wrong drops bounce back and cost a heart. When all are placed, a banner asks: 'The book's top priority is fast feed loads. So the default is...?' Push / Pull.",
+   "check": "All 8 cards sorted; banner answered Push."
+  },
+  {
+   "title": "The hybrid dial",
+   "sub": "Push for most, pull for the famous",
+   "teaches": "Book's hybrid: use push for the majority of users so feeds load fast; for celebrities or users with very many friends/followers, don't fan out their posts; followers pull those posts at read time and merge them into their precomputed feed. The book also suggests consistent hashing to spread requests and data more evenly and ease hotkeys (World 6, quest 6.2). Back-of-envelope (our own illustrative numbers, not the book's): 10M DAU, each posting about once a day, average 300 friends -> 10M x 300 = 3 billion feed writes/day ~= 3e9 / 86,400 ~= 35,000 writes/s on average. One account with 50M followers posting once = 50M writes by itself, more than an hour of the whole system's average write load.",
+   "interaction": "Two parts. (1) Calculate-and-check: 'Our illustrative numbers: 10 million DAU, 1 post each per day, 300 friends on average. Average feed-cache writes per second?' numeric input, accept 30,000-40,000 (exact ~34,700); then 'A page with 50 million followers posts once with pure push: how many writes?' accept 50,000,000. (2) The dial sim: a histogram of 1,000 sample accounts by follower count (long tail: most under 500, a few in the millions). A draggable threshold line: accounts right of the line are 'pull' (orange), left are 'push' (blue). Two live gauges: 'peak write burst' (falls as the line moves left) and 'extra lists merged per feed load' (rises as more accounts become pull). A target zone is shaded on both gauges; the learner must place the threshold so both gauges sit in their green zones (works for thresholds roughly 10k-1M followers in the toy data). Then a button 'Bo opens his feed' animates the hybrid read: one lookup of Bo's precomputed list + 2 pulls from the celebrities he follows, merged newest-first.",
+   "check": "Both calculations within tolerance; threshold placed with both gauges green. Quiz (2 Qs): 'In the hybrid, whose posts are NOT fanned out?' (celebrities / very high follower counts); 'What does consistent hashing help with here?' (spreading keys and load more evenly across cache nodes to ease hotspots)."
+  },
+  {
+   "title": "Boss: The Fanout Oracle",
+   "sub": "Push, pull, or hybrid?",
+   "teaches": "Applying the model choice to concrete products and situations.",
+   "interaction": "Q.boss with shared choices: 'Push (fanout on write)' / 'Pull (fanout on read)' / 'Hybrid'. Scenarios: (1) 'A friends-only app where nobody has more than 5,000 friends and fast feed loads are the top priority' -> Push (the cap bounds fanout). (2) 'A Twitter-like app: most users have 200 followers, a few have 100 million' -> Hybrid. (3) 'An internal company app with 2,000 employees; 80% open it once a quarter' -> Pull (most precomputed feeds would be wasted, and reads are small). (4) 'Your fanout queue backs up for 20 minutes every time one pop star posts' -> Hybrid (stop fanning out her posts). (5) 'You need friends to see a post in real time and feed loads must be near-instant' -> Push. (6) 'Feed loads take 3 seconds because each one merges 1,500 followed accounts' -> Hybrid (precompute feeds for normal accounts, pull only the few huge ones). Wrong answers explain the trade-off.",
+   "check": "Boss HP to zero."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "Defend your fanout",
+   "teaches": "The fanout choice is the most-asked deep-dive question for this prompt.",
+   "interaction": "Q.drill. Prompt: 'Interviewer: push or pull for the news feed? What about celebrities?' Model answer (paraphrase): 'Two options. Fanout on write precomputes each follower's feed when a post is published: reads are a cheap cache lookup and delivery is real-time, but a user with millions of followers turns one post into millions of writes, and we waste work on people who never log in. Fanout on read builds the feed at load time: no wasted work and no write bursts, but every load gathers and merges many lists, so it's slow. Fast reads matter most, so I'd push for normal users and skip fanout for accounts above a follower threshold; their followers pull those posts at read time and merge them in. I'd spread cache keys with consistent hashing to avoid hot shards.' Checks: 'Defined both push and pull', 'Gave a pro and a con for each', 'Named the celebrity / write amplification problem', 'Named the inactive-user waste', 'Proposed the hybrid with a follower threshold', 'Said why fast reads win'.",
+   "check": "Drill completed and self-graded."
+  }
+ ],
+ "caveats": [
+  "The book calls the celebrity problem a 'hotkey problem'. Strictly, the pain is write amplification (one post becomes millions of writes) plus fanout lag; a single hot key is a related but separate issue.",
+  "Consistent hashing spreads many keys evenly but cannot split ONE very hot key; real systems replicate hot items or cache them locally.",
+  "With a strict 5,000-friend cap, pure push is bounded (at most 5,000 writes per post). The celebrity problem really bites with unlimited followers, as on Twitter or Instagram.",
+  "Twitter publicly described a hybrid like this in 2012: tweets were fanned out into per-user timelines held in Redis, while very high-follower accounts were merged in at read time.",
+  "The 35,000 writes/s and 50M-follower numbers are our illustrative assumptions; the book doesn't do estimation for this chapter.",
+  "Academic work (Feeding Frenzy, SIGMOD 2010) picks push or pull per producer-consumer pair based on their post and read rates, a finer-grained version of the hybrid."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo: Design a News Feed System (book chapter 11, online version)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-news-feed-system"
+  },
+  {
+   "label": "Raffi Krikorian, Timelines at Scale (Twitter, QCon 2012, InfoQ)",
+   "url": "https://www.infoq.com/presentations/Twitter-Timeline-Scalability/"
+  },
+  {
+   "label": "Silberstein et al., Feeding Frenzy: Selectively Materializing Users' Event Feeds (SIGMOD 2010)",
+   "url": "https://dl.acm.org/doi/10.1145/1807167.1807224"
+  },
+  {
+   "label": "Karger et al., Consistent Hashing and Random Trees (STOC 1997)",
+   "url": "https://dl.acm.org/doi/10.1145/258533.258660"
+  }
+ ],
+ "id": "1102",
+ "file": "1102-news-feed-fanout-push-vs-pull.html",
+ "world": 11,
+ "chapterTitle": "Design a News Feed System",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-news-feed-system",
+ "cheatsheet": "../reference/ch11-news-feed-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "1101",
+   "n": "11.1",
+   "t": "Two Rivers",
+   "d": "Scope a news feed, design its two APIs, and sketch the publish and read flows"
+  },
+  {
+   "id": "1102",
+   "n": "11.2",
+   "t": "Push, Pull, or Both",
+   "d": "Fanout on write vs fanout on read, the celebrity problem, and the hybrid fix"
+  },
+  {
+   "id": "1103",
+   "n": "11.3",
+   "t": "The Fanout Factory",
+   "d": "Inside publishing: auth and rate limits, the five-step fanout workflow, and an ID-only feed cache"
+  },
+  {
+   "id": "1104",
+   "n": "11.4",
+   "t": "Hydrate the Feed",
+   "d": "Inside reading: turn post IDs into a full feed, serve media from a CDN, and the five cache layers"
+  },
+  {
+   "id": "1105",
+   "n": "BOSS",
+   "t": "Design It Live: News Feed",
+   "d": "Full mock interview: design a news feed for 10 million daily users"
+  }
+ ]
+}
