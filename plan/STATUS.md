@@ -2,7 +2,7 @@
 
 Every chapter of *System Design Interview* Vol. 1 as a world of quests. Ticked = done. Regenerate: `python3 plan/tools/status.py`.
 
-**60 of 83 quests built** · 51 live on the map · 9 built, awaiting world review · 10 being built (draft on disk, not verified) · 13 not started.
+**61 of 83 quests built** · 51 live on the map · 10 built, awaiting world review · 9 being built (draft on disk, not verified) · 13 not started.
 
 Legend: `[x]` done · `[ ]` not done. A world is **done** when every quest is built, the world review has run, its cheat sheet
 exists, and its quests are `ready: true` on the map.
@@ -13,7 +13,7 @@ exists, and its quests are `ready: true` on the map.
 - [ ] `0102` 1.2 · [Copy the Ledger](../lessons/0102-scale-database-replication.html) — being built (unverified draft)
 - [ ] `0103` 1.3 · [Hot Memory, Near Edge](../lessons/0103-scale-cache-and-cdn.html) — being built (unverified draft)
 - [ ] `0104` 1.4 · [Forget Me, Find Me Anywhere](../lessons/0104-scale-stateless-and-data-centers.html) — being built (unverified draft)
-- [ ] `0105` 1.5 · [Queues, Gauges & Shards](../lessons/0105-scale-queues-observability-sharding.html) — being built (unverified draft)
+- [x] `0105` 1.5 · [Queues, Gauges & Shards](../lessons/0105-scale-queues-observability-sharding.html) — built · needs world review
 - [ ] `0106` BOSS · [Zero to Millions, Live](../lessons/0106-scale-boss-millions-live.html) — being built (unverified draft)
 - [ ] World review + cheat sheet
 
