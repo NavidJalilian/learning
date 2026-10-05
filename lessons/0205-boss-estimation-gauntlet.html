@@ -228,7 +228,7 @@
       <ul class="small" style="margin:0 0 6px;padding-left:20px">
         <li><b style="color:var(--good)">Green</b>: within ±30% of the model answer, unit labeled. Full XP.</li>
         <li><b style="color:var(--warn)">Amber</b>: the right order of magnitude (within 3×), or no unit. Half XP.</li>
-        <li><b style="color:var(--bad)">Red</b>: further off. Costs a heart and 20 seconds.</li>
+        <li><b style="color:var(--bad)">Red</b>: further off. Costs a heart and 20 seconds. One slip is charged once: if a later row is off only because it used your own earlier wrong number with the right method, that row is amber, not red.</li>
       </ul>
       <p class="small muted">Each row takes 25 seconds. A hint shows the formula and costs 15 seconds more. Tip: 86,400 seconds in a day is close to 100,000, so "÷ 86,400" is roughly "drop five zeros" (Quest <a href="0201-powers-of-two.html">2.1</a>).</p>
       <div class="lbl">The interviewer's numbers</div>
@@ -259,6 +259,7 @@
       <p>An estimate only earns its keep if it <b>changes a decision</b>. The interviewer's real question after any number is "so what?"</p>
       <div class="chat" id="chat5"></div>
       <div class="lbl">Link each number to the design move it forces: tap a number, then its move</div>
+      <p class="small muted" style="margin:0">A wrong link costs a heart the first time for each number. More misses on the same number only cost time.</p>
       <div class="match" id="match"></div>
       <div class="status" id="matchStatus" role="status"></div>
       <div id="closeWrap" style="display:none">
@@ -704,9 +705,12 @@ function check3(i) {
   else if (grade === 'a') {
     const why = close && !unitOK ? `<b>Right number, but label your units.</b> ${u ? `"${u}" doesn't fit this row.` : 'A bare number is ambiguous.'} Write the unit at every step; it's how you catch a 1,000× slip.` + CITE(1, BOOK) : '<b>Right order of magnitude.</b> Close enough to steer a design, but check the step that drifted:';
     html = `${why} ${r.worked}`; Q.addXP(5, btn); tick(3, 25, 'num', 0.5, 1);
+  } else if (grade === 'c') {
+    html = `<b>↪ Carried slip, not a new one.</b> Your method is right: your own earlier numbers give ~${sig2(carried / UNITS[r.nat][1])} ${r.nat}, and that's what you wrote. No heart lost, but the earlier slip is still in it. Swap in the model numbers from here on: ${r.worked}`;
+    Q.toast('no ♥ lost', btn, 'practice'); tick(3, 25, 'num', 0.5, 1);
   } else {
     html = `<b>✗ Off by more than 3×.</b> ${!unitOK && u ? `(And "${u}" doesn't fit this row.) ` : ''}${r.worked} <span class="muted">(−20 s)</span>`;
-    Q.loseHeart(btn); tick(3, 45, 'num', 0, 1);
+    Q.loseHeart(btn); tick(3, 45, 'num', 0, 1, 1);
   }
   tick(3, 0, 'unit', unitOK ? 1 : 0, 1);
   if (p.sig > 3) html += ` <span class="rchip">🎯 Round it: "${r.show}" is plenty</span>`;
@@ -717,9 +721,9 @@ function check3(i) {
   else finish3();
 }
 function finish3() {
-  const g = s3res.filter(x => x === 'g').length, a = s3res.filter(x => x === 'a').length;
+  const cnt = k => s3res.filter(x => x === k).length, g = cnt('g'), c = cnt('c'), a = cnt('a') + c;
   const bn = $('#s3bonus'); bn.style.display = 'block';
-  bn.innerHTML = `<b>Board complete: ${g} green, ${a} amber, ${8 - g - a} red.</b> Bonus number a senior adds: 30 TB of new media a day ÷ 86,400 s ≈ <b>350 MB/s</b> of uploads, all day. That's a lot of bandwidth for one ingest path, which matters in the wrap-up.`;
+  bn.innerHTML = `<b>Board complete: ${g} green, ${a} amber${c ? ` (${c} carried slip${c > 1 ? 's' : ''})` : ''}, ${cnt('r')} red.</b> Bonus number a senior adds: 30 TB of new media a day ÷ 86,400 s ≈ <b>350 MB/s</b> of uploads, all day. That's a lot of bandwidth for one ingest path, which matters in the wrap-up.`;
   chat3.iv(g >= 6 ? 'Clean board. Quick sanity check before I start poking at it.' : 'Okay. Quick sanity check before I start poking at it.').then(() => {
     Q.quiz($('#s3q'), {
       tag: 'Sanity check', xp: 20,
@@ -811,10 +815,10 @@ const SLOTS = [
     { t: 'Next I\'d order exactly 42 servers and 165 PB of disk today, so we never need to revisit capacity again.', v: 'Too precise: estimates guide a design; they aren\'t a purchase order.' }] },
 ];
 const chat5 = Chat($('#chat5'));
-let sel5 = null, linked = new Set(), links5 = [], s5slot = 0;
+let sel5 = null, linked = new Set(), links5 = [], s5slot = 0, missed5 = new Set();
 function setup5() {
   begun.delete(5);
-  chat5.clear(); sel5 = null; linked = new Set(); links5 = []; s5slot = 0;
+  chat5.clear(); sel5 = null; linked = new Set(); links5 = []; s5slot = 0; missed5 = new Set();
   ['#s5q', '#closing', '#speech'].forEach(s => $(s).innerHTML = '');
   $('#speech').className = 'speech'; $('#closeWrap').style.display = 'none'; $('#s5caveat').style.display = 'none';
   $('#matchStatus').textContent = ''; $('#matchStatus').className = 'status';
@@ -865,8 +869,14 @@ function onCard(b) {
   } else {
     const p = linkPath(sel5, j, 'bad');
     setTimeout(() => { p.style.opacity = 0; setTimeout(() => p.remove(), 600); }, 500);
-    nudge(b); Q.loseHeart(b); tick(5, 15, 'tie', 0, 1);
-    st.className = 'status e'; st.innerHTML = `Not that one. ${PAIRS[sel5].hint}`;
+    nudge(b);
+    if (!missed5.has(sel5)) {           // first miss on this number: a heart; repeats only cost time
+      missed5.add(sel5); Q.loseHeart(b); tick(5, 15, 'tie', 0, 1, 1);
+      st.className = 'status e'; st.innerHTML = `Not that one. ${PAIRS[sel5].hint}`;
+    } else {
+      tick(5, 10, null); clockToast(5, 10, b);
+      st.className = 'status e'; st.innerHTML = `Still not that one (no heart this time, just 10 s). ${PAIRS[sel5].hint}`;
+    }
   }
 }
 function showClosing() {
@@ -923,6 +933,18 @@ const CATS = [
 ];
 const VERD = [[.85, 'Strong hire', 3], [.7, 'Hire', 2], [.5, 'Lean hire', 1], [0, 'No hire (yet)', 0]];
 const verdict = r => VERD.find(v => r >= v[0]);
+const LEVEL = l => VERD.find(v => v[2] === l);
+/* The signal average alone can hide a sloppy run (one bad category gets diluted by six good ones),
+   so the overall verdict is capped by the clock and by mistakes, like a real debrief:
+   any overtime drops one level (more than 2 min over drops two); 3+ mistakes drop one (6+ drop two). */
+function overall(avg, total, misses) {
+  const base = verdict(avg)[2], over = total - 600, why = [];
+  let cap = 3;
+  if (over > 0) { cap -= over > 120 ? 2 : 1; why.push(`${fmt(over)} over time`); }
+  if (misses >= 3) { cap -= misses >= 6 ? 2 : 1; why.push(`${misses} mistakes`); }
+  const lvl = Math.min(base, Math.max(0, cap));
+  return { v: LEVEL(lvl), base: LEVEL(base), capped: lvl < base, why };
+}
 const SNAME = { 1: 'Scope it', 2: 'Plan the math', 3: 'Crunch it', 4: 'Follow-ups', 5: 'Wrap it up' };
 function renderScore() {
   const d = iload(), sums = {};
@@ -936,13 +958,16 @@ function renderScore() {
   const rated = CATS.map(c => sums[c.k]).filter(s => s && s[1]);
   const avg = rated.length ? rated.reduce((t, s) => t + s[0] / s[1], 0) / rated.length : 0;
   const total = totalSec(d);
+  const misses = [1, 2, 3, 4, 5].reduce((t, n) => t + ((d[n] && d[n].miss) || 0), 0);
+  const ov = rated.length ? overall(avg, total, misses) : null;
   $('#scorecard').innerHTML = `<div class="scorecard"><div class="kicker">Interviewer's scorecard</div><h3>Your signals from this run</h3>
     <p class="small muted" style="margin:0">Computed from your choices in every stage. Replaying a stage overwrites its part.</p>
     ${rows.join('')}
     <table class="sc-time"><thead><tr><th>Stage</th><th>Your time</th><th>Budget</th></tr></thead><tbody>
     ${[1, 2, 3, 4, 5].map(n => { const played = !!d[n], s = stageSec(d, n); return `<tr><td>${SNAME[n]}</td><td>${played || Q.isCleared(n) ? fmt(s) : '—'}</td><td>${fmt(BUDGET[n])} ${played ? (s <= BUDGET[n] ? '<span class="ok">✓</span>' : '<span class="ov">over</span>') : ''}</td></tr>`; }).join('')}
     </tbody></table>
-    <div class="sc-overall"><span>Final clock ${fmt(total)} of 10:00 ${total <= 600 ? '<span style="color:var(--good);font-weight:700">✓ on time</span>' : '<span style="color:var(--warn);font-weight:700">over time</span>'}</span><span>Overall&nbsp; <b>${rated.length ? verdict(avg)[1] : '—'}</b></span></div></div>`;
+    <div class="sc-overall"><span>Final clock ${fmt(total)} of 10:00 ${total <= 600 ? '<span style="color:var(--good);font-weight:700">✓ on time</span>' : '<span style="color:var(--warn);font-weight:700">over time</span>'}<br><span class="small muted">Mistakes: ${misses}${misses ? ' (wrong answers and red rows: the ones that cost a heart)' : ''}</span></span><span>Overall&nbsp; <b class="sc-verdict">${ov ? ov.v[1] : '—'}</b></span></div>
+    ${ov && ov.capped ? `<p class="small" style="margin:10px 0 0;color:var(--warn)">Your signals alone read <b>${ov.base[1]}</b>, but ${ov.why.join(' and ')} pull it down. Interviewers notice both: a run that's right but slow, or right after several wrong turns, reads weaker than a clean one. Replay the stage that cost the most.</p>` : ''}</div>`;
   requestAnimationFrame(() => setTimeout(() => $$('#scorecard .sc-bar div[data-w]').forEach(b => b.style.width = b.dataset.w + '%'), 60));
 }
 function setup6() {

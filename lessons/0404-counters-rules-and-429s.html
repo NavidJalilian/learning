@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>The Counter Room</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: Redis console (stage 1), YAML builder (2), HTTP response inspector + client lanes (3), whiteboard (4) */
+:root { --yk: #9fa8ff; --yv: #6ee7a8; --cur: rgba(143,130,255,.22); --sel-bg: #23264a; --sel-line: #3a3f6b; --crash: rgba(229,72,77,.35); --on-dark: #dfe3ff; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --yk: #a9b1ff; --yv: #7cf0b4; --cur: rgba(143,130,255,.28); --sel-bg: #1c1f3d; --sel-line: #3d4275; --crash: rgba(255,92,99,.38); --on-dark: #e6e9ff; }
+}
+:root[data-theme="dark"] { --yk: #a9b1ff; --yv: #7cf0b4; --cur: rgba(143,130,255,.28); --sel-bg: #1c1f3d; --sel-line: #3d4275; --crash: rgba(255,92,99,.38); --on-dark: #e6e9ff; }
+
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.lbl { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.opt.nope { animation: shake .4s; }
+.bignum { font-family: var(--mono); font-weight: 700; }
+
+/* stage 1: Redis console */
+.rgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 14px; }
+.rcard { min-width: 0; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); padding: 12px; }
+.rcard .big { font-family: var(--mono); font-weight: 700; font-size: 26px; line-height: 1.2; }
+.rcard .kname { font-family: var(--mono); font-size: 13px; word-break: break-all; color: var(--accent); font-weight: 600; }
+.rcard.empty .big { color: var(--muted); }
+.ttl { height: 8px; border-radius: 99px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; margin-top: 6px; }
+.ttl div { height: 100%; width: 0; background: var(--teal); transition: width .4s; }
+.status { display: inline-block; margin-top: 6px; font-family: var(--mono); font-weight: 700; font-size: 13px; padding: 4px 8px; border-radius: 8px; background: var(--bg-2); color: var(--muted); }
+.status.ok { background: var(--good-soft); color: var(--good); }
+.status.no { background: var(--bad-soft); color: var(--bad); }
+.rterm { border-radius: 0; min-height: 0; }
+.rterm .term-log { min-height: 120px; max-height: 190px; }
+.sim-bar .btn { padding: 8px 12px; font-size: 14px; min-height: 40px; }
+.code { background: var(--code-bg); color: var(--code-ink); border-radius: 12px; padding: 10px 0; font-family: var(--mono); font-size: 13px; margin: 12px 0; transition: background .3s; }
+.code .ln { padding: 3px 12px 3px 8px; white-space: pre-wrap; word-break: break-word; border-left: 3px solid transparent; }
+.code .ln .no { display: inline-block; width: 22px; color: #6b7099; user-select: none; }
+.code .ln.ran { opacity: .6; }
+.code .ln.cur { background: var(--cur); border-left-color: var(--yk); }
+.code .ln.cur::after { content: "  ◀ next"; color: var(--yk); font-size: 11px; }
+.code .ln.skipped { text-decoration: line-through; color: #ff8a8a; opacity: 1; }
+.code .gap { margin: 2px 12px; padding: 2px 8px; border: 1px dashed #ff8a8a; border-radius: 6px; color: #ff8a8a; font-size: 11.5px; display: none; }
+.code .gap.on { display: block; }
+.code.crash { animation: crash .7s; }
+@keyframes crash { 20%, 60% { background: var(--crash); } }
+.btn.danger { border-color: var(--bad); color: var(--bad); }
+.btn.danger:hover { background: var(--bad-soft); }
+.bugkey { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; font-family: var(--mono); font-size: 13.5px; padding: 10px 12px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line); }
+.bugkey b.bad { color: var(--bad); }
+.bugkey b.good { color: var(--good); }
+
+/* stage 2: YAML builder */
+.rulecard { border-radius: 16px; padding: 16px; background: linear-gradient(160deg, var(--accent-soft), var(--teal-soft)); text-align: center; animation: rise .35s; }
+.rulecard .src { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.rulecard p { margin: 6px 0 0; font-size: 18px; }
+.pips { display: flex; gap: 6px; justify-content: center; margin-bottom: 10px; }
+.pips i { width: 26px; height: 6px; border-radius: 99px; background: var(--line); }
+.pips i.on { background: var(--accent); }
+.pips i.done { background: var(--good); }
+.yaml { background: var(--code-bg); color: var(--code-ink); border-radius: 14px; padding: 12px 14px; font-family: var(--mono); font-size: 13.5px; margin-top: 12px; overflow-x: auto; border: 2px solid transparent; transition: border-color .3s; }
+.yaml.ok { border-color: var(--good); }
+.yaml .yl { display: flex; align-items: center; white-space: pre; min-height: 26px; }
+.yaml .yl.f { min-height: 46px; }
+.yaml .k { color: var(--yk); }
+.yaml .cm { color: #7d82ad; }
+.yaml select { font: inherit; color: var(--on-dark); background: var(--sel-bg); border: 1.5px solid var(--sel-line); border-radius: 8px; min-height: 40px; padding: 4px 6px; margin-left: 6px; max-width: 170px; }
+.yaml select.wrong { border-color: #ff8a8a; }
+.yaml select.right { border-color: #6ee7a8; color: #6ee7a8; }
+.hints { list-style: none; padding: 0; margin: 10px 0 0; font-size: 14px; display: grid; gap: 4px; }
+.hints li::before { content: "💡 "; }
+.evs { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 12px; min-height: 8px; }
+.ev { font-family: var(--mono); font-size: 12.5px; padding: 5px 8px; border-radius: 8px; background: var(--good-soft); color: var(--good); font-weight: 600; animation: rise .25s; }
+.ev.no { background: var(--bad-soft); color: var(--bad); animation: shake .4s; }
+.meter { display: flex; align-items: center; gap: 10px; margin-top: 12px; font-family: var(--mono); font-size: 13px; }
+.meter .mt { flex: 1; height: 14px; border-radius: 99px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; }
+.meter .mf { height: 100%; width: 0; background: var(--good); }
+
+/* stage 3: response inspector */
+.tl svg { display: block; width: 100%; height: auto; }
+.tl .win { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1; }
+.tl .tk { fill: var(--panel); stroke: var(--muted); stroke-width: 2; }
+.tl .tk.cur { stroke: var(--accent); stroke-width: 3; }
+.tl .tk.ok { fill: var(--good-soft); stroke: var(--good); }
+.tl .tk.no { fill: var(--bad-soft); stroke: var(--bad); }
+.tl .tn { fill: var(--ink); font: 700 10px var(--mono); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.tl .ax { fill: var(--muted); font: 600 10.5px var(--font); }
+.resp { margin-top: 12px; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--panel); animation: rise .35s; }
+.resp .rh { padding: 8px 12px; background: var(--bg-2); font-size: 13.5px; font-weight: 600; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.resp .rb { padding: 8px 12px 12px; font-family: var(--mono); font-size: 13px; }
+.resp .hl { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; padding: 4px 0; }
+.resp .hk { color: var(--accent); font-weight: 600; }
+.resp select, .resp input { font: inherit; color: var(--ink); background: var(--bg); border: 1.5px solid var(--line); border-radius: 8px; min-height: 40px; padding: 4px 8px; }
+.resp input { width: 88px; }
+.resp input::placeholder { color: var(--muted); font-size: 11px; }
+.resp .wrong { border-color: var(--bad); background: var(--bad-soft); }
+.resp .right { border-color: var(--good); background: var(--good-soft); }
+.resp.worked { background: var(--bg); }
+.resp .note { font-family: var(--font); font-size: 13.5px; color: var(--muted); margin: 6px 0 0; }
+.rlog { display: grid; gap: 4px; margin-top: 10px; font-family: var(--mono); font-size: 12.5px; }
+.rlog div { padding: 4px 8px; border-radius: 8px; background: var(--good-soft); animation: rise .3s; }
+.rlog div.no { background: var(--bad-soft); }
+.hdrs { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14.5px; }
+.hdrs td { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.hdrs td:first-child { font-family: var(--mono); font-size: 12.5px; font-weight: 600; color: var(--accent); word-break: break-all; width: 44%; }
+.lanes .ln-lbl { fill: var(--ink); font: 700 11.5px var(--font); }
+.lanes .ln-sub { fill: var(--muted); font: 500 10px var(--font); }
+.lanes .track { stroke: var(--line); stroke-width: 2; }
+.lanes .reset { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 4 3; }
+.lanes .rlbl { fill: var(--accent); font: 700 10.5px var(--font); text-anchor: middle; }
+.lanes .d-no { fill: var(--bad); }
+.lanes .d-ok { fill: var(--good); }
+.lanes .wait { stroke: var(--teal); stroke-width: 2; stroke-dasharray: 2 4; }
+.lanes .ax { fill: var(--muted); font: 600 10px var(--mono); text-anchor: middle; }
+.bp { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+@media (max-width: 560px) { .bp { grid-template-columns: 1fr; } }
+.bp .opt { font-size: 14.5px; min-height: 48px; }
+.bp .opt[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.bp .opt.right { border-color: var(--good); background: var(--good-soft); }
+.bp .opt.wrong { border-color: var(--bad); background: var(--bad-soft); }
+.bp .opt.miss { border-style: dashed; border-color: var(--good); }
+
+/* stage 4: whiteboard */
+.wb svg { max-width: 560px; margin: 0 auto; }
+.wb .part { opacity: 0; transition: opacity .45s; }
+.wb .part.on { opacity: 1; }
+.wb .box rect { fill: var(--panel); stroke: var(--muted); stroke-width: 2; transition: fill .3s, stroke .3s; }
+.wb .box.lit rect { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 3; }
+.wb .box.hot rect { fill: var(--bad-soft); stroke: var(--bad); stroke-width: 3; }
+.wb .bt { fill: var(--ink); font: 700 15px var(--font); text-anchor: middle; }
+.wb .bs { fill: var(--muted); font: 500 11.5px var(--font); text-anchor: middle; }
+.wb .arrow { fill: none; stroke: var(--muted); stroke-width: 2.5; }
+.wb .arrow.bad { stroke: var(--bad); stroke-dasharray: 5 4; }
+.wb .arrow.warn { stroke: var(--warn); }
+.wb .ah { fill: var(--muted); }
+.wb .ah.bad { fill: var(--bad); }
+.wb .ah.warn { fill: var(--warn); }
+.wb .pkt { stroke: var(--panel); stroke-width: 2.5; }
+.wb .pkt.ok { fill: var(--accent); }
+.wb .pkt.no { fill: var(--bad); }
+.wb .pkt.q { fill: var(--warn); }
+.wb .note { font: 700 13px var(--mono); text-anchor: middle; }
+.wb .note.ok { fill: var(--good); }
+.wb .note.no { fill: var(--bad); }
+.wb .note.q { fill: var(--warn); }
+.wb .note.n { fill: var(--muted); }
+.wbmsg { padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); font-size: 14.5px; min-height: 48px; }
+.wbmsg.nudge { background: var(--warn-soft); }
+.wbmsg.bad { background: var(--bad-soft); }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+@media (max-width: 640px) { .tiles { grid-template-columns: 1fr 1fr; } }
+.tiles .opt { text-align: center; font-weight: 600; font-size: 14.5px; padding: 10px 8px; min-height: 56px; }
+.tiles .opt small { display: block; font-weight: 500; font-size: 12px; color: var(--muted); }
+.mode { font-family: var(--mono); font-size: 13px; }
+.mode b { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 4.4 · Design a Rate Limiter</div>
+    <h1>The Counter Room</h1>
+    <p class="lede">You know the algorithms. Now build the machine around them: where the counters live, how the rules are written, what the client is told when it hits the wall, and the book's final diagram.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can explain why counters live in <b>Redis</b> (<code>INCR</code>, <code>EXPIRE</code>), write a <b>Lyft-style rule</b>, list the <b>three rate-limit headers</b> and what a client should do with a <b>429</b>, and draw the book's <b>detailed design</b> from memory.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Where do counters live?</h2><div class="sub">Redis, INCR and EXPIRE</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Every algorithm from Quests 4.2 and 4.3 boils down to one idea: <b>count</b>. Keep a counter for each user (or IP address, or API key). If the counter goes over the limit, refuse the request.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener">[1]</a></p>
+      <p>So where does the counter live? The book rules out the database. A database keeps its data on disk, and disk is slow. This check runs on <i>every single request</i>, so it has to be fast. The book picks an <b>in-memory cache</b> instead: it's fast, and it can delete data on a timer by itself. The popular choice is <b>Redis</b>, a key-value store that keeps everything in memory. Two commands do the work:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener">[1]</a></p>
+      <ul>
+        <li><code>INCR key</code> adds 1 to the number stored at that key. A missing key counts as 0, so the first INCR returns 1.<a class="cite" href="https://redis.io/docs/latest/commands/incr/" target="_blank" rel="noopener">[2]</a></li>
+        <li><code>EXPIRE key 60</code> gives the key a <b>TTL</b> (time to live). After 60 seconds Redis deletes the key on its own.<a class="cite" href="https://redis.io/docs/latest/commands/expire/" target="_blank" rel="noopener">[3]</a></li>
+      </ul>
+      <p>The request first reaches the <b>rate limiting middleware</b>, a layer of code that sits in front of your API servers. In the book's flow, the middleware reads the counter from Redis. If the limit is reached, the request is rejected. If not, it goes on to the API servers, and the counter is incremented and saved back. Limit here: <b>5 requests per 60 s</b>. Press <b>Send</b> and watch the commands.</p>
+
+      <div class="sim">
+        <div class="rgrid">
+          <div class="rcard">
+            <div class="lbl">📱 Client · user42</div>
+            <div class="big" id="rT">t = 0 s</div>
+            <div class="status" id="rStatus">no request yet</div>
+          </div>
+          <div class="rcard empty" id="rKeyCard">
+            <div class="lbl">🧮 Redis</div>
+            <div class="kname">rl:user42</div>
+            <div class="big" id="rVal">(nil)</div>
+            <div class="small muted">TTL <span class="mono" id="rTTL">—</span></div>
+            <div class="ttl"><div id="rBar"></div></div>
+          </div>
+        </div>
+        <div class="term rterm"><div class="term-log" id="rlog"><div class="nil">// Redis console. Each request runs the commands below.</div></div></div>
+        <div class="sim-bar">
+          <span class="row" style="gap:8px"><button class="btn primary" id="rSend">📨 Send request</button><button class="btn" id="rWait">⏩ Wait 60 s</button><button class="btn" id="rReset">↻ Reset</button></span>
+        </div>
+      </div>
+      <ul class="checklist" id="s1goals">
+        <li data-g="reject"><span class="box">✓</span><span>Keep sending until the middleware answers <b>429</b></span></li>
+        <li data-g="reset"><span class="box">✓</span><span>Then wait for the key to <b>expire</b> and get a <b>200</b> again</span></li>
+      </ul>
+      <div class="callout"><b>Book flow vs. real code.</b> The book reads the counter, checks it, and increments only when the request is allowed. That's what the sim does. Many real limiters skip the read and run <code>INCR</code> first, then compare the number it returns. That's one round trip instead of two, but rejected attempts get counted too. Reading and then writing in two steps also opens the door to race conditions, which is Quest 4.5's topic.</div>
+
+      <div class="challenge boxed" id="bugBox">
+        <div class="step">Spot the bug</div>
+        <h3>The server dies at the worst moment</h3>
+        <p class="small">Here's the middleware code from the sim. It's close to the rate limiter pattern on Redis's own INCR page.<a class="cite" href="https://redis.io/docs/latest/commands/incr/" target="_blank" rel="noopener">[2]</a> Step through the first request of a fresh window. When the pointer sits <b>after INCR and before EXPIRE</b>, kill the server.</p>
+        <div class="code" id="bugCode"></div>
+        <div class="row"><button class="btn primary" id="bugStep">▶ Run next line</button><button class="btn danger" id="bugKill">💥 Kill the server</button></div>
+        <div class="bugkey" id="bugKey" style="margin-top:12px"></div>
+        <div class="simlog" id="bugLog" style="border:1px solid var(--line);border-radius:12px;margin-top:10px"><div>Fresh window: rl:user42 doesn't exist yet.</div></div>
+        <div class="row" id="bugNext" style="display:none;margin-top:12px"><button class="btn primary" id="bugFF">⏩ Play the next few days</button></div>
+        <div id="s1fix"></div>
+      </div>
+      <p class="small muted" id="s1wait" style="display:none">One more thing before the last check: finish the two console goals above.</p>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Write the rules</h2><div class="sub">Lyft-style rule config</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Counters need <b>rules</b>: what to count, and how many is too many. The book points to Lyft, which open-sourced its rate-limiting service. Rules are written in <b>configuration files</b> and saved on disk.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener">[1]</a><a class="cite" href="https://github.com/envoyproxy/ratelimit" target="_blank" rel="noopener">[4]</a></p>
+      <p>A rule has a <b>domain</b> (which part of the product it covers) and a <b>descriptor</b>: a <b>key</b> naming a kind of request and a <b>value</b> picking one specific kind. Then comes the <b>rate_limit</b>: a time <b>unit</b> (second, minute, hour or day) and <b>requests_per_unit</b>. The file is written in YAML, a format where indentation shows what belongs to what.</p>
+      <p>Turn each English rule into YAML. When it's right, test it.</p>
+      <div class="pips" id="pips"><i></i><i></i><i></i></div>
+      <div id="ruleWrap"></div>
+      <div class="callout tip"><b>Where it lives now.</b> Lyft's service moved under the Envoy project: <code>envoyproxy/ratelimit</code>. Its README still uses this same domain / descriptors / rate_limit layout.<a class="cite" href="https://github.com/envoyproxy/ratelimit" target="_blank" rel="noopener">[4]</a></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Tell the client</h2><div class="sub">429, headers, and how a good client backs off</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>When a request is over the limit, the API answers with HTTP status <b>429 Too Many Requests</b>. Depending on the use case, the request may also be <b>put in a queue</b> to run later. The book's example is orders that got rate limited because the system was overloaded: you'd rather keep them than lose them.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener">[1]</a></p>
+      <p>How does a client know it's close to the limit? From <b>HTTP response headers</b>, the small <code>Name: value</code> lines sent with every response. The book uses three:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener">[1]</a></p>
+      <table class="hdrs">
+        <tr><td>X-Ratelimit-Limit</td><td>How many calls the client may make in each time window.</td></tr>
+        <tr><td>X-Ratelimit-Remaining</td><td>How many allowed requests are left in the current window.</td></tr>
+        <tr><td>X-Ratelimit-Retry-After</td><td>How many seconds to wait before trying again without being throttled. Sent with the 429.</td></tr>
+      </table>
+      <p>Be the API. The limit is <b>5 requests per 60-second window</b>, and the window started at t = 0 s. Fill in each response. Request #1 is done for you.</p>
+      <div class="sim tl"><svg id="tlSvg" viewBox="0 0 340 66" role="img" aria-label="Timeline of six requests inside a 60-second window"></svg></div>
+      <div id="respWrap"></div>
+      <div class="rlog" id="respLog"></div>
+
+      <div id="clientPart" style="display:none">
+        <h3 style="margin:22px 0 6px">The client side</h3>
+        <p>Request #6 got a 429 with <code>X-Ratelimit-Retry-After: 35</code>. Two different apps get that same response. The <b>impatient</b> one retries every half second. The <b>polite</b> one waits the 35 seconds plus a little <b>jitter</b> (a small random extra wait, so thousands of clients don't all retry in the same instant).<a class="cite" href="https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/" target="_blank" rel="noopener">[8]</a></p>
+        <div class="sim lanes">
+          <svg id="lanes" viewBox="0 0 360 140" role="img" aria-label="Two client timelines after a 429"></svg>
+          <div class="sim-bar"><span>Impatient: <span class="bignum" id="lnBad">0</span> wasted</span><span>Polite: <span class="bignum" id="lnGood">0</span> wasted</span></div>
+        </div>
+        <div class="challenge boxed" id="lanePred"></div>
+        <div id="bpPart" style="display:none">
+          <h3 style="margin:22px 0 6px">Pick the good habits</h3>
+          <p class="small">The book ends the chapter with advice for people <i>writing</i> clients. Four of these six are on its list. Tap those four, then check.</p>
+          <div class="bp" id="bp"></div>
+          <div class="row" style="margin-top:10px"><button class="btn primary" id="bpCheck" disabled>Check my 4 picks</button></div>
+          <div class="explain" id="bpEx"></div>
+        </div>
+      </div>
+      <div class="callout warn"><b>Honest caveat: header names vary.</b> <code>X-Ratelimit-*</code> is a common habit, not a standard. GitHub, for example, sends <code>x-ratelimit-limit</code>, <code>x-ratelimit-remaining</code> and <code>x-ratelimit-reset</code>, where reset is a clock time, not a number of seconds.<a class="cite" href="https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api" target="_blank" rel="noopener">[7]</a> The standard header for "wait this long" is plain <code>Retry-After</code>.<a class="cite" href="https://www.rfc-editor.org/rfc/rfc9110#name-retry-after" target="_blank" rel="noopener">[5]</a> The IETF is drafting standard <code>RateLimit</code> and <code>RateLimit-Policy</code> headers.<a class="cite" href="https://datatracker.ietf.org/doc/draft-ietf-httpapi-ratelimit-headers/" target="_blank" rel="noopener">[6]</a> In an interview, the book's names are fine. Just show you know the idea.</div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Draw the detailed design</h2><div class="sub">Rebuild the book's final diagram</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Time to put it all on one whiteboard. The book's detailed design has eight parts.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener">[1]</a> Tap them in an order that makes sense: a part that depends on something not drawn yet costs you a minute of interview time. Two tiles don't belong at all, and each of those costs a heart.</p>
+      <div class="sim wb">
+        <svg id="wb" viewBox="0 0 560 404" role="img" aria-label="Whiteboard: the rate limiter's detailed design"></svg>
+        <div class="wbmsg" id="wbMsg">The whiteboard is empty. Where does a request start?</div>
+        <div class="sim-bar"><span class="mode" id="wbMode">over-limit mode: <b>—</b></span><span class="mono small"><span id="wbCount">0 / 8</span> parts · <span id="wbClock">0</span> min lost</span></div>
+      </div>
+      <div class="tiles" id="tiles"></div>
+      <div class="challenge" id="s4pred"></div>
+      <div id="s4quiz"></div>
+      <div class="callout warn"><b>Honest caveat: queue with care.</b> Queuing over-limit requests only makes sense for work that can safely run later, like orders or emails. For an interactive read, such as loading a feed, a fast 429 is kinder than a long hidden wait. And the client should be told the work was accepted for later, not silently left hanging.</div>
+      <div class="row" id="s4replay" style="display:none;margin-top:12px"><button class="btn">↻ Wipe the whiteboard</button></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Header Golem</h2><div class="sub">Counters, rules and responses under pressure</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Five on-call moments. Each one tests a piece of the design from this quest. Pick the best answer.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">The request's journey in 60 seconds</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> One middleware and one Redis is easy. What happens when ten middleware servers read the same counter at the same moment? Two requests both see "4", both pass, and the limit leaks. That's Quest 4.5, <i>Many Doors, One Count</i>.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 4: Design a Rate Limiter</a>. Read "High-level architecture", then the Step 3 deep dive: rate limiting rules, exceeding the rate limit, the headers, and the detailed design. Then read the "Pattern: Rate limiter" section on <a href="https://redis.io/docs/latest/commands/incr/" target="_blank" rel="noopener">Redis's INCR page</a>, which walks through the race you broke in stage 1.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <b>Key design matters for the bug in stage 1.</b> If the key has the time window built into its name (say <code>rl:user42:14:03</code> for the minute 14:03), a missing EXPIRE doesn't lock anyone out. Next minute uses a fresh key. Instead the old keys pile up forever and slowly eat Redis's memory. Either way, make INCR and EXPIRE atomic: a Lua script, a <code>MULTI</code>/<code>EXEC</code> transaction, or set the TTL only when INCR returns 1 inside the same script.<a class="cite" href="https://redis.io/docs/latest/commands/incr/" target="_blank" rel="noopener">[2]</a> <b>Backoff, done well</b>, usually means exponential backoff (double the wait after each failure) with full jitter, as AWS showed.<a class="cite" href="https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/" target="_blank" rel="noopener">[8]</a> When the server sends a Retry-After, honour it first.
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"why not keep the counter in the API server's own memory?"</i> or <i>"how often should the workers pull the rules?"</i> Follow-up questions are part of the quest.
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 4 "Design a Rate Limiter" (ByteByteGo).</li>
+        <li>Redis docs, <a href="https://redis.io/docs/latest/commands/incr/" target="_blank" rel="noopener">INCR</a> (includes a rate limiter pattern).</li>
+        <li>Redis docs, <a href="https://redis.io/docs/latest/commands/expire/" target="_blank" rel="noopener">EXPIRE</a>.</li>
+        <li><a href="https://github.com/envoyproxy/ratelimit" target="_blank" rel="noopener">envoyproxy/ratelimit</a> (Lyft's rate limit service and its rule format).</li>
+        <li><a href="https://www.rfc-editor.org/rfc/rfc9110#name-retry-after" target="_blank" rel="noopener">RFC 9110, Retry-After</a>.</li>
+        <li><a href="https://datatracker.ietf.org/doc/draft-ietf-httpapi-ratelimit-headers/" target="_blank" rel="noopener">IETF draft: RateLimit header fields for HTTP</a>.</li>
+        <li><a href="https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api" target="_blank" rel="noopener">GitHub: Rate limits for the REST API</a>.</li>
+        <li><a href="https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/" target="_blank" rel="noopener">AWS Architecture Blog: Exponential backoff and jitter</a>.</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0404',
+  badge: '🧮 Badge: Counter Keeper',
+  winTitle: 'Counters under control',
+  cheatsheet: '../reference/ch04-rate-limiter-cheatsheet.html',
+});
+const { sleep, shuffle, esc } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+const pause = ms => sleep(Q.reduced ? Math.min(ms, 30) : ms);
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function logTo(el, html, cls) { el.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); el.scrollTop = el.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); Q.addXP(xp || 10, li);
+  return true;
+}
+const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+function tween(dur, fn) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 0) { fn(1); return res(); }
+    const t0 = performance.now();
+    const f = now => { const p = Math.min(1, (now - t0) / dur); fn(p); p < 1 ? requestAnimationFrame(f) : res(); };
+    requestAnimationFrame(f);
+  });
+}
+function nudge(el) { el.classList.remove('nope'); void el.offsetWidth; el.classList.add('nope'); }
+// Predict-then-watch round. Resolves after the learner picks and the action has played.
+function predict(box, { step, title, options, correct, act, explain, xp = 15 }) {
+  box.innerHTML = `${step ? `<div class="step">${step}</div>` : ''}<h3>${title}</h3><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+  const opts = $('.opts', box);
+  let busy = false;
+  return new Promise(resolve => {
+    shuffle(options.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = async () => {
+        if (busy) return; busy = true;
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        b.classList.add('picked');
+        await act();
+        const ok = i === correct;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-i="${correct}"]`, opts).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + explain;
+        ok ? Q.addXP(xp, b) : Q.loseHeart(b);
+        resolve({ ok, row: $('.row', box) });
+      };
+      opts.appendChild(b);
+    });
+  });
+}
+function nextBtn(row, label, fn, primary = true) {
+  const b = document.createElement('button'); b.className = 'btn' + (primary ? ' primary' : ''); b.textContent = label; b.onclick = fn; row.appendChild(b); return b;
+}
+
+/* ================= STAGE 1: Redis counters ================= */
+Q.onStage(1, () => {
+  const KEY = 'rl:user42', LIMIT = 5, TTL = 60;
+  const st = { t: 0, key: null, busy: false, sawReject: false, expiredAfterReject: false };
+  const goals = new Set();
+  let fixDone = false, quizShown = false;
+  const log = $('#rlog');
+
+  async function line(text, cls) {
+    const d = document.createElement('div'); d.className = cls || ''; log.appendChild(d);
+    if (Q.reduced || cls !== 'in') d.textContent = text;
+    else for (let i = 1; i <= text.length; i += 2) { d.textContent = text.slice(0, i + 1); log.scrollTop = log.scrollHeight; await sleep(16); }
+    log.scrollTop = log.scrollHeight;
+    await pause(110);
+  }
+  function render() {
+    $('#rT').textContent = `t = ${st.t} s`;
+    const k = st.key;
+    $('#rVal').textContent = k ? k.v : '(nil)';
+    $('#rTTL').textContent = k ? (k.exp == null ? '-1 (none)' : Math.max(0, k.exp - st.t) + ' s') : '— (no key)';
+    $('#rBar').style.width = k && k.exp != null ? Math.max(0, (k.exp - st.t) / TTL * 100) + '%' : '0%';
+    $('#rKeyCard').classList.toggle('empty', !k);
+  }
+  function setStatus(code) { const s = $('#rStatus'); s.textContent = code === 200 ? '200 OK' : '429 Too Many'; s.className = 'status ' + (code === 200 ? 'ok' : 'no'); }
+  function setBtns(on) { ['#rSend', '#rWait', '#rReset'].forEach(s => $(s).disabled = !on); }
+  function expireIfDue() { if (st.key && st.key.exp != null && st.t >= st.key.exp) { st.key = null; return true; } return false; }
+
+  $('#rSend').onclick = async () => {
+    if (st.busy) return; st.busy = true; setBtns(false);
+    if (expireIfDue()) render();
+    await line(`> GET ${KEY}`, 'in');
+    const v = st.key ? st.key.v : 0;
+    await line(st.key ? `"${v}"` : '(nil)   // no key yet, so count = 0', 'nil');
+    if (v >= LIMIT) {
+      await line(`${v} ≥ ${LIMIT}: limit reached → 429 Too Many Requests (no INCR)`, 'err');
+      setStatus(429); st.sawReject = true;
+      checkGoal('#s1goals', 'reject', goals, 10);
+    } else {
+      await line(`${v} < ${LIMIT} → forward to API servers → 200 OK`, 'ok');
+      setStatus(200);
+      await line(`> INCR ${KEY}`, 'in');
+      if (!st.key) st.key = { v: 0, exp: null };
+      st.key.v++; render();
+      await line(`(integer) ${st.key.v}`, 'ok');
+      if (st.key.v === 1) {
+        await line(`> EXPIRE ${KEY} ${TTL}`, 'in');
+        st.key.exp = st.t + TTL; render();
+        await line('(integer) 1   // key will vanish in 60 s', 'ok');
+      }
+      if (st.expiredAfterReject) checkGoal('#s1goals', 'reset', goals, 10);
+    }
+    st.t += 4; render();
+    st.busy = false; setBtns(true); maybeQuiz();
+  };
+  $('#rWait').onclick = async () => {
+    if (st.busy) return; st.busy = true; setBtns(false);
+    st.t += 60;
+    const gone = expireIfDue(); render();
+    if (gone) { await line(`// 60 s pass. TTL hits 0, so Redis deletes ${KEY} by itself. A new window starts with the next request.`, 'nil'); if (st.sawReject) st.expiredAfterReject = true; }
+    else await line('// 60 s pass. There was no key to expire.', 'nil');
+    st.busy = false; setBtns(true);
+  };
+  $('#rReset').onclick = () => {
+    if (st.busy) return;
+    Object.assign(st, { t: 0, key: null, sawReject: false, expiredAfterReject: false });
+    log.innerHTML = '<div class="nil">// Redis console reset. Each request runs the commands below.</div>';
+    $('#rStatus').textContent = 'no request yet'; $('#rStatus').className = 'status';
+    render();
+  };
+  render();
+
+  /* ---- spot the bug ---- */
+  const CODE = [
+    `count = GET ${KEY}`,
+    `if count >= 5: return 429`,
+    `n = INCR ${KEY}`,
+    `if n == 1: EXPIRE ${KEY} 60`,
+    `forward to API servers`,
+  ];
+  const bug = { p: 0, crashed: false, played: false, key: null, busy: false };
+  const blog = $('#bugLog');
+  function renderCode() {
+    $('#bugCode').innerHTML = CODE.map((c, i) => {
+      const cls = bug.crashed ? (i === 3 || i === 4 ? ' skipped' : ' ran') : (i === bug.p ? ' cur' : i < bug.p ? ' ran' : '');
+      return `<div class="ln${cls}"><span class="no">${i + 1}</span>${esc(c)}</div>${i === 2 ? `<div class="gap${!bug.crashed && bug.p === 3 ? ' on' : ''}">⚠ danger zone: the key exists but has no TTL yet</div>` : ''}`;
+    }).join('');
+  }
+  function renderBugKey() {
+    const k = bug.key;
+    $('#bugKey').innerHTML = `<span>${KEY} = <b>${k ? k.v : '(nil)'}</b></span><span>TTL = ${k ? (k.exp == null ? '<b class="bad">-1 (never expires)</b>' : '<b class="good">60 s</b>') : '—'}</span>${bug.crashed ? '<span>server: <b class="bad">restarted</b></span>' : ''}`;
+  }
+  function resetBug() {
+    Object.assign(bug, { p: 0, crashed: false, played: false, key: null, busy: false });
+    blog.innerHTML = '<div>Fresh window: rl:user42 doesn\'t exist yet.</div>';
+    $('#bugStep').disabled = false; $('#bugStep').textContent = '▶ Run next line'; $('#bugKill').disabled = false;
+    $('#bugNext').style.display = 'none';
+    renderCode(); renderBugKey();
+  }
+  $('#bugStep').onclick = () => {
+    if (bug.crashed || bug.busy) return;
+    if (bug.p > 4) { resetBug(); return; }
+    const p = bug.p;
+    if (p === 0) logTo(blog, 'GET → (nil), so count = 0');
+    if (p === 1) logTo(blog, '0 < 5, so carry on');
+    if (p === 2) { bug.key = { v: 1, exp: null }; logTo(blog, 'INCR → 1. The key now exists, with <b>no TTL yet</b>. Now is the moment.', 'w'); }
+    if (p === 3) { bug.key.exp = 60; logTo(blog, 'EXPIRE ran: TTL 60 s. Safe this time.', 'g'); }
+    if (p === 4) { logTo(blog, 'Forwarded. Nothing crashed, so this run was fine. Start over and pull the plug right after INCR.'); $('#bugStep').textContent = '↻ Start over'; }
+    bug.p++; renderCode(); renderBugKey();
+  };
+  $('#bugKill').onclick = async () => {
+    const kb = $('#bugKill');
+    if (bug.crashed || bug.busy) return;
+    if (bug.p !== 3) {
+      nudge(kb);
+      logTo(blog, bug.p < 3 ? 'Nothing bad happens if it dies now: Redis has no key yet. The risky gap is after INCR (line 3) and before EXPIRE (line 4).' : 'Too late: EXPIRE already ran, so the key will expire. Start over.', 'w');
+      return;
+    }
+    bug.busy = true; bug.crashed = true;
+    const code = $('#bugCode'); code.classList.remove('crash'); void code.offsetWidth; code.classList.add('crash');
+    $('#bugStep').disabled = true; kb.disabled = true;
+    renderCode();
+    logTo(blog, '💥 The middleware server crashed between INCR and EXPIRE.', 'e');
+    await pause(700);
+    logTo(blog, '🔁 It restarts. Redis didn\'t crash, so it still holds rl:user42 = 1, with TTL -1 (no expiry).', 'w');
+    renderBugKey();
+    Q.addXP(15, kb);
+    bug.busy = false;
+    $('#bugNext').style.display = '';
+  };
+  $('#bugFF').onclick = async () => {
+    if (bug.played || bug.busy) return;
+    bug.busy = true; bug.played = true; $('#bugFF').disabled = true;
+    for (let v = 2; v <= 5; v++) { bug.key.v = v; renderBugKey(); logTo(blog, `t = ${v * 8} s: user42 sends a request → INCR → ${v}. (n isn't 1, so no EXPIRE.)`); await pause(380); }
+    logTo(blog, 't = 60 s: a healthy key would vanish now. This one has no TTL, so it stays.', 'w'); await pause(650);
+    logTo(blog, 't = 2 min: user42 tries again → GET → 5 → <b>429</b>.', 'e'); await pause(650);
+    logTo(blog, '3 days later: GET → 5 → <b>429</b>. user42 is locked out for good, until someone deletes the key by hand.', 'e');
+    await pause(400);
+    bug.busy = false;
+    Q.quiz($('#s1fix'), {
+      tag: 'Pick the fix',
+      q: 'How do you make sure this can never happen again?',
+      options: ['Run INCR and EXPIRE together in one atomic Lua script', 'Raise the EXPIRE timeout from 60 to 600 seconds', 'Move the counters out of Redis into a MySQL table'],
+      correct: 0,
+      good: '<b>Atomic</b> means all-or-nothing: both commands happen, or neither does. Redis runs a Lua script as one step, so no crash can land between INCR and EXPIRE. A <code>MULTI</code>/<code>EXEC</code> transaction works too.',
+      bad: 'A longer TTL doesn\'t help, because the TTL was never set at all. MySQL brings back slow disk access and has no built-in expiry. The fix is to make INCR and EXPIRE <b>atomic</b> (all-or-nothing), for example in one Lua script or a <code>MULTI</code>/<code>EXEC</code> transaction.',
+      onDone: () => { fixDone = true; maybeQuiz(); },
+    });
+  };
+  resetBug();
+
+  function maybeQuiz() {
+    if (quizShown || !fixDone) return;
+    if (goals.size < 2) { $('#s1wait').style.display = ''; return; }
+    $('#s1wait').style.display = 'none';
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s1quiz'), {
+      q: 'Why does the book keep the counters in Redis and not in the main database?',
+      options: ['It lives in memory and keys can expire on their own', 'Only Redis can add one to a stored number safely', 'A database cannot hold one counter for every user'],
+      correct: 0,
+      good: 'Speed and expiry. The check runs on every request, so it must be fast, and memory beats disk by a wide margin. And <code>EXPIRE</code> ends each window for free, with no cleanup job.',
+      bad: 'A database can count, and it can hold millions of rows. The problem is speed: it reads from disk, and this check runs on every request. Redis lives in memory, and <code>EXPIRE</code> ends each window for free.',
+      onDone: () => setTimeout(() => Q.clearStage(1), 900),
+    }), 400);
+  }
+});
+
+/* ================= STAGE 2: write the rules ================= */
+Q.onStage(2, () => {
+  const FIELDS = {
+    domain: ['auth', 'messaging', 'search'],
+    key: ['auth_type', 'message_type', 'search_type'],
+    value: ['keyword', 'login', 'marketing', 'signup'],
+    unit: ['second', 'minute', 'hour', 'day'],
+    requests_per_unit: ['1', '5', '60', '100', '500'],
+  };
+  const RULES = [
+    { en: 'No more than <b>5 marketing messages</b> per <b>day</b>.', src: 'Book example 1', ico: '✉️', ev: 'marketing message', ans: { domain: 'messaging', key: 'message_type', value: 'marketing', unit: 'day', requests_per_unit: '5' } },
+    { en: 'A client can\'t <b>log in</b> more than <b>5 times</b> in <b>1 minute</b>.', src: 'Book example 2', ico: '🔑', ev: 'login', ans: { domain: 'auth', key: 'auth_type', value: 'login', unit: 'minute', requests_per_unit: '5' } },
+    { en: 'No more than <b>100 keyword searches</b> per <b>hour</b>.', src: 'New rule: your turn', ico: '🔍', ev: 'search', ans: { domain: 'search', key: 'search_type', value: 'keyword', unit: 'hour', requests_per_unit: '100' } },
+  ];
+  const HINT = {
+    domain: () => '<b>domain</b> is the part of the product the rule covers: messaging, logins (auth) or search.',
+    key: () => '<b>key</b> names a kind of request, and it matches the domain: message_type, auth_type or search_type.',
+    value: () => '<b>value</b> picks the one specific kind of request this rule is about.',
+    unit: (a, c) => `Read the rule again. <b>unit</b>: it says per ${a}, and per ${c || '—'} ≠ per ${a}.`,
+    requests_per_unit: () => '<b>requests_per_unit</b>: how many are allowed in each unit of time?',
+  };
+  let ri = 0;
+  const sel = f => `<select data-f="${f}" aria-label="${f}"><option value="">—</option>${FIELDS[f].map(o => `<option>${o}</option>`).join('')}</select>`;
+  function pips(done) { $$('#pips i').forEach((p, i) => p.className = i < done ? 'done' : i === ri ? 'on' : ''); }
+  function show() {
+    const r = RULES[ri];
+    let missed = false, built = false;
+    pips(ri);
+    $('#ruleWrap').innerHTML = `<div class="rulecard"><div class="src">Rule ${ri + 1} of 3 · ${r.src}</div><p>${r.en}</p></div>
+      <div class="yaml" id="yaml">
+        <div class="yl f"><span class="k">domain</span>:${sel('domain')}</div>
+        <div class="yl"><span class="k">descriptors</span>:</div>
+        <div class="yl f">  - <span class="k">key</span>:${sel('key')}</div>
+        <div class="yl f">    <span class="k">value</span>:${sel('value')}</div>
+        <div class="yl">    <span class="k">rate_limit</span>:</div>
+        <div class="yl f">      <span class="k">unit</span>:${sel('unit')}</div>
+        <div class="yl f">      <span class="k">requests_per_unit</span>:${sel('requests_per_unit')}</div>
+      </div>
+      <ul class="hints" id="hints"></ul>
+      <div class="row" style="margin-top:12px" id="ruleRow"><button class="btn primary" id="ruleCheck">Check my YAML</button></div>
+      <div id="evWrap"></div>`;
+    const sels = $$('#yaml select');
+    sels.forEach(s => s.onchange = () => { s.classList.remove('wrong'); });
+    $('#ruleCheck').onclick = () => {
+      if (built) return;
+      const bad = [];
+      sels.forEach(s => {
+        const f = s.dataset.f, ok = s.value === r.ans[f];
+        s.classList.toggle('wrong', !ok); s.classList.toggle('right', ok);
+        if (!ok) bad.push(f);
+      });
+      const hl = $('#hints');
+      if (bad.length) {
+        hl.innerHTML = bad.map(f => `<li>${HINT[f](r.ans[f], (sels.find(s => s.dataset.f === f) || {}).value)}</li>`).join('');
+        nudge($('#ruleCheck'));
+        if (!missed) { missed = true; Q.loseHeart($('#ruleCheck')); }
+        else Q.toast('try again', $('#ruleCheck'), 'practice');
+        return;
+      }
+      built = true;
+      hl.innerHTML = '';
+      sels.forEach(s => s.disabled = true);
+      $('#yaml').classList.add('ok');
+      Q.addXP(15, $('#ruleCheck'));
+      $('#ruleCheck').remove();
+      const n = +r.ans.requests_per_unit;
+      nextBtn($('#ruleRow'), `🧪 Test it: fire ${n + 1} ${r.ev}${n + 1 === 1 ? '' : (r.ev.endsWith('h') ? 'es' : 's')}`, e => runTest(e.currentTarget));
+    };
+    async function runTest(btn) {
+      btn.disabled = true;
+      const n = +r.ans.requests_per_unit, w = $('#evWrap');
+      if (n <= 10) {
+        w.innerHTML = '<div class="evs" id="evs"></div>';
+        for (let i = 1; i <= n; i++) { $('#evs').insertAdjacentHTML('beforeend', `<span class="ev">${r.ico} ${i} ✓</span>`); await pause(200); }
+      } else {
+        w.innerHTML = `<div class="meter"><div class="mt"><div class="mf" id="mf"></div></div><span id="mc">0 / ${n}</span></div><div class="evs" id="evs"></div>`;
+        await tween(1300, p => { const c = Math.round(n * p); $('#mf').style.width = (c / n * 100) + '%'; $('#mc').textContent = `${c} / ${n}`; });
+      }
+      await pause(250);
+      $('#evs').insertAdjacentHTML('beforeend', `<span class="ev no">${r.ico} ${n + 1} → 429</span>`);
+      w.insertAdjacentHTML('beforeend', `<p class="small" style="margin:8px 0 0">The first ${n} pass. Number ${n + 1} goes over <code>requests_per_unit: ${n}</code> for this <code>unit: ${r.ans.unit}</code>, so it bounces with a 429. The count starts again in the next ${r.ans.unit}.</p>`);
+      Q.addXP(5, btn);
+      btn.remove();
+      pips(ri + 1);
+      if (ri < RULES.length - 1) nextBtn($('#ruleRow'), 'Next rule →', () => { ri++; show(); });
+      else {
+        $('#ruleRow').insertAdjacentHTML('beforeend', '<span class="small"><b>All three rules written and tested.</b></span>');
+        nextBtn($('#ruleRow'), '↻ Write them again', () => { ri = 0; show(); }, false);
+        Q.clearStage(2);
+      }
+    }
+  }
+  show();
+});
+
+/* ================= STAGE 3: tell the client ================= */
+Q.onStage(3, () => {
+  const LIMIT = 5, RESET = 60;
+  const REQS = [0, 5, 10, 15, 20, 25].map((t, i) => ({ n: i + 1, t, status: i < LIMIT ? '200' : '429', limit: '5', rem: String(i < LIMIT ? LIMIT - 1 - i : 0), retry: i < LIMIT ? '' : String(RESET - t) }));
+  let cur = 1; // index of the request being answered (0 is the worked example)
+  const done = new Set([0]);
+  const svg = $('#tlSvg');
+  const tx = t => 22 + t * 5;
+  function drawTL() {
+    svg.innerHTML = '';
+    S('rect', { class: 'win', x: tx(0), y: 18, width: tx(60) - tx(0), height: 18, rx: 9 }, svg);
+    S('text', { class: 'ax', x: tx(0), y: 56 }, svg).textContent = 't = 0 s';
+    const e = S('text', { class: 'ax', x: tx(60), y: 56, 'text-anchor': 'end' }, svg); e.textContent = 'window resets at 60 s';
+    REQS.forEach((r, i) => {
+      const c = S('circle', { class: 'tk' + (done.has(i) ? (r.status === '200' ? ' ok' : ' no') : i === cur ? ' cur' : ''), cx: tx(r.t), cy: 27, r: 9 }, svg);
+      S('text', { class: 'tn', x: tx(r.t), y: 27 }, svg).textContent = r.n;
+      void c;
+    });
+  }
+  const blank = v => ['', '-', '—', 'none', 'n/a'].includes(String(v).trim().toLowerCase());
+  function respHTML(r, worked) {
+    const d = worked ? ' disabled' : '';
+    return `<div class="resp${worked ? ' worked' : ''}" data-n="${r.n}">
+      <div class="rh"><span>Request #${r.n} · t = ${r.t} s</span><span class="muted">GET /api/feed</span></div>
+      <div class="rb">
+        <div class="hl"><span class="hk">HTTP/1.1</span><select data-f="status" aria-label="Status code"${d}><option value="">— status —</option><option value="200"${worked ? ' selected' : ''}>200 OK</option><option value="429">429 Too Many Requests</option></select></div>
+        <div class="hl"><span class="hk">X-Ratelimit-Limit:</span><input data-f="limit" inputmode="numeric" aria-label="X-Ratelimit-Limit" value="${worked ? r.limit : ''}"${d}></div>
+        <div class="hl"><span class="hk">X-Ratelimit-Remaining:</span><input data-f="rem" inputmode="numeric" aria-label="X-Ratelimit-Remaining" value="${worked ? r.rem : ''}"${d}></div>
+        <div class="hl"><span class="hk">X-Ratelimit-Retry-After:</span><input data-f="retry" inputmode="numeric" aria-label="X-Ratelimit-Retry-After (leave blank if not sent)" placeholder="blank = not sent" value=""${d}></div>
+        ${worked ? '<p class="note">Worked example: the first request of the window. Allowed (200). The limit is 5, and after this one 4 are left. No Retry-After, because nothing was refused.</p>' : '<div class="row" style="margin-top:8px"><button class="btn primary q-chk">Send this response</button></div><div class="explain"></div>'}
+      </div></div>`;
+  }
+  function logLine(r) {
+    const d = document.createElement('div'); d.className = r.status === '429' ? 'no' : '';
+    d.textContent = `#${r.n} t=${r.t}s → ${r.status} · Limit ${r.limit} · Remaining ${r.rem}${r.retry ? ' · Retry-After ' + r.retry : ''}`;
+    $('#respLog').appendChild(d);
+  }
+  function hint(f, r) {
+    if (f === 'status') return `Count it: this is request #${r.n} in a window that allows ${LIMIT}.`;
+    if (f === 'limit') return 'Limit never changes from one response to the next: it\'s how many calls the window allows.';
+    if (f === 'rem') return r.status === '429' ? 'This request was refused, and nothing is left in the window.' : `Remaining = allowed requests left in this window after this one. #${r.n} of ${LIMIT} just went through.`;
+    return r.status === '429' ? `Seconds until the window resets. It resets at t = ${RESET} s, and it's now t = ${r.t} s.` : 'This one went through, so there\'s nothing to wait for. Leave Retry-After blank (not sent).';
+  }
+  function showReq() {
+    drawTL();
+    const r = REQS[cur], wrap = $('#respWrap');
+    wrap.innerHTML = respHTML(REQS[0], true) + (cur < REQS.length ? respHTML(r, false) : '');
+    if (cur >= REQS.length) return;
+    const box = $(`.resp[data-n="${r.n}"]`, wrap);
+    let missed = false;
+    $$('select, input', box).forEach(el => el.addEventListener('input', () => el.classList.remove('wrong')));
+    $('.q-chk', box).onclick = e => {
+      const btn = e.currentTarget, bad = [];
+      $$('select, input', box).forEach(el => {
+        const f = el.dataset.f, want = r[f];
+        const ok = f === 'retry' ? (want === '' ? blank(el.value) : el.value.trim() === want) : el.value.trim() === want;
+        el.classList.toggle('wrong', !ok); el.classList.toggle('right', ok);
+        if (!ok) bad.push(f);
+      });
+      const ex = $('.explain', box);
+      if (bad.length) {
+        ex.className = 'explain show bad';
+        ex.innerHTML = '<b>Not quite.</b> ' + bad.map(f => hint(f, r)).join(' ');
+        nudge(btn);
+        if (!missed) { missed = true; Q.loseHeart(btn); } else Q.toast('try again', btn, 'practice');
+        return;
+      }
+      btn.disabled = true;
+      Q.addXP(8, btn);
+      done.add(cur); logLine(r);
+      cur++;
+      if (cur < REQS.length) { setTimeout(showReq, Q.reduced ? 0 : 450); return; }
+      drawTL();
+      ex.className = 'explain show good';
+      ex.innerHTML = '<b>All six right.</b> Five allowed, Remaining counting down 4, 3, 2, 1, 0. The sixth bounced with a 429 and Retry-After 35: the window resets at 60 s, and it was 25 s.';
+      startClient();
+    };
+  }
+  logLine(REQS[0]);
+  showReq();
+
+  /* ---- client behaviour ---- */
+  let clientStarted = false;
+  const lx = t => 74 + (t - 25) * 6.8;
+  function drawLanes() {
+    const L = $('#lanes'); L.innerHTML = '';
+    S('text', { class: 'ln-lbl', x: 4, y: 52 }, L).textContent = 'Impatient';
+    S('text', { class: 'ln-sub', x: 4, y: 65 }, L).textContent = 'retry every 0.5 s';
+    S('text', { class: 'ln-lbl', x: 4, y: 104 }, L).textContent = 'Polite';
+    S('text', { class: 'ln-sub', x: 4, y: 117 }, L).textContent = 'wait 35 s + jitter';
+    S('line', { class: 'track', x1: lx(25), y1: 55, x2: lx(65), y2: 55 }, L);
+    S('line', { class: 'track', x1: lx(25), y1: 107, x2: lx(65), y2: 107 }, L);
+    S('line', { class: 'reset', x1: lx(60), y1: 22, x2: lx(60), y2: 124 }, L);
+    S('text', { class: 'rlbl', x: lx(60) - 10, y: 16 }, L).textContent = 'window resets';
+    [25, 35, 45, 55, 65].forEach(t => { S('text', { class: 'ax', x: lx(t), y: 137 }, L).textContent = t + 's'; });
+    S('circle', { class: 'd-no', cx: lx(25), cy: 55, r: 4.5 }, L);
+    S('circle', { class: 'd-no', cx: lx(25), cy: 107, r: 4.5 }, L);
+    const g = S('g', { id: 'laneDots' }, L); void g;
+    $('#lnBad').textContent = '0'; $('#lnGood').textContent = '0';
+  }
+  async function playLanes() {
+    drawLanes();
+    const g = $('#laneDots');
+    const wait = S('line', { class: 'wait', x1: lx(25), y1: 107, x2: lx(25), y2: 107 }, g);
+    let shown = 0, okBad = false, okGood = false;
+    const RETRIES = []; for (let t = 25.5; t < 60; t += 0.5) RETRIES.push(t);
+    await tween(3200, p => {
+      const now = 25 + 40 * p;
+      while (shown < RETRIES.length && RETRIES[shown] <= now) { S('circle', { class: 'd-no', cx: lx(RETRIES[shown]), cy: 55, r: 1.7 }, g); shown++; $('#lnBad').textContent = shown; }
+      if (!okBad && now >= 60) { okBad = true; S('circle', { class: 'd-ok', cx: lx(60), cy: 55, r: 5.5 }, g); }
+      wait.setAttribute('x2', lx(Math.min(now, 62.1)));
+      if (!okGood && now >= 62.1) { okGood = true; S('circle', { class: 'd-ok', cx: lx(62.1), cy: 107, r: 5.5 }, g); }
+    });
+    return shown;
+  }
+  function startClient() {
+    if (clientStarted) return; clientStarted = true;
+    $('#clientPart').style.display = '';
+    drawLanes();
+    predict($('#lanePred'), {
+      step: 'Predict, then watch',
+      title: 'Both clients got that 429 at t = 25 s. Which one gets its next <b>200 OK</b> first?',
+      options: ['The impatient one, by about 30 seconds', 'The polite one, by about 30 seconds', 'Neither: both get in at about t = 60 s'],
+      correct: 2,
+      xp: 20,
+      act: playLanes,
+      explain: 'Nobody can beat the window: it opens at t = 60 s for everyone. The impatient client got in at 60 s, and the polite one about 2 s later. But the impatient one sent <b>69 extra requests</b> that all bounced, burning its user\'s battery and your server\'s capacity. Some APIs treat that hammering as abuse and block the client for longer.',
+    }).then(({ row }) => {
+      nextBtn(row, '↻ Replay the race', () => playLanes(), false);
+      showBP();
+    });
+  }
+  /* ---- best practices ---- */
+  const BP = [
+    { t: 'Cache API responses on the client to avoid repeat calls', ok: true },
+    { t: 'Know the limit, and don\'t send bursts in a short time', ok: true },
+    { t: 'Catch errors and exceptions so the client recovers gracefully', ok: true },
+    { t: 'Add enough back-off time to the retry logic', ok: true },
+    { t: 'On a 429, retry immediately in a tight loop until it works', ok: false },
+    { t: 'Open more parallel connections so requests get through faster', ok: false },
+  ];
+  let bpShown = false, bpMissed = false, bpDone = false;
+  function showBP() {
+    if (bpShown) return; bpShown = true;
+    $('#bpPart').style.display = '';
+    $('#bp').innerHTML = shuffle(BP.map((b, i) => ({ b, i }))).map(({ b, i }) => `<button class="opt" data-i="${i}" aria-pressed="false">${b.t}</button>`).join('');
+    const btns = $$('#bp .opt');
+    const picked = () => btns.filter(b => b.getAttribute('aria-pressed') === 'true');
+    btns.forEach(b => b.onclick = () => {
+      if (bpDone) return;
+      btns.forEach(x => x.classList.remove('right', 'wrong', 'miss'));
+      const on = b.getAttribute('aria-pressed') !== 'true';
+      if (on && picked().length >= 4) { Q.toast('pick 4', b, 'practice'); return; }
+      b.setAttribute('aria-pressed', on);
+      $('#bpCheck').disabled = picked().length !== 4;
+    });
+    $('#bpCheck').onclick = () => {
+      if (bpDone) return;
+      const pk = picked(), ex = $('#bpEx');
+      const wrong = pk.filter(b => !BP[+b.dataset.i].ok);
+      if (wrong.length) {
+        wrong.forEach(b => b.classList.add('wrong'));
+        btns.filter(b => BP[+b.dataset.i].ok && b.getAttribute('aria-pressed') !== 'true').forEach(b => b.classList.add('miss'));
+        ex.className = 'explain show bad';
+        ex.innerHTML = '<b>Not quite.</b> Retrying in a loop and opening more connections both send <i>more</i> traffic at a server that just asked for less. The dashed cards are the ones you missed. Swap and check again.';
+        if (!bpMissed) { bpMissed = true; Q.loseHeart($('#bpCheck')); } else Q.toast('try again', $('#bpCheck'), 'practice');
+        return;
+      }
+      bpDone = true;
+      pk.forEach(b => b.classList.add('right'));
+      btns.forEach(b => b.disabled = true); $('#bpCheck').disabled = true;
+      ex.className = 'explain show good';
+      ex.innerHTML = '<b>Exactly the book\'s list.</b> Cache what you can, respect the limit, handle errors so the app doesn\'t crash, and back off before retrying. When the server sends a Retry-After, that number comes first.';
+      Q.addXP(20, $('#bpCheck'));
+      setTimeout(() => Q.clearStage(3), 900);
+    };
+  }
+});
+
+/* ================= STAGE 4: the detailed design ================= */
+Q.onStage(4, () => {
+  const W = 150, H = 60;
+  const BOX = {
+    rules:   { x: 10,  y: 10,  t: '📄 Rules', s: 'config files on disk' },
+    workers: { x: 205, y: 10,  t: '⚙️ Workers', s: 'pull rules often' },
+    cache:   { x: 205, y: 118, t: '⚡ Cache', s: 'copy of the rules' },
+    redis:   { x: 400, y: 118, t: '🧮 Redis', s: 'counters' },
+    client:  { x: 10,  y: 226, t: '📱 Client', s: 'app or browser' },
+    mw:      { x: 205, y: 226, t: '🚦 Rate limiter', s: 'middleware' },
+    api:     { x: 400, y: 226, t: '🖥️ API servers', s: 'the real work' },
+    queue:   { x: 205, y: 334, t: '📬 Message queue', s: 'run later' },
+  };
+  const C = k => [BOX[k].x + W / 2, BOX[k].y + H / 2];
+  const ARROWS = [
+    { id: 'rw', a: 'rules', b: 'workers', d: 'M160 40 L201 40' },
+    { id: 'wc', a: 'workers', b: 'cache', d: 'M280 70 L280 114' },
+    { id: 'cm', a: 'cache', b: 'mw', d: 'M280 178 L280 222' },
+    { id: 'cl', a: 'client', b: 'mw', d: 'M160 246 L201 246' },
+    { id: 'bk', a: 'client', b: 'mw', d: 'M205 270 L164 270', cls: 'bad' },
+    { id: 'mr', a: 'mw', b: 'redis', d: 'M335 224 L418 182', two: true },
+    { id: 'ma', a: 'mw', b: 'api', d: 'M355 256 L396 256' },
+    { id: 'mq', a: 'mw', b: 'queue', d: 'M280 286 L280 330', cls: 'warn' },
+  ];
+  const TILES = [
+    { k: 'client', t: 'Client', s: 'sends the requests' },
+    { k: 'mw', t: 'Rate limiter middleware', s: 'checks every request', need: 'client', why: 'Middleware in front of what? Draw who sends the requests first.' },
+    { k: 'api', t: 'API servers', s: 'do the real work', need: 'mw', why: 'Requests reach the API servers <i>through</i> the limiter. Draw the middleware first.' },
+    { k: 'redis', t: 'Redis', s: 'counters', need: 'mw', why: 'Who reads these counters? Put the middleware on the board first.' },
+    { k: 'rules', t: 'Rules', s: 'config files on disk' },
+    { k: 'workers', t: 'Workers', s: 'pull the rules', need: 'rules', why: 'Workers pull rules from disk, and there are no rules on the board yet.' },
+    { k: 'cache', t: 'Cache', s: 'a copy of the rules', need: 'workers', why: 'Something has to fill this cache. Draw whatever copies the rules into it first.' },
+    { k: 'queue', t: 'Message queue', s: 'requests for later', need: 'mw', why: 'Who sends requests into this queue? Draw the middleware first.' },
+    { k: 'cdn', t: 'CDN', s: 'for static images', bad: 'A CDN serves static files (images, scripts) from servers near the user. Useful, but it has nothing to do with deciding whether a request is over the limit.' },
+    { k: 'sql', t: 'SQL database', s: 'for the counters', bad: 'That\'s stage 1\'s trap. A database reads from disk, which is too slow for a check on <b>every</b> request, and it has no built-in expiry. Counters go in Redis.' },
+  ];
+  const SAY = {
+    client: 'Every request starts at the <b>client</b>: a phone app, a browser, or another service.',
+    mw: 'The <b>rate limiter middleware</b> sees every request <i>before</i> the API servers do. When it says no, it sends a 429 back (red dashed arrow).',
+    api: 'Requests under the limit go on to the <b>API servers</b>.',
+    redis: 'The middleware fetches the <b>counters</b> (and the last request\'s timestamp) from <b>Redis</b>, then updates them.',
+    rules: '<b>Rules</b> live in config files on disk, like the YAML you wrote in stage 2.',
+    workers: '<b>Workers</b> pull the rules from disk often, so an edit gets picked up.',
+    cache: 'Workers store the rules in a <b>cache</b>. The middleware reads its rules from here, never straight from disk.',
+    queue: 'Over-limit requests are either <b>dropped</b> or sent to a <b>message queue</b> to be processed later.',
+  };
+  const svg = $('#wb');
+  let placed, lost, phase;
+  function build() {
+    svg.innerHTML = `<defs>${['', 'bad', 'warn'].map(c => `<marker id="ah${c}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ah ${c}"/></marker>`).join('')}</defs>`;
+    const ag = S('g', {}, svg), bg = S('g', {}, svg);
+    ARROWS.forEach(a => {
+      const p = S('path', { class: 'part arrow ' + (a.cls || ''), id: 'ar-' + a.id, d: a.d, 'marker-end': `url(#ah${a.cls || ''})` }, ag);
+      if (a.two) p.setAttribute('marker-start', 'url(#ah)');
+    });
+    Object.entries(BOX).forEach(([k, b]) => {
+      const g = S('g', { class: 'part box', id: 'bx-' + k }, bg);
+      S('rect', { x: b.x, y: b.y, width: W, height: H, rx: 12 }, g);
+      S('text', { class: 'bt', x: b.x + W / 2, y: b.y + 27 }, g).textContent = b.t;
+      S('text', { class: 'bs', x: b.x + W / 2, y: b.y + 46 }, g).textContent = b.s;
+    });
+    S('text', { class: 'note n', id: 'nCount', x: 85, y: 152 }, svg);
+    S('text', { class: 'note', id: 'nResp', x: 85, y: 310 }, svg);
+    S('text', { class: 'note q', id: 'nQueue', x: 475, y: 368 }, svg);
+    S('text', { class: 'note no', id: 'nDrop', x: 280, y: 215 }, svg);
+    S('g', { id: 'pkts' }, svg);
+  }
+  function setup() {
+    placed = new Set(); lost = 0; phase = 'build';
+    build();
+    $('#wbMsg').className = 'wbmsg'; $('#wbMsg').innerHTML = 'The whiteboard is empty. Where does a request start?';
+    $('#wbCount').textContent = '0 / 8'; $('#wbClock').textContent = '0';
+    $('#wbMode').innerHTML = 'over-limit mode: <b>—</b>';
+    $('#s4pred').innerHTML = ''; $('#s4quiz').innerHTML = ''; $('#s4replay').style.display = 'none';
+    $('#tiles').innerHTML = shuffle(TILES).map(t => `<button class="opt" data-k="${t.k}">${t.t}<small>${t.s}</small></button>`).join('');
+    $$('#tiles .opt').forEach(b => b.onclick = () => onTile(b));
+  }
+  function msg(html, cls) { const m = $('#wbMsg'); m.className = 'wbmsg' + (cls ? ' ' + cls : ''); m.innerHTML = html; }
+  function onTile(b) {
+    if (phase !== 'build' || b.disabled) return;
+    const t = TILES.find(x => x.k === b.dataset.k);
+    if (t.bad) { b.disabled = true; b.classList.add('wrong'); Q.loseHeart(b); msg('✗ ' + t.bad, 'bad'); return; }
+    if (t.need && !placed.has(t.need)) { nudge(b); lost++; $('#wbClock').textContent = lost; msg(t.why + ' <span class="muted">(−1 min)</span>', 'nudge'); return; }
+    placed.add(t.k); b.disabled = true; b.classList.add('right'); Q.addXP(4, b);
+    $('#bx-' + t.k).classList.add('on');
+    ARROWS.forEach(a => { if (placed.has(a.a) && placed.has(a.b)) $('#ar-' + a.id).classList.add('on'); });
+    $('#wbCount').textContent = `${placed.size} / 8`;
+    msg(SAY[t.k]);
+    if (placed.size === 8) {
+      phase = 'predict';
+      $$('#tiles .opt').forEach(x => x.disabled = true);
+      msg(`Complete: the book's detailed design${lost ? `, with ${lost} minute${lost === 1 ? '' : 's'} lost to ordering` : ', in a clean order'}. Now send some traffic through it.`);
+      setTimeout(() => rounds(0), 500);
+    }
+  }
+  /* ---- predict-then-watch ---- */
+  function lit(k, on, cls = 'lit') { $('#bx-' + k).classList.toggle(cls, on); }
+  function note(id, text) { $('#' + id).textContent = text || ''; }
+  async function travel(keys, cls) {
+    const pts = keys.map(C);
+    const c = S('circle', { r: 9, class: 'pkt ' + cls, cx: pts[0][0], cy: pts[0][1] }, $('#pkts'));
+    lit(keys[0], true);
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [x1, y1] = pts[i], [x2, y2] = pts[i + 1];
+      await tween(Math.max(320, Math.hypot(x2 - x1, y2 - y1) * 3.4), p => { const k = ease(p); c.setAttribute('cx', x1 + (x2 - x1) * k); c.setAttribute('cy', y1 + (y2 - y1) * k); });
+      lit(keys[i + 1], true);
+    }
+    await pause(200); c.remove();
+  }
+  function clearLit() { Object.keys(BOX).forEach(k => { lit(k, false); lit(k, false, 'hot'); }); ['nCount', 'nResp', 'nQueue', 'nDrop'].forEach(n => note(n, '')); }
+  async function checkCounter(count) {
+    lit('cache', true); note('nCount', 'rule: 5 / min'); await pause(450);
+    await travel(['mw', 'redis', 'mw'], 'ok');
+    note('nCount', `count = ${count}`);
+    await pause(350);
+  }
+  const OPTS = ['Client → limiter → API servers: 200 OK', 'Client → limiter → back to client: 429', 'Client → limiter → queue, plus a 429'];
+  const ROUNDS = [
+    { mode: 'drop', title: 'user42 has made <b>2 requests</b> this minute. The rule allows 5. A 3rd request arrives. Which path does it take?', correct: 0,
+      act: async () => { clearLit(); await travel(['client', 'mw'], 'ok'); await checkCounter('2 → 3'); await travel(['mw', 'api'], 'ok'); note('nResp', '200 OK'); $('#nResp').setAttribute('class', 'note ok'); },
+      explain: 'The middleware loads the rule from the cache, gets the counter from Redis (2 is under 5), and forwards the request to the API servers. The counter goes up to 3.' },
+    { mode: 'drop', title: 'Same rule. user42 tries a <b>6th login</b> inside one minute. Over-limit mode for logins is <b>drop</b>.', correct: 1,
+      act: async () => { clearLit(); await travel(['client', 'mw'], 'ok'); await checkCounter('5 ≥ 5'); lit('mw', true, 'hot'); note('nDrop', '✗ dropped'); await travel(['mw', 'client'], 'no'); note('nResp', '429 + headers'); $('#nResp').setAttribute('class', 'note no'); },
+      explain: 'Over the limit, so the request never reaches the API servers. The client gets a 429 with the rate-limit headers (Retry-After included), and the request is dropped.' },
+    { mode: 'enqueue', title: 'During a flash sale a <b>checkout order</b> arrives, and orders are over their limit. Over-limit mode for orders is <b>enqueue</b>.', correct: 2,
+      act: async () => { clearLit(); await travel(['client', 'mw'], 'ok'); await checkCounter('limit hit'); lit('mw', true, 'hot'); await Promise.all([travel(['mw', 'client'], 'no'), travel(['mw', 'queue'], 'q')]); note('nResp', '429'); $('#nResp').setAttribute('class', 'note no'); note('nQueue', '⏳ 1 order waiting'); },
+      explain: 'The client still gets a 429 right away, but the order isn\'t thrown out. It goes into the message queue and is processed later, when there\'s room. That\'s the book\'s example: keep orders that were limited because the system was overloaded.' },
+  ];
+  async function rounds(i) {
+    const r = ROUNDS[i];
+    $('#wbMode').innerHTML = `over-limit mode: <b>${r.mode}</b>`;
+    const { row } = await predict($('#s4pred'), { step: `Request ${i + 1} of 3 · predict, then watch`, title: r.title, options: OPTS, correct: r.correct, act: r.act, explain: r.explain });
+    nextBtn(row, i < ROUNDS.length - 1 ? 'Next request →' : 'One last question →', () => {
+      if (i < ROUNDS.length - 1) return rounds(i + 1);
+      row.innerHTML = '';
+      Q.quiz($('#s4quiz'), {
+        q: 'Why do workers copy the rules from disk into a cache?',
+        options: ['So the limiter never reads the disk on each request', 'So rules can be changed without editing any file', 'So each API server can keep its own private rules'],
+        correct: 0,
+        good: 'The middleware needs a rule for every request. Reading it from memory is fast. Reading it from disk every time would be slow. The workers do the slow disk reads in the background, every so often.',
+        bad: 'Rules are still edited in files on disk, and they\'re shared. The point is speed: the middleware needs a rule for every request, so it reads them from the in-memory cache. The workers do the slow disk reads in the background.',
+        onDone: () => { $('#s4replay').style.display = ''; setTimeout(() => Q.clearStage(4), 900); },
+      });
+    });
+  }
+  $('#s4replay .btn').onclick = setup;
+  setup();
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss'), {
+  name: '🗿 Header Golem',
+  xp: 15,
+  scenarios: [
+    { e: '🔒', t: 'Locked out for days', d: 'Support ticket: user 981 has been getting 429s since Monday. In Redis, <code>rl:user981</code> = 5 and its TTL is -1. Most likely cause?', a: 'crash',
+      choices: [{ k: 'crash', label: 'Non-atomic INCR + EXPIRE', sub: 'a crash skipped EXPIRE' }, { k: 'low', label: 'Limit set too low', sub: '5 per minute is strict' }, { k: 'full', label: 'Redis ran out of memory', sub: 'it evicted the wrong keys' }],
+      why: 'TTL -1 means the key never expires, so the window never ends. That\'s the classic sign that INCR ran but EXPIRE didn\'t. Run the pair atomically, in a Lua script or a MULTI/EXEC transaction.' },
+    { e: '📝', t: 'Ops edits a rule', d: 'Ops raises the login limit from 5 to 10 per minute by editing the config file on disk. How does the middleware see the change?', a: 'workers',
+      choices: [{ k: 'workers', label: 'Workers refresh the cache', sub: 'they pull rules from disk often' }, { k: 'disk', label: 'Middleware reads disk', sub: 'on every single request' }, { k: 'restart', label: 'Restart every server', sub: 'rules load only at boot' }],
+      why: 'In the book\'s design, workers pull the rules from disk often and store them in the cache. The middleware reads rules from that cache, so the edit shows up on the next refresh.' },
+    { e: '🛒', t: 'Flash-sale orders', d: 'During a sale, checkout orders hit the limit because the order system is overloaded. Every lost order is lost money.', a: 'queue',
+      choices: [{ k: 'queue', label: '429 + enqueue', sub: 'process the order later' }, { k: 'drop', label: '429 + drop', sub: 'the client can try again' }, { k: 'off', label: 'Turn the limiter off', sub: 'let every order through' }],
+      why: 'This is the book\'s own example. Orders limited because of overload can go to a queue and be processed later. Turning the limiter off is how an overloaded system falls over completely.' },
+    { e: '⏳', t: 'Retry-After: 30', d: 'Your mobile app gets a 429 with <code>X-Ratelimit-Retry-After: 30</code>. What should the app do?', a: 'wait',
+      choices: [{ k: 'wait', label: 'Wait 30 s + jitter', sub: 'then retry' }, { k: 'now', label: 'Retry right away', sub: 'maybe it was a blip' }, { k: 'more', label: 'Open more connections', sub: 'to spread the load' }],
+      why: 'Honour the header: wait at least 30 seconds, add a little random jitter so every phone doesn\'t retry at the same instant, then retry. Anything sooner just collects more 429s.' },
+    { e: '🐘', t: '"We already have PostgreSQL"', d: 'A teammate asks: "Why add Redis just for counters? Our PostgreSQL database is right there."', a: 'mem',
+      choices: [{ k: 'mem', label: 'Memory speed + expiry', sub: 'checked on every request' }, { k: 'sql', label: 'SQL can\'t count', sub: 'it has no + 1 update' }, { k: 'size', label: 'Too much data', sub: 'counters are enormous' }],
+      why: 'The book\'s reason: disk access makes the database slow for a check that runs on every request. An in-memory cache like Redis is fast and has time-based expiry built in.' },
+  ],
+  outro: 'Counters in memory, set atomically. Rules on disk, cached by workers. A 429 with headers, then drop or queue.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: interview drill ================= */
+Q.onStage(6, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"Walk me through what happens to one request in your rate limiter, from the client to the API server or back."</i>',
+  placeholder: 'The request first hits the rate limiter middleware…',
+  model: '"Rules live in config files on disk, and workers pull them into a cache, so the limiter never reads disk on the request path. A request first hits the rate limiter middleware. It loads the matching rule from the cache and gets this user\'s counter from Redis. Redis, because it\'s in memory and keys expire on their own: INCR adds one, EXPIRE ends the window, and I\'d run the pair atomically in a Lua script. If the user is under the limit, the request goes to the API servers and the counter goes up. If not, the client gets a 429 with X-Ratelimit-Limit, X-Ratelimit-Remaining and X-Ratelimit-Retry-After, and the request is dropped, or queued to run later if it\'s something like an order. On the client side: cache responses, respect the limit, handle errors, and back off with jitter before retrying."',
+  checks: ['Rules on disk, pulled by workers into a cache', 'Counters in Redis with INCR and EXPIRE, done atomically', 'A 429 plus at least two of the rate-limit headers', 'Over-limit requests are dropped or queued for later'],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

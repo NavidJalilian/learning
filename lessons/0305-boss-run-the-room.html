@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Run the Room</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: interview clock + signal meter, chat, move menus, requirement board, whiteboard,
+   deep-dive planner, wrap-up cards, transcript grader, scorecard */
+.stage, .victory { scroll-margin-top: 150px; }
+@media (max-width: 560px) { .stage-b { padding: 18px 14px 22px; } .stage-h { padding: 16px 14px; } }
+
+/* sticky interview clock */
+.ivbar { position: sticky; top: var(--hudH, 66px); z-index: 15; margin-top: 22px; display: flex; align-items: center; gap: 12px; padding: 8px 14px; background: color-mix(in srgb, var(--panel) 90%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); font-size: 13px; }
+.ivbar .clk { font-family: var(--mono); font-weight: 700; font-size: 16px; white-space: nowrap; transition: color .3s; }
+.ivbar .clk small { color: var(--muted); font-weight: 400; font-size: 12px; }
+.ivbar.over .clk { color: var(--warn); }
+.ivbar .trk { flex: 1; min-width: 40px; height: 8px; border-radius: 99px; background: var(--bg-2); position: relative; overflow: hidden; border: 1px solid var(--line); }
+.ivbar .fill { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, var(--teal), var(--accent)); transition: width .6s cubic-bezier(.2,.8,.2,1); border-radius: 99px; }
+.ivbar.over .fill { background: linear-gradient(90deg, var(--warn), var(--bad)); }
+.ivbar .stp { font-weight: 700; white-space: nowrap; color: var(--accent); }
+.ivbar .stp small { color: var(--muted); font-weight: 600; }
+.ivbar .sigm { font-family: var(--mono); font-weight: 700; white-space: nowrap; padding: 2px 8px; border-radius: 99px; background: var(--bg-2); }
+.ivbar .sigm.hi { background: var(--good-soft); color: var(--good); }
+.ivbar .sigm.mid { background: var(--warn-soft); color: var(--warn); }
+.ivbar .sigm.lo { background: var(--bad-soft); color: var(--bad); }
+@media (max-width: 560px) { .ivbar { gap: 8px; padding: 7px 10px; } .ivbar .stp small, .ivbar .clk small { display: none; } }
+
+/* chat with the interviewer */
+.chat { display: flex; flex-direction: column; gap: 10px; margin: 14px 0; max-height: 340px; overflow-y: auto; padding: 6px 2px; }
+.chat:empty { display: none; }
+.msg { display: flex; gap: 8px; align-items: flex-end; max-width: 92%; animation: rise .3s; }
+.msg .av { font-size: 20px; width: 34px; height: 34px; border-radius: 50%; background: var(--accent-soft); display: grid; place-items: center; flex: none; }
+.msg .bub { padding: 9px 13px; border-radius: 16px; font-size: 15px; line-height: 1.45; }
+.msg.iv .bub { background: var(--bg-2); border-bottom-left-radius: 4px; }
+.msg.me { align-self: flex-end; }
+.msg.me .bub { background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+.msg .who { display: block; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin-bottom: 2px; }
+.typing i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); margin: 0 2px; animation: blink 1s infinite; }
+.typing i:nth-child(2) { animation-delay: .15s; } .typing i:nth-child(3) { animation-delay: .3s; }
+@keyframes blink { 50% { opacity: .2; } }
+
+/* four-step strip */
+.fw { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 14px 0 6px; }
+@media (max-width: 640px) { .fw { grid-template-columns: repeat(2, 1fr); } }
+.fw div { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--bg); }
+.fw b { display: block; font-size: 14px; }
+.fw span { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.fw i { font-style: normal; font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: .08em; text-transform: uppercase; }
+
+/* step 1: move menu + requirements board */
+.lbl { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-top: 16px; }
+.qdeck { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+@media (max-width: 560px) { .qdeck { grid-template-columns: 1fr; } }
+.qdeck .opt { font-size: 14.5px; padding: 11px 12px; min-height: 44px; }
+.reqs { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 6px; margin: 8px 0 4px; }
+.req { border: 1.5px dashed var(--line); border-radius: 10px; padding: 7px 10px; font-size: 13px; color: var(--muted); min-height: 38px; display: flex; align-items: center; gap: 6px; transition: background .3s, border-color .3s; }
+.req.got { border-style: solid; border-color: var(--good); background: var(--good-soft); color: var(--ink); font-weight: 600; animation: rise .35s; }
+.req.got.faint { border-color: var(--warn); background: var(--warn-soft); }
+.req.got.faint::after { content: " (unspoken)"; font-weight: 500; color: var(--warn); font-size: 12px; }
+
+/* graded move widget: partial-credit styling */
+.opt.meh { border-color: var(--warn); background: var(--warn-soft); }
+.explain.meh { background: var(--warn-soft); }
+.opt.nope { animation: shake .4s; }
+
+/* step 2: whiteboard */
+.sim svg.wb { max-width: 560px; margin: 0 auto; }
+.wb .gh { fill: none; stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.wb .nd { opacity: 0; transition: opacity .45s; }
+.wb .nd.on { opacity: 1; }
+.wb .nd rect { fill: var(--panel); stroke-width: 2.2; }
+.wb .nd.sh rect { stroke: var(--muted); }
+.wb .nd.pub rect { stroke: var(--teal); }
+.wb .nd.read rect { stroke: var(--accent); }
+.wb .nd.both rect { stroke: var(--warn); }
+.wb .nd.media rect { stroke: var(--good); }
+.wb .nd .n { fill: var(--ink); font: 700 14px var(--font); text-anchor: middle; }
+.wb .nd .s { fill: var(--muted); font: 500 11px var(--font); text-anchor: middle; }
+.wb .ed { stroke: var(--muted); stroke-width: 2; fill: none; opacity: 0; transition: opacity .45s; }
+.wb .ed.on { opacity: 1; }
+.wb .ah { fill: var(--muted); }
+.wb .lane { font: 700 12px var(--font); letter-spacing: .14em; text-anchor: middle; }
+.wb .lane.pub { fill: var(--teal); } .wb .lane.read { fill: var(--accent); }
+.wb .divl { stroke: var(--line); stroke-dasharray: 4 5; stroke-width: 1.5; }
+.legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.legend span::before { content: ""; display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; border: 2px solid var(--muted); }
+.legend .lp::before { border-color: var(--teal); } .legend .lr::before { border-color: var(--accent); } .legend .lb::before { border-color: var(--warn); }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+@media (max-width: 640px) { .tiles { grid-template-columns: 1fr 1fr; } }
+.tiles .opt { text-align: center; font-weight: 600; font-size: 14px; padding: 10px 6px; min-height: 44px; }
+.tiles .opt small { display: block; font-weight: 500; font-size: 12px; color: var(--muted); }
+
+/* step 3: deep-dive planner */
+.planbar { display: flex; height: 40px; margin-top: 10px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--bg-2); }
+.pseg { flex: none; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: var(--ink); background: var(--accent-soft); border-right: 2px solid var(--panel); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding: 0 4px; animation: rise .3s; }
+.pseg.core { background: var(--teal-soft); }
+.planmeta { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin-top: 6px; }
+.topics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+@media (max-width: 560px) { .topics { grid-template-columns: 1fr; } }
+.topics .opt { font-size: 14.5px; display: flex; justify-content: space-between; gap: 10px; align-items: center; min-height: 44px; }
+.topics .opt .mn { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+.topics .opt.picked { background: var(--accent-soft); }
+.topics .opt .ord { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; margin-right: 6px; flex: none; }
+.round { margin-top: 18px; }
+.round .step { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+
+/* step 4: wrap-up */
+.wrapcards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+@media (max-width: 560px) { .wrapcards { grid-template-columns: 1fr; } }
+.wrapcards .opt { font-size: 14.5px; min-height: 44px; }
+.wrapcards .opt.picked { background: var(--accent-soft); }
+.wrapcards .opt.picked.right { background: var(--good-soft); }
+.wrapcards .opt.picked.wrong { background: var(--bad-soft); }
+.wrapcards .opt .verdict { display: block; font-size: 13px; margin-top: 4px; color: var(--muted); }
+
+/* switch seats: transcript grader */
+.tx { display: grid; gap: 8px; margin-top: 12px; }
+.tline { border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; background: var(--bg); transition: border-color .3s, background .3s; }
+.tline .tt { display: flex; gap: 10px; align-items: baseline; font-size: 15px; }
+.tline .ts { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--accent); flex: none; min-width: 40px; }
+.tline .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; padding-left: 50px; }
+@media (max-width: 560px) { .tline .tags { padding-left: 0; } }
+.tline .tags .opt { padding: 7px 10px; font-size: 13.5px; min-height: 40px; }
+.tline .tags .opt[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); font-weight: 700; }
+.tline.ok { border-color: var(--good); }
+.tline.no { border-color: var(--bad); background: var(--bad-soft); }
+.tline .rule { display: none; margin-top: 8px; font-size: 14px; padding-left: 50px; color: var(--muted); }
+@media (max-width: 560px) { .tline .rule { padding-left: 0; } }
+.tline.ok .rule, .tline.no .rule { display: block; }
+.tline .rule b { color: var(--ink); }
+.decide { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 8px; }
+@media (max-width: 560px) { .decide { grid-template-columns: 1fr 1fr; } }
+.decide .opt { text-align: center; font-weight: 700; min-height: 44px; }
+.decide .opt[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+
+/* scorecard */
+.scorecard { margin-top: 18px; border: 1px solid var(--line); border-radius: 18px; padding: 18px; background: var(--bg); }
+.scorecard h3 { margin: 0 0 2px; font-size: 19px; }
+.sc-row { display: grid; grid-template-columns: 160px 1fr auto; gap: 12px; align-items: center; margin-top: 12px; font-size: 14.5px; }
+@media (max-width: 560px) { .sc-row { grid-template-columns: 1fr auto; } .sc-row .sc-bar { grid-column: 1 / -1; grid-row: 2; } }
+.sc-bar { height: 12px; background: var(--bg-2); border-radius: 99px; overflow: hidden; border: 1px solid var(--line); }
+.sc-bar div { height: 100%; width: 0; border-radius: 99px; background: linear-gradient(90deg, var(--teal), var(--accent)); transition: width .9s cubic-bezier(.2,.8,.2,1); }
+.verd { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 99px; white-space: nowrap; background: var(--bg-2); color: var(--muted); }
+.verd.v3 { background: var(--good-soft); color: var(--good); }
+.verd.v2 { background: var(--teal-soft); color: var(--teal); }
+.verd.v1 { background: var(--warn-soft); color: var(--warn); }
+.verd.v0 { background: var(--bad-soft); color: var(--bad); }
+.sc-flags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.sc-flags span { font-size: 13px; padding: 4px 10px; border-radius: 99px; background: var(--bad-soft); color: var(--bad); font-weight: 600; }
+.sc-flags span.none { background: var(--good-soft); color: var(--good); }
+.sc-overall { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.sc-overall b { font-size: 22px; }
+.sc-time { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 12px; }
+.sc-time td, .sc-time th { padding: 5px 6px; border-bottom: 1px solid var(--line); text-align: left; }
+.sc-time th { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.sc-time .ok { color: var(--good); font-weight: 700; } .sc-time .ov { color: var(--warn); font-weight: 700; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Boss · A Framework for System Design Interviews</div>
+    <h1>Run the Room</h1>
+    <p class="lede">One prompt, one interviewer, 45 minutes on the clock. Everything from <a href="0301-rules-of-the-room.html">3.1</a>, <a href="0302-ask-before-you-build.html">3.2</a>, <a href="0303-blueprint-and-buy-in.html">3.3</a> and <a href="0304-dive-deep-land-clean.html">3.4</a> at once. Then you switch seats and grade somebody else.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> run a full "design a news feed" interview through all four steps on the clock, choosing strong moves at each step, then judge another candidate's run the way an interviewer would.</p></div>
+  </section>
+
+  <div class="ivbar" id="ivbar" aria-live="polite">
+    <span class="clk">🕐 <b id="ivClock">00:00</b> <small>/ 45:00</small></span>
+    <div class="trk"><div class="fill" id="ivFill"></div></div>
+    <span class="stp" id="ivStep">Step 1 <small>· scope</small></span>
+    <span class="sigm" id="ivSig" title="Signal: share of strong moves so far">📶 —</span>
+  </div>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Step 1: Scope the Feed</h2><div class="sub">Minutes 0–8 · understand the problem</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book splits every system design interview into four steps, each with a rough time budget<a class="cite" href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener">[1]</a>. The bar above is your <b>game clock</b>: every move costs minutes. The 📶 meter is your <b>signal</b>, meaning the evidence the interviewer writes down to decide "hire" or "no hire".</p>
+      <div class="fw">
+        <div><i>Step 1</i><b>Understand the problem</b><span>3–10 min</span></div>
+        <div><i>Step 2</i><b>High-level design + buy-in</b><span>10–15 min</span></div>
+        <div><i>Step 3</i><b>Deep dive</b><span>10–25 min</span></div>
+        <div><i>Step 4</i><b>Wrap up</b><span>3–5 min</span></div>
+      </div>
+      <p class="small muted">Each turn you get four moves. A good question costs 1 minute. A time-waster costs 2 minutes and some signal. Jumping ahead costs a heart. Fill all six slots on the board; finish inside 10 minutes for a bonus.</p>
+      <div class="chat" id="chat1"></div>
+      <div class="lbl">Requirements board</div>
+      <div class="reqs" id="reqs"></div>
+      <div id="s1menu"></div>
+      <div id="s1follow"></div>
+      <div id="s1lock"></div>
+      <div class="callout warn" id="s1caveat" style="display:none"><b>Honest caveat.</b> The 45-minute clock and the per-move minute costs are our game framing. The book gives a time range per step, not a scoring system. Also, in the book's version of this dialogue, the interviewer suggests newest-first ordering to keep things simple. Here you had to make the call yourself, which is just as common in real interviews.</div>
+      <div class="row" id="s1replay" style="display:none;margin-top:14px"><button class="btn">↻ Replay the scoping</button></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Step 2: Sketch and Check In</h2><div class="sub">Minutes 8–22 · high-level design and buy-in</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book's news feed sketch has two flows<a class="cite" href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener">[1]</a>. <b>Publishing</b>: a post is saved, then pushed into friends' feeds. <b>Reading</b>: the feed is assembled from friends' posts, newest first. Tap the components in the order you'd draw them. Each box costs 1 minute. A box whose parent isn't drawn yet costs an extra minute. Over-engineering costs a heart.</p>
+      <div class="chat" id="chat2"></div>
+      <div class="sim">
+        <svg class="wb" id="wb" viewBox="0 0 440 496" role="img" aria-label="Whiteboard: news feed high-level design with a publish lane and a read lane"></svg>
+        <div class="sim-bar"><span class="legend"><span>shared</span><span class="lp">publish</span><span class="lr">read</span><span class="lb">both flows</span></span><span class="mono small" id="wbStatus">0 / 10 boxes</span></div>
+        <div class="simlog" id="wbLog" aria-live="polite"><div>Empty whiteboard. Start with whoever sends the requests.</div></div>
+      </div>
+      <div class="tiles" id="tiles"></div>
+      <div id="s2check"></div>
+      <div id="s2media"></div>
+      <div id="s2fan"></div>
+      <div class="row" id="s2replay" style="display:none;margin-top:14px"><button class="btn">↻ Wipe the whiteboard and redraw</button></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Step 3: The Deep Dive</h2><div class="sub">Minutes 22–38 · dig where it counts</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>By now the interviewer has dropped a hint about what they care about. Step 3 is about spending your minutes there, avoiding rabbit holes, and thinking out loud when it gets hard. Three rounds.</p>
+      <div class="chat" id="chat3"></div>
+      <div class="round" id="s3a"></div>
+      <div class="round" id="s3b"></div>
+      <div class="round" id="s3c"></div>
+      <div class="callout warn" id="s3caveat" style="display:none"><b>Honest caveat.</b> Chapter 3 only names "feed publishing" and "feed retrieval" as the deep-dive topics. The push/pull/hybrid details here come from the book's Chapter 11 news feed design<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-news-feed-system" target="_blank" rel="noopener">[2]</a> and from common practice. Twitter's home timeline is the classic real example<a class="cite" href="https://dataintensive.net/" target="_blank" rel="noopener">[4]</a>. Interviewers also vary: some drive the deep dive themselves, others let you choose. Either way, the strong move is to read their cues and check in.</div>
+      <div class="row" id="s3replay" style="display:none;margin-top:14px"><button class="btn">↻ Replay the deep dive</button></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Step 4: Wrap It Up</h2><div class="sub">Minutes 38–45 · land the plane</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book's rule for the last few minutes: the interview isn't over when your diagram is done. It's over when the interviewer says so<a class="cite" href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener">[1]</a>. Use the time to show you see the system's weak spots and what comes next.</p>
+      <div class="chat" id="chat4"></div>
+      <p class="small muted" id="wrapHint">Pick exactly <b>3</b> closing moves, then deliver them. Strong ones take 1 minute each; weak ones take 2 and cost a heart.</p>
+      <div class="wrapcards" id="wrapcards"></div>
+      <div class="row" style="margin-top:12px"><button class="btn primary" id="deliver" disabled>🎤 Deliver my close (0 / 3)</button></div>
+      <div id="s4beat"></div>
+      <div class="row" id="s4replay" style="display:none;margin-top:14px"><button class="btn">↻ Try a different close</button></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Switch Seats: Grade the Candidate</h2><div class="sub">You're the interviewer now · off the clock</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Here is Riley's run at the same prompt. Tag each moment the way an interviewer would: <b>✅ Strong signal</b>, <b>➖ Neutral</b> or <b>🚩 Red flag</b>. Then make the call. Watch for this: a design can be technically fine and still get a "no hire" if the <i>process</i> is poor. The book names over-engineering, narrow-mindedness and stubbornness as red flags<a class="cite" href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener">[1]</a>.</p>
+      <p class="small muted">To pass: at least 10 of 14 tags right <i>and</i> the right overall decision. Miss, and you see the answers, lose a heart and can grade again.</p>
+      <div class="tx" id="tx"></div>
+      <div class="lbl">Your decision on Riley</div>
+      <div class="decide" id="decide"></div>
+      <div class="row" style="margin-top:12px"><button class="btn primary" id="submitGrade" disabled>📝 Submit my scorecard (0 / 14 tagged)</button></div>
+      <div class="explain" id="gradeEx"></div>
+      <div class="row" id="s5retry" style="display:none;margin-top:12px"><button class="btn">↻ Grade Riley again</button></div>
+      <div class="callout warn" id="s5caveat" style="display:none"><b>Honest caveat.</b> Hire and no-hire calls here are a teaching device. Real decisions combine several interviews and a company's own rubric, and one process slip rarely sinks a strong candidate by itself. Riley piled up six.</div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say It Like a Senior + Scorecard</h2><div class="sub">The 60-second game plan, then your verdict</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div id="scorecard"></div>
+      <div class="row" id="s6replay" style="display:none;margin-top:14px"><button class="btn">↻ Say it again</button></div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Re-read all of <a href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener">Ch. 3: A Framework for System Design Interviews</a>, especially the dos and don'ts and the time table at the end. Then skim <a href="https://bytebytego.com/courses/system-design-interview/design-a-news-feed-system" target="_blank" rel="noopener">Ch. 11: Design a News Feed System</a>, where this exact prompt is built in full: fanout on write vs on read, the cache layers, and the celebrity problem. For a second angle on the interview process, see the <a href="https://github.com/donnemartin/system-design-primer#how-to-approach-a-system-design-interview-question" target="_blank" rel="noopener">System Design Primer's guide</a>.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note</h4>
+      Real feeds keep going past what we drew. The "news feed cache" in production usually holds only post IDs per user, and the read path then fetches the full posts and author details from other caches (Chapter 11 calls this a multi-layer cache). Facebook's paper on scaling memcache<a class="cite" href="https://www.usenix.org/conference/nsdi13/technical-sessions/presentation/nishtala" target="_blank" rel="noopener">[5]</a> shows what that cache tier looks like at billions of reads per second: leases to stop stampedes, regional pools, and a lot of operational care. Then run this interview <b>out loud</b> once this week with a 45-minute timer. Wherever you stall is what to review.
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"play the interviewer and push back on my fan-out choice"</i> or <i>"grade my 60-second summary"</i>. A live mock round with follow-ups is the best next step.
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 3 "A Framework for System Design Interviews" (ByteByteGo).</li>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 11 "Design a News Feed System" (ByteByteGo).</li>
+        <li>Donne Martin, <i>The System Design Primer</i>, "How to approach a system design interview question" (GitHub).</li>
+        <li>Martin Kleppmann, <i>Designing Data-Intensive Applications</i>, Ch. 1 (Twitter home-timeline fan-out example).</li>
+        <li>Nishtala et al., "Scaling Memcache at Facebook", NSDI 2013.</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0305',
+  winTitle: 'Hire. Strong hire.',
+  badge: '👑 Badge: Room Runner',
+  cheatsheet: '../reference/ch03-framework-cheatsheet.html',
+});
+const { sleep, shuffle } = Q;
+const CITE = (n, url) => `<a class="cite" href="${url}" target="_blank" rel="noopener">[${n}]</a>`;
+const C1 = CITE(1, 'https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews');
+const C2 = CITE(2, 'https://bytebytego.com/courses/system-design-interview/design-a-news-feed-system');
+const C4 = CITE(4, 'https://dataintensive.net/');
+
+/* ================= interview record: clock, signals, red flags =================
+   Kept apart from the engine's progress, under its own key. Each stage n stores
+   { min, sig: { design|collab|press|amb|qs: [got, max] }, flags: [] }. A stage's record is wiped
+   the first time you act in it during a page load (or on replay), so replays overwrite, not pile up. */
+const IKEY = 'sdq:v1:0305-interview';
+const PAR = { 1: 7.5, 2: 12.5, 3: 15, 4: 4 };   // perfect-play minutes, used for stages cleared earlier but not replayed
+const STEPS = [
+  { name: 'Step 1 · Scope', stage: 1, lo: 3, hi: 10 },
+  { name: 'Step 2 · High-level design', stage: 2, lo: 10, hi: 15 },
+  { name: 'Step 3 · Deep dive', stage: 3, lo: 10, hi: 25 },
+  { name: 'Step 4 · Wrap up', stage: 4, lo: 3, hi: 5 },
+];
+function iload() { try { return JSON.parse(localStorage.getItem(IKEY) || '{}') || {}; } catch (_) { return {}; } }
+function isave(d) { try { localStorage.setItem(IKEY, JSON.stringify(d)); } catch (_) {} }
+if (!Q.review && ![1, 2, 3, 4, 5, 6].some(n => Q.isCleared(n))) { try { localStorage.removeItem(IKEY); } catch (_) {} }
+const begun = new Set();
+let active = 0;
+function rec(n, min = 0, sig = {}, flag) {
+  const d = iload();
+  if (!begun.has(n) || !d[n]) { begun.add(n); d[n] = { min: 0, sig: {}, flags: [] }; }
+  d[n].min += min;
+  Object.entries(sig).forEach(([k, [g, m]]) => { const s = d[n].sig[k] || [0, 0]; s[0] += g; s[1] += m; d[n].sig[k] = s; });
+  if (flag && !d[n].flags.includes(flag)) d[n].flags.push(flag);
+  isave(d); active = n; renderBar();
+  return d[n];
+}
+const stageMin = (d, n) => d[n] ? d[n].min : (Q.isCleared(n) ? PAR[n] : 0);
+const pad = x => String(x).padStart(2, '0');
+const fmt = m => { const mm = Math.floor(m), ss = Math.round((m - mm) * 60); return `${pad(mm)}:${pad(ss)}`; };
+const totalMin = d => [1, 2, 3, 4].reduce((s, n) => s + stageMin(d, n), 0);
+function sums(d) {
+  const out = {};
+  [1, 2, 3, 4].forEach(n => Object.entries((d[n] && d[n].sig) || {}).forEach(([k, [g, m]]) => { const s = out[k] || [0, 0]; s[0] += g; s[1] += m; out[k] = s; }));
+  return out;
+}
+function renderBar() {
+  const d = iload(), total = totalMin(d);
+  let cur = active;
+  if (!cur) { cur = 1; while (cur <= 6 && Q.isCleared(cur)) cur++; }
+  const st = STEPS.find(s => s.stage === cur);
+  $('#ivClock').textContent = fmt(total);
+  $('#ivFill').style.width = Math.min(100, total / 45 * 100) + '%';
+  const spent = st ? stageMin(d, st.stage) : 0;
+  $('#ivbar').classList.toggle('over', !!(total > 45 || (st && spent > st.hi)));
+  if (st) { const [a, b] = st.name.split(' · '); $('#ivStep').innerHTML = `${a} <small>· ${b.toLowerCase()} · ${fmt(spent)} of ${st.lo}–${st.hi}m</small>`; }
+  else $('#ivStep').innerHTML = cur === 5 ? 'Seats <small>· off the clock</small>' : cur === 6 ? 'Debrief <small>· scorecard</small>' : 'Done <small>· interview over</small>';
+  const s = Object.values(sums(d)).reduce((t, [g, m]) => [t[0] + g, t[1] + m], [0, 0]);
+  const sig = $('#ivSig');
+  if (!s[1]) { sig.textContent = '📶 —'; sig.className = 'sigm'; return; }
+  const p = Math.round(s[0] / s[1] * 100);
+  sig.textContent = `📶 ${p}%`; sig.className = 'sigm ' + (p >= 75 ? 'hi' : p >= 55 ? 'mid' : 'lo');
+}
+function setHudH() { const h = $('#hud'); if (h) document.documentElement.style.setProperty('--hudH', h.offsetHeight + 'px'); }
+addEventListener('resize', setHudH);
+const done = n => { Q.clearStage(n); renderBar(); };
+const plus = m => ` <span class="muted">(+${m} min)</span>`;
+
+/* ================= chat helper ================= */
+function Chat(el) {
+  let queue = Promise.resolve(), first = true;
+  const add = (who, html) => {
+    const m = document.createElement('div'); m.className = 'msg ' + who;
+    m.innerHTML = who === 'iv' ? `<span class="av" aria-hidden="true">🧑🏽‍💼</span><div class="bub">${html}</div>` : `<div class="bub">${html}</div>`;
+    el.appendChild(m); el.scrollTop = el.scrollHeight; return m;
+  };
+  return {
+    iv(html) {
+      queue = queue.then(async () => {
+        const m = add('iv', '<span class="typing" aria-label="typing"><i></i><i></i><i></i></span>');
+        await sleep(Q.reduced ? 0 : 420);
+        $('.bub', m).innerHTML = (first ? '<span class="who">Jordan · interviewer</span>' : '') + html; first = false;
+        el.scrollTop = el.scrollHeight;
+      });
+      return queue;
+    },
+    me(html) { queue = queue.then(() => { add('me', html); }); return queue; },
+    clear() { el.innerHTML = ''; first = true; queue = Promise.resolve(); },
+  };
+}
+function nudge(b) { b.classList.remove('nope'); void b.offsetWidth; b.classList.add('nope'); }
+
+/* ================= graded-move widget =================
+   Like Q.quiz, but options are graded 2 (strong), 1 (okay) or 0 (weak), and each carries its own
+   minute cost, signal changes and optional red flag. Weak moves cost a heart unless `soft`. */
+function moves(mount, { tag = 'Your move', q, options, xp = 20, stage, onDone }) {
+  const box = document.createElement('div');
+  box.className = 'quiz';
+  box.innerHTML = `<span class="tag">${tag}</span>${q ? `<p class="q">${q}</p>` : ''}<div class="opts"></div><div class="explain"></div>`;
+  const opts = $('.opts', box), ex = $('.explain', box);
+  shuffle(options.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+    const b = document.createElement('button');
+    b.className = 'opt'; b.textContent = o.t; b.dataset.i = i;
+    b.onclick = () => {
+      $$('.opt', opts).forEach(x => x.disabled = true);
+      const g = o.g;
+      b.classList.add(g === 2 ? 'right' : g === 1 ? 'meh' : 'wrong');
+      if (g !== 2) $(`.opt[data-i="${options.findIndex(x => x.g === 2)}"]`, opts).classList.add('right');
+      ex.className = 'explain show ' + (g === 2 ? 'good' : g === 1 ? 'meh' : 'bad');
+      ex.innerHTML = `<b>${g === 2 ? 'Strong move.' : g === 1 ? 'Okay move.' : 'Weak move.'}</b> ${o.why}${o.min ? plus(o.min) : ''}`;
+      if (g === 2) Q.addXP(xp, b);
+      else if (g === 1) Q.addXP(Math.round(xp / 2), b);
+      else if (!o.soft) Q.loseHeart(b);
+      rec(stage, o.min || 0, o.sig || {}, o.flag);
+      onDone && onDone(o, g);
+    };
+    opts.appendChild(b);
+  });
+  mount.appendChild(box);
+  return box;
+}
+
+/* ================= STAGE 1: scope the feed ================= */
+const FACTS = [
+  { k: 'feat', q: 'Ask which features matter most', say: 'What are the most important features?', a: 'Two. A user can publish a post, and a user can see their friends\' posts on a feed page.', r: '✍️ Publish posts · 📰 see friends\' feed' },
+  { k: 'plat', q: 'Ask if it\'s mobile, web, or both', say: 'Is this a mobile app, a web app, or both?', a: 'Both.', r: '📱 Mobile + 💻 web' },
+  { k: 'scale', q: 'Ask about scale, now and in a year', say: 'How many users do we have, and how fast are we growing?', a: 'Design for about 10 million daily active users.', r: '👥 10M daily active users' },
+  { k: 'friends', q: 'Ask how many friends a user can have', say: 'How many friends can one user have?', a: 'Up to 5,000.', r: '🤝 Up to 5,000 friends' },
+  { k: 'media', q: 'Ask whether posts can hold media', say: 'Can a post contain images or video, or just text?', a: 'Yes. Posts can include images and videos.', r: '🎞️ Images + video' },
+  { k: 'order', q: 'Ask how the feed should be ordered', say: 'How should the feed be sorted? By time, or by some ranking?', a: 'Good question. You decide. Just tell me what you\'re assuming.', r: '🕒 Newest first (reverse-chronological)' },
+];
+const EXTRA = [
+  { k: 'stack', q: 'Ask about the existing tech stack', say: 'Is there an existing tech stack or services I should reuse?', a: 'Assume a standard cloud setup. Nothing in-house you have to build on.' },
+];
+const WASTE = [
+  { k: 'draw', q: 'Start drawing the architecture', say: '<i>(uncaps a marker and starts drawing a load balancer)</i>', a: 'Hold on. Before any boxes: what are we building, and for whom?', min: 2, flag: 'jumped', heart: true },
+  { k: 'brand', q: 'Ask what brand colours the app uses', say: 'What are the brand colours for the feed?', a: 'That won\'t change the architecture. Let\'s stay on the system.', min: 2 },
+  { k: 'kafka', q: 'Ask if you can just use Kafka for all of it', say: 'Can I just use Kafka for everything?', a: 'Maybe later. Right now I don\'t think you know what you\'re building yet.', min: 2 },
+  { k: 'how', q: 'Ask how they would design it themselves', say: 'How would you design it?', a: 'I\'d rather hear your approach. That\'s the exercise.', min: 2 },
+  { k: 'team', q: 'Ask how many engineers are on the team', say: 'How many engineers work on the feed?', a: 'Not relevant to this design. Let\'s keep going.', min: 2 },
+];
+const chat1 = Chat($('#chat1'));
+let s1 = {};
+function setup1() {
+  begun.delete(1); chat1.clear();
+  s1 = { got: new Set(), used: new Set(), drew: false, silent: false, nudged: false, busy: false, turn: 0 };
+  ['#s1menu', '#s1follow', '#s1lock'].forEach(s => $(s).innerHTML = '');
+  $('#s1caveat').style.display = 'none';
+  $('#reqs').innerHTML = FACTS.map((f, i) => `<div class="req" data-r="${f.k}">? requirement ${i + 1}</div>`).join('');
+  chat1.iv('Hi, thanks for coming in. Today\'s prompt is short: <b>design a news feed.</b> We have 45 minutes. Over to you.').then(nextTurn);
+}
+function nextTurn() {
+  if (s1.got.size === FACTS.length) return;
+  const goods = [...FACTS.filter(f => !s1.got.has(f.k)), ...EXTRA.filter(e => !s1.used.has(e.k))];
+  const bads = WASTE.filter(w => !s1.used.has(w.k));
+  const want = s1.turn === 0 ? 2 : (Math.random() < .5 ? 1 : 2);
+  let nb = Math.min(bads.length, want);
+  const ng = Math.min(goods.length, 4 - nb);
+  nb = Math.min(bads.length, 4 - ng);
+  let pb = shuffle(bads).slice(0, nb);
+  const draw = bads.find(b => b.k === 'draw');
+  if (s1.turn === 0 && draw && !pb.includes(draw)) pb[0] = draw;
+  const items = shuffle([...shuffle(goods).slice(0, ng), ...pb]);
+  s1.turn++;
+  $('#s1menu').innerHTML = `<div class="lbl">Turn ${s1.turn} · pick your move</div><div class="qdeck">${items.map(it => `<button class="opt" data-k="${it.k}">${it.q}</button>`).join('')}</div>`;
+  $$('#s1menu .opt').forEach(b => b.onclick = () => pick1(b));
+}
+function addFact(k, faint) {
+  const f = FACTS.find(x => x.k === k), slot = $(`#reqs .req[data-r="${k}"]`);
+  s1.got.add(k); slot.classList.add('got'); slot.classList.toggle('faint', !!faint); slot.innerHTML = f.r;
+}
+async function checkTime1() {
+  const d = iload();
+  if (!s1.nudged && d[1] && d[1].min > 10) { s1.nudged = true; await chat1.iv('We\'re past ten minutes. Let\'s move on to a design soon.'); }
+}
+async function pick1(b) {
+  if (s1.busy) return;
+  s1.busy = true;
+  $$('#s1menu .opt').forEach(x => x.disabled = true);
+  const k = b.dataset.k;
+  const f = FACTS.find(x => x.k === k), e = EXTRA.find(x => x.k === k), w = WASTE.find(x => x.k === k);
+  if (w) {
+    s1.used.add(k); b.classList.add('wrong');
+    if (w.heart) { s1.drew = true; Q.loseHeart(b); } else Q.toast(`+${w.min} min`, b, 'minus');
+    rec(1, w.min, k === 'draw' ? { amb: [0, 1] } : { qs: [0, 1] }, w.flag);
+    chat1.me(w.say); await chat1.iv(w.a + plus(w.min));
+  } else if (e) {
+    s1.used.add(k); b.classList.add('right'); Q.addXP(6, b); rec(1, 1, { qs: [1, 1] });
+    chat1.me(e.say); await chat1.iv(e.a + plus(1));
+  } else if (k === 'order') {
+    b.classList.add('right'); Q.addXP(6, b); rec(1, 1, { qs: [1, 1] });
+    chat1.me(f.say); await chat1.iv(f.a + plus(1));
+    s1.busy = false; orderFollow(); return;
+  } else {
+    b.classList.add('right'); Q.addXP(6, b); rec(1, 1, { qs: [1, 1] });
+    chat1.me(f.say); await chat1.iv(f.a + plus(1)); addFact(k);
+  }
+  await checkTime1();
+  s1.busy = false;
+  if (s1.got.size === FACTS.length) finish1(); else nextTurn();
+}
+function orderFollow() {
+  $('#s1menu').innerHTML = '';
+  moves($('#s1follow'), {
+    tag: 'Follow-up · "you decide"', xp: 10, stage: 1,
+    q: 'Jordan handed the decision back to you. What do you do?',
+    options: [
+      { t: 'Say "newest first for v1" and write it on the board', g: 2, min: 0.5, sig: { amb: [1, 1] },
+        why: 'That\'s how you resolve ambiguity: make a simple call, say it out loud, and write it down so you both share the same picture. The book asks you to write assumptions on the whiteboard for exactly this reason.' + C1 },
+      { t: 'Pick newest first in your head and keep going', g: 0, soft: true, min: 0.5, sig: { amb: [0, 1] }, flag: 'unwritten',
+        why: 'The choice is fine, but nobody knows you made it. If Jordan was picturing a ranked feed, you will find out twenty minutes from now. Say assumptions out loud and write them down.' },
+      { t: 'Propose a machine-learned ranking model for v1', g: 0, min: 2, sig: { design: [0, 1] }, flag: 'overeng',
+        why: 'Ranking with a trained model is a whole project of its own. Nobody asked for it, and it adds risk to a first version. Jordan steers you back: "Let\'s keep it simple: newest first."' },
+    ],
+    onDone: async (o) => {
+      s1.silent = o.flag === 'unwritten';
+      chat1.me(o.g === 2 ? 'I\'ll assume newest first, reverse-chronological, for v1. Writing that down.' : o.flag === 'overeng' ? 'I\'d rank posts with an ML model.' : '<i>(nods and keeps going)</i>');
+      await chat1.iv(o.g === 2 ? 'Works for me.' : o.flag === 'overeng' ? 'That\'s a big project on its own. For v1, let\'s keep it simple: newest first.' : '…Okay.');
+      addFact('order', s1.silent);
+      await checkTime1();
+      setTimeout(() => { $('#s1follow').innerHTML = ''; if (s1.got.size === FACTS.length) finish1(); else nextTurn(); }, Q.reduced ? 300 : 1600);
+    },
+  });
+}
+async function finish1() {
+  $('#s1menu').innerHTML = '';
+  if (!s1.drew) rec(1, 0, { amb: [1, 1] });
+  const d = iload(), m = d[1] ? d[1].min : 0;
+  if (m <= 10) {
+    rec(1, 0, { press: [1, 1] });
+    Q.addXP(15, $('#reqs'));
+    await chat1.iv(`All six on the board in ${fmt(m)}. That's well inside the step-1 budget.`);
+  } else {
+    rec(1, 0, { press: [0, 1] });
+    await chat1.iv(`Board's full, but that took ${fmt(m)}. The book's range for this step tops out at about ten minutes.`);
+  }
+  await chat1.iv('Before we move on: read me back the assumption you wrote down.');
+  Q.quiz($('#s1lock'), {
+    tag: 'Lock it in', xp: 20,
+    q: '"Which assumption did you write down for the feed?"',
+    options: ['The feed shows posts newest first, by time posted', 'The feed is ranked by a learned engagement score', 'The feed only shows posts from the past 24 hours'],
+    correct: 0,
+    good: 'Reverse-chronological order keeps version one simple: no ranking model, no scores, just time.' + (s1.silent ? ' But you never said it out loud in this run. Next time, say it <i>before</i> you build on it.' : ' And because you said it out loud, Jordan agreed to it.') + C1,
+    bad: 'It was <b>newest first</b> (reverse-chronological). It keeps version one simple: no ranking model, no scores. A learned ranking was exactly the over-engineering to avoid.' + C1,
+    onDone: ok => {
+      rec(1, 0.5, { amb: [ok ? 1 : 0, 1] });
+      $('#s1caveat').style.display = 'block'; $('#s1replay').style.display = 'flex';
+      setTimeout(() => done(1), 900);
+    },
+  });
+}
+$('#s1replay .btn').onclick = () => { $('#s1replay').style.display = 'none'; setup1(); };
+Q.onStage(1, setup1);
+
+/* ================= STAGE 2: sketch and check in ================= */
+const NS = 'http://www.w3.org/2000/svg';
+const NODES = {
+  user: { x: 140, y: 10, w: 160, h: 44, n: 'Users', s: 'web + mobile app', lane: 'sh', t: 'Users (web + mobile)', sub: 'who sends requests' },
+  lb: { x: 145, y: 78, w: 150, h: 40, n: 'Load balancer', lane: 'sh', need: ['user'], t: 'Load balancer', sub: 'spreads traffic' },
+  web: { x: 145, y: 142, w: 150, h: 40, n: 'Web servers', lane: 'sh', need: ['lb'], t: 'Web servers', sub: 'take the requests' },
+  notif: { x: 8, y: 142, w: 118, h: 40, n: 'Notification', s: 'service', lane: 'pub', need: ['web'], t: 'Notification service', sub: 'tells friends' },
+  post: { x: 30, y: 226, w: 160, h: 40, n: 'Post service', lane: 'pub', need: ['web'], t: 'Post service', sub: 'saves posts' },
+  pcache: { x: 12, y: 292, w: 92, h: 40, n: 'Post cache', lane: 'pub', need: ['post'], t: 'Post cache', sub: 'hot posts' },
+  pdb: { x: 114, y: 292, w: 86, h: 40, n: 'Post DB', lane: 'pub', need: ['post'], t: 'Post DB', sub: 'durable store' },
+  fanout: { x: 30, y: 358, w: 160, h: 40, n: 'Fanout service', lane: 'pub', need: ['post'], t: 'Fanout service', sub: 'pushes to feeds' },
+  feedsvc: { x: 250, y: 226, w: 160, h: 40, n: 'News feed service', lane: 'read', need: ['web'], t: 'News feed service', sub: 'builds a feed' },
+  feedcache: { x: 130, y: 440, w: 180, h: 44, n: 'News feed cache', s: 'one feed list per user', lane: 'both', needAny: ['fanout', 'feedsvc'], t: 'News feed cache', sub: 'ready-made feeds' },
+  media: { x: 318, y: 10, w: 114, h: 44, n: 'CDN', s: '+ object storage', lane: 'media' },
+};
+const EDGES = [
+  ['user', 'lb', 'M220 54 V75'], ['lb', 'web', 'M220 118 V139'], ['web', 'notif', 'M145 162 H129'],
+  ['web', 'post', 'M180 182 L124 223'], ['web', 'feedsvc', 'M260 182 L316 223'],
+  ['post', 'pcache', 'M80 266 L64 289'], ['post', 'pdb', 'M140 266 L152 289'],
+  ['post', 'fanout', 'M190 252 H210 V378 H193'], ['fanout', 'feedcache', 'M110 398 L176 437'],
+  ['feedsvc', 'feedcache', 'M330 266 L272 437'], ['user', 'media', 'M300 32 H315'],
+];
+const BOARD = ['user', 'lb', 'web', 'notif', 'post', 'pcache', 'pdb', 'fanout', 'feedsvc', 'feedcache'];
+const TRAPS = [
+  { k: 'chain', t: 'Blockchain post ledger', sub: 'tamper-proof posts', why: 'A blockchain? Nobody asked for tamper-proof posts. That\'s over-engineering, one of the red flags the book names.' + C1 },
+  { k: 'cons', t: 'Custom consensus layer', sub: 'our own Paxos', why: 'Writing our own consensus protocol for a feed is a huge, risky detour. Off-the-shelf databases already handle this. That\'s over-engineering.' + C1 },
+  { k: 'ml', t: 'ML ranking service', sub: 'learned feed order', why: 'We agreed newest-first in step 1. A ranking model is a big build nobody asked for. That\'s over-engineering.' },
+];
+const SAY2 = {
+  user: 'Users on the web and the mobile app send every request.',
+  lb: 'The load balancer spreads traffic evenly across the web servers.',
+  web: 'Web servers check who you are and route each request to the right service.',
+  notif: 'The notification service tells friends that something new is up.',
+  post: 'The post service saves each new post.',
+  pcache: 'The post cache keeps recent posts in memory, so reads skip the database.',
+  pdb: 'The post DB is the durable copy of every post.',
+  fanout: 'Once a post is saved, the fanout service pushes it into each friend\'s feed.',
+  feedsvc: 'The news feed service answers "show me my feed" requests.',
+  feedcache: 'The news feed cache holds each user\'s ready-made feed. Fanout writes to it; the feed service reads from it. Both flows meet here.',
+};
+const WHY2 = {
+  lb: 'A load balancer in front of whom? Draw the users first.',
+  web: 'Requests reach web servers through the load balancer. Draw that first.',
+  notif: 'Who calls the notification service? Draw the web servers first.',
+  post: 'Who calls the post service? Draw the web servers first.',
+  pcache: 'A cache for which service? Draw the post service first.',
+  pdb: 'Where do posts come from? Draw the post service first.',
+  fanout: 'Fan out <i>what</i>? A post has to be saved by the post service first.',
+  feedsvc: 'Feed requests arrive through the web servers. Draw them first.',
+  feedcache: 'Who writes to this cache, or reads from it? Draw the fanout service or the news feed service first.',
+};
+const chat2 = Chat($('#chat2'));
+let s2 = {};
+function wbSVG() {
+  const ghost = Object.entries(NODES).filter(([k]) => k !== 'media').map(([, v]) => `<rect class="gh" x="${v.x}" y="${v.y}" width="${v.w}" height="${v.h}" rx="9"/>`).join('');
+  const nodes = Object.entries(NODES).map(([k, v]) => {
+    const cx = v.x + v.w / 2;
+    const txt = v.s ? `<text class="n" x="${cx}" y="${v.y + 18}">${v.n}</text><text class="s" x="${cx}" y="${v.y + 34}">${v.s}</text>` : `<text class="n" x="${cx}" y="${v.y + v.h / 2 + 5}">${v.n}</text>`;
+    return `<g class="nd ${v.lane}" id="n-${k}"><rect x="${v.x}" y="${v.y}" width="${v.w}" height="${v.h}" rx="9"/>${txt}</g>`;
+  }).join('');
+  const edges = EDGES.map(([a, b, d]) => `<path class="ed" data-a="${a}" data-b="${b}" d="${d}" marker-end="url(#wbah)"/>`).join('');
+  return `<defs><marker id="wbah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" class="ah"/></marker></defs>
+    <line class="divl" x1="220" y1="200" x2="220" y2="425"/>
+    <text class="lane pub" x="110" y="214">① PUBLISH</text><text class="lane read" x="330" y="214">② READ</text>
+    ${ghost}${edges}${nodes}`;
+}
+function place(k) {
+  s2.placed.add(k);
+  $('#n-' + k).classList.add('on');
+  $$('#wb .ed').forEach(e => { if (s2.placed.has(e.dataset.a) && s2.placed.has(e.dataset.b)) e.classList.add('on'); });
+}
+function log2(html, cls = '') { const l = $('#wbLog'); l.insertAdjacentHTML('beforeend', `<div class="${cls}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function setup2() {
+  begun.delete(2); chat2.clear();
+  s2 = { placed: new Set(), phase: 'build' };
+  ['#s2check', '#s2media', '#s2fan'].forEach(s => $(s).innerHTML = '');
+  $('#wb').innerHTML = wbSVG();
+  $('#wbStatus').textContent = '0 / 10 boxes';
+  $('#wbLog').innerHTML = '<div>Empty whiteboard. Start with whoever sends the requests.</div>';
+  chat2.iv('Good scope. Now sketch a high-level design for me, the way you would on a whiteboard.');
+  const tiles = shuffle([...BOARD.map(k => ({ k, t: NODES[k].t, sub: NODES[k].sub })), ...TRAPS]);
+  $('#tiles').innerHTML = tiles.map(t => `<button class="opt" data-k="${t.k}">${t.t}<small>${t.sub}</small></button>`).join('');
+  $$('#tiles .opt').forEach(b => b.onclick = () => onTile(b));
+}
+async function onTile(b) {
+  if (s2.phase !== 'build' || b.disabled) return;
+  const k = b.dataset.k, trap = TRAPS.find(x => x.k === k);
+  if (trap) {
+    b.disabled = true; b.classList.add('wrong'); Q.loseHeart(b); rec(2, 2, { design: [0, 1] }, 'overeng');
+    chat2.me(`Let's add a ${trap.t.replace('ML', 'machine-learning').toLowerCase()}.`); chat2.iv(trap.why + plus(2));
+    log2(`✗ ${trap.t}: over-engineering`, 'e');
+    return;
+  }
+  const N = NODES[k];
+  const blocked = N.need ? N.need.some(x => !s2.placed.has(x)) : N.needAny ? !N.needAny.some(x => s2.placed.has(x)) : false;
+  if (blocked) { nudge(b); rec(2, 1, { design: [0, 0.5] }); log2(`⚠ ${N.t}: ${WHY2[k].replace(/<[^>]+>/g, '')} (+1 min)`, 'w'); return; }
+  b.disabled = true; b.classList.add('right'); Q.addXP(5, b); rec(2, 1, { design: [1, 1] });
+  place(k); log2(`✓ ${N.t}: ${SAY2[k]}`, 'g');
+  $('#wbStatus').textContent = `${BOARD.filter(x => s2.placed.has(x)).length} / 10 boxes`;
+  if (BOARD.every(x => s2.placed.has(x))) {
+    s2.phase = 'check';
+    $$('#tiles .opt').forEach(x => x.disabled = true);
+    chat2.me('That\'s both flows: publishing on the left, reading on the right. They meet at the feed cache.');
+    await chat2.iv('Okay, I see it.');
+    checkIn();
+  }
+}
+function checkIn() {
+  moves($('#s2check'), {
+    tag: 'Decision moment', xp: 15, stage: 2,
+    q: 'The sketch is up. What\'s your next move?',
+    options: [
+      { t: 'Pause and ask: "Does this shape work before I go deeper?"', g: 2, min: 1, sig: { collab: [1, 1] },
+        why: 'That\'s the buy-in move. Step 2 is about drafting a blueprint and getting feedback on it, treating the interviewer as a teammate. If the shape is wrong, you find out now, not twenty minutes later.' + C1 },
+      { t: 'Carry straight on into the details of every box, in turn', g: 0, min: 2, sig: { collab: [0, 1] }, flag: 'nobuyin',
+        why: 'You never checked that the interviewer agrees with the shape. Going deep on every box also risks spending the deep dive on parts they don\'t care about. Ask for buy-in first.' + C1 },
+      { t: 'Tell them the design is complete and wait for questions', g: 0, min: 2, sig: { collab: [0, 1] }, flag: 'nobuyin',
+        why: 'A box diagram isn\'t a finished design, and "done" shuts the conversation down. Ask whether the shape works, then offer where to go deeper.' + C1 },
+    ],
+    onDone: async (o, g) => {
+      chat2.me(g === 2 ? 'Does this overall shape work for you before I go deeper?' : o.t.startsWith('Tell') ? 'I think the design is complete.' : 'Next, the post service internals…');
+      await chat2.iv(g === 2 ? 'Yes, the shape works for me. <b>I\'m curious about fan-out</b>, though.' : 'Let me stop you there. The shape is fine. What I\'m <b>curious about is fan-out</b>.');
+      await chat2.iv('Quick one first: posts can have video. Where do the videos live?');
+      mediaQuiz();
+    },
+  });
+}
+function mediaQuiz() {
+  Q.quiz($('#s2media'), {
+    tag: 'Curveball', xp: 15,
+    q: '"Where do the videos live?"',
+    options: ['In object storage, sent to users through a CDN', 'As binary blobs inside rows of the post database', 'On the local disks of the web server that got them'],
+    correct: 0,
+    good: 'Big files go to <b>object storage</b> (a cheap store built for large files, like Amazon S3). A <b>CDN</b>, a network of servers close to users, caches and serves them. The post itself just keeps a link. The book\'s news feed design does the same.' + C2,
+    bad: 'Videos belong in <b>object storage</b> (a cheap store built for large files), served through a <b>CDN</b> close to users. Blobs in the database bloat every query and backup; a web server\'s disk dies with the server and can\'t be shared.' + C2,
+    onDone: async ok => {
+      rec(2, 1, { design: [ok ? 1 : 0, 1] });
+      $('#n-media').classList.add('on'); s2.placed.add('media');
+      $$('#wb .ed').forEach(e => { if (s2.placed.has(e.dataset.a) && s2.placed.has(e.dataset.b)) e.classList.add('on'); });
+      log2('✓ CDN + object storage: media goes straight from the CDN to the app.', 'g');
+      await sleep(Q.reduced ? 100 : 800);
+      fanQuiz();
+    },
+  });
+}
+function fanQuiz() {
+  Q.quiz($('#s2fan'), {
+    tag: 'Read the room', xp: 20,
+    q: 'Jordan said, "I\'m curious about fan-out." What does that tell you about step 3?',
+    options: ['Lead the deep dive with fan-out, then cover the rest', 'Cover every component equally so that nothing is missed', 'Skip fan-out, since they clearly know it well already'],
+    correct: 0,
+    good: 'A hint like that is the interviewer telling you where the points are. In the book\'s version of this example, the deep dive covers exactly two things: feed publishing (fan-out) and feed retrieval.' + C1,
+    bad: 'When the interviewer names a topic, that\'s where the points are. Lead with fan-out. In the book\'s version of this example, the deep dive is feed publishing (fan-out), then feed retrieval.' + C1,
+    onDone: ok => {
+      const r = rec(2, 0.5, { collab: [ok ? 1 : 0, 1] });
+      rec(2, 0, { press: [r.min <= 15 ? 1 : 0, 1] });
+      s2.phase = 'done';
+      $('#s2replay').style.display = 'flex';
+      setTimeout(() => done(2), 900);
+    },
+  });
+}
+$('#s2replay .btn').onclick = () => { $('#s2replay').style.display = 'none'; setup2(); };
+Q.onStage(2, setup2);
+
+/* ================= STAGE 3: the deep dive ================= */
+const TOPICS = [
+  { k: 'fan', t: 'Fan-out on publish: push, pull, or both', m: 6, kind: 'core' },
+  { k: 'ret', t: 'Feed retrieval: feed cache, then post details', m: 5, kind: 'core' },
+  { k: 'cel', t: 'Celebrity accounts and hot cache keys', m: 3, kind: 'ok' },
+  { k: 'store', t: 'Storage for posts and the friend graph', m: 3, kind: 'ok' },
+  { k: 'edge', t: 'EdgeRank-style ranking weights, in detail', m: 8, kind: 'trap' },
+  { k: 'lbalg', t: 'Load-balancer algorithms compared', m: 3, kind: 'weak' },
+  { k: 'ui', t: 'Pixel layout of the feed screen', m: 3, kind: 'weak' },
+];
+const chat3 = Chat($('#chat3'));
+let s3 = {};
+function setup3() {
+  begun.delete(3); chat3.clear();
+  s3 = { plan: [], phase: 'plan', tries: 0 };
+  ['#s3a', '#s3b', '#s3c'].forEach(s => $(s).innerHTML = '');
+  $('#s3caveat').style.display = 'none';
+  chat3.iv('Let\'s go deeper. You have about fifteen minutes. As I said, <b>I\'m curious about fan-out</b>. Where do you want to spend the time?');
+  $('#s3a').innerHTML = `<div class="step">Round A · plan the next 15 minutes</div>
+    <p class="small muted" style="margin:4px 0 0">Tap topics in the order you'd cover them (tap again to remove). They must fit in 15 minutes.</p>
+    <div class="planbar" id="planbar" aria-label="Your deep-dive plan"></div>
+    <div class="planmeta"><span id="planUsed">0 / 15 min planned</span><span id="planOrder">Nothing planned yet</span></div>
+    <div class="topics" id="topics">${TOPICS.map(t => `<button class="opt" data-k="${t.k}" aria-pressed="false"><span>${t.t}</span><span class="mn">${t.m} min</span></button>`).join('')}</div>
+    <div class="row" style="margin-top:10px"><button class="btn primary" id="pitch" disabled>🗣️ Pitch this plan</button><button class="btn" id="planClear">Clear</button></div>
+    <div class="explain" id="planEx"></div>`;
+  $$('#topics .opt').forEach(b => b.onclick = () => toggleTopic(b));
+  $('#planClear').onclick = () => { if (s3.phase !== 'plan') return; s3.plan = []; renderPlan(); };
+  $('#pitch').onclick = pitchPlan;
+  renderPlan();
+}
+const planMin = () => s3.plan.reduce((s, k) => s + TOPICS.find(t => t.k === k).m, 0);
+function renderPlan() {
+  $('#planbar').innerHTML = s3.plan.map(k => { const t = TOPICS.find(x => x.k === k); return `<div class="pseg ${t.kind === 'core' ? 'core' : ''}" style="width:${t.m / 15 * 100}%" title="${t.t}">${t.m}m</div>`; }).join('');
+  $('#planUsed').textContent = `${planMin()} / 15 min planned`;
+  $('#planOrder').textContent = s3.plan.length ? s3.plan.map((k, i) => `${i + 1}. ${TOPICS.find(t => t.k === k).t.split(':')[0].split(',')[0]}`).join(' → ') : 'Nothing planned yet';
+  $$('#topics .opt').forEach(b => {
+    const i = s3.plan.indexOf(b.dataset.k);
+    b.classList.toggle('picked', i >= 0); b.setAttribute('aria-pressed', i >= 0);
+    const old = $('.ord', b); if (old) old.remove();
+    if (i >= 0) $('span', b).insertAdjacentHTML('afterbegin', `<span class="ord">${i + 1}</span>`);
+  });
+  $('#pitch').disabled = s3.phase !== 'plan' || !s3.plan.length;
+}
+function toggleTopic(b) {
+  if (s3.phase !== 'plan') return;
+  const k = b.dataset.k, i = s3.plan.indexOf(k), t = TOPICS.find(x => x.k === k);
+  if (i >= 0) s3.plan.splice(i, 1);
+  else if (planMin() + t.m > 15) { nudge(b); Q.toast('won\'t fit', b, 'practice'); return; }
+  else s3.plan.push(k);
+  renderPlan();
+}
+async function pitchPlan() {
+  if (s3.phase !== 'plan' || !s3.plan.length) return;
+  s3.phase = 'wait'; s3.tries++; renderPlan();
+  const btn = $('#pitch'), ex = $('#planEx'), plan = s3.plan.slice();
+  chat3.me('Here\'s my plan: ' + plan.map(k => TOPICS.find(t => t.k === k).t.split(':')[0].split(',')[0].toLowerCase()).join(', then ') + '.');
+  let msg = '', ok = false;
+  if (plan.includes('edge')) {
+    Q.loseHeart(btn); rec(3, 2, { design: [0, 1] }, 'rabbit');
+    msg = 'EdgeRank\'s weights would eat 8 of our 15 minutes and show nothing about whether the system scales. The book uses this exact example as a rabbit hole to avoid.' + C1;
+    await chat3.iv('Ranking weights? We agreed newest-first, and that would eat half our time.' + plus(2));
+  } else if (plan[0] !== 'fan') {
+    rec(3, 1, { collab: [0, 1] });
+    msg = 'Jordan said they were curious about fan-out. Opening with something else ignores the hint. Lead with the topic they flagged.';
+    await chat3.iv('Hm. I did say I\'m curious about fan-out…' + plus(1));
+  } else if (!plan.includes('ret')) {
+    rec(3, 1, { design: [0, 1] });
+    msg = 'Fan-out fills the feed caches, but how does a user actually <i>get</i> their feed? The book\'s deep dive for this prompt covers both halves: publishing and retrieval.' + C1;
+    await chat3.iv('And when I open the app, how does my feed actually reach me?' + plus(1));
+  } else ok = true;
+  if (!ok) {
+    ex.className = 'explain show bad'; ex.innerHTML = '<b>Revise the plan.</b> ' + msg;
+    s3.phase = 'plan'; renderPlan(); return;
+  }
+  const weak = plan.filter(k => TOPICS.find(t => t.k === k).kind === 'weak');
+  s3.phase = 'done';
+  $$('#topics .opt').forEach(b => b.disabled = true); $('#planClear').disabled = true; btn.disabled = true;
+  rec(3, 1 + planMin(), { design: [weak.length ? 0.5 : 1, 1], collab: [1, 1] });
+  Q.addXP(weak.length ? 15 : 25, btn);
+  ex.className = 'explain show ' + (weak.length ? 'meh' : 'good');
+  ex.innerHTML = weak.length
+    ? '<b>Accepted, with a wobble.</b> You led with fan-out and covered retrieval. But ' + weak.map(k => TOPICS.find(t => t.k === k).t.toLowerCase()).join(' and ') + ' won\'t tell the interviewer anything about how the feed scales. Spend those minutes on celebrities or storage instead.'
+    : '<b>Strong plan.</b> Fan-out first (the topic they flagged), then retrieval: the two deep-dive areas the book picks for this prompt.' + C1 + (plan.length > 2 ? ' The extra topic is a sensible use of the spare minutes.' : '');
+  await chat3.iv(weak.length ? 'Okay. Fan-out first, good. Let\'s go.' : 'Good plan. Let\'s start with fan-out.');
+  roundB();
+}
+function roundB() {
+  const wrap = $('#s3b');
+  wrap.innerHTML = '<div class="step">Round B · the stuck moment</div>';
+  chat3.iv('Say we later add a "follow" feature, and one creator has <b>10 million followers</b>. They post. What happens to your fan-out?').then(() => {
+    moves(wrap, {
+      tag: 'Under pressure', xp: 20, stage: 3,
+      q: 'You don\'t have the answer ready. What do you do?',
+      options: [
+        { t: 'Think aloud: pushing to 10M feeds is slow, so propose pull for celebrities', g: 2, sig: { press: [1, 1] },
+          why: 'You said the problem out loud, named why it hurts, and offered a direction the interviewer can react to. That\'s thinking out loud under pressure. Writing one post into 10 million feeds is a huge burst of work, so big accounts are pulled at read time instead.' + C2 },
+        { t: 'Share what you have tried so far, then ask for a hint on the next step', g: 1, min: 1, sig: { press: [0.5, 1] },
+          why: 'A fine move: the book says to ask for hints when you are stuck rather than stall. You showed your work first, which keeps it collaborative. Reasoning your way to a direction yourself scores a little higher.' + C1 },
+        { t: 'Go quiet and work it all out in your head before you say anything', g: 0, min: 3, sig: { press: [0, 1] }, flag: 'silent',
+          why: 'Three silent minutes give the interviewer nothing to score. The book is blunt: don\'t think in silence. Talk through what you are weighing, even if it\'s half-formed.' + C1 },
+        { t: 'Say accounts that big are rare, so the design can safely ignore them', g: 0, min: 1, sig: { press: [0, 1] }, flag: 'narrow',
+          why: 'Waving away a real problem reads as narrow-mindedness, one of the book\'s red flags. Celebrity accounts are rare but cause most of the trouble in a push-based feed.' + C1 },
+      ],
+      onDone: (o, g) => {
+        chat3.me(g === 2 ? 'Pushing one post into 10 million feeds would take ages and hammer the cache. Maybe celebrities\' posts get pulled at read time instead? Want me to explore a hybrid?' : g === 1 ? 'I tried pushing to every follower, but that\'s 10 million writes. Could I get a hint on where to go?' : o.flag === 'silent' ? '<i>(three minutes of silence)</i>' : 'Accounts that big are rare. We can ignore them.');
+        chat3.iv(g === 2 ? 'Yes, go on. That\'s the direction I hoped for.' : g === 1 ? 'Sure: what if you treated those accounts differently from everyone else?' : o.flag === 'silent' ? 'I\'m going to jump in. What are you weighing right now?' : 'They\'re rare, but they\'re exactly what breaks a push design.').then(() => setTimeout(roundC, Q.reduced ? 200 : 900));
+      },
+    });
+  });
+}
+function roundC() {
+  const wrap = $('#s3c');
+  wrap.innerHTML = '<div class="step">Round C · the pushback</div>';
+  chat3.iv('Let me push back. <b>"Why not drop the fanout service and just build every feed when it\'s read?"</b>').then(() => {
+    moves(wrap, {
+      tag: 'Defend or adapt', xp: 20, stage: 3,
+      q: 'How do you answer?',
+      options: [
+        { t: 'Compare: pull is slow for big friend lists; keep push, pull for celebrities', g: 2, min: 1, sig: { collab: [1, 1], design: [1, 1] },
+          why: 'You weighed both sides out loud. <b>Fan-out on write</b> (push) builds feeds ahead of time, so reads are fast, but one post from a huge account means millions of writes. <b>Fan-out on read</b> (pull) makes writing cheap and reading slow, especially with thousands of friends. The common answer is a hybrid: push for most users, pull for celebrities.' + C2 + C4 },
+        { t: 'Insist push is always the right answer and move on to the next topic', g: 0, min: 1, sig: { collab: [0, 1], design: [0, 1] }, flag: 'stubborn',
+          why: 'That\'s stubbornness, a red flag the book names. The interviewer\'s question had a real point: push breaks for huge accounts. Weigh it before you defend.' + C1 },
+        { t: 'Agree at once and redraw everything as pull, with no reasons given', g: 0, min: 2, sig: { collab: [0, 1], design: [0, 1] }, flag: 'caved',
+          why: 'Changing your mind is fine; changing it without reasons isn\'t. Pull for everyone makes every feed load slow. The interviewer wants to see you compare the two, not just follow.' },
+      ],
+      onDone: (o, g) => {
+        chat3.me(g === 2 ? 'Pull would make reads slow for anyone with thousands of friends. I\'d keep push for normal users and pull for celebrities: a hybrid.' : o.flag === 'stubborn' ? 'Push is always better. Moving on.' : 'Good point. I\'ll switch everything to pull.');
+        chat3.iv(g === 2 ? 'Nice. That\'s the trade-off I was looking for.' : 'Okay. Let\'s keep going.').then(() => {
+          const d = iload();
+          rec(3, 0, { press: [d[3] && d[3].min <= 25 ? 1 : 0, 1] });
+          $('#s3caveat').style.display = 'block'; $('#s3replay').style.display = 'flex';
+          setTimeout(() => done(3), 900);
+        });
+      },
+    });
+  });
+}
+$('#s3replay .btn').onclick = () => { $('#s3replay').style.display = 'none'; setup3(); };
+Q.onStage(3, setup3);
+
+/* ================= STAGE 4: wrap it up ================= */
+const CLOSE = [
+  { t: 'Name the bottleneck: celebrity posts and hot feed caches', good: true, r: 'Good self-critique. The book: there is always something to improve, so point at it before I do.' },
+  { t: 'Walk through failures: a cache node or fanout worker dies', good: true, r: 'Yes. Server failures and network loss are exactly the error cases the book suggests covering.' },
+  { t: 'Cover operations: metrics, error logs and a safe rollout', good: true, r: 'Good. How we\'d know it\'s healthy, and how we\'d ship it safely, is a book wrap-up topic.' },
+  { t: 'Say what changes at 10x the users: the next scale curve', good: true, r: 'Nice. Going from 10 million to 100 million users is the "next scale curve" the book mentions.' },
+  { t: 'Give a short recap of the two flows and the key trade-off', good: true, r: 'Helpful. A quick recap shows you hold the whole system in your head, not just the last part.' },
+  { t: 'Say the design is solid and has no real weaknesses left', good: false, flag: 'perfect', r: 'Every design has weak spots. The book says never to claim yours is perfect.' },
+  { t: 'Say "I think that\'s everything" and wait in silence', good: false, flag: 'early', r: 'That leaves minutes on the table. You\'re not done until the interviewer says so.' },
+  { t: 'Start redrawing the whole fanout design from scratch', good: false, flag: 'panic', r: 'With five minutes left? That reads as panic, not depth.' },
+];
+const chat4 = Chat($('#chat4'));
+function setup4() {
+  begun.delete(4); chat4.clear();
+  $('#s4beat').innerHTML = '';
+  const dl = $('#deliver');
+  dl.disabled = true; dl.textContent = '🎤 Deliver my close (0 / 3)'; dl.style.display = ''; dl.dataset.locked = '0';
+  $('#wrapHint').style.display = '';
+  chat4.iv('We have about five minutes left. Anything you want to add before we wrap up?');
+  const wc = $('#wrapcards');
+  wc.innerHTML = shuffle(CLOSE.map((c, i) => ({ c, i }))).map(({ c, i }) => `<button class="opt" data-w="${i}" aria-pressed="false">${c.t}</button>`).join('');
+  $$('.opt', wc).forEach(b => b.onclick = () => {
+    if (dl.dataset.locked === '1') return;
+    const on = !b.classList.contains('picked');
+    if (on && $$('.opt.picked', wc).length >= 3) { nudge(b); return; }
+    b.classList.toggle('picked', on); b.setAttribute('aria-pressed', on);
+    const k = $$('.opt.picked', wc).length;
+    dl.disabled = k !== 3; dl.textContent = `🎤 Deliver my close (${k} / 3)`;
+  });
+}
+$('#deliver').onclick = async e => {
+  const btn = e.currentTarget; if (btn.disabled || btn.dataset.locked === '1') return;
+  btn.disabled = true; btn.dataset.locked = '1';
+  const picks = $$('#wrapcards .opt.picked');
+  $$('#wrapcards .opt').forEach(b => b.disabled = true);
+  let good = 0;
+  for (const b of picks) {
+    const c = CLOSE[+b.dataset.w];
+    chat4.me(c.t + '.');
+    b.classList.add(c.good ? 'right' : 'wrong');
+    b.insertAdjacentHTML('beforeend', `<span class="verdict">${c.good ? '✓ strong close' : '✗ weak close'}</span>`);
+    if (c.good) { good++; Q.addXP(10, b); rec(4, 1, { design: [1, 1] }); }
+    else { Q.loseHeart(b); rec(4, 2, { collab: [0, 1] }, c.flag); }
+    await chat4.iv(c.r + plus(c.good ? 1 : 2));
+  }
+  $$('#wrapcards .opt').forEach(b => { const c = CLOSE[+b.dataset.w]; if (c.good && !b.classList.contains('picked')) { b.classList.add('right'); b.insertAdjacentHTML('beforeend', '<span class="verdict">also a strong close</span>'); } });
+  btn.style.display = 'none'; $('#wrapHint').style.display = 'none';
+  await chat4.iv(good === 3 ? 'That\'s a strong finish. Thanks, that\'s all from me. <b>Any questions for me?</b>' : 'Okay. Thanks, that\'s all from me. <b>Any questions for me?</b>');
+  finalBeat();
+};
+function finalBeat() {
+  moves($('#s4beat'), {
+    tag: 'The last beat', xp: 15, stage: 4,
+    q: '"Any questions for me?"',
+    options: [
+      { t: 'Ask what the real feed challenges are for the team today', g: 2, min: 1, sig: { qs: [1, 1] },
+        why: 'A genuine question about their real problems keeps the conversation two-way and shows you care about the work, not just the verdict. Asking how you could improve works too.' },
+      { t: 'Say no thanks, you\'re all set, and thank them for the time', g: 1, min: 0.5, sig: { qs: [0.5, 1] },
+        why: 'Polite and harmless, but it wastes the last chance to show curiosity about the team.' },
+      { t: 'Ask them straight out whether you passed the interview', g: 0, soft: true, min: 0.5, sig: { qs: [0, 1] },
+        why: 'They almost never can tell you on the spot, and it ends the conversation on an awkward note. Ask about the work instead.' },
+    ],
+    onDone: async (o, g) => {
+      chat4.me(g === 2 ? 'What\'s the hardest feed problem your team is dealing with right now?' : g === 1 ? 'No questions. Thanks for your time!' : 'So… did I pass?');
+      const d = iload(), total = totalMin(d), step = d[4] ? d[4].min : 0;
+      rec(4, 0, { press: [total <= 45 && step <= 5 ? 1 : 0, 1] });
+      await chat4.iv((g === 2 ? 'Great question. Honestly? Celebrity posts, exactly what you named. ' : g === 1 ? 'Thanks for coming in. ' : 'You\'ll hear from the recruiter. ') +
+        (total <= 45 ? `We finished at ${fmt(total)}, right on time. 🤝` : `We ran to ${fmt(total)}, a little over our 45 minutes. 🤝`));
+      $('#s4replay').style.display = 'flex';
+      setTimeout(() => done(4), 900);
+    },
+  });
+}
+$('#s4replay .btn').onclick = () => { $('#s4replay').style.display = 'none'; setup4(); };
+Q.onStage(4, setup4);
+
+/* ================= STAGE 5: switch seats ================= */
+const TAGS = [{ k: 'S', t: '✅ Strong' }, { k: 'N', t: '➖ Neutral' }, { k: 'R', t: '🚩 Red flag' }];
+const LINES = [
+  { ts: '0:30', t: 'Riley starts drawing a load balancer and web servers before asking a single question.', a: 'R', rule: '<b>Red flag: jumped into a solution.</b> The book\'s first "don\'t" is building before clarifying the requirements.' },
+  { ts: '3:00', t: 'After a hint from the interviewer, Riley asks how many friends a user can have.', a: 'N', rule: '<b>Neutral.</b> Right question, but only after a nudge. Asked unprompted in minute one, it would be a strong signal.' },
+  { ts: '5:00', t: 'Riley labels the boxes "load balancer" and "web servers" with no comment.', a: 'N', rule: '<b>Neutral.</b> Standard boxes, drawn plainly. Expected, not a signal either way.' },
+  { ts: '9:00', t: 'Riley draws the publish flow and the read flow as two clear, separate paths.', a: 'S', rule: '<b>Strong.</b> Splitting the design into publishing and reading is exactly the book\'s high-level move for this prompt.' },
+  { ts: '12:00', t: 'Riley keeps adding boxes and never asks whether the overall shape works.', a: 'R', rule: '<b>Red flag: no buy-in.</b> Step 2 says to share the blueprint and ask for feedback, treating the interviewer as a teammate.' },
+  { ts: '16:00', t: 'Riley explains the weights inside Facebook\'s EdgeRank for eight minutes.', a: 'R', rule: '<b>Red flag: rabbit hole.</b> The book uses this very example: ranking details eat time and prove nothing about scaling.' },
+  { ts: '24:00', t: '"Fan-out on write makes reads fast, because each feed is built ahead of time."', a: 'S', rule: '<b>Strong.</b> A design choice stated together with its reason. That\'s trade-off thinking.' },
+  { ts: '25:00', t: 'The interviewer suggests pull for celebrities. Riley says push is always right and moves on.', a: 'R', rule: '<b>Red flag: stubbornness,</b> one of the book\'s named red flags. A hint from the interviewer is a gift, not an attack.' },
+  { ts: '28:00', t: 'Riley says posts will live "in a database" without choosing one yet.', a: 'N', rule: '<b>Neutral.</b> Deferring the exact database is fine at this point. It only matters if asked.' },
+  { ts: '30:00', t: 'Riley puts videos in object storage behind a CDN, and explains why.', a: 'S', rule: '<b>Strong.</b> The right tool, with a reason: big media in cheap storage, served from servers near users.' },
+  { ts: '34:00', t: 'Riley rewrites a messy label on the whiteboard so it\'s easier to read.', a: 'N', rule: '<b>Neutral.</b> Tidying the board is harmless. No signal either way.' },
+  { ts: '38:00', t: 'Riley goes quiet for three minutes while working something out.', a: 'R', rule: '<b>Red flag: thinking in silence.</b> The book: keep communicating, and ask for a hint when stuck.' },
+  { ts: '41:00', t: '"I think the design is complete. It has no real weaknesses."', a: 'R', rule: '<b>Red flag: claims perfection.</b> The book: never say your design is perfect; there\'s always something to improve.' },
+  { ts: '43:00', t: '"Is there anything you\'d like me to go deeper on?"', a: 'S', rule: '<b>Strong.</b> Inviting the interviewer to steer is collaboration, and it keeps the interview going until they end it.' },
+];
+const DECIDE = ['Strong hire', 'Hire', 'Lean no hire', 'Strong no hire'];
+const DEC_OK = 'Lean no hire';
+let s5 = {};
+function setup5() {
+  s5 = { tags: {}, dec: null, locked: false };
+  $('#tx').innerHTML = LINES.map((l, i) => `<div class="tline" data-i="${i}"><div class="tt"><span class="ts">${l.ts}</span><span>${l.t}</span></div>
+    <div class="tags" role="group" aria-label="Tag line at ${l.ts}">${TAGS.map(t => `<button class="opt" data-t="${t.k}" aria-pressed="false">${t.t}</button>`).join('')}</div><div class="rule">${l.rule}</div></div>`).join('');
+  $('#decide').innerHTML = DECIDE.map(d => `<button class="opt" data-d="${d}" aria-pressed="false">${d}</button>`).join('');
+  $('#gradeEx').className = 'explain'; $('#gradeEx').innerHTML = '';
+  $('#s5retry').style.display = 'none';
+  $$('#tx .tline').forEach(row => $$('.tags .opt', row).forEach(b => b.onclick = () => {
+    if (s5.locked) return;
+    s5.tags[row.dataset.i] = b.dataset.t;
+    $$('.tags .opt', row).forEach(x => x.setAttribute('aria-pressed', x === b));
+    upd5();
+  }));
+  $$('#decide .opt').forEach(b => b.onclick = () => {
+    if (s5.locked) return;
+    s5.dec = b.dataset.d;
+    $$('#decide .opt').forEach(x => x.setAttribute('aria-pressed', x === b));
+    upd5();
+  });
+  upd5();
+}
+function upd5() {
+  const n = Object.keys(s5.tags).length, btn = $('#submitGrade');
+  btn.disabled = s5.locked || n < LINES.length || !s5.dec;
+  btn.textContent = n < LINES.length ? `📝 Submit my scorecard (${n} / ${LINES.length} tagged)` : !s5.dec ? '📝 Pick a decision to submit' : '📝 Submit my scorecard';
+}
+$('#submitGrade').onclick = e => {
+  if (s5.locked) return;
+  s5.locked = true;
+  const btn = e.currentTarget; btn.disabled = true;
+  let right = 0;
+  $$('#tx .tline').forEach(row => {
+    const l = LINES[+row.dataset.i], ok = s5.tags[row.dataset.i] === l.a;
+    if (ok) right++;
+    row.classList.add(ok ? 'ok' : 'no');
+    $$('.tags .opt', row).forEach(x => { x.disabled = true; if (x.dataset.t === l.a) x.classList.add('right'); else if (x.getAttribute('aria-pressed') === 'true') x.classList.add('wrong'); });
+  });
+  const decOk = s5.dec === DEC_OK;
+  $$('#decide .opt').forEach(x => { x.disabled = true; if (x.dataset.d === DEC_OK) x.classList.add('right'); else if (x.dataset.d === s5.dec) x.classList.add('wrong'); });
+  const pass = right >= 10 && decOk;
+  const why = '<b>Lean no hire</b> is the call. Riley\'s technical pieces are real: two clean flows, a reasoned push choice, media on a CDN. That\'s why it isn\'t a strong no. But Riley skipped scoping, never got buy-in, sank eight minutes into ranking, brushed off the interviewer\'s idea, went silent, and called the design perfect. The book\'s point: interviewers grade how you work, not just what you draw.' + C1;
+  const ex = $('#gradeEx');
+  ex.className = 'explain show ' + (pass ? 'good' : 'bad');
+  ex.innerHTML = `<b>${right} of ${LINES.length} tags right · decision ${decOk ? '✓' : '✗'}.</b> ${why}`;
+  try { const d = iload(); d[5] = { eye: [right, LINES.length], dec: decOk }; isave(d); } catch (_) {}
+  active = 5; renderBar();
+  if (pass) {
+    Q.addXP(right * 3, btn); Q.addXP(20, $('#decide'));
+    $('#s5caveat').style.display = 'block';
+    setTimeout(() => done(5), 900);
+  } else {
+    Q.loseHeart(btn);
+    $('#s5retry').style.display = 'flex';
+  }
+};
+$('#s5retry .btn').onclick = () => { setup5(); $('#tx').scrollIntoView({ behavior: Q.reduced ? 'auto' : 'smooth', block: 'start' }); };
+Q.onStage(5, setup5);
+
+/* ================= STAGE 6: drill + scorecard ================= */
+const SIG = [
+  { k: 'design', n: 'Design skill', from: 'boxes, media, deep-dive plan, trade-offs, close' },
+  { k: 'collab', n: 'Collaboration', from: 'check-in, following the hint, pushback' },
+  { k: 'press', n: 'Under pressure', from: 'stuck moment, staying inside each step\'s time' },
+  { k: 'amb', n: 'Ambiguity', from: 'not jumping ahead, stated assumptions' },
+  { k: 'qs', n: 'Good questions', from: 'scoping questions, the last question' },
+];
+const FLAGS = {
+  jumped: ['Jumped into a solution', 'ask before you build'],
+  unwritten: ['Unspoken assumption', 'say it and write it down'],
+  overeng: ['Over-engineering', 'a red flag the book names'],
+  nobuyin: ['No buy-in', 'check the blueprint before going deeper'],
+  rabbit: ['Rabbit hole', 'spend minutes where they prove scale'],
+  silent: ['Thinking in silence', 'keep talking; ask for hints'],
+  narrow: ['Narrow-mindedness', 'a red flag the book names'],
+  stubborn: ['Stubbornness', 'a red flag the book names'],
+  caved: ['No trade-off reasoning', 'change your mind with reasons'],
+  perfect: ['Claimed perfection', 'there is always something to improve'],
+  early: ['Ended early', 'you\'re done when they say so'],
+  panic: ['Late redesign', 'reflect in the last minutes, don\'t restart'],
+};
+const VERD = [[.85, 'Strong hire', 3], [.7, 'Hire', 2], [.55, 'Lean hire', 1], [0, 'Lean no hire', 0]];
+function renderScore() {
+  const d = iload(), S = sums(d);
+  const rows = SIG.map(c => {
+    const s = S[c.k];
+    if (!s || !s[1]) return `<div class="sc-row"><span><b>${c.n}</b><br><span class="small muted">${c.from}</span></span><div class="sc-bar"><div></div></div><span class="verd">not played</span></div>`;
+    const r = s[0] / s[1], v = VERD.find(x => r >= x[0]);
+    return `<div class="sc-row"><span><b>${c.n}</b><br><span class="small muted">${c.from}</span></span><div class="sc-bar"><div data-w="${Math.round(r * 100)}"></div></div><span class="verd v${v[2]}">${Math.round(r * 100)}%</span></div>`;
+  });
+  const flags = [...new Set([1, 2, 3, 4].flatMap(n => (d[n] && d[n].flags) || []))];
+  const rated = SIG.map(c => S[c.k]).filter(s => s && s[1]);
+  const avg = rated.length ? rated.reduce((t, s) => t + s[0] / s[1], 0) / rated.length : 0;
+  let lvl = VERD.find(x => avg >= x[0])[2];
+  const cap = flags.length >= 4 ? 0 : flags.length >= 2 ? 1 : flags.length === 1 ? 2 : 3;
+  const capped = cap < lvl; lvl = Math.min(lvl, cap);
+  const verdict = VERD.find(x => x[2] === lvl)[1];
+  const total = totalMin(d);
+  const steps = STEPS.map(s => ({ ...s, m: stageMin(d, s.stage), played: !!d[s.stage] || Q.isCleared(s.stage) }));
+  const eye = d[5] && d[5].eye;
+  $('#scorecard').innerHTML = `<div class="scorecard"><div class="kicker">Jordan's scorecard</div><h3>Your five signals from this run</h3>
+    <p class="small muted" style="margin:0">Computed from your choices in stages 1–4. Replaying a stage overwrites its part.</p>
+    ${rows.join('')}
+    <div class="lbl">Red flags triggered</div>
+    <div class="sc-flags">${flags.length ? flags.map(f => `<span title="${FLAGS[f][1]}">🚩 ${FLAGS[f][0]}</span>`).join('') : '<span class="none">None. Clean run.</span>'}</div>
+    <table class="sc-time"><thead><tr><th>Step</th><th>Your time</th><th>Book's range</th></tr></thead><tbody>
+    ${steps.map(s => `<tr><td>${s.name}</td><td>${s.played ? fmt(s.m) : '—'}</td><td>${s.lo}–${s.hi} min ${s.played && d[s.stage] ? (s.m <= s.hi ? '<span class="ok">✓</span>' : '<span class="ov">over</span>') : ''}</td></tr>`).join('')}
+    </tbody></table>
+    ${eye ? `<p class="small" style="margin:12px 0 0">🪑 <b>Interviewer's eye</b> (stage 5): ${eye[0]} / ${eye[1]} moments tagged right, decision ${d[5].dec ? '✓' : '✗'}.</p>` : ''}
+    <div class="sc-overall"><span>Clock ${fmt(total)} of 45:00 ${total <= 45 ? '<span style="color:var(--good);font-weight:700">✓ on time</span>' : '<span style="color:var(--warn);font-weight:700">over time</span>'}</span><span>Verdict&nbsp; <b>${rated.length ? verdict : '—'}</b></span></div>
+    ${rated.length && capped ? `<p class="small muted" style="margin:6px 0 0">Your signal average alone would score higher; ${flags.length} red flag${flags.length > 1 ? 's' : ''} pulled the verdict down. That's how process slips cost real candidates.</p>` : ''}</div>`;
+  requestAnimationFrame(() => setTimeout(() => $$('#scorecard .sc-bar div[data-w]').forEach(b => b.style.width = b.dataset.w + '%'), 60));
+  return { verdict: rated.length ? verdict : null, total, flags };
+}
+function setup6() {
+  renderScore();
+  Q.drill($('#drill'), {
+    prompt: 'Jordan, walking you out: <i>"Give me the 60-second version of how you ran that interview, step by step."</i>',
+    placeholder: 'I started by scoping: mobile and web…',
+    minWords: 40,
+    model: '"I started by scoping: mobile and web, posting and viewing friends\' posts, newest first by assumption, up to 5,000 friends, 10 million daily users, images and video. Then I sketched two flows: publishing through the post service and a fanout service into a feed cache, and reading from the news feed service out of that cache, with media on a CDN. I checked the shape with the interviewer. In the deep dive I focused on fan-out, push for normal users and pull for celebrities, and on the retrieval path. I closed by naming the celebrity bottleneck, cache failure recovery, the metrics I\'d watch, and what changes at ten times the scale."',
+    checks: [
+      'I covered all four steps in order',
+      'I quoted the key scope numbers (5,000 friends, 10M DAU)',
+      'I named both flows and the fan-out trade-off',
+      'I closed with a bottleneck and an operations point',
+    ],
+    onDone: n => {
+      const res = renderScore();
+      try { const d = iload(); d.card = { verdict: res.verdict, minutes: res.total, flags: res.flags, drill: n, at: new Date().toISOString() }; isave(d); } catch (_) {}
+      $('#scorecard').scrollIntoView({ behavior: Q.reduced ? 'auto' : 'smooth', block: 'center' });
+      $('#s6replay').style.display = 'flex';
+      setTimeout(() => done(6), 1200);
+    },
+  });
+}
+$('#s6replay .btn').onclick = () => { $('#s6replay').style.display = 'none'; setup6(); };
+Q.onStage(6, setup6);
+
+Q.start();
+setHudH(); renderBar();
+})();
+</script>
+</body>
+</html>
