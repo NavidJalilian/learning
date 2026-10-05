@@ -1,0 +1,125 @@
+{
+ "n": "14.2",
+ "slug": "youtube-upload-and-stream-flows",
+ "t": "Upload Lane, Watch Lane",
+ "d": "The high-level design: CDN, API servers, the video upload flow and the streaming flow",
+ "boss": false,
+ "badge": "🛣️ Badge: Pipeline Pilot",
+ "winTitle": "Both lanes are open",
+ "goal": "Your win today: you can draw the book's high-level design and walk an interviewer through what happens, step by numbered step, from 'upload' to 'ready to stream', and explain how a video then streams from the nearest CDN edge.",
+ "bookSections": "Step 2: propose high-level design and get buy-in (Client, CDN, API servers); Video uploading flow (flow a: upload the actual video; flow b: update the metadata); Video streaming flow (streaming protocols)",
+ "stages": [
+  {
+   "title": "Three boxes",
+   "sub": "Who serves what?",
+   "teaches": "The book's top-level split: Client (computer, mobile phone, smart TV); CDN, which stores the videos and streams them from the edge server closest to the user; API servers, which handle everything except streaming: feed recommendations, generating the video upload URL, updating the metadata database and cache, user signup, and so on. Blob storage = 'binary large object' storage: a service that stores big unstructured files (like video) cheaply and durably (e.g. Amazon S3). Design principle from the book: don't build everything; reuse existing cloud services (blob storage, CDN) and spend the interview on the parts that matter.",
+   "interaction": "Sort into lanes. 8 request cards fall in one at a time: 'play the next 4 seconds of a video', 'sign up', 'get my home feed', 'get an upload URL', 'save video title and description', 'fetch the 720p version', 'like a video', 'load thumbnail image'. The learner flicks each into the CDN lane or the API servers lane. Thumbnail is accepted in CDN (static asset) with a note that the book doesn't say. A wrong drop bounces back with a one-line reason.",
+   "check": "Q.quiz (2 Qs): (1) Why stream from a CDN rather than from your API servers? -> the edge is close to the viewer (low latency, high throughput) and it takes the huge bandwidth load off your servers. (2) What is blob storage good for? -> large binary files such as raw and transcoded videos."
+  },
+  {
+   "title": "Build the upload pipeline",
+   "sub": "Put the components on the whiteboard",
+   "teaches": "Components of the book's upload design and what each does: User (client); Load balancer (spreads requests across API servers); API servers (all non-streaming requests); Metadata DB (video metadata such as title, URL, size, resolution, format, user info; sharded and replicated for performance and availability); Metadata cache (caches metadata and user objects for speed); Original storage (blob storage for the uploaded original videos); Transcoding servers (convert the video into multiple formats/resolutions; 'transcoding' = 'encoding' here); Transcoded storage (blob storage for the transcoded output); CDN (caches and streams the transcoded videos); Completion queue (a message queue holding 'transcoding finished' events); Completion handler (a set of workers that pull events from the completion queue and update the metadata DB and cache).",
+   "interaction": "Whiteboard builder (like 0008 stage 2). An empty canvas with the user on the left. 11 component chips sit in a tray. The learner taps components in an order that respects dependencies and each snaps into its place in the book's diagram with an arrow; hovering shows a one-line definition. Placing something whose input doesn't exist yet (e.g. completion handler before completion queue, CDN before transcoded storage) shakes and costs 1 XP. Two decoy chips ('video editing service', 'search index') cost a heart if placed. Finished diagram stays visible for the next stage.",
+   "check": "Q.quiz (2 Qs): (1) Why put a completion queue between the transcoding servers and the database? -> it decouples them: transcoders publish 'done' events and move on; the completion handler updates the DB at its own pace and can retry. (2) Why is the metadata DB sharded and replicated? -> sharding for write/read scale, replication for availability and read throughput."
+  },
+  {
+   "title": "Follow the bytes",
+   "sub": "Predict each hop of the upload, then watch it",
+   "teaches": "Flow a (upload the actual video), the book's numbered steps: 1. Videos are uploaded to original storage. 2. Transcoding servers fetch videos from original storage and start transcoding. 3. Once transcoding is complete, two things happen in parallel: 3a. transcoded videos are sent to transcoded storage, and 3a.1. distributed to the CDN; 3b. transcoding completion events are queued in the completion queue, 3b.1. the completion handler's workers pull the events, 3b.1.a and 3b.1.b. the completion handler updates the metadata DB and the metadata cache. 4. API servers inform the client that the video is uploaded and ready for streaming. Flow b (update the metadata): while the file is uploading, the client in parallel sends a request to update the video metadata (file name, size, format, etc.); API servers update the metadata cache and DB.",
+   "interaction": "Predict-then-watch on the diagram from stage 2. A glowing 'video packet' travels along the arrows. At each numbered junction the animation pauses and offers 3 'next hop' choices; correct = the packet continues and the step label (1, 2, 3a, 3a.1, 3b...) lights up. At step 3 the packet splits into two packets (3a and 3b) to show parallelism; the learner must tap BOTH branches to proceed. After flow a finishes, a second, smaller 'metadata packet' runs flow b and the learner is asked: 'Does flow b wait for flow a to finish?' (No: it runs in parallel while the file uploads). A 'replay at 2x' button shows both flows together.",
+   "check": "Q.quiz (2 Qs): (1) Put in order: completion handler updates DB, transcoding servers fetch original, CDN gets transcoded copy, upload to original storage. (2) Why send metadata in parallel with the upload? -> the user can type the title while the big file uploads; metadata is tiny and doesn't need to wait for bytes."
+  },
+  {
+   "title": "Stream, don't download",
+   "sub": "How the video reaches the screen",
+   "teaches": "Downloading = copy the whole file before playing. Streaming = the device continuously receives small pieces of the video from a remote source and plays them as they arrive, so playback starts almost immediately. Streaming protocol = a standardised way to control data transfer for streaming. The book lists: MPEG-DASH (MPEG = Moving Picture Experts Group; DASH = Dynamic Adaptive Streaming over HTTP), Apple HLS (HTTP Live Streaming), Microsoft Smooth Streaming, Adobe HTTP Dynamic Streaming (HDS). You don't need to know the internals; you need to know different protocols support different video encodings and players, so pick the right one for your use case. Videos stream directly from the CDN: the edge server closest to you delivers the video, so latency is very low.",
+   "interaction": "Race simulation. Two phones side by side play the same 300 MB clip on a 20 Mbit/s connection. Before pressing Play, the learner predicts the time-to-first-frame for each (choices: ~0.5 s / ~15 s / ~2 min). Left 'Download' phone shows a progress bar filling for about 2 minutes (300 MB = 2,400 Mbit / 20 Mbit/s = 120 s) before playing; right 'Stream' phone fetches 4-second segments and starts in under a second. Then an 'edge picker' map: the learner taps their city; arrows show the request going to the nearest CDN edge (low RTT) vs a far origin (high RTT), with ms counters. Finish with a 4-card match: acronym -> full name (DASH, HLS, Smooth Streaming, HDS).",
+   "check": "Q.quiz (2 Qs): (1) Where do viewers' video bytes come from in the book's design? -> the nearest CDN edge server, not the API servers or original storage. (2) Why do protocol choices matter? -> each supports different encodings and players; you choose based on the devices you must support."
+  },
+  {
+   "title": "Boss: The Upload Ogre",
+   "sub": "Debug the flows",
+   "teaches": "Reasoning across the whole flow: which component owns which state, what runs in parallel, where to look when something is stuck.",
+   "interaction": "Q.boss() with 5 cards, 3 choices each. (1) 'The transcoded files are on the CDN but the app still shows Processing forever.' -> look at the completion queue / completion handler (step 3b never updated the metadata DB/cache). (2) 'A smart TV in Brazil wants to play a video. Which box serves the bytes?' -> nearest CDN edge. (3) 'Should transcoding servers write directly to the metadata DB instead of the queue?' -> no: tight coupling; the queue absorbs bursts and lets the handler retry. (4) 'The user edits the title while the 1 GB file is still uploading. Problem?' -> no, flow b runs independently through the API servers. (5) 'Why not stream from original storage to save CDN money?' -> originals aren't transcoded for devices or bandwidth, and storage is far from viewers (high latency).",
+   "check": "Pass at 4/5."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "'Walk me through an upload'",
+   "teaches": "Recall of both flows.",
+   "interaction": "Q.drill(): prompt 'The interviewer says: walk me through what happens from the moment I hit Upload until my friend presses Play.' Model answer + checklist: client uploads to original storage; metadata update in parallel via API servers (cache + DB); transcoding servers fetch and transcode; in parallel transcoded copies go to transcoded storage then CDN, and a completion event goes to the completion queue; completion handler updates metadata DB and cache; API servers tell the client it's ready; the friend streams from the nearest CDN edge using a streaming protocol such as HLS or DASH.",
+   "check": "Self-grade per checklist line."
+  }
+ ],
+ "caveats": [
+  "The book's step 4 says API servers 'inform the client'. In practice that is a push notification or the client polling a status endpoint; the book doesn't specify.",
+  "Real YouTube publishes lower resolutions first and adds HD/4K later, because higher resolutions take longer to process. The book's flow treats 'transcoding complete' as one event.",
+  "Message queues usually deliver at least once, so the completion handler may see the same event twice. Its DB/cache updates should be idempotent (safe to apply twice).",
+  "Of the four protocols the book lists, HLS and MPEG-DASH dominate today; Microsoft Smooth Streaming and Adobe HDS are largely legacy."
+ ],
+ "sources": [
+  {
+   "label": "System Design Interview Vol. 1, Ch. 14: Design YouTube (ByteByteGo)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-youtube"
+  },
+  {
+   "label": "Wikipedia: Binary large object",
+   "url": "https://en.wikipedia.org/wiki/Binary_large_object"
+  },
+  {
+   "label": "RFC 8216: HTTP Live Streaming",
+   "url": "https://datatracker.ietf.org/doc/html/rfc8216"
+  },
+  {
+   "label": "Wikipedia: Adaptive bitrate streaming",
+   "url": "https://en.wikipedia.org/wiki/Adaptive_bitrate_streaming"
+  }
+ ],
+ "id": "1402",
+ "file": "1402-youtube-upload-and-stream-flows.html",
+ "world": 14,
+ "chapterTitle": "Design YouTube",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-youtube",
+ "cheatsheet": "../reference/ch14-youtube-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "1401",
+   "n": "14.1",
+   "t": "Size Up the Tube",
+   "d": "Scope a YouTube clone and do the napkin maths for storage and CDN cost"
+  },
+  {
+   "id": "1402",
+   "n": "14.2",
+   "t": "Upload Lane, Watch Lane",
+   "d": "The high-level design: CDN, API servers, the video upload flow and the streaming flow"
+  },
+  {
+   "id": "1403",
+   "n": "14.3",
+   "t": "The Format Forge",
+   "d": "Why videos are transcoded, containers vs codecs, adaptive bitrate, and the DAG model"
+  },
+  {
+   "id": "1404",
+   "n": "14.4",
+   "t": "The Transcoding Factory",
+   "d": "Preprocessor, DAG scheduler, resource manager, task workers, temporary storage"
+  },
+  {
+   "id": "1405",
+   "n": "14.5",
+   "t": "Faster, Safer, Cheaper",
+   "d": "Speed, safety and cost optimisations, plus the book's error-handling playbook"
+  },
+  {
+   "id": "1406",
+   "n": "BOSS",
+   "t": "Design YouTube Live",
+   "d": "Full mock interview: design a video upload and streaming service"
+  }
+ ]
+}

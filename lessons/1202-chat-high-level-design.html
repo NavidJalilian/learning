@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>The Switchboard</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: sort bins (s1), connection dots (s2, s4), architecture board (s3), login map + registry (s4) */
+:root { --off: #b9b5c8; --wire: #c9c3b5; --on-acc: #ffffff; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --off: #4a4d70; --wire: #3a3e62; --on-acc: #0e0f1d; }
+}
+:root[data-theme="dark"] { --off: #4a4d70; --wire: #3a3e62; --on-acc: #0e0f1d; }
+
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.msg { margin-top: 12px; font-size: 15px; padding: 10px 14px; border-radius: 12px; background: var(--bg-2); min-height: 44px; }
+.msg.good { background: var(--good-soft); }
+.msg.bad { background: var(--bad-soft); }
+.shake { animation: shake .4s; }
+.bignum { font-family: var(--mono); font-weight: 700; }
+.bignum.bad { color: var(--bad); }
+.bignum.good { color: var(--good); }
+.bignum.warn { color: var(--warn); }
+
+/* stage 1: tray + bins */
+.tray { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; min-height: 48px; }
+.tcard { min-height: 44px; border: 2px solid var(--line); background: var(--panel); border-radius: 12px; padding: 8px 12px; font-weight: 600; font-size: 14.5px; display: inline-flex; align-items: center; gap: 6px; transition: border-color .2s, background .2s, transform .1s; text-align: left; }
+.tcard:hover { border-color: var(--accent); }
+.tcard[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); transform: translateY(-2px); }
+.bins { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+@media (max-width: 640px) { .bins { grid-template-columns: 1fr; } }
+.bin { border: 2px dashed var(--line); border-radius: 16px; padding: 12px; min-height: 120px; background: var(--bg); cursor: pointer; transition: border-color .2s, background .2s; }
+.bin:hover, .bin:focus-visible { border-color: var(--accent); outline: none; }
+.bins.armed .bin { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.bin h3 { margin: 0; font-size: 16px; }
+.bin .bsub { font-size: 12.5px; color: var(--muted); margin-bottom: 8px; }
+.bin-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.placed { font-size: 13px; font-weight: 600; padding: 5px 9px; border-radius: 9px; background: var(--good-soft); border: 1px solid color-mix(in srgb, var(--good) 40%, transparent); animation: rise .3s; }
+
+/* stage 2: calc + dots */
+.calc { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; font-size: 16px; }
+.calc input { width: 110px; min-height: 44px; border-radius: 12px; border: 2px solid var(--line); background: var(--bg); color: var(--ink); font: 600 17px var(--mono); padding: 6px 10px; }
+.calc input:focus { border-color: var(--accent); outline: none; }
+.cd { fill: var(--teal); transition: transform .9s cubic-bezier(.3,.7,.2,1), fill .4s, opacity .4s; }
+.cd.off { fill: var(--off); }
+.cd.nt { transition: none; }
+.cd.retry { fill: var(--warn); }
+.srv rect { fill: var(--panel); stroke: var(--line); stroke-width: 2; transition: stroke .3s, fill .3s; }
+.srv text { fill: var(--ink); font: 700 11px var(--font); text-anchor: middle; }
+.srv.tap { cursor: pointer; }
+.srv.tap:hover rect, .srv.tap:focus rect { stroke: var(--accent); }
+.srv:focus { outline: none; }
+.srv.dead rect { stroke: var(--bad); stroke-dasharray: 5 4; fill: var(--bad-soft); }
+.srv.dead text { fill: var(--bad); }
+.floor { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 3 5; }
+.cap { fill: var(--muted); font: 600 11px var(--font); text-anchor: middle; }
+
+/* stage 3: architecture board */
+.board svg { max-width: 560px; margin: 0 auto; }
+.wire { stroke: var(--wire); stroke-width: 2.5; fill: none; transition: stroke .4s, opacity .4s; }
+.wire.on { stroke: var(--muted); }
+.cwire { stroke-width: 3; fill: none; transition: stroke .4s; stroke: var(--wire); }
+.cwire.http { stroke: var(--accent); }
+.cwire.ws { stroke: var(--teal); stroke-dasharray: 7 4; }
+.users rect { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+.users text, .slot text { text-anchor: middle; dominant-baseline: central; }
+.users .nm { fill: var(--ink); font: 700 13px var(--font); }
+.slot { cursor: pointer; }
+.slot:focus { outline: none; }
+.slot rect { fill: var(--bg); stroke: var(--line); stroke-width: 2; stroke-dasharray: 6 5; transition: fill .3s, stroke .3s; }
+.slot .nm { fill: var(--ink); font: 700 12px var(--font); }
+.slot .ht { fill: var(--muted); font: 500 10.5px var(--font); }
+.slot .q { fill: var(--muted); font: 700 16px var(--font); }
+.board.armed .slot:not(.filled) rect { stroke: var(--accent); }
+.slot:hover:not(.filled) rect, .slot:focus:not(.filled) rect { stroke: var(--accent); fill: var(--accent-soft); }
+.slot.filled { cursor: default; }
+.slot.filled rect { fill: var(--panel); stroke: var(--teal); stroke-dasharray: none; animation: snap .4s; transform-box: fill-box; transform-origin: center; }
+.slot.nope rect { stroke: var(--bad); }
+@keyframes snap { 40% { transform: scale(1.06); } }
+.proto { cursor: pointer; }
+.proto:focus { outline: none; }
+.proto rect { fill: var(--panel); stroke: var(--line); stroke-width: 2; }
+.proto:hover rect, .proto:focus rect { stroke: var(--ink); }
+.proto text { font: 700 11.5px var(--mono); fill: var(--muted); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.proto.http rect { fill: var(--accent-soft); stroke: var(--accent); }
+.proto.http text { fill: var(--accent); }
+.proto.ws rect { fill: var(--teal-soft); stroke: var(--teal); }
+.proto.ws text { fill: var(--teal); }
+.proto.bad rect { stroke: var(--bad); stroke-width: 3; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--muted); }
+.legend i { display: inline-block; width: 22px; height: 0; border-top: 3px solid; vertical-align: middle; margin-right: 5px; }
+.tiles { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+.tiles .tcard { font-size: 14px; }
+.tiles .tcard.gone { display: none; }
+
+/* stage 4: login map, ordering, registry, herd sim */
+.lmap svg { max-width: 540px; margin: 0 auto; }
+.ln rect { fill: var(--panel); stroke: var(--line); stroke-width: 2; }
+.ln text { fill: var(--ink); font: 700 11.5px var(--font); text-anchor: middle; dominant-baseline: central; }
+.ln .ht { fill: var(--muted); font: 500 10px var(--font); }
+.ln.hl rect { stroke: var(--accent); fill: var(--accent-soft); }
+.larrow { stroke: var(--wire); stroke-width: 2.5; fill: none; opacity: .5; transition: stroke .4s, opacity .4s; }
+.larrow.on { stroke: var(--accent); opacity: 1; }
+.larrow.ws.on { stroke: var(--teal); stroke-dasharray: 7 4; }
+.lbadge circle { fill: var(--bg-2); stroke: var(--line); transition: fill .3s; }
+.lbadge text { fill: var(--muted); font: 700 11px var(--font); text-anchor: middle; dominant-baseline: central; }
+.lbadge.on circle { fill: var(--accent); stroke: var(--accent); }
+.lbadge.on text { fill: var(--on-acc); }
+.ord { display: grid; gap: 8px; margin-top: 10px; }
+.ord .tcard { width: 100%; }
+.ordslots { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; counter-reset: st; }
+.ordslots li { counter-increment: st; position: relative; padding: 9px 12px 9px 44px; border-radius: 12px; border: 2px dashed var(--line); font-size: 14.5px; min-height: 44px; color: var(--muted); }
+.ordslots li::before { content: counter(st); position: absolute; left: 10px; top: 10px; width: 24px; height: 24px; border-radius: 8px; background: var(--bg-2); display: grid; place-items: center; font-weight: 700; font-size: 13px; }
+.ordslots li.filled { border-style: solid; border-color: var(--accent); background: var(--accent-soft); color: var(--ink); animation: rise .3s; }
+.ordslots li.filled::before { background: var(--accent); color: #fff; }
+.reg { display: grid; gap: 8px; margin-top: 10px; }
+.regrow { display: grid; grid-template-columns: 54px 1fr 92px; gap: 4px 12px; align-items: center; text-align: left; border: 2px solid var(--line); background: var(--panel); border-radius: 12px; padding: 10px 12px; min-height: 48px; transition: border-color .2s, background .2s; }
+.regrow:hover:not([disabled]) { border-color: var(--accent); }
+.regrow .nm { font-weight: 700; font-family: var(--mono); }
+.regrow .rg { font-size: 13.5px; color: var(--muted); }
+.regrow .ld { font-family: var(--mono); font-size: 13px; text-align: right; }
+.regrow .bar { grid-column: 2 / 4; height: 8px; border-radius: 99px; background: var(--bg-2); overflow: hidden; }
+.regrow .bar i { display: block; height: 100%; border-radius: 99px; background: var(--good); }
+.regrow .bar i.hot { background: var(--bad); }
+.regrow.down { opacity: .65; }
+.regrow.right { border-color: var(--good); background: var(--good-soft); }
+.regrow.wrong { border-color: var(--bad); background: var(--bad-soft); }
+.whereami { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; font-weight: 600; padding: 6px 12px; border-radius: 99px; background: var(--accent-soft); }
+.meter-t { fill: var(--bg-2); stroke: var(--line); }
+.meter-f { fill: var(--good); transition: width .35s, fill .3s; }
+.meter-f.over { fill: var(--bad); }
+.limit { stroke: var(--ink); stroke-width: 2; }
+.srv .rate { fill: var(--muted); font: 700 10.5px var(--mono); text-anchor: start; }
+.srv .rate.over { fill: var(--bad); }
+.srv.flash rect { stroke: var(--bad); fill: var(--bad-soft); }
+.sub3 { margin-top: 22px; padding-top: 6px; border-top: 1px solid var(--line); }
+.sub3 h3 { font-size: 17px; margin: 10px 0 6px; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 12.2 · Design a Chat System</div>
+    <h1>The Switchboard</h1>
+    <p class="lede">Fifty million people a day want to chat. Sort the parts that remember you from the parts that don't, wire up the servers, and decide who picks your chat server and what happens when it dies.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can draw the book's adjusted high-level design (API, chat, presence and notification servers, the key-value store, service discovery), say which parts are <b>stateless</b> or <b>stateful</b> and why, and explain how a client gets its chat server and what happens when that server dies.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Three kinds of service</h2><div class="sub">Stateless, stateful, third-party</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>In Quest 12.1 you opened the pipe: every phone keeps a <b>WebSocket</b> (a connection that stays open both ways) to the chat service. Now zoom out. The book splits the whole system into three groups:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener">[1]</a></p>
+      <ul>
+        <li><b>Stateless services.</b> "Stateless" means the server keeps nothing about you between requests, so any copy can answer. Login, signup, user profile, group management: a request goes in, a response comes out. They sit behind a <b>load balancer</b> (a front door that spreads requests over many identical servers). They can be one big app (a <i>monolith</i>) or many small <i>microservices</i>. Many can be bought off the shelf rather than built.</li>
+        <li><b>Stateful service.</b> "Stateful" means a server holds something about you, so you have to keep talking to that same server. Here that's the <b>chat service</b>: your phone holds one open connection to one chat server and normally stays on it while that server is up.</li>
+        <li><b>Third-party integration.</b> A service someone else runs. The big one is <b>push notifications</b>, so you still hear about a message when the app isn't running (that's Chapter 10, <a href="1001-notification-channels.html">Quest 10.1</a>).</li>
+      </ul>
+      <p>One stateless service is special: <b>service discovery</b>. Its job is to tell your phone <i>which</i> chat server to connect to. Hold that thought for stage 4.</p>
+      <p><b>Your move:</b> tap a card, then tap the bin it belongs in.</p>
+      <div class="tray" id="tray1" aria-label="Cards to sort"></div>
+      <div class="bins" id="bins1">
+        <div class="bin" data-b="sl" role="button" tabindex="0" aria-label="Bin: Stateless"><h3>🔁 Stateless</h3><div class="bsub">request in, response out · behind a load balancer</div><div class="bin-list"></div></div>
+        <div class="bin" data-b="sf" role="button" tabindex="0" aria-label="Bin: Stateful"><h3>🔗 Stateful</h3><div class="bsub">a connection stays open to one server</div><div class="bin-list"></div></div>
+        <div class="bin" data-b="tp" role="button" tabindex="0" aria-label="Bin: Third-party"><h3>🌐 Third-party</h3><div class="bsub">someone else runs it for you</div><div class="bin-list"></div></div>
+      </div>
+      <div class="msg" id="s1msg">Pick a card to start.</div>
+      <div class="row" style="margin-top:10px"><button class="btn" id="s1again" style="display:none">↻ Shuffle and sort again</button></div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Can one box do it?</h2><div class="sub">The book's memory math</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Before scaling out, ask the honest question: could one server hold everyone? The book's numbers: about <b>1 million users connected at the same time</b> (that's 2% of the 50 million daily users), and roughly <b>10 KB of server memory per open connection</b>. The book stresses that 10 KB is a very rough figure that depends a lot on your programming language.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener">[1]</a></p>
+      <div class="challenge boxed">
+        <div class="step">Calculate</div>
+        <div class="calc"><span>1,000,000 connections × 10 KB =</span><input id="calcIn" type="number" inputmode="decimal" step="any" aria-label="Memory in gigabytes"><span>GB</span><button class="btn primary" id="calcBtn">Check</button></div>
+        <div class="msg" id="calcMsg" style="display:none"></div>
+      </div>
+      <p style="margin-top:16px">So it <i>fits</i>. A modern server has far more than 10 GB of RAM. Now see what else comes with it. Each dot below is <b>2,500 connected users</b>.</p>
+      <div class="sim">
+        <svg id="box2" viewBox="0 0 400 255" role="img" aria-label="Connected users on chat servers"></svg>
+        <div class="sim-bar">
+          <span class="row" style="gap:8px"><button class="btn" id="plugBtn" style="padding:8px 12px;font-size:14px">🔌 Pull the plug</button><button class="btn" id="splitBtn" style="padding:8px 12px;font-size:14px" disabled>Split across 10 servers</button><button class="btn" id="box2reset" style="padding:8px 12px;font-size:14px">↻ Reset</button></span>
+          <span class="bignum" id="dc">1,000,000 online</span>
+        </div>
+        <div class="simlog" id="log2"><div>One big chat server holds every connection.</div></div>
+      </div>
+      <ul class="checklist" id="s2goals">
+        <li data-g="calc"><span class="box">✓</span><span>Work out the memory for 1M connections</span></li>
+        <li data-g="plug"><span class="box">✓</span><span>Pull the plug on the single server</span></li>
+        <li data-g="split"><span class="box">✓</span><span>Split across 10 servers, then tap one to pull its plug</span></li>
+      </ul>
+      <div class="callout warn"><b>Honest caveat: "how many per box" varies a lot.</b> Real memory per connection depends on encryption (TLS) buffers, the language runtime and the operating system's socket buffers. In 2012 WhatsApp reported over 2 million connections on a single Erlang/FreeBSD server.<a class="cite" href="https://blog.whatsapp.com/1-million-is-so-2011" target="_blank" rel="noopener">[3]</a> So the memory math is a sanity check, not the reason to scale out.</div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Build the switchboard</h2><div class="sub">The adjusted high-level design</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Here is the cast of the book's adjusted design (its figure 12-8):<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener">[1]</a></p>
+      <ul>
+        <li><b>Chat servers</b> send and receive messages.</li>
+        <li><b>Presence servers</b> track who is online or offline (the green dot, Quest 12.5).</li>
+        <li><b>API servers</b> handle everything else: login, signup, changing your profile and so on.</li>
+        <li><b>Notification servers</b> send push notifications.</li>
+        <li>A <b>key-value store</b> (a database that looks data up by a key, like a giant dictionary) keeps chat history, so a user who comes back online sees everything they missed.</li>
+      </ul>
+      <p>Phones reach the chat and presence servers over <b>WebSocket</b>, and everything else over plain <b>HTTP</b> through the load balancer. Other data, such as profiles and friend lists, lives in a relational database (Quest 12.3).</p>
+      <p><b>Your move:</b> tap a tile, then tap the empty slot whose job matches. Two tiles are traps. Then tap the three labels on the phone connections to set each one to HTTP or WebSocket.</p>
+      <div class="sim board" id="board3wrap">
+        <svg id="board3" viewBox="0 0 400 360" role="group" aria-label="Architecture board"></svg>
+        <div class="tiles" id="tiles3" aria-label="Component tiles"></div>
+        <div class="sim-bar">
+          <span class="legend"><span><i style="border-color:var(--accent)"></i>HTTP</span><span><i style="border-color:var(--teal);border-top-style:dashed"></i>WebSocket</span></span>
+          <span class="row" style="gap:8px"><button class="btn" id="protoCheck" style="padding:8px 12px;font-size:14px">Check connections</button><button class="btn" id="board3reset" style="padding:8px 12px;font-size:14px">↻ Reset</button></span>
+        </div>
+        <div class="simlog" id="log3"><div>7 empty slots. Each one says what its job is.</div></div>
+      </div>
+      <ul class="checklist" id="s3goals">
+        <li data-g="place"><span class="box">✓</span><span>Fill all 7 slots (and leave the traps in the tray)</span></li>
+        <li data-g="proto"><span class="box">✓</span><span>Label the 3 phone connections HTTP or WebSocket</span></li>
+      </ul>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Who picks your server?</h2><div class="sub">Service discovery with ZooKeeper</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>There are many chat servers. Which one should your phone connect to? That's the job of <b>service discovery</b>: it recommends the best chat server for you, using things like <b>where you are</b> and <b>how full each server is</b>. The book's example is <b>Apache ZooKeeper</b>,<a class="cite" href="https://zookeeper.apache.org/" target="_blank" rel="noopener">[2]</a> an open-source coordination service. Every available chat server registers with it, and it picks one for each client by preset rules.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener">[1]</a></p>
+
+      <h3 style="font-size:17px;margin:18px 0 6px">Part 1 · The login flow</h3>
+      <p class="small">Tap the four steps in the order they happen. Each one lights up its arrow.</p>
+      <div class="sim lmap">
+        <svg id="lmap" viewBox="0 0 400 230" role="img" aria-label="Login flow: user, load balancer, API servers, service discovery, chat servers"></svg>
+      </div>
+      <ol class="ordslots" id="ordSlots"><li></li><li></li><li></li><li></li></ol>
+      <div class="ord" id="ordPool"></div>
+      <div class="msg" id="ordMsg" style="display:none"></div>
+
+      <div class="sub3">
+        <h3>Part 2 · Be ZooKeeper</h3>
+        <p class="small">User A just logged in. Here's the registry of chat servers. Which one do you hand back?</p>
+        <div class="whereami">📍 User A is in New York (us-east)</div>
+        <div class="reg" id="reg"></div>
+        <div class="msg" id="regMsg" style="display:none"></div>
+      </div>
+
+      <div class="sub3">
+        <h3>Part 3 · A server dies</h3>
+        <p class="small">The book's wrap-up: if a chat server goes offline, service discovery hands its clients a new chat server to connect to.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener">[1]</a> A WebSocket can't be moved to another machine, so every phone on the dead server has to reconnect. Here's a separate toy cluster: server B holds 300 phones. Setting up a connection is expensive (encryption handshake, login check, fetching missed messages), so each server can safely accept about <b>60 new connections per second</b>. The black line on each meter marks that limit.</p>
+        <div class="sim">
+          <svg id="herd" viewBox="0 0 400 262" role="img" aria-label="Reconnect simulation: server B crashes and its phones reconnect to servers A, C and D"></svg>
+          <div class="sim-bar">
+            <span class="row" style="gap:8px"><span class="small">Random backoff</span><span class="seg" id="boSeg"><button data-b="0" class="on" aria-pressed="true">Off</button><button data-b="1" aria-pressed="false">On</button></span></span>
+            <span class="row" style="gap:8px"><button class="btn primary" id="crashBtn" style="padding:8px 12px;font-size:14px">💥 Crash server B</button><button class="btn" id="herdReset" style="padding:8px 12px;font-size:14px" disabled>↻ Reset</button></span>
+          </div>
+          <div class="simlog" id="log4"><div>Server B is healthy and holds 300 phones.</div></div>
+        </div>
+      </div>
+      <ul class="checklist" id="s4goals">
+        <li data-g="order"><span class="box">✓</span><span>Put the 4 login steps in order</span></li>
+        <li data-g="pick"><span class="box">✓</span><span>Pick the right server for User A</span></li>
+        <li data-g="herd"><span class="box">✓</span><span>Crash B with backoff <b>off</b>: watch the stampede</span></li>
+        <li data-g="jitter"><span class="box">✓</span><span>Turn random backoff <b>on</b> and crash B again</span></li>
+      </ul>
+      <div class="callout warn"><b>Honest caveat: the book skips the stampede.</b> When a server with hundreds of thousands of connections dies, all of those phones try to reconnect at once. Engineers call this a <b>thundering herd</b>. Real systems make each client wait a random, growing delay before retrying (<i>exponential backoff with jitter</i>) and keep spare capacity for exactly this moment.</div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Overload Golem</h2><div class="sub">Route the traffic right</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The Golem is throwing every kind of request at one pile of servers. Send each one to the server type whose job it is.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">Sketch the switchboard out loud</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> You put chat history in a "key-value store" without saying why, or how each message gets an ID that sorts in time order. That's <a href="1203-chat-storage-and-ids.html">Quest 12.3, <i>The Message Vault</i></a>.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 12: "Design a Chat System"</a>. Read "Step 2: High-level design" (stateless, stateful and third-party services, then "Scalability" and the adjusted design), "Service discovery" in step 3, and "Error handling" in the wrap-up. For the real tool, skim the <a href="https://zookeeper.apache.org/" target="_blank" rel="noopener">Apache ZooKeeper</a> overview. For fun, read WhatsApp's short post <a href="https://blog.whatsapp.com/1-million-is-so-2011" target="_blank" rel="noopener">"1 million is so 2011"</a>.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <ul style="margin:0;padding-left:20px">
+        <li><b>10 KB per connection is a round number.</b> Kernel socket buffers, TLS state and your runtime decide the real figure. WhatsApp's 2 million on one box shows how far a tuned stack can go.<a class="cite" href="https://blog.whatsapp.com/1-million-is-so-2011" target="_blank" rel="noopener">[3]</a></li>
+        <li><b>ZooKeeper is only the book's example.</b> Many teams use Consul, etcd, or their own "gateway assignment" service, often behind a layer-4 load balancer (one that routes raw TCP connections without reading them). What matters is the idea: a <b>registry of healthy servers</b> plus a <b>placement rule</b>. In ZooKeeper, servers usually register as <i>ephemeral</i> entries, which vanish by themselves when a server stops checking in.<a class="cite" href="https://zookeeper.apache.org/" target="_blank" rel="noopener">[2]</a></li>
+        <li><b>"Which server is Bob on?"</b> To deliver a message, some part of the system has to find the chat server holding Bob's connection. Real systems often keep a session (route) table mapping each user to their gateway. The book leaves this implicit in its 1-on-1 flow (Quest 12.4).</li>
+        <li><b>Reconnect storms are a real outage cause.</b> Randomised exponential backoff on clients, plus spare capacity and rate limits on the servers, keep one dead box from knocking over its neighbours.</li>
+      </ul>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"why are presence servers separate from chat servers?"</i> or <i>"how does the chat server for Alice find the chat server holding Bob?"</i>
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 12 "Design a Chat System" (ByteByteGo): high-level design, scalability, service discovery, error handling.</li>
+        <li>Apache ZooKeeper project site.</li>
+        <li>WhatsApp blog, "1 million is so 2011" (January 2012).</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '1202',
+  winTitle: 'Every line connected',
+  badge: '🎛️ Badge: Switchboard Operator',
+  cheatsheet: '../reference/ch12-chat-cheatsheet.html',
+});
+const { sleep, shuffle } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+const T = ms => Q.reduced ? Math.min(60, ms) : ms;
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function onActivate(el, fn) {
+  el.addEventListener('click', fn);
+  el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(e); } });
+}
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); Q.addXP(xp, li);
+  return true;
+}
+function say(el, html, kind) { el.style.display = ''; el.className = 'msg' + (kind ? ' ' + kind : ''); el.innerHTML = html; }
+function shakeEl(el) { el.classList.remove('shake'); void el.getBoundingClientRect(); el.classList.add('shake'); }
+function rng(seed) { return () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; }; }
+const fmt = n => n.toLocaleString('en-US');
+function moveDot(el, x, y, delay) { el.style.transitionDelay = (Q.reduced ? 0 : (delay || 0)) + 'ms'; el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`; }
+
+/* ================= STAGE 1: sort into bins ================= */
+Q.onStage(1, () => {
+  const BINS = { sl: 'Stateless', sf: 'Stateful', tp: 'Third-party' };
+  const HINT = {
+    sl: 'Ask yourself: once the server has replied, does anything need to stay open for you? If not, any copy behind the load balancer can do it.',
+    sf: 'This one needs a connection that stays open, so it lives on one specific server that can push to you.',
+    tp: 'Your app isn’t even running. Your own servers can’t reach the phone directly. Who can?',
+  };
+  const CARDS = [
+    { k: 'login', e: '🔑', t: 'Log in', a: 'sl', why: 'One request, one response. Any API server behind the load balancer can check a password.' },
+    { k: 'signup', e: '✍️', t: 'Sign up', a: 'sl', why: 'A one-off request and response. Nothing needs to stay open afterwards.' },
+    { k: 'pic', e: '🖼️', t: 'Change profile picture', a: 'sl', why: 'A plain HTTP upload to whichever API server the load balancer picks.' },
+    { k: 'group', e: '👥', t: 'Create a group', a: 'sl', why: 'The book lists group management with the stateless request/response services.' },
+    { k: 'msg', e: '💬', t: 'Send / receive messages', a: 'sf', why: 'Your phone holds one WebSocket to one chat server. Only that server can push a new message to you.' },
+    { k: 'dot', e: '🟢', t: 'Online indicator', a: 'sf', why: 'In the book’s adjusted design, presence servers also hold WebSockets, so they notice when you connect or drop.', hint: 'Something has to notice the moment you connect or drop off. What kind of connection lets a server notice that?' },
+    { k: 'push', e: '🔔', t: 'Push to an offline phone', a: 'tp', why: 'The app isn’t connected, so Apple’s APNs or Google’s FCM wakes the phone for you. That’s Chapter 10.' },
+    { k: 'which', e: '🧭', t: '“Which chat server should I use?”', a: 'sl', why: 'That’s service discovery: a quick request and response that returns a chat server’s address. Nothing stays open.', hint: 'It sounds like chat, but it’s a single question and a single answer. Does anything stay open afterwards?' },
+  ];
+  const tray = $('#tray1'), msg = $('#s1msg'), bins = $('#bins1');
+  const missed = new Set();
+  let sel = null, placed = 0, quizShown = false;
+  function build() {
+    sel = null; placed = 0;
+    $$('.bin-list', bins).forEach(l => l.innerHTML = '');
+    bins.classList.remove('armed');
+    tray.innerHTML = shuffle(CARDS).map(c => `<button class="tcard" data-k="${c.k}" aria-pressed="false"><span aria-hidden="true">${c.e}</span>${c.t}</button>`).join('');
+    $$('.tcard', tray).forEach(b => b.onclick = () => {
+      $$('.tcard', tray).forEach(x => x.setAttribute('aria-pressed', 'false'));
+      if (sel === b) { sel = null; bins.classList.remove('armed'); return; }
+      sel = b; b.setAttribute('aria-pressed', 'true'); bins.classList.add('armed');
+      say(msg, `<b>${b.textContent}</b> picked. Now tap its bin.`);
+    });
+    say(msg, 'Pick a card to start.');
+  }
+  $$('.bin', bins).forEach(bin => onActivate(bin, () => {
+    if (!sel) { say(msg, 'Tap a card first, then tap the bin it belongs in.'); return; }
+    const c = CARDS.find(x => x.k === sel.dataset.k);
+    if (c.a === bin.dataset.b) {
+      const chip = document.createElement('span'); chip.className = 'placed'; chip.textContent = `${c.e} ${c.t}`;
+      $('.bin-list', bin).appendChild(chip);
+      sel.remove(); sel = null; bins.classList.remove('armed'); placed++;
+      say(msg, `<b>${c.t} → ${BINS[c.a]}.</b> ${c.why}`, 'good');
+      Q.addXP(5, chip);
+      if (placed === CARDS.length) finished();
+    } else {
+      shakeEl(sel);
+      say(msg, `<b>Not ${BINS[bin.dataset.b]}.</b> ${c.hint || HINT[c.a]}`, 'bad');
+      if (!missed.has(c.k)) { missed.add(c.k); Q.loseHeart(sel); }
+    }
+  }));
+  function finished() {
+    say(msg, '<b>All 8 sorted.</b> Notice that only two things need a connection that stays open: messages and presence. Everything else is ordinary request/response, plus one service you rent.', 'good');
+    $('#s1again').style.display = '';
+    if (quizShown) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s1quiz'), {
+      q: 'The API servers sit behind a plain round-robin load balancer. Why can’t you route chat messages the same way?',
+      options: ['Your open connection lives on one specific server', 'Chat servers are too slow to share the traffic evenly', 'Load balancers can never pass WebSocket traffic at all', 'Messages have to be encrypted before they are balanced'],
+      correct: 0,
+      good: 'Round-robin sends each request to the next server in turn, which is fine when any server can answer. But a message for you has to reach the <b>one</b> server holding your WebSocket. A load balancer can still choose where a <i>new</i> connection lands. It just can’t move one that’s already open.',
+      bad: 'The issue is <b>state</b>. Round-robin works when any server can answer. A message for you must reach the one chat server that holds your open WebSocket, and a random pick almost never is that server.',
+      onDone: () => setTimeout(() => Q.clearStage(1), 900),
+    }), 500);
+  }
+  $('#s1again').onclick = () => { $('#s1again').style.display = 'none'; build(); };
+  build();
+});
+
+/* ================= STAGE 2: one box vs ten ================= */
+Q.onStage(2, () => {
+  const svg = $('#box2'), N = 400, PER = 40, SLOTS = 56;
+  const goals = new Set();
+  let mode = 'one', dead = new Set(), plugged = true, kills = 0, busy = false, quizShown = false, calcMissed = false;
+  S('line', { class: 'floor', x1: 10, y1: 202, x2: 390, y2: 202 }, svg);
+  const boxG = S('g', {}, svg), dotG = S('g', {}, svg);
+  const cap = S('text', { class: 'cap', x: 200, y: 250 }, svg);
+  const R = rng(1202);
+  const dots = Array.from({ length: N }, (_, i) => ({ i, box: Math.floor(i / PER), slot: i % PER, el: S('circle', { class: 'cd nt', r: 2.5, cx: 0, cy: 0 }, dotG) }));
+  const oneXY = i => [123 + (i % 20) * 8.2, 50 + Math.floor(i / 20) * 7.6];
+  const boxXY = b => [10 + (b % 5) * 77.5, 12 + Math.floor(b / 5) * 94];
+  const tenXY = (b, s) => { const [bx, by] = boxXY(b); return [bx + 7.5 + (s % 8) * 7.85, by + 26 + Math.floor(s / 8) * 7.6]; };
+  const fallXY = (x) => [Math.max(8, Math.min(392, x + (R() - .5) * 26)), 210 + R() * 30];
+  function drawBoxes() {
+    boxG.innerHTML = '';
+    if (mode === 'one') {
+      const g = S('g', { class: 'srv' + (plugged ? '' : ' dead') }, boxG);
+      S('rect', { x: 110, y: 18, width: 180, height: 182, rx: 12 }, g);
+      S('text', { x: 200, y: 36 }, g).textContent = plugged ? '1 chat server · 1M connections' : '💀 crashed · 0 connections';
+      cap.textContent = '1 dot = 2,500 users';
+      return;
+    }
+    for (let b = 0; b < 10; b++) {
+      const [bx, by] = boxXY(b), isDead = dead.has(b);
+      const g = S('g', { class: 'srv' + (isDead ? ' dead' : ' tap'), tabindex: isDead ? -1 : 0, role: 'button', 'aria-label': isDead ? `Chat server ${b + 1}, crashed` : `Chat server ${b + 1}: pull its plug` }, boxG);
+      S('rect', { x: bx, y: by, width: 70, height: 84, rx: 9 }, g);
+      S('text', { x: bx + 35, y: by + 15 }, g).textContent = isDead ? '💀 CS' + (b + 1) : 'CS' + (b + 1);
+      if (!isDead) onActivate(g, () => kill(b));
+    }
+    cap.textContent = '1 dot = 2,500 users · tap a server to pull its plug';
+  }
+  function home() {
+    dots.forEach(d => {
+      d.el.classList.remove('off');
+      const [x, y] = mode === 'one' ? oneXY(d.i) : tenXY(d.box, d.slot);
+      moveDot(d.el, x, y, mode === 'one' ? 0 : (d.i % 40) * 4);
+    });
+  }
+  function counter(text, cls) { const c = $('#dc'); c.textContent = text; c.className = 'bignum ' + (cls || ''); }
+  function reset() {
+    mode = 'one'; dead = new Set(); plugged = true; kills = 0; busy = false;
+    dots.forEach(d => { d.box = Math.floor(d.i / PER); d.slot = d.i % PER; });
+    drawBoxes(); home();
+    counter('1,000,000 online'); $('#plugBtn').disabled = false; $('#splitBtn').disabled = true;
+  }
+  $('#plugBtn').onclick = async () => {
+    if (busy || mode !== 'one' || !plugged) return;
+    busy = true; plugged = false; drawBoxes();
+    dots.forEach(d => { const [x] = oneXY(d.i); const [fx, fy] = fallXY(x); d.el.classList.add('off'); moveDot(d.el, fx, fy, R() * 350); });
+    counter('1,000,000 users disconnected', 'bad');
+    logTo('log2', '🔌 The one server lost power. <b>Every single user</b> is offline, and there is nowhere for them to go.', 'e');
+    $('#plugBtn').disabled = true; $('#splitBtn').disabled = false;
+    await sleep(T(1100)); busy = false;
+    if (checkGoal('#s2goals', 'plug', goals, 10)) maybeQuiz();
+  };
+  $('#splitBtn').onclick = () => {
+    if (busy) return;
+    mode = 'ten'; dead = new Set(); kills = 0;
+    dots.forEach(d => { d.box = Math.floor(d.i / PER); d.slot = d.i % PER; });
+    drawBoxes(); home();
+    counter('1,000,000 online', 'good'); $('#splitBtn').disabled = true;
+    logTo('log2', 'Same users, now spread over 10 chat servers (100,000 each). Tap one to pull its plug.');
+  };
+  async function kill(b) {
+    if (busy || mode !== 'ten' || dead.has(b)) return;
+    if (kills >= 2) { Q.toast('reset to try again', $('#box2reset'), 'practice'); return; }
+    busy = true; kills++; dead.add(b); drawBoxes();
+    const victims = dots.filter(d => d.box === b);
+    victims.forEach(d => { const [x] = tenXY(b, d.slot); const [fx, fy] = fallXY(x); d.el.classList.add('off'); moveDot(d.el, fx, fy, R() * 250); });
+    counter(`${fmt(victims.length * 2500)} users disconnected`, 'warn');
+    logTo('log2', `🔌 CS${b + 1} died: ${fmt(victims.length * 2500)} users dropped. The other ${10 - dead.size} keep working.`, 'w');
+    await sleep(T(1300));
+    const alive = [...Array(10).keys()].filter(x => !dead.has(x));
+    const count = x => dots.filter(d => d.box === x).length;
+    victims.forEach(d => { d.box = -1; });
+    victims.forEach(d => {
+      const tgt = alive.slice().sort((p, q) => count(p) - count(q) || p - q)[0];
+      d.slot = Math.min(count(tgt), SLOTS - 1); d.box = tgt;
+    });
+    victims.forEach((d, k) => { d.el.classList.remove('off'); const [x, y] = tenXY(d.box, d.slot); moveDot(d.el, x, y, k * 12); });
+    counter('1,000,000 online', 'good');
+    logTo('log2', `↪ They asked for a new server and reconnected across the other ${alive.length}. Each survivor took about ${fmt(Math.round(victims.length / alive.length * 2500 / 1000) * 1000)} extra users.`, 'g');
+    await sleep(T(900)); busy = false;
+    if (checkGoal('#s2goals', 'split', goals, 15)) maybeQuiz();
+  }
+  $('#box2reset').onclick = () => { if (!busy) { reset(); logTo('log2', '↻ Back to one big server.'); } };
+  const settle = els => requestAnimationFrame(() => requestAnimationFrame(() => els.forEach(e => e.classList.remove('nt'))));
+
+  $('#calcBtn').onclick = () => {
+    const raw = $('#calcIn').value.trim(), v = parseFloat(raw), m = $('#calcMsg');
+    if (raw === '' || isNaN(v)) { say(m, 'Type a number of gigabytes first.'); return; }
+    if (v >= 9.5 && v <= 10.5) {
+      say(m, '<b>About 10 GB.</b> 1,000,000 × 10 KB = 10,000,000 KB = 10,000 MB = 10 GB (or about 9.5 GB if you count 1,024 per step). That matches the book: it really does fit in one modern server’s memory.', 'good');
+      $('#calcBtn').disabled = true; $('#calcIn').readOnly = true;
+      if (checkGoal('#s2goals', 'calc', goals, 20)) maybeQuiz();
+      return;
+    }
+    let hint = 'Multiply first: 1,000,000 × 10 KB = 10,000,000 KB. Then divide by 1,000 to get MB, and by 1,000 again to get GB.';
+    if (v >= 9500 && v <= 10500) hint = 'That’s the answer in <b>MB</b>. Divide by 1,000 once more to get GB.';
+    else if (v >= 9.5e6 && v <= 1.05e7) hint = 'That’s the answer in <b>KB</b>. Divide by 1,000 twice to get GB.';
+    else if (v > 0 && v < 0.0105 && v >= 0.0095) hint = 'That’s in <b>TB</b>. We want GB, so multiply by 1,000.';
+    else if (v >= 95 && v <= 105) hint = 'Close, but one zero too many. Count the steps: KB → MB → GB is two divisions by 1,000.';
+    say(m, `<b>Not quite.</b> ${hint}`, 'bad');
+    shakeEl($('#calcIn'));
+    if (!calcMissed) { calcMissed = true; Q.loseHeart($('#calcBtn')); }
+  };
+  $('#calcIn').addEventListener('keydown', e => { if (e.key === 'Enter') $('#calcBtn').click(); });
+
+  function maybeQuiz() {
+    if (quizShown || goals.size < 3) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s2quiz'), {
+      q: 'The memory fits on one box. So what’s wrong with putting everyone on one box?',
+      options: ['One crash would disconnect every user', '10 GB of memory costs far too much', 'WebSockets can’t share one machine', 'A CPU can’t track a million sockets'],
+      correct: 0,
+      good: 'It’s a <b>single point of failure</b>: one part whose failure takes down everything. The book says this is the biggest of several reasons not to propose a one-server design, and that doing so in an interview raises a red flag. Split across 10 servers, one crash costs 10% of users for a moment, and they reconnect elsewhere.',
+      bad: 'Memory isn’t the problem, as you just worked out. The problem is a <b>single point of failure</b>: one crash disconnects everyone and there is nowhere to go. The book warns that proposing a one-server design raises a red flag.',
+      onDone: () => setTimeout(() => Q.clearStage(2), 900),
+    }), 500);
+  }
+  reset(); settle(dots.map(d => d.el));
+});
+
+/* ================= STAGE 3: build the switchboard ================= */
+Q.onStage(3, () => {
+  const svg = $('#board3'), wrap = $('#board3wrap'), tiles = $('#tiles3');
+  const SLOTS = [
+    { k: 'lb', name: 'Load balancer', hint: 'spreads HTTP load', x: 8, y: 100, w: 120 },
+    { k: 'chat', name: 'Chat servers', hint: 'send & receive', x: 141, y: 100, w: 118 },
+    { k: 'pres', name: 'Presence servers', hint: 'online / offline', x: 272, y: 100, w: 120 },
+    { k: 'api', name: 'API servers', hint: 'login, signup…', x: 8, y: 200, w: 120 },
+    { k: 'notif', name: 'Notifications', hint: 'push to offline phones', x: 260, y: 200, w: 132 },
+    { k: 'sd', name: 'Service discovery', hint: 'picks a chat server', x: 8, y: 300, w: 120 },
+    { k: 'kv', name: 'Key-value store', hint: 'chat history', x: 141, y: 300, w: 251 },
+  ];
+  const H = 50;
+  const TILES = [
+    { k: 'lb', t: 'Load balancer', job: 'it spreads HTTP requests over the API servers' },
+    { k: 'api', t: 'API servers', job: 'they handle login, signup and profile changes' },
+    { k: 'chat', t: 'Chat servers', job: 'they send and receive messages over WebSocket' },
+    { k: 'pres', t: 'Presence servers', job: 'they track who is online' },
+    { k: 'notif', t: 'Notification servers', job: 'they send push notifications to phones that aren’t connected' },
+    { k: 'kv', t: 'Key-value store', job: 'it stores chat history' },
+    { k: 'sd', t: 'Service discovery', job: 'it picks which chat server a phone should use' },
+    { k: 'xdb', t: 'Single DB for everything', trap: 'Chat history is huge and keeps growing, while profiles and friend lists are small and relational. The book splits them: a key-value store for history and a relational database for the rest. One database for everything would also be one big point of failure.' },
+    { k: 'xp2p', t: 'Clients connect peer-to-peer', trap: 'Phones never talk to each other directly in this design. They don’t know each other’s addresses, and the other person may be offline. Every message goes through the chat service (Quest 12.1).' },
+  ];
+  const PROTOS = [
+    { k: 'e1', ans: 'HTTP', d: 'M150 48 L68 100', lx: 107, ly: 74, what: 'phones → load balancer' },
+    { k: 'e2', ans: 'WS', d: 'M200 48 L200 100', lx: 200, ly: 74, what: 'phones ↔ chat servers' },
+    { k: 'e3', ans: 'WS', d: 'M250 48 L332 100', lx: 293, ly: 74, what: 'phones ↔ presence servers' },
+  ];
+  const WIRES = [
+    { need: ['lb', 'api'], d: 'M68 150 L68 200' },
+    { need: ['api', 'sd'], d: 'M68 250 L68 300' },
+    { need: ['chat', 'kv'], d: 'M200 150 L200 300' },
+    { need: ['chat', 'notif'], d: 'M245 150 L300 200' },
+    { need: ['api', 'kv'], d: 'M128 225 L170 225 L170 300' },
+  ];
+  const goals = new Set(), trapped = new Set(), wrongTile = new Set();
+  let filled = new Set(), sel = null, protoVal = {}, quizShown = false;
+
+  function draw() {
+    svg.innerHTML = '';
+    const wiresG = S('g', {}, svg), cG = S('g', {}, svg), nodeG = S('g', {}, svg), pG = S('g', {}, svg);
+    WIRES.forEach(w => { const p = S('path', { class: 'wire', d: w.d }, wiresG); p.dataset.need = w.need.join(','); });
+    PROTOS.forEach(p => S('path', { class: 'cwire', d: p.d, id: 'cw-' + p.k }, cG));
+    const u = S('g', { class: 'users' }, nodeG);
+    S('rect', { x: 130, y: 8, width: 140, height: 40, rx: 10 }, u);
+    S('text', { class: 'nm', x: 200, y: 28 }, u).textContent = '📱 Users (mobile / web)';
+    SLOTS.forEach(s => {
+      const g = S('g', { class: 'slot', tabindex: 0, role: 'button', 'data-k': s.k }, nodeG);
+      S('rect', { x: s.x, y: s.y, width: s.w, height: H, rx: 10 }, g);
+      S('text', { class: 'q', x: s.x + s.w / 2, y: s.y + 17 }, g).textContent = '?';
+      S('text', { class: 'ht', x: s.x + s.w / 2, y: s.y + 36 }, g).textContent = s.hint;
+      onActivate(g, () => drop(s, g));
+      paintSlot(s, g);
+    });
+    PROTOS.forEach(p => {
+      const g = S('g', { class: 'proto', tabindex: 0, role: 'button', 'data-k': p.k }, pG);
+      S('rect', { x: p.lx - 38, y: p.ly - 12, width: 76, height: 24, rx: 12 }, g);
+      S('text', { x: p.lx, y: p.ly }, g);
+      onActivate(g, () => cycle(p, g));
+      paintProto(p, g);
+    });
+    paintWires();
+  }
+  function paintSlot(s, g) {
+    const on = filled.has(s.k);
+    g.classList.toggle('filled', on);
+    g.setAttribute('aria-label', on ? `${s.name}: ${s.hint}` : `Empty slot: ${s.hint}`);
+    const [q, ht] = $$('text', g);
+    if (on) { q.setAttribute('class', 'nm'); q.textContent = s.name; }
+    else { q.setAttribute('class', 'q'); q.textContent = '?'; }
+  }
+  function paintProto(p, g) {
+    const v = protoVal[p.k];
+    g.setAttribute('class', 'proto' + (v === 'HTTP' ? ' http' : v === 'WS' ? ' ws' : ''));
+    $('text', g).textContent = v === 'WS' ? 'WebSocket' : v || '? tap';
+    g.setAttribute('aria-label', `Connection ${p.what}: ${v === 'WS' ? 'WebSocket' : v || 'not set'}. Tap to change.`);
+    const w = $('#cw-' + p.k); w.setAttribute('class', 'cwire' + (v === 'HTTP' ? ' http' : v === 'WS' ? ' ws' : ''));
+  }
+  function paintWires() { $$('.wire', svg).forEach(w => w.classList.toggle('on', w.dataset.need.split(',').every(k => filled.has(k)))); }
+  function buildTiles() {
+    tiles.innerHTML = shuffle(TILES).map(t => `<button class="tcard${filled.has(t.k) ? ' gone' : ''}" data-k="${t.k}" aria-pressed="false">${t.t}</button>`).join('');
+    $$('.tcard', tiles).forEach(b => b.onclick = () => {
+      $$('.tcard', tiles).forEach(x => x.setAttribute('aria-pressed', 'false'));
+      if (sel === b) { sel = null; wrap.classList.remove('armed'); return; }
+      sel = b; b.setAttribute('aria-pressed', 'true'); wrap.classList.add('armed');
+    });
+  }
+  function drop(s, g) {
+    if (filled.has(s.k)) return;
+    if (!sel) { logTo('log3', 'Tap a tile in the tray first, then tap a slot.'); return; }
+    const t = TILES.find(x => x.k === sel.dataset.k);
+    if (t.trap) {
+      shakeEl(sel); g.classList.add('nope'); setTimeout(() => g.classList.remove('nope'), 600);
+      logTo('log3', `✗ <b>${t.t}</b> bounces back. ${t.trap}`, 'e');
+      if (!trapped.has(t.k)) { trapped.add(t.k); Q.loseHeart(sel); }
+      return;
+    }
+    if (t.k !== s.k) {
+      shakeEl(sel); g.classList.add('nope'); setTimeout(() => g.classList.remove('nope'), 600);
+      logTo('log3', `✗ This slot’s job is “${s.hint}”. ${t.t} do${/s$/.test(t.t) ? '' : 'es'} something else: ${t.job}.`, 'w');
+      if (!wrongTile.has(t.k)) { wrongTile.add(t.k); Q.loseHeart(sel); }
+      return;
+    }
+    filled.add(s.k);
+    sel.classList.add('gone'); sel = null; wrap.classList.remove('armed');
+    paintSlot(s, g); paintWires();
+    logTo('log3', `✓ <b>${s.name}</b>: ${t.job}.`, 'g');
+    Q.addXP(5, g);
+    if (filled.size === SLOTS.length) {
+      logTo('log3', 'All 7 placed. The two traps stay in the tray. Now set the three phone connections and press <b>Check connections</b>.', 'g');
+      if (checkGoal('#s3goals', 'place', goals, 5)) maybeQuiz();
+    }
+  }
+  function cycle(p, g) {
+    const v = protoVal[p.k];
+    protoVal[p.k] = v === 'HTTP' ? 'WS' : 'HTTP';
+    paintProto(p, g);
+  }
+  $('#protoCheck').onclick = e => {
+    if (PROTOS.some(p => !protoVal[p.k])) { logTo('log3', 'Set all three labels first (tap each one to switch between HTTP and WebSocket).'); return; }
+    const wrong = PROTOS.filter(p => protoVal[p.k] !== p.ans);
+    $$('.proto', svg).forEach(g => g.classList.toggle('bad', wrong.some(p => p.k === g.dataset.k)));
+    if (wrong.length) {
+      logTo('log3', `✗ ${wrong.length} of 3 wrong (outlined in red). Rule of thumb: if the server must push to you the moment something happens (messages, presence), it rides a WebSocket. Everything else is plain HTTP through the load balancer.`, 'e');
+      Q.loseHeart(e.currentTarget);
+      return;
+    }
+    logTo('log3', '✓ HTTP to the load balancer for request/response work. WebSocket to chat and presence servers, because those servers push to you.', 'g');
+    if (checkGoal('#s3goals', 'proto', goals, 20)) maybeQuiz();
+  };
+  $('#board3reset').onclick = () => {
+    filled = new Set(); sel = null; protoVal = {}; wrap.classList.remove('armed');
+    draw(); buildTiles(); logTo('log3', '↻ Board cleared.');
+  };
+  function maybeQuiz() {
+    if (quizShown || goals.size < 2) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s3quiz'), {
+      q: 'Bob was offline all weekend. He opens the app. Where does the chat history he missed come from?',
+      options: ['The key-value store of chat history', 'The presence servers’ in-memory cache', 'The notification servers’ push queue', 'The senders’ phones, which resend it'],
+      correct: 0,
+      good: 'The book puts chat history in the <b>key-value store</b>, so a user who comes back online sees every earlier message. Push notifications only tell Bob <i>that</i> something arrived. They aren’t the record. Quest 12.3 explains why a key-value store fits this data.',
+      bad: 'Push notifications only alert Bob, and presence servers only know who’s online. The record of every message lives in the <b>key-value store</b>, which is exactly why it’s in the design.',
+      onDone: () => setTimeout(() => Q.clearStage(3), 900),
+    }), 500);
+  }
+  draw(); buildTiles();
+});
+
+/* ================= STAGE 4: service discovery ================= */
+Q.onStage(4, () => {
+  const goals = new Set();
+  let quizShown = false;
+  function maybeQuiz() {
+    if (quizShown || goals.size < 4) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s4quiz'), {
+      q: 'Chat server 2 dies with 200,000 open WebSockets. What happens next?',
+      options: ['Clients notice, ask discovery for a new server, reconnect', 'The load balancer moves every live socket to a new server', 'Those users stay offline until server 2 has been repaired', 'ZooKeeper replays every lost message to the affected users'],
+      correct: 0,
+      good: 'An open connection can’t be moved to another machine. It dies with the server. Each phone notices the drop, gets a new chat server from service discovery, opens a fresh WebSocket, and then fetches the messages it missed (Quest 12.4 shows how). Spread those reconnects out with random backoff, or you get the stampede you just saw.',
+      bad: 'Connections die with their server, and ZooKeeper only picks servers. It doesn’t store messages. Each phone notices the drop, gets a new chat server from service discovery, reconnects, then fetches what it missed from storage.',
+      onDone: () => setTimeout(() => Q.clearStage(4), 900),
+    }), 500);
+  }
+
+  /* ---- part 1: login map + ordering ---- */
+  const map = $('#lmap');
+  const NODES = [
+    { k: 'user', t: '👤 User A', x: 8, y: 92, w: 92, h: 42 },
+    { k: 'lb', t: 'Load balancer', x: 132, y: 14, w: 112, h: 42 },
+    { k: 'api', t: 'API servers', x: 282, y: 14, w: 110, h: 42 },
+    { k: 'sd', t: 'Service discovery', ht: 'ZooKeeper', x: 272, y: 92, w: 120, h: 42 },
+    { k: 'cs1', t: 'Chat server 1', x: 100, y: 176, w: 92, h: 40 },
+    { k: 'cs2', t: 'Chat server 2', x: 200, y: 176, w: 92, h: 40 },
+    { k: 'cs3', t: 'Chat server 3', x: 300, y: 176, w: 92, h: 40 },
+  ];
+  const ARROWS = [
+    { s: 1, d: 'M100 102 L132 46', bx: 112, by: 66 },
+    { s: 2, d: 'M244 35 L282 35', bx: 263, by: 22 },
+    { s: 3, d: 'M337 56 L337 92', bx: 352, by: 74 },
+    { s: 3, d: 'M272 120 L100 120', bx: 186, by: 120, dash: true },
+    { s: 4, d: 'M70 134 L240 176', bx: 140, by: 162, ws: true },
+  ];
+  const STEPS = [
+    { s: 1, t: 'User A tries to log in to the app.' },
+    { s: 2, t: 'The load balancer passes the login request to the API servers.' },
+    { s: 3, t: 'After the backend checks who A is, service discovery picks chat server 2 and its address goes back to A.' },
+    { s: 4, t: 'User A opens a WebSocket to chat server 2.' },
+  ];
+  function drawMap() {
+    map.innerHTML = '';
+    const aG = S('g', {}, map), nG = S('g', {}, map), bG = S('g', {}, map);
+    ARROWS.forEach(a => { const p = S('path', { class: 'larrow' + (a.ws ? ' ws' : ''), d: a.d, 'data-s': a.s }, aG); if (a.dash) p.setAttribute('stroke-dasharray', '3 5'); });
+    NODES.forEach(n => {
+      const g = S('g', { class: 'ln', 'data-k': n.k }, nG);
+      S('rect', { x: n.x, y: n.y, width: n.w, height: n.h, rx: 9 }, g);
+      if (n.ht) { S('text', { x: n.x + n.w / 2, y: n.y + 15 }, g).textContent = n.t; S('text', { class: 'ht', x: n.x + n.w / 2, y: n.y + 30 }, g).textContent = n.ht; }
+      else S('text', { x: n.x + n.w / 2, y: n.y + n.h / 2 }, g).textContent = n.t;
+    });
+    ARROWS.filter((a, i) => ARROWS.findIndex(b => b.s === a.s) === i).forEach(a => {
+      const g = S('g', { class: 'lbadge', 'data-s': a.s }, bG);
+      S('circle', { cx: a.bx, cy: a.by, r: 10 }, g); S('text', { x: a.bx, y: a.by }, g).textContent = a.s;
+    });
+  }
+  function light(s) {
+    $$(`.larrow[data-s="${s}"]`, map).forEach(p => p.classList.add('on'));
+    $$(`.lbadge[data-s="${s}"]`, map).forEach(p => p.classList.add('on'));
+    const hl = { 1: ['user', 'lb'], 2: ['lb', 'api'], 3: ['api', 'sd', 'user'], 4: ['user', 'cs2'] }[s];
+    $$('.ln', map).forEach(n => n.classList.toggle('hl', hl.includes(n.dataset.k)));
+  }
+  const ordMissed = new Set();
+  let next = 1;
+  function buildOrder() {
+    next = 1; drawMap();
+    $$('#ordSlots li').forEach(li => { li.className = ''; li.textContent = ''; });
+    const pool = $('#ordPool');
+    pool.innerHTML = shuffle(STEPS).map(st => `<button class="tcard" data-s="${st.s}">${st.t}</button>`).join('');
+    $$('.tcard', pool).forEach(b => b.onclick = () => {
+      const s = +b.dataset.s;
+      if (s !== next) {
+        shakeEl(b);
+        const tip = s < next ? 'That one is already done.' : `Not yet. Something has to happen before that (you need step ${next}).`;
+        say($('#ordMsg'), `<b>Out of order.</b> ${tip} Think about what the user needs before they can open a WebSocket: the address of a server, which comes after logging in.`, 'bad');
+        if (!ordMissed.has(next)) { ordMissed.add(next); Q.loseHeart(b); }
+        return;
+      }
+      const li = $$('#ordSlots li')[s - 1]; li.textContent = b.textContent; li.classList.add('filled');
+      b.remove(); light(s); next++;
+      if (next > 4) {
+        say($('#ordMsg'), '<b>That’s the book’s figure 12-11.</b> Logging in is ordinary HTTP through the load balancer. Only after the backend knows who you are does service discovery hand back a chat server, and only then does the phone open its WebSocket.', 'good');
+        $('#ordPool').innerHTML = '<button class="btn" id="ordAgain">↻ Shuffle and order again</button>';
+        $('#ordAgain').onclick = () => { $('#ordMsg').style.display = 'none'; buildOrder(); };
+        if (checkGoal('#s4goals', 'order', goals, 15)) maybeQuiz();
+      } else say($('#ordMsg'), `✓ Step ${s}. What happens next?`, 'good');
+    });
+  }
+  buildOrder();
+
+  /* ---- part 2: be ZooKeeper ---- */
+  const REG = [
+    { k: 'cs1', nm: 'CS1', rg: 'us-east (Virginia)', ld: 92, up: true, why: 'CS1 is close, but it’s <b>92% full</b>. Load it further and it’s the next server to fall over. Capacity is one of the book’s criteria.' },
+    { k: 'cs2', nm: 'CS2', rg: 'us-east (Virginia)', ld: 40, up: true, ok: true, why: '<b>Near and has room.</b> CS2 is in the same region as New York and only 40% full. That’s the book’s two criteria at once: location and capacity.' },
+    { k: 'cs3', nm: 'CS3', rg: 'eu-west (Ireland)', ld: 15, up: true, why: 'CS3 has plenty of room, but it’s across the Atlantic. Every message from New York would make a long round trip, adding tens of milliseconds each way. Location matters.' },
+    { k: 'cs4', nm: 'CS4', rg: 'us-east (Virginia)', ld: 0, up: false, why: 'CS4 is <b>down</b>. Service discovery only hands out servers that are alive and registered. In ZooKeeper, a crashed server’s registration typically disappears on its own.' },
+  ];
+  const regMissed = new Set();
+  let picked = false;
+  $('#reg').innerHTML = REG.map(r => `<button class="regrow${r.up ? '' : ' down'}" data-k="${r.k}" aria-label="${r.nm}, ${r.rg}, ${r.up ? r.ld + '% load' : 'down'}"><span class="nm">${r.nm}</span><span class="rg">${r.rg}</span><span class="ld">${r.up ? r.ld + '% load' : '⛔ down'}</span><span class="bar"><i class="${r.ld > 80 ? 'hot' : ''}" style="width:${r.up ? r.ld : 0}%"></i></span></button>`).join('');
+  $$('#reg .regrow').forEach(b => b.onclick = () => {
+    const r = REG.find(x => x.k === b.dataset.k);
+    $$('#reg .regrow').forEach(x => x.classList.remove('wrong'));
+    if (r.ok) {
+      b.classList.add('right');
+      say($('#regMsg'), r.why, 'good');
+      if (!picked) { picked = true; if (checkGoal('#s4goals', 'pick', goals, 20)) maybeQuiz(); }
+      return;
+    }
+    b.classList.add('wrong'); shakeEl(b);
+    say($('#regMsg'), `<b>Not ${r.nm}.</b> ${r.why} Try another.`, 'bad');
+    if (!picked && !regMissed.has(r.k)) { regMissed.add(r.k); Q.loseHeart(b); }
+  });
+
+  /* ---- part 3: the thundering herd ---- */
+  const herd = $('#herd'), NP = 300, LIMIT = 60, MAXR = 120, MW = 94;
+  const TG = [{ k: 'A', x: 12 }, { k: 'C', x: 145 }, { k: 'D', x: 278 }];
+  const TY = 168, TW = 110, TH = 90;
+  let backoff = false, running = false;
+  const bG = S('g', {}, herd), tG = S('g', {}, herd), dG = S('g', {}, herd);
+  const bSrv = S('g', { class: 'srv' }, bG);
+  S('rect', { x: 118, y: 6, width: 164, height: 124, rx: 12 }, bSrv);
+  const bLab = S('text', { x: 200, y: 22 }, bSrv);
+  const meters = TG.map(t => {
+    const g = S('g', { class: 'srv' }, tG);
+    S('rect', { x: t.x, y: TY, width: TW, height: TH, rx: 10 }, g);
+    const lab = S('text', { x: t.x + 8, y: TY + 15, 'text-anchor': 'start' }, g); lab.textContent = 'Server ' + t.k; lab.style.textAnchor = 'start';
+    const rate = S('text', { class: 'rate', x: t.x + 8, y: TY + 43 }, g);
+    S('rect', { class: 'meter-t', x: t.x + 8, y: TY + 22, width: MW, height: 9, rx: 4 }, g);
+    const fill = S('rect', { class: 'meter-f', x: t.x + 8, y: TY + 22, width: 0, height: 9, rx: 4 }, g);
+    S('line', { class: 'limit', x1: t.x + 8 + MW * LIMIT / MAXR, x2: t.x + 8 + MW * LIMIT / MAXR, y1: TY + 19, y2: TY + 34 }, g);
+    return { g, rate, fill, n: 0, peak: 0 };
+  });
+  const homeXY = i => [129 + (i % 20) * 7.4, 34 + Math.floor(i / 20) * 6.3];
+  const slotXY = (ti, j) => [TG[ti].x + 9 + (j % 20) * 4.85, TY + 54 + Math.floor(j / 20) * 7.5];
+  const pd = Array.from({ length: NP }, (_, i) => ({ i, t: i % 3, el: S('circle', { class: 'cd nt', r: 1.9, cx: 0, cy: 0 }, dG) }));
+  function setMeter(m, v) {
+    m.fill.setAttribute('width', (Math.min(v, MAXR) / MAXR * MW).toFixed(1));
+    m.fill.classList.toggle('over', v > LIMIT);
+    m.rate.textContent = v + '/s'; m.rate.classList.toggle('over', v > LIMIT);
+    m.g.classList.toggle('flash', v > LIMIT);
+  }
+  function herdReset() {
+    running = false;
+    bSrv.classList.remove('dead'); bLab.textContent = 'Server B · 300 phones';
+    pd.forEach(d => { d.el.classList.remove('off', 'retry'); const [x, y] = homeXY(d.i); moveDot(d.el, x, y, 0); });
+    meters.forEach(m => { m.n = 0; m.peak = 0; setMeter(m, 0); });
+    $('#crashBtn').disabled = false; $('#herdReset').disabled = true;
+  }
+  $$('#boSeg button').forEach(b => b.onclick = () => {
+    if (running) return;
+    backoff = b.dataset.b === '1';
+    $$('#boSeg button').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+    logTo('log4', backoff ? 'Random backoff <b>on</b>: each phone waits a random 0–5 seconds before reconnecting.' : 'Random backoff <b>off</b>: every phone reconnects the instant it notices the drop.');
+  });
+  $('#crashBtn').onclick = async () => {
+    if (running) return;
+    running = true; $('#crashBtn').disabled = true;
+    const bo = backoff, R = rng(bo ? 77 : 5);
+    bSrv.classList.add('dead'); bLab.textContent = '💀 Server B crashed';
+    pd.forEach(d => { d.el.classList.add('off'); d.due = bo ? Math.floor(R() * 6) : 0; d.done = false; });
+    meters.forEach(m => { m.n = 0; m.peak = 0; });
+    logTo('log4', `💥 B is gone. 300 phones lost their connection and each asks service discovery for a new server (A, C or D).`, 'w');
+    await sleep(T(700));
+    let tick = 0, retries = 0;
+    while (pd.some(d => !d.done) && tick < 14) {
+      const arrivals = [[], [], []];
+      pd.forEach(d => { if (!d.done && d.due === tick) arrivals[d.t].push(d); });
+      let over = [];
+      arrivals.forEach((arr, ti) => {
+        const m = meters[ti];
+        setMeter(m, arr.length); m.peak = Math.max(m.peak, arr.length);
+        arr.forEach((d, k) => {
+          if (k < LIMIT) {
+            const [x, y] = slotXY(ti, m.n++); d.done = true; d.el.classList.remove('off', 'retry'); moveDot(d.el, x, y, Q.reduced ? 0 : k * 4);
+          } else {
+            d.el.classList.remove('off'); d.el.classList.add('retry');
+            const [x0] = slotXY(ti, 0); moveDot(d.el, x0 + R() * 92, 140 + R() * 22, k * 3);
+            d.due = tick + 1 + (bo ? Math.floor(R() * 3) : 0); retries++;
+          }
+        });
+        if (arr.length > LIMIT) over.push(`${TG[ti].k} ${arr.length}/s`);
+      });
+      const total = arrivals.reduce((s, a) => s + a.length, 0);
+      if (total) logTo('log4', `t=${tick}s · ${total} reconnect attempts${over.length ? ` · 🔴 over the limit: ${over.join(', ')}, the extras time out and retry` : ' · 🟢 every server under its limit'}`, over.length ? 'e' : 'g');
+      await sleep(T(bo ? 650 : 1100));
+      tick++;
+    }
+    meters.forEach(m => setMeter(m, 0));
+    const peak = Math.max(...meters.map(m => m.peak));
+    meters.forEach((m, ti) => { m.rate.textContent = 'peak ' + m.peak + '/s'; m.rate.classList.toggle('over', m.peak > LIMIT); });
+    logTo('log4', `All 300 reconnected in ${tick} s. Peak: <b>${peak} new connections/s</b> on one server (limit ${LIMIT}).${retries ? ` ${retries} attempts timed out and had to retry.` : ''}`, peak > LIMIT ? 'w' : 'g');
+    running = false; $('#herdReset').disabled = false;
+    if (!bo && peak > LIMIT) {
+      logTo('log4', 'That spike is a <b>thundering herd</b>: everyone reconnecting in the same instant. In real life the timeouts make phones retry, which adds even more load. Now turn random backoff on and crash B again.', 'w');
+      if (checkGoal('#s4goals', 'herd', goals, 10)) maybeQuiz();
+    }
+    if (bo && peak <= LIMIT) {
+      logTo('log4', 'Same 300 phones, same servers, but spread over a few seconds. No server went past its limit, and the only cost is that some people waited a few seconds.', 'g');
+      if (checkGoal('#s4goals', 'jitter', goals, 15)) maybeQuiz();
+    }
+  };
+  $('#herdReset').onclick = () => { if (!running) { herdReset(); logTo('log4', '↻ Server B is back with its 300 phones.'); } };
+  herdReset();
+  requestAnimationFrame(() => requestAnimationFrame(() => pd.forEach(d => d.el.classList.remove('nt'))));
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss'), {
+  name: '🗿 Overload Golem',
+  xp: 15,
+  choices: [
+    { k: 'api', label: 'API servers', sub: 'HTTP' },
+    { k: 'chat', label: 'Chat servers', sub: 'WebSocket' },
+    { k: 'pres', label: 'Presence servers', sub: 'online status' },
+    { k: 'notif', label: 'Notification servers', sub: 'push' },
+  ],
+  scenarios: [
+    { e: '🪪', t: 'Change of name', d: 'A user updates their display name in settings.', a: 'api', why: 'A one-off request and response. It goes over HTTP through the load balancer to the API servers, which handle profile changes.' },
+    { e: '💬', t: 'Alice → Bob, live', d: 'Alice sends Bob a message while Bob has the app open and connected.', a: 'chat', why: 'Messages travel over WebSocket through the chat servers. Bob is connected, so his chat server can push it straight to him.' },
+    { e: '📴', t: 'Bob’s phone is off', d: 'Alice just messaged Bob, but Bob’s phone has no connection to any chat server.', a: 'notif', why: 'Nobody can push over a WebSocket that doesn’t exist. The notification servers send a push through APNs or FCM, and the message itself waits in the key-value store until Bob reconnects.' },
+    { e: '🟢', t: 'Carol comes online', d: 'Carol opens the app, and her friends should see a green dot next to her name.', a: 'pres', why: 'Online/offline status is the presence servers’ job. They hold a WebSocket to Carol, so they know she’s here (Quest 12.5 covers how her friends get told).' },
+    { e: '✍️', t: 'New account', d: 'A brand-new user signs up.', a: 'api', why: 'Signup is classic stateless request/response, so it goes to the API servers behind the load balancer.' },
+    { e: '💓', t: 'Every 5 seconds', d: 'Dave’s phone sends a small “still here” signal every 5 seconds.', a: 'pres', why: 'That’s a heartbeat, and presence servers use it to decide who is online. In the book, missing heartbeats for about 30 seconds marks you offline (Quest 12.5).' },
+    { e: '🧭', t: 'Where do I connect?', d: 'Erin just logged in. Her app needs the address of a chat server to open a WebSocket to.', a: 'api', why: 'It can’t be a chat server’s job, because Erin isn’t connected to one yet. Login goes over HTTP to the API servers, and the backend asks <b>service discovery</b> (ZooKeeper) to pick a nearby server with room. The address comes back in the response.' },
+  ],
+  outro: 'The pattern: request/response goes to the API servers, real-time messages to the chat servers, “who’s online” to the presence servers, and anything for a phone that isn’t connected to the notification servers.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: interview drill ================= */
+Q.onStage(6, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"Walk me through your high-level design for a chat app with 50 million daily users."</i>',
+  placeholder: 'I’d split the system into stateless, stateful and third-party parts…',
+  model: '"I split it into stateless services, stateful services and third parties. Login, signup and profile are stateless API servers behind a load balancer. Chat servers are stateful: each client keeps a WebSocket to one chat server. Presence servers track who\'s online, also over WebSocket, and notification servers push to phones that aren\'t connected. Chat history goes in a key-value store, and user and friend data in a relational database. On login, service discovery, for example ZooKeeper, picks a nearby chat server with spare capacity. One box could hold 1M connections in about 10 GB of memory, but it would be a single point of failure, so we scale out. If a chat server dies, its clients reconnect to whatever server service discovery hands them, with random backoff so they don\'t all hit at once."',
+  checks: ['I separated stateless, stateful and third-party services', 'I named the server roles (API, chat, presence, notification) plus the key-value store', 'I explained service discovery and what happens when a chat server dies'],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

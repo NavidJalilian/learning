@@ -1,0 +1,123 @@
+{
+ "n": "10.2",
+ "slug": "notification-high-level-design",
+ "t": "Shatter the Single Server",
+ "d": "From one notification box to servers, per-channel queues and workers",
+ "boss": false,
+ "badge": "🏗️ Badge: Decoupler",
+ "winTitle": "The monolith is rubble!",
+ "goal": "Your win today: you can draw the book's improved high-level design (services → notification servers + cache/DB → one queue per channel → workers → third parties → devices), name the three problems it fixes, and narrate the 6-step send flow.",
+ "bookSections": "Step 1 scope numbers (used for estimates); Step 2 — 'Notification sending/receiving flow': high-level design, its problems, high-level design (improved), the 6-step flow",
+ "stages": [
+  {
+   "title": "Version 1: one box",
+   "sub": "The naive design and its three cracks",
+   "teaches": "Book's first sketch: Service 1…N → Notification System → APNs / FCM / SMS / Email → devices. 'Services' are anything that triggers a notification: a micro-service, a cron job or a distributed system (e.g. a billing service emailing a payment-due reminder, a shopping site texting 'your package arrives tomorrow'). The notification system starts as ONE notification server that offers APIs to the services and builds payloads for the third parties. Three problems: (1) Single point of failure (SPOF): one server down = no notifications. (2) Hard to scale: everything (DB, cache, processing) lives in one box, so you can't scale the pieces independently. (3) Performance bottleneck: building notifications is resource-heavy (e.g. rendering HTML emails, waiting on slow third-party responses); doing all of it in one system overloads it at peak hours.",
+   "interaction": "Stress-test sim. Diagram of the one-box design with a big 'Notification Server' box that contains mini icons: DB, cache, HTML renderer, sender. Controls: a traffic slider (100 → 5,000 notifications/s), a 'Kill server' button, and a 'Black Friday campaign' button. As traffic rises the box's CPU meter fills; at peak it turns red and packets pile up and drop. 'Kill server' turns every lane dark. After playing, the learner gets 3 hotspot labels to place on the diagram: SPOF, Hard to scale, Performance bottleneck — each must be dropped on the matching symptom (the dark lanes / the crammed box internals / the red CPU meter with slow third-party spinner).",
+   "check": "Q.quiz: 'Rendering HTML emails and waiting on SendGrid slows everything down at peak. Which of the book's three problems is that?' Correct: 'Performance bottleneck'. Distractors: 'Single point of failure', 'Hard to scale', 'Data loss'."
+  },
+  {
+   "title": "How big is big?",
+   "sub": "Back-of-the-envelope on the book's numbers",
+   "teaches": "Scope from the book: 10 million mobile pushes, 1 million SMS and 5 million emails per day (16 million total); soft real-time (as soon as possible, slight delay OK under load); iOS, Android and laptop/desktop; triggered by client apps or scheduled server-side; users can opt out. Average rate = per-day ÷ ~86,400 s (≈10^5 for quick maths): push ≈ 116/s, email ≈ 58/s, SMS ≈ 12/s, total ≈ 185/s. Lesson: the AVERAGE is small; the danger is bursts (a marketing blast or breaking news fires millions within minutes), which is exactly what queues absorb. (Peak multiplier is our assumption; the book doesn't compute these.)",
+   "interaction": "Calculate-and-check. Three input boxes (push/s, SMS/s, email/s) next to the book's daily numbers, plus a hint toggle 'a day ≈ 86,400 s ≈ 10^5'. Accept answers within ±25% (so both 100 and 116 pass for push). After all three are right, a 'Breaking news!' button sends 2,000,000 pushes in 10 minutes: learner computes the burst rate (≈3,300/s, accept 2,500–4,500) and sees it is ~30× the average — a bar chart average vs burst animates.",
+   "check": "Q.quiz: 'Average load is only ~185 notifications/s. Why still design for scale?' Correct: 'Traffic is bursty — a single campaign or news alert can be many times the average'. Distractors: 'Because 185/s already needs 100 servers', 'Third parties require it', 'It doesn't matter; one server is fine'."
+  },
+  {
+   "title": "Three fixes",
+   "sub": "Build the improved design",
+   "teaches": "Book's improvements: (1) move the database and cache out of the notification server; (2) add more notification servers with automatic horizontal scaling; (3) introduce message queues to decouple components. Components: Notification servers (APIs for services, internal or verified clients only to prevent spam; basic validation of emails/phone numbers; fetch data needed to render from cache/DB; put notification data onto queues). Cache: user info, device info, notification templates. DB: users, notifications, settings. Message queues: remove dependencies between components and buffer high volumes; each notification type gets its OWN queue so an outage at one third-party service does not affect other types. Workers: servers that pull events from the queues and send them to the matching third-party service.",
+   "interaction": "Predict-then-watch, two rounds. Round 1 (build): a canvas with the services on the left and devices on the right; learner taps the components in a sensible order into empty slots: cache + DB (outside), notification servers ×3 behind a load balancer, 4 queues (iOS PN, Android PN, SMS, Email), workers, third parties. Round 2 (predict): 'The SMS provider goes down for 15 minutes. With ONE shared queue vs FOUR per-channel queues, what happens to iOS pushes?' Learner predicts (delayed / unaffected) for each layout, then watches: in the shared-queue layout, SMS messages fail and get retried, clogging the single queue so push and email wait behind them; in per-channel layout only the SMS queue swells while the other three stay flat.",
+   "check": "Q.quiz: 'Why does the book give each notification type its own queue?' Correct: 'So an outage at one third-party service doesn't hold up the other channels'. Distractors: 'Queues can only store one message format', 'It's cheaper', 'So workers don't need to know the channel'."
+  },
+  {
+   "title": "Follow the ping",
+   "sub": "The 6-step flow + the send API",
+   "teaches": "Book flow: 1) a service calls the notification servers' API; 2) notification servers fetch metadata (user info, device token, notification settings) from cache or DB; 3) the notification event goes to the matching queue (an iOS push → iOS PN queue); 4) workers pull events from the queues; 5) workers send to third-party services; 6) third-party services deliver to user devices. Book's example API for sending an email: POST https://api.example.com/v/sms/send with body {to:[{user_id:123456}], from:{email:from_address@example.com}, subject:'Hello, World!', content:[{type:'text/plain', value:'Hello, World!'}]}. Note the caller sends a user_id, not an address — the notification server looks up the address itself.",
+   "interaction": "Order-the-steps game: 6 shuffled cards; learner taps them in order (wrong tap shakes and costs a heart). When done, a packet animates through the diagram along the 6 steps, each step highlighting. Then a mini spot-the-bug: the book's API request is shown; learner is asked 'One thing in this request looks off — tap it.' Correct tap: the path '/v/sms/send' (the body is clearly an email; the path should be something like /v1/email/send). Bonus reveal: 'to' carries user_id, not an email address — tap explains why that's GOOD (servers resolve contact info + settings centrally).",
+   "check": "Q.quiz: 'In step 2, what does the notification server fetch before enqueueing?' Correct: 'User info, device tokens and notification settings — from cache, falling back to the DB'. Distractors: 'The rendered HTML from the third party', 'Nothing; workers fetch everything', 'Delivery receipts from APNs'."
+  },
+  {
+   "title": "Boss: The Backlog Hydra",
+   "sub": "Which component saves you?",
+   "teaches": "Mapping symptoms to the component in the improved design that addresses them.",
+   "interaction": "Q.boss named '🐉 Backlog Hydra', choices: Message queue (buffer/isolation), More notification servers (autoscaling), Cache, More workers. Scenarios: (1) 'Marketing schedules a 2M-email blast for 9:00; notification servers must accept it in seconds' → Message queue (absorb the burst, workers drain at their pace). (2) 'One notification server's VM dies at lunchtime' → More notification servers (no SPOF behind a load balancer). (3) 'Every send hits the DB for the same popular device tokens and templates; DB CPU at 90%' → Cache. (4) 'The iOS PN queue depth climbs steadily all afternoon though APNs is healthy' → More workers. (5) 'The SMS provider is down; you must not delay push and email' → Message queue (separate per-channel queues). (6) 'Services call the API faster than one server can validate and look up data' → More notification servers. Each with a why.",
+   "check": "Boss clears when all 6 are answered."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "Sketch the high-level design out loud",
+   "teaches": "The 60-second high-level design pitch.",
+   "interaction": "Q.drill. Prompt: 'Sketch your high-level design for the notification system. Why not just one notification server?' Model: 'A single server is a single point of failure, can't scale its DB, cache and processing separately, and becomes a bottleneck when rendering and waiting on third parties at peak. So: services call an internal, authenticated API on a fleet of stateless notification servers that autoscale. They validate the request, look up user info, device tokens and settings from a cache backed by the DB, and drop an event on a queue — one queue per channel, so an SMS outage doesn't block push or email, and the queues absorb bursts like a 2-million-email campaign. Workers pull from each queue and call APNs, FCM, the SMS provider or the email provider, which deliver to the device. Average load is only around 185 a second for 16 million a day, but it's bursty, which is why the queue matters.' Checks: 'I named the 3 problems of one server', 'I described servers → cache/DB → per-channel queues → workers → third parties', 'I said why per-channel queues (isolation) and why queues at all (bursts/decoupling)'.",
+   "check": "Self-grade against 3 checks."
+  }
+ ],
+ "caveats": [
+  "The per-second numbers and burst example are our own back-of-the-envelope additions; the book only gives the daily totals.",
+  "The book's sample endpoint path is /v/sms/send although the body is an email — treat it as a typo; version and channel your paths clearly (e.g. /v1/email/send).",
+  "The message queues themselves must be replicated (e.g. Kafka replication, RabbitMQ quorum queues) or they become the new single point of failure — the book doesn't say this.",
+  "Real systems often split queues by priority as well as channel (an OTP login code should never wait behind a marketing blast); the book splits by channel only."
+ ],
+ "sources": [
+  {
+   "label": "Alex Xu, System Design Interview Vol. 1, Ch. 10: Design a Notification System (ByteByteGo)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-notification-system"
+  },
+  {
+   "label": "Ch. 3: A Framework for System Design Interviews (ByteByteGo)",
+   "url": "https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews"
+  },
+  {
+   "label": "Datadog: Key metrics for RabbitMQ monitoring (book ref [7])",
+   "url": "https://www.datadoghq.com/blog/rabbitmq-monitoring/"
+  },
+  {
+   "label": "Apple: User Notifications / APNs documentation",
+   "url": "https://developer.apple.com/documentation/usernotifications"
+  },
+  {
+   "label": "Firebase Cloud Messaging documentation",
+   "url": "https://firebase.google.com/docs/cloud-messaging"
+  }
+ ],
+ "id": "1002",
+ "file": "1002-notification-high-level-design.html",
+ "world": 10,
+ "chapterTitle": "Design a Notification System",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-notification-system",
+ "cheatsheet": "../reference/ch10-notification-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "1001",
+   "n": "10.1",
+   "t": "Three Roads to the Lock Screen",
+   "d": "Push (APNs/FCM), SMS and email: who delivers what, and the contact info you need"
+  },
+  {
+   "id": "1002",
+   "n": "10.2",
+   "t": "Shatter the Single Server",
+   "d": "From one notification box to servers, per-channel queues and workers"
+  },
+  {
+   "id": "1003",
+   "n": "10.3",
+   "t": "Never Lose a Ping",
+   "d": "Notification log, at-least-once, dedupe, retries and watching the queue"
+  },
+  {
+   "id": "1004",
+   "n": "10.4",
+   "t": "Respect the Inbox",
+   "d": "Templates, opt-in settings, rate limits, auth, event tracking and the final design"
+  },
+  {
+   "id": "1005",
+   "n": "BOSS",
+   "t": "Ping the Planet — Live",
+   "d": "Full mock interview: design a notification system"
+  }
+ ]
+}

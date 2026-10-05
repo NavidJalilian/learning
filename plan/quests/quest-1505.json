@@ -1,0 +1,127 @@
+{
+ "n": "15.5",
+ "slug": "drive-storage-and-failures",
+ "t": "Thrift & Chaos",
+ "d": "Save storage space with dedup, version limits and cold storage, then survive every component failing",
+ "boss": false,
+ "badge": "🧯 Badge: Chaos Tamer",
+ "winTitle": "Lean and unbreakable!",
+ "goal": "Your win today: you can name the book's three storage-saving techniques and, for any component an interviewer points at, say what happens when it fails and how the system recovers.",
+ "bookSections": "Step 3 (Save storage space, Failure handling)",
+ "stages": [
+  {
+   "title": "Same block, stored once",
+   "sub": "De-duplication, watch the counter",
+   "teaches": "Book: to support file version history and ensure reliability, multiple versions of the same file are stored across multiple data centers, which fills storage fast. Technique 1, de-duplicate data: eliminate redundant blocks at the account level. Two blocks are identical if they have the same hash value — store one copy and point both files' block rows at it. Example: a user saves the same 20 MB slide deck in three folders -> 20 MB stored, not 60 MB; a new version that changes 1 of 5 blocks adds 4 MB, not 20 MB.",
+   "interaction": "Dedup lab. A user's drive panel with drag-in sample files (deck.pptx 5 blocks, deck-copy.pptx identical, deck-v2.pptx with 1 changed block, photo.jpg 3 blocks). Each block is a coloured tile labelled with its hash. As the learner drags files in, two meters update side by side: 'Logical size' and 'Stored with dedup'. Before each drop the learner predicts the new 'stored' number (multiple-choice of 3 values). Expected: deck 20 MB stored; copy +0 MB; v2 +4 MB; photo +12 MB. Final readout shows the % saved.",
+   "check": "Q.quiz: 'How does the system decide two blocks are duplicates?' -> same hash value. Distractors: same file name; same size; same upload time."
+  },
+  {
+   "title": "Keep what matters",
+   "sub": "Version limits and cold storage, tune the sliders",
+   "teaches": "Technique 2, adopt an intelligent data backup strategy: (a) set a limit on the number of versions kept — when the limit is reached, the oldest version is replaced with the new one; (b) keep valuable versions only — some files are edited very often (e.g. a document saved 1,000 times in a short period), and saving every version would be wasteful; give more weight to recent versions; experiment to find the best number. Technique 3, move infrequently used data to cold storage: data not active for months or years; cold storage like Amazon S3 Glacier is much cheaper than S3. Approximate public list prices (us-east-1, check current): S3 Standard ~$0.023/GB-month; S3 Glacier Deep Archive ~$0.00099/GB-month (~23x cheaper) — but retrieval takes hours, not milliseconds.",
+   "interaction": "Cost console. Inputs: a slider 'max versions per file' (1–1000), a toggle 'thin out bursts (keep recent versions denser)', and a slider 'move to cold storage after N months untouched'. A simulated user population (a mix of 'hot', 'warm' and 'forgotten' files, plus one 'autosave-every-10-seconds' doc) feeds a monthly storage bill chart and two risk lights: 'Restore old version?' (red if versions cap is below 10) and 'Open old file fast?' (amber when cold-storage cutoff is under 1 month, because retrieval takes hours). Learner goal: get the bill under a target while keeping both lights green; any setting around 'cap 50–100 versions, thinning on, cold after 6–12 months' passes. Reveal shows the book's three techniques as a checklist.",
+   "check": "Q.quiz: 'A user wants to open a 3-year-old file stored in Glacier Deep Archive right now. What's the catch?' -> retrieval takes hours, so cold storage only suits data that's truly rarely accessed."
+  },
+  {
+   "title": "Pull the plug",
+   "sub": "Failure handling, chaos board",
+   "teaches": "Book's failure table. Load balancer failure: a secondary becomes active and picks up the traffic; LBs monitor each other with heartbeats (periodic 'I'm alive' signals). Block server failure: other servers pick up unfinished or pending jobs. Cloud storage failure: S3 buckets are replicated multiple times in different regions; if files aren't available in one region, fetch them from another. API server failure: stateless, so the LB stops sending traffic to it and redirects to others. Metadata cache failure: cache servers are replicated multiple times; if one goes down, access other nodes to fetch data, and bring up a new cache server to replace the failed one. Metadata DB failure — master down: promote one of the slaves to act as the new master and bring up a new slave; slave down: use another slave for reads and bring another DB server up to replace the failed one. Notification service failure: every online user keeps a long-poll connection; each notification server is connected with many users — per the Dropbox talk in 2012, over 1 million connections are open per machine. If a server goes down, all its long-poll connections are lost, so clients must reconnect to a different server; even though one server can keep many open connections, it can't reconnect all the lost ones at once, so reconnecting is relatively slow. Offline backup queue failure: queues are replicated multiple times; if one queue fails, its consumers may need to re-subscribe to the backup queue.",
+   "interaction": "Chaos board over the full architecture mini-map. Each component has a red 'kill' button. Learner kills one at a time (all 8 must be tried to clear the stage). On each kill, before any animation, three recovery cards appear; learner predicts the right one (e.g. kill 'Metadata DB master' -> 'promote a replica to master, add a new replica' vs 'serve writes from cache' vs 'restore last night's backup'). Then the animation plays the book's recovery (secondary LB lights up, replica crowned, traffic rerouted around a dead API server, region B serving S3 reads). Special notification-server kill: 1,000,000 dots (rendered as a density cloud) detach and stream to other servers over a visible 'reconnect storm' timer; a toggle 'add random jitter + backoff to reconnects' flattens the spike (honest caveat).",
+   "check": "Q.quiz: 'Why is losing a notification server slower to recover from than losing an API server?' -> ~1M long-lived connections drop at once and all clients must reconnect elsewhere; API servers are stateless request handlers the LB simply routes around."
+  },
+  {
+   "title": "Boss: The Hoarder & the Gremlin",
+   "sub": "Interview scenarios",
+   "teaches": "Applying storage savings and failure recovery.",
+   "interaction": "Q.boss '👾 The Hoarder & the Gremlin', 5 scenarios. (1) 'Storage costs doubled; half of it is copies of the same installers.' -> block-level dedup by hash / bigger disks / delete files over 1 GB. (2) 'One doc autosaves every 10 seconds and has 40,000 versions.' -> cap versions and keep valuable, recent ones / store every version forever / disable autosave for that user. (3) 'The metadata DB master just died at 3 a.m.' -> promote a replica to master and add a new replica / go read-only until morning / serve metadata from S3. (4) 'An entire AWS region is down.' -> serve blocks from the cross-region replica / wait / fail all downloads. (5) 'A notification server crashes; 1M phones lose their connection.' -> clients reconnect to other notification servers (with backoff); sync resumes, just slowly / users must reinstall the app / data is lost.",
+   "check": "Boss cleared when all 5 are answered."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "Thrift + resilience in 45 seconds",
+   "teaches": "Combining cost control and failure handling into one confident answer.",
+   "interaction": "Q.drill. Prompt: 'Interviewer: storage is our biggest bill and we can never lose data. What do you do?' Model: 'Three things save space: de-duplicate at the block level, since identical blocks share a hash and are stored once; keep a smart version history — cap the number of versions and keep the valuable, recent ones instead of every autosave; and move data nobody's touched for months to cold storage like Glacier, which is far cheaper but slow to retrieve. For reliability, every layer has a backup: S3 is replicated across regions, the metadata DB promotes a replica if the master dies, API servers are stateless behind a load balancer with a standby, caches and queues are replicated, and if a notification server dies its clients reconnect elsewhere — slowly, since it held about a million connections.' Checks: dedup by hash; version cap + keep valuable versions; cold storage + retrieval trade-off; cross-region S3; DB replica promotion; notification reconnect cost.",
+   "check": "Self-graded checklist."
+  }
+ ],
+ "caveats": [
+  "The book dedups at the account level. Cross-user dedup saves more but leaks information (an attacker can test whether someone else already stored a given file by whether the upload is instant), so many providers limit it.",
+  "Dedup and encryption pull against each other: if every user's blocks are encrypted with different keys, identical plaintext becomes different ciphertext. Dedup must hash before encryption (or use convergent encryption), which has its own privacy trade-offs.",
+  "Cold-storage prices are approximate list prices and change; minimum storage durations and retrieval fees also apply.",
+  "'Over 1 million connections per machine' is a 2012 Dropbox talk figure; the reconnect-storm problem is real, and the standard fix (jittered exponential backoff) isn't in the book.",
+  "Promoting a replica after a master failure can lose the last few writes if replication was asynchronous; for metadata that needs strong consistency, use synchronous or semi-synchronous replication, or a consensus-based store."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo — Design Google Drive (book chapter)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-google-drive"
+  },
+  {
+   "label": "Amazon S3 Glacier storage classes",
+   "url": "https://aws.amazon.com/s3/storage-classes/glacier/"
+  },
+  {
+   "label": "Amazon S3 pricing",
+   "url": "https://aws.amazon.com/s3/pricing/"
+  },
+  {
+   "label": "Dropbox Tech — Inside the Magic Pocket (Dropbox's block storage)",
+   "url": "https://dropbox.tech/infrastructure/inside-the-magic-pocket"
+  },
+  {
+   "label": "How We've Scaled Dropbox (Kevin Modzelewski, 2012 talk)",
+   "url": "https://www.youtube.com/watch?v=PE4gwstWhmc"
+  },
+  {
+   "label": "AWS Architecture Blog — Exponential Backoff and Jitter",
+   "url": "https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/"
+  }
+ ],
+ "id": "1505",
+ "file": "1505-drive-storage-and-failures.html",
+ "world": 15,
+ "chapterTitle": "Design Google Drive",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-google-drive",
+ "cheatsheet": "../reference/ch15-google-drive-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "1501",
+   "n": "15.1",
+   "t": "Claim Your Locker",
+   "d": "Scope Google Drive, run the numbers, design the upload/download/revision APIs, outgrow one server"
+  },
+  {
+   "id": "1502",
+   "n": "15.2",
+   "t": "Chop It Into Blocks",
+   "d": "The high-level design, block servers, 4 MB blocks, delta sync, compress-then-encrypt"
+  },
+  {
+   "id": "1503",
+   "n": "15.3",
+   "t": "The Metadata Ledger",
+   "d": "Strong consistency, cache invalidation, the metadata schema, and sync conflicts"
+  },
+  {
+   "id": "1504",
+   "n": "15.4",
+   "t": "Ping When It Changes",
+   "d": "The upload flow, the download flow, long-polling notifications and the offline backup queue"
+  },
+  {
+   "id": "1505",
+   "n": "15.5",
+   "t": "Thrift & Chaos",
+   "d": "Save storage space with dedup, version limits and cold storage, then survive every component failing"
+  },
+  {
+   "id": "1506",
+   "n": "BOSS",
+   "t": "Design Drive Live",
+   "d": "Full mock interview: design Google Drive with the 4-step framework"
+  }
+ ]
+}

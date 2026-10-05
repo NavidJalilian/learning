@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Ping When It Changes</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: Drive mini-map (stages 1–2), two-lane builder (s1), block strip (s2), long-poll timeline (s3) */
+:root { --lane-a: #5a48f0; --lane-b: #0d9a96; --lane-a-soft: #ebe8ff; --lane-b-soft: #dcf5f3; --off: #8a8799; --pk-glow: #f0b400; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --lane-a: #8f82ff; --lane-b: #31d3c8; --lane-a-soft: #25224a; --lane-b-soft: #123335; --off: #6d6b85; --pk-glow: #ffd23f; }
+}
+:root[data-theme="dark"] { --lane-a: #8f82ff; --lane-b: #31d3c8; --lane-a-soft: #25224a; --lane-b-soft: #123335; --off: #6d6b85; --pk-glow: #ffd23f; }
+
+/* ---------- Drive mini-map ---------- */
+.map svg { max-width: 520px; margin: 0 auto; }
+.map .edge { stroke: var(--line); stroke-width: 3; stroke-linecap: round; transition: stroke .3s; }
+.map .edge.a { stroke: var(--lane-a); }
+.map .edge.b { stroke: var(--lane-b); }
+.map .edge.d { stroke: var(--pk-glow); }
+.map .node rect { fill: var(--panel); stroke: var(--muted); stroke-width: 2; transition: fill .3s, stroke .3s, opacity .3s; }
+.map .node .ic { font-size: 18px; text-anchor: middle; dominant-baseline: central; }
+.map .node .nm { fill: var(--ink); font: 700 12.5px var(--font); text-anchor: middle; }
+.map .node .sb { fill: var(--muted); font: 600 10.5px var(--mono); text-anchor: middle; }
+.map .node.dim { opacity: .38; }
+.map .node.off rect { stroke: var(--off); stroke-dasharray: 5 4; fill: var(--bg-2); }
+.map .node.off .nm, .map .node.off .ic { opacity: .5; }
+.map .node.pend .sb { fill: var(--warn); }
+.map .node.done .sb { fill: var(--good); }
+.map .node.here rect { stroke: var(--pk-glow); stroke-width: 4; }
+.map .node.wrong rect { fill: var(--bad-soft); stroke: var(--bad); animation: shake .4s; }
+.map .node.tap { cursor: pointer; }
+.map .node.tap:hover rect, .map .node.tap:focus rect { stroke: var(--accent); stroke-width: 3; }
+.map .node:focus { outline: none; }
+.map .node.queued rect { stroke: var(--warn); stroke-width: 3; }
+.map .pk { stroke: var(--bg); stroke-width: 2.5; }
+.map .pk.a { fill: var(--lane-a); }
+.map .pk.b { fill: var(--lane-b); }
+.map .pk.d { fill: var(--pk-glow); }
+.cast { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; font-size: 14px; margin: 12px 0 4px; }
+@media (max-width: 640px) { .cast { grid-template-columns: 1fr; } }
+.cast div { padding-left: 4px; }
+.hintline { font-size: 14px; padding: 8px 14px; border-top: 1px solid var(--line); background: var(--panel); min-height: 38px; }
+.hintline.bad { color: var(--bad); }
+.hintline.good { color: var(--good); }
+
+/* ---------- stage 1: two-lane builder ---------- */
+.lanes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+@media (max-width: 640px) { .lanes { grid-template-columns: 1fr; } }
+.lane { border-radius: 14px; padding: 10px 12px; border: 2px solid var(--lane-a); background: var(--lane-a-soft); }
+.lane.b { border-color: var(--lane-b); background: var(--lane-b-soft); }
+.lane-h { font-weight: 700; font-size: 14px; margin-bottom: 6px; }
+.lane-h span { font-weight: 500; color: var(--muted); }
+.slots { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; counter-reset: s; }
+.slots li { counter-increment: s; position: relative; min-height: 40px; padding: 8px 10px 8px 34px; border-radius: 10px; border: 1.5px dashed color-mix(in srgb, var(--muted) 50%, transparent); font-size: 13.5px; line-height: 1.35; color: var(--muted); }
+.slots li::before { content: counter(s); position: absolute; left: 9px; top: 8px; width: 18px; height: 18px; border-radius: 6px; display: grid; place-items: center; font: 700 11px var(--mono); background: var(--bg-2); color: var(--muted); }
+.slots li.filled { border-style: solid; border-color: transparent; background: var(--panel); color: var(--ink); animation: rise .3s; }
+.lane .slots li.filled::before { background: var(--lane-a); color: #fff; }
+.lane.b .slots li.filled::before { background: var(--lane-b); color: #fff; }
+.pool { display: grid; gap: 8px; margin-top: 14px; }
+.pool-h { font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-top: 14px; }
+.stepc { display: flex; gap: 8px; align-items: center; border: 1px solid var(--line); background: var(--bg); border-radius: 12px; padding: 6px 6px 6px 12px; font-size: 14px; line-height: 1.35; }
+.stepc .tx { flex: 1; min-width: 0; }
+.stepc .go { flex: none; min-width: 44px; min-height: 40px; border-radius: 10px; border: 2px solid var(--lane-a); background: var(--panel); font-weight: 700; color: var(--lane-a); padding: 0 8px; }
+.stepc .go.b { border-color: var(--lane-b); color: var(--lane-b); }
+.stepc .go:hover { background: var(--lane-a-soft); }
+.stepc .go.b:hover { background: var(--lane-b-soft); }
+.stepc.nope { border-color: var(--bad); background: var(--bad-soft); animation: shake .4s; }
+.bmsg { font-size: 14px; min-height: 22px; margin-top: 10px; font-weight: 600; }
+.bmsg.bad { color: var(--bad); }
+.bmsg.good { color: var(--good); }
+
+/* ---------- stage 2: block strip ---------- */
+.blocks { display: grid; grid-template-columns: repeat(8, 1fr); gap: 5px; max-width: 420px; margin: 10px auto 4px; }
+.bk { aspect-ratio: 1; border-radius: 8px; display: grid; place-items: center; font: 700 13px var(--mono); background: var(--bg-2); border: 2px solid var(--line); color: var(--muted); transition: background .4s, border-color .4s, color .4s; }
+.bk.chg { border-color: var(--warn); border-style: dashed; color: var(--warn); }
+.bk.got { background: var(--good-soft); border-color: var(--good); border-style: solid; color: var(--good); animation: blip .5s; }
+@keyframes blip { 45% { transform: scale(1.2); } }
+.bcap { text-align: center; font-size: 13px; color: var(--muted); }
+.offrow { display: none; margin-top: 16px; }
+.offrow.on { display: block; animation: rise .35s; }
+
+/* ---------- stage 3: long-poll timeline ---------- */
+.tl svg { max-width: 470px; margin: 0 auto; }
+.tl .ln { stroke: var(--line); stroke-width: 2; stroke-dasharray: 4 5; }
+.tl .lab { fill: var(--muted); font: 700 13px var(--font); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.tl .bar { fill: var(--accent); opacity: .3; }
+.tl .bar.live { opacity: .55; }
+.tl .req { stroke: var(--accent); stroke-width: 2.5; }
+.tl .resp { stroke: var(--good); stroke-width: 3; }
+.tl .resp.to { stroke: var(--muted); }
+.tl .resp.cu { stroke: var(--warn); }
+.tl .fetch { stroke: var(--teal); stroke-width: 2.5; stroke-dasharray: 5 3; }
+.tl .fdot { fill: var(--teal); }
+.tl .ev { fill: var(--warn); stroke: var(--bg); stroke-width: 2; }
+.tl .ev.miss { fill: var(--bad); }
+.tl .mk { font: 700 13px var(--font); text-anchor: middle; fill: var(--ink); }
+.tl .mk.miss { fill: var(--bad); }
+.tl .now { stroke: var(--ink); stroke-width: 1.5; stroke-dasharray: 3 3; opacity: .6; }
+.tlstat { display: flex; gap: 8px 16px; flex-wrap: wrap; font-size: 14px; }
+.tlstat b { font-family: var(--mono); }
+.btn.nudge { animation: nudge 1s infinite; }
+@keyframes nudge { 50% { box-shadow: 0 4px 0 color-mix(in srgb, var(--accent) 60%, #000), 0 0 0 6px color-mix(in srgb, var(--accent) 30%, transparent); } }
+.tlkey { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--muted); padding: 8px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+.tlkey i { display: inline-block; width: 14px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
+.vsgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+@media (max-width: 560px) { .vsgrid { grid-template-columns: 1fr; } }
+.vsgrid > div { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--bg); font-size: 14.5px; }
+.vsgrid h3 { margin: 0 0 4px; font-size: 16px; }
+.vsgrid svg { display: block; width: 100%; height: auto; max-width: 260px; margin: 6px auto 0; }
+.mini .c { fill: var(--panel); stroke: var(--muted); stroke-width: 2; }
+.mini text { fill: var(--ink); font: 700 12px var(--font); text-anchor: middle; }
+.mini .up { stroke: var(--accent); stroke-width: 2.5; }
+.mini .dn { stroke: var(--good); stroke-width: 2.5; }
+.mini .hold { fill: var(--accent); opacity: .25; }
+#chooser { display: none; margin-top: 18px; }
+#chooser.on { display: block; animation: rise .35s; }
+.sort-item .row .opt { min-height: 40px; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 15.4 · Design Google Drive</div>
+    <h1>Ping When It Changes</h1>
+    <p class="lede">You save a file on your laptop. A minute later it's on your phone. Build the two upload lanes, trace the download hop by hop, and hold a long-poll line open so no change slips past.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can walk through the <b>upload flow</b> (two parallel requests, status <code>pending</code> → <code>uploaded</code>), the <b>download flow</b>, and defend <b>long polling over WebSocket</b> for Drive's notifications.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Two lanes at once</h2><div class="sub">The upload flow, tap-in-order</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>In <a href="1502-drive-blocks-and-delta-sync.html">Quest 15.2</a> you met the cast of the high-level design. Quick refresher:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-google-drive" target="_blank" rel="noopener">[1]</a></p>
+      <div class="cast">
+        <div>🧱 <b>Block servers</b> split a file into blocks and push them to cloud storage.</div>
+        <div>☁️ <b>Cloud storage</b> holds the blocks (Amazon S3 in the book).</div>
+        <div>🖥️ <b>API servers</b> do almost everything except moving bytes: sign-in, profiles, file metadata.</div>
+        <div>🗄️ <b>Metadata DB</b> stores <i>metadata</i>: data about files (name, size, versions, which blocks).</div>
+        <div>🔔 <b>Notification service</b> tells clients when something changed.</div>
+        <div>📥 <b>Offline backup queue</b> holds changes for a device that's offline.</div>
+      </div>
+      <p>When client 1 (Bob's laptop) saves a new file, it fires <b>two requests at the same time</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-google-drive" target="_blank" rel="noopener">[1]</a> <b>Lane A</b> records <i>what the file is</i> (its metadata). <b>Lane B</b> moves <i>what's in it</i> (the content). Tap each step into its lane, in order. Watch the file's status on the metadata DB and client 2's screen.</p>
+
+      <div class="sim map">
+        <svg id="map1" viewBox="0 0 400 360" role="img" aria-label="Drive design: clients, block servers, cloud storage, API servers, metadata DB, notification service"></svg>
+        <div class="hintline" id="m1note">plan.docx has no record yet. Client 2 shows nothing.</div>
+      </div>
+
+      <div class="lanes">
+        <div class="lane a"><div class="lane-h">Lane A · metadata <span>(what the file is)</span></div><ol class="slots" id="laneA"></ol></div>
+        <div class="lane b"><div class="lane-h">Lane B · content <span>(what's in it)</span></div><ol class="slots" id="laneB"></ol></div>
+      </div>
+      <div class="pool-h" id="poolH">Steps to place · tap A or B</div>
+      <div class="pool" id="pool"></div>
+      <div class="bmsg" id="bmsg"></div>
+
+      <div class="callout tip" id="s1why" style="display:none"><b>Why two lanes?</b> The metadata request is tiny, so other devices hear about the file almost at once, while the big content upload is still running. The <b>status</b> field joins the lanes: <code>pending</code> until cloud storage confirms every block is stored, then <code>uploaded</code>. The book adds that <b>editing</b> a file runs exactly the same flow.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-google-drive" target="_blank" rel="noopener">[1]</a></div>
+      <div class="challenge" id="s1pred"></div>
+      <div class="row" id="s1playRow" style="display:none;margin-top:12px"><button class="btn primary" id="s1play">▶ Play both lanes together</button><span class="small muted" id="s1playNote">Watch the two packets race.</span></div>
+      <div id="s1quiz"></div>
+      <div class="row" style="margin-top:12px"><button class="btn" id="s1reset">↻ Shuffle and rebuild</button></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Catch up</h2><div class="sub">The download flow, trace it</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>A download starts when a file is added or edited <b>somewhere else</b>. How does your phone find out? The book gives two cases:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-google-drive" target="_blank" rel="noopener">[1]</a></p>
+      <ul>
+        <li><b>Phone online:</b> the notification service tells it "something changed, come and get it". The phone then pulls the latest data itself.</li>
+        <li><b>Phone offline:</b> the change is saved in the <b>offline backup queue</b>. When the phone comes back, it pulls the latest changes.</li>
+      </ul>
+      <p><b>Trace mode.</b> Bob just edited <code>plan.docx</code>. The glowing box is where the message is now. Tap the box it goes to <b>next</b>. Nine hops.</p>
+
+      <div class="sim map">
+        <svg id="map2" viewBox="0 0 400 360" role="img" aria-label="Drive design for tracing the download flow; boxes are tappable"></svg>
+        <div class="hintline" id="m2hint">Start: the notification service has news. Who hears it first?</div>
+        <div class="simlog" id="m2log"><div>Bob saved a new version of plan.docx on his laptop.</div></div>
+      </div>
+      <ul class="checklist" id="s2goals">
+        <li data-g="trace"><span class="box">✓</span><span>Trace all nine hops of the download</span></li>
+        <li data-g="queue"><span class="box">✓</span><span>Take client 2 offline and let <b>3 edits</b> pile up</span></li>
+        <li data-g="drain"><span class="box">✓</span><span>Bring client 2 back online and watch it catch up</span></li>
+      </ul>
+
+      <div class="offrow" id="offrow">
+        <p><b>Run 2: the phone goes dark.</b> Switch client 2 off, have Bob make three edits, then switch it back on.</p>
+        <div class="row">
+          <button class="btn" id="offBtn">📴 Take client 2 offline</button>
+          <button class="btn" id="editBtn">✏️ Bob edits a file</button>
+        </div>
+      </div>
+
+      <div class="challenge" id="s2pred" style="display:none"></div>
+      <div id="blkWrap" style="display:none">
+        <div class="blocks" id="blocks"></div>
+        <div class="bcap" id="bcap">Client 2's copy of plan.docx: 8 blocks. Dashed = changed in Bob's new version.</div>
+      </div>
+      <div id="s2quiz"></div>
+      <div class="row" style="margin-top:12px"><button class="btn" id="s2reset">↻ Trace again</button></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Hold the line</h2><div class="sub">Long polling vs WebSocket, predict-then-watch</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The notification service has to push news to clients. The server can't just phone a laptop out of the blue, so the client keeps a line open. The book weighs two ways to do that:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-google-drive" target="_blank" rel="noopener">[1]</a></p>
+      <div class="vsgrid">
+        <div><h3>⏳ Long polling</h3>The client sends a normal HTTP request. The server <b>holds it open without answering</b> until it has news or a time limit passes. Then the client sends a new one straight away. Dropbox uses this.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-google-drive" target="_blank" rel="noopener">[1]</a>
+          <svg class="mini" viewBox="0 0 260 90" aria-hidden="true"><rect class="hold" x="70" y="30" width="120" height="30" rx="6"/><line class="up" x1="70" y1="20" x2="70" y2="70"/><line class="dn" x1="190" y1="70" x2="190" y2="20"/><text x="30" y="24">client</text><text x="30" y="74">server</text><text x="130" y="50">held…</text><text x="215" y="50">news!</text></svg>
+        </div>
+        <div><h3>🔌 WebSocket</h3>One connection that stays open, and <b>both sides</b> can send messages at any time. It's built for two-way, real-time traffic.<a class="cite" href="https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API" target="_blank" rel="noopener">[3]</a>
+          <svg class="mini" viewBox="0 0 260 90" aria-hidden="true"><text x="30" y="24">client</text><text x="30" y="74">server</text><line class="up" x1="80" y1="20" x2="95" y2="70"/><line class="dn" x1="115" y1="70" x2="130" y2="20"/><line class="up" x1="150" y1="20" x2="165" y2="70"/><line class="dn" x1="170" y1="70" x2="185" y2="20"/><line class="dn" x1="200" y1="70" x2="215" y2="20"/><line class="up" x1="225" y1="20" x2="240" y2="70"/></svg>
+        </div>
+      </div>
+      <p><b>You are client 2.</b> Press <b>Open long poll</b>. The bar is your request, held open by the notification service. When the server answers, your poll is over: the client fetches the news and must <b>reopen right away</b>. Be quick: any change that lands while no poll is open can't reach you.</p>
+
+      <div class="sim tl">
+        <svg id="tl" viewBox="0 0 340 206" role="img" aria-label="Timeline of long-poll requests between client 2, the notification service and the API servers"></svg>
+        <div class="tlkey"><span><i style="background:var(--accent)"></i>held request</span><span><i style="background:var(--good)"></i>answer: changes</span><span><i style="background:var(--muted)"></i>answer: timeout</span><span><i style="background:var(--teal)"></i>fetch metadata</span><span><i style="background:var(--bad)"></i>missed</span></div>
+        <div class="sim-bar">
+          <button class="btn primary" id="tlBtn">⏳ Open long poll</button>
+          <div class="tlstat"><span>Poll: <b id="tlState">closed</b></span><span>Delivered: <b id="tlOk">0</b></span><span>Missed: <b id="tlMiss">0</b></span></div>
+        </div>
+        <div class="simlog" id="tlLog"><div>Client 2 is online, nothing open yet.</div></div>
+      </div>
+      <ul class="checklist" id="s3goals">
+        <li data-g="open"><span class="box">✓</span><span>Open a long poll</span></li>
+        <li data-g="change"><span class="box">✓</span><span>Get a "changes!" answer, then reopen</span></li>
+        <li data-g="timeout"><span class="box">✓</span><span>Sit through a timeout, then reopen</span></li>
+        <li data-g="clean"><span class="box">✓</span><span>Finish a run with zero missed changes</span></li>
+      </ul>
+      <div class="callout" id="tlNote" style="display:none"><b>What you just did by hand,</b> a real client does in a loop: after every answer or timeout it reopens at once.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-google-drive" target="_blank" rel="noopener">[1]</a> A "missed" change isn't lost. The server still has it, and the next poll gets it straight away. It just arrives late. Correctness comes from re-reading the metadata, not from the ping itself. <span class="muted">The 60 s timeout is just this sim's choice; the book doesn't give a number.</span></div>
+
+      <div id="chooser">
+        <p><b>Pick the channel.</b> For each product, would you use long polling or WebSocket?</p>
+        <div class="sort" id="chooseList"></div>
+        <div class="callout tip" id="whyLP" style="display:none"><b>The book's two reasons for long polling in Drive:</b><a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-google-drive" target="_blank" rel="noopener">[1]</a> (1) the traffic is <b>one-way</b>: the server tells the client about file changes, and the client never pushes anything back on that line. (2) Drive's notifications are <b>infrequent</b>, with no bursts of data. WebSocket shines for real-time, two-way traffic like chat.</div>
+      </div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Boss: The Silent Device</h2><div class="sub">Interview scenarios</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Five things an interviewer (or an angry user) might throw at you. Pick the move a senior engineer would make.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Say it like a senior</h2><div class="sub">Walk the flows in 60 seconds</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> Every edit stores new blocks, and every version is kept. That adds up fast. In <a href="1505-drive-storage-and-failures.html">Quest 15.5, <i>Thrift &amp; Chaos</i></a>, you'll cut storage costs and then break every box on this map, one at a time.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-google-drive" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 15 "Design Google Drive"</a>, Step 3: "Upload flow", "Download flow" and "Notification service". Then watch Kevin Modzelewski's <a href="https://www.youtube.com/watch?v=PE4gwstWhmc" target="_blank" rel="noopener">"How We've Scaled Dropbox"</a> talk, which the book draws on. For a real long-poll API, see Dropbox's <code>files/list_folder/longpoll</code> in its <a href="https://www.dropbox.com/developers/documentation/http/documentation" target="_blank" rel="noopener">HTTP API docs</a>.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <ul style="margin:0;padding-left:20px">
+        <li><b>The "offline backup queue" is fuzzy.</b> Real sync clients usually keep a <b>cursor</b>: a marker for the last change they saw. When they reconnect, they ask "everything since this cursor?" No per-device queue is needed. Dropbox's public API works this way: the long poll only answers "changes: true or false", and the client then lists the changes since its cursor.<a class="cite" href="https://www.dropbox.com/developers/documentation/http/documentation" target="_blank" rel="noopener">[5]</a></li>
+        <li><b>"Upload complete" is your job to track.</b> S3 can send an event when an object is created.<a class="cite" href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/EventNotifications.html" target="_blank" rel="noopener">[4]</a> But a file is many blocks, so "done" really means "every block of this version is stored". The server has to count that itself.</li>
+        <li><b>Long polling vs WebSocket is a close call today.</b> Many products push to clients over WebSocket or server-sent events. Either answer is fine in an interview if you give the reason.</li>
+        <li><b>The ping only says "something changed".</b> Correctness comes from re-reading the metadata. So a lost notification delays sync but doesn't corrupt data.</li>
+      </ul>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"what if both lanes fail halfway?"</i> or <i>"how does the server know which clients to notify?"</i> Follow-up questions are part of the quest.
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 15 "Design Google Drive", Step 3 (ByteByteGo).</li>
+        <li>Kevin Modzelewski, "How We've Scaled Dropbox", 2012 talk (YouTube).</li>
+        <li>MDN Web Docs, "The WebSocket API".</li>
+        <li>AWS, "Amazon S3 Event Notifications", S3 User Guide.</li>
+        <li>Dropbox, HTTP API documentation (<code>files/list_folder/longpoll</code>).</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '1504',
+  badge: '🔔 Badge: Sync Herald',
+  winTitle: 'Every device in sync!',
+  cheatsheet: '../reference/ch15-google-drive-cheatsheet.html',
+});
+const { sleep, shuffle } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+const BOOK = '<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-google-drive" target="_blank" rel="noopener">[1]</a>';
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+const f1 = n => (+n).toFixed(1);
+function anim(dur, f) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 1) { f(1); return res(); }
+    const t0 = performance.now();
+    const fr = now => { const p = Math.min(1, (now - t0) / dur); f(p); p < 1 ? requestAnimationFrame(fr) : res(); };
+    requestAnimationFrame(fr);
+  });
+}
+const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+const pause = ms => sleep(Q.reduced ? Math.min(ms, 120) : ms);
+function logTo(el, html, cls) { el.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); el.scrollTop = el.scrollHeight; }
+function checkGoal(list, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`[data-g="${g}"]`, list); li.classList.add('done'); Q.addXP(xp || 10, li);
+  return true;
+}
+// Predict-then-watch round (same shape as the other quests).
+function predict(box, { step, title, options, correct, act, explain, xp = 20 }) {
+  box.innerHTML = `${step ? `<div class="step">${step}</div>` : ''}<h3>${title}</h3><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+  const opts = $('.opts', box);
+  let busy = false;
+  return new Promise(resolve => {
+    shuffle(options.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = async () => {
+        if (busy) return; busy = true;
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        b.classList.add('picked');
+        await act();
+        const ok = i === correct;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-i="${correct}"]`, opts).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + explain;
+        ok ? Q.addXP(xp, b) : Q.loseHeart(b);
+        resolve({ ok, row: $('.row', box) });
+      };
+      opts.appendChild(b);
+    });
+  });
+}
+
+/* ---------- the Drive mini-map (stages 1 and 2) ---------- */
+const NODES = {
+  c1: { x: 58, y: 120, ic: '💻', nm: 'Client 1' },
+  c2: { x: 58, y: 300, ic: '📱', nm: 'Client 2' },
+  blk: { x: 200, y: 50, ic: '🧱', nm: 'Block servers' },
+  s3: { x: 342, y: 50, ic: '☁️', nm: 'Cloud storage' },
+  api: { x: 200, y: 190, ic: '🖥️', nm: 'API servers' },
+  mdb: { x: 342, y: 190, ic: '🗄️', nm: 'Metadata DB' },
+  ntf: { x: 200, y: 310, ic: '🔔', nm: 'Notification' },
+  obq: { x: 342, y: 310, ic: '📥', nm: 'Offline queue' },
+};
+const EDGES = [['c1', 'blk'], ['c1', 'api'], ['c2', 'blk'], ['c2', 'api'], ['c2', 'ntf'], ['blk', 's3'], ['s3', 'api'], ['api', 'mdb'], ['api', 'ntf'], ['ntf', 'obq']];
+const HW = 56, HH = 33;
+const ekey = (a, b) => [a, b].sort().join('-');
+function ends(a, b) {
+  const A = NODES[a], B = NODES[b], dx = B.x - A.x, dy = B.y - A.y;
+  const t = Math.min(dx ? (HW + 2) / Math.abs(dx) : Infinity, dy ? (HH + 2) / Math.abs(dy) : Infinity);
+  return [A.x + dx * t, A.y + dy * t, B.x - dx * t, B.y - dy * t];
+}
+function makeMap(svg, { subs = {}, onNode } = {}) {
+  svg.innerHTML = '';
+  const eG = S('g', {}, svg), nG = S('g', {}, svg), fx = S('g', {}, svg);
+  const eEl = {}, nEl = {};
+  EDGES.forEach(([a, b]) => { const [x1, y1, x2, y2] = ends(a, b); eEl[ekey(a, b)] = S('line', { class: 'edge', x1: f1(x1), y1: f1(y1), x2: f1(x2), y2: f1(y2) }, eG); });
+  Object.entries(NODES).forEach(([id, n]) => {
+    const g = S('g', { class: 'node', 'data-id': id }, nG);
+    S('rect', { x: n.x - HW, y: n.y - HH, width: HW * 2, height: HH * 2, rx: 12 }, g);
+    S('text', { class: 'ic', x: n.x, y: n.y - 12 }, g).textContent = n.ic;
+    S('text', { class: 'nm', x: n.x, y: n.y + 11 }, g).textContent = n.nm;
+    const sb = S('text', { class: 'sb', x: n.x, y: n.y + 25 }, g); sb.textContent = subs[id] || '';
+    if (onNode) {
+      g.classList.add('tap'); g.setAttribute('tabindex', 0); g.setAttribute('role', 'button'); g.setAttribute('aria-label', n.nm);
+      g.addEventListener('click', () => onNode(id, g));
+      g.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNode(id, g); } });
+    }
+    nEl[id] = { g, sb };
+  });
+  const M = {
+    node: id => nEl[id].g,
+    sub(id, text, cls) { nEl[id].sb.textContent = text; const g = nEl[id].g; g.classList.remove('pend', 'done'); if (cls) g.classList.add(cls); },
+    cls(id, c, on) { nEl[id].g.classList.toggle(c, on); },
+    edge(a, b, c) { const e = eEl[ekey(a, b)]; if (e) e.setAttribute('class', 'edge' + (c ? ' ' + c : '')); },
+    clearEdges() { Object.values(eEl).forEach(e => e.setAttribute('class', 'edge')); },
+    here(id) { Object.values(nEl).forEach(o => o.g.classList.remove('here')); if (id) nEl[id].g.classList.add('here'); },
+    flash(id, c) { const g = nEl[id].g; g.classList.remove(c); void g.getBBox(); g.classList.add(c); setTimeout(() => g.classList.remove(c), 600); },
+    packet(a, b, c = 'a', dur = 520, keep = true) {
+      const [x1, y1, x2, y2] = ends(a, b);
+      if (keep) M.edge(a, b, c);
+      const p = S('circle', { class: 'pk ' + c, r: 7, cx: f1(x1), cy: f1(y1) }, fx);
+      return anim(dur, t => { const q = ease(t); p.setAttribute('cx', f1(x1 + (x2 - x1) * q)); p.setAttribute('cy', f1(y1 + (y2 - y1) * q)); })
+        .then(() => { if (Q.reduced) p.remove(); else setTimeout(() => p.remove(), 160); });
+    },
+    async path(ids, c, dur) { for (let i = 0; i < ids.length - 1; i++) await M.packet(ids[i], ids[i + 1], c, dur); },
+  };
+  return M;
+}
+
+/* ================= STAGE 1: the upload flow ================= */
+Q.onStage(1, () => {
+  const STEPS = [
+    { id: 'a1', L: 'A', t: 'Client 1 sends the new file’s metadata to the API servers', e: ['c1', 'api'], h: 'client 1 sending only the file’s details (name, size, owner)' },
+    { id: 'a2', L: 'A', t: 'API servers save the metadata, with status “pending”', e: ['api', 'mdb'], h: 'a database record for the file, before its bytes exist' },
+    { id: 'a3', L: 'A', t: 'API servers tell the notification service a file is coming', e: ['api', 'ntf'], h: 'a heads-up to the notification service that a file is coming' },
+    { id: 'a4', L: 'A', t: 'Notification service tells client 2: “uploading…”', e: ['ntf', 'c2'], h: 'other devices hearing that a file is on its way' },
+    { id: 'b1', L: 'B', t: 'Client 1 sends the file’s content to the block servers', e: ['c1', 'blk'], h: 'client 1 sending the actual bytes' },
+    { id: 'b2', L: 'B', t: 'Block servers split it into blocks, compress, encrypt, and store them in cloud storage', e: ['blk', 's3'], h: 'the file being turned into blocks and stored' },
+    { id: 'b3', L: 'B', t: 'Cloud storage calls the API servers back: upload complete', e: ['s3', 'api'], h: 'cloud storage reporting that every block has landed' },
+    { id: 'b4', L: 'B', t: 'API servers flip the status to “uploaded” in the metadata DB', e: ['api', 'mdb'], h: 'the database record being marked done' },
+    { id: 'b5', L: 'B', t: 'API servers tell the notification service the upload finished', e: ['api', 'ntf'], h: 'the “it’s finished” news reaching the notification service' },
+    { id: 'b6', L: 'B', t: 'Notification service tells client 2: “ready”', e: ['ntf', 'c2'], h: 'other devices hearing they can download now' },
+  ];
+  const lane = L => STEPS.filter(s => s.L === L);
+  const SUBS = { c1: 'Bob’s laptop', c2: 'screen: —', mdb: 'plan.docx: —', obq: '' };
+  let map, placed, mistakes, builtOnce = false, predicted = false, played = false, quizShown = false, busy = false;
+
+  function paintState() {
+    const has = id => placed.has(id);
+    if (has('b4')) map.sub('mdb', 'plan.docx: uploaded', 'done');
+    else if (has('a2')) map.sub('mdb', 'plan.docx: pending', 'pend');
+    else map.sub('mdb', 'plan.docx: —');
+    if (has('b6')) map.sub('c2', '✅ plan.docx ready', 'done');
+    else if (has('a4')) map.sub('c2', '⏳ uploading…', 'pend');
+    else map.sub('c2', 'screen: —');
+    const st = has('b4') ? 'uploaded' : has('a2') ? 'pending' : null;
+    $('#m1note').textContent = st ? `plan.docx status: ${st}. Client 2 shows: ${has('b6') ? 'ready to open' : has('a4') ? '“uploading…”' : 'nothing yet'}.` : 'plan.docx has no record yet. Client 2 shows nothing.';
+  }
+  function build() {
+    map = makeMap($('#map1'), { subs: SUBS });
+    map.cls('obq', 'dim', true);
+    placed = new Set(); mistakes = 0; busy = false;
+    $('#laneA').innerHTML = lane('A').map(() => '<li>…</li>').join('');
+    $('#laneB').innerHTML = lane('B').map(() => '<li>…</li>').join('');
+    $('#pool').innerHTML = shuffle(STEPS).map(s => `<div class="stepc" data-id="${s.id}"><span class="tx">${s.t}</span><button class="go" data-l="A" aria-label="Put in lane A">A</button><button class="go b" data-l="B" aria-label="Put in lane B">B</button></div>`).join('');
+    $('#poolH').style.display = ''; $('#bmsg').textContent = ''; $('#bmsg').className = 'bmsg';
+    $$('#pool .go').forEach(b => b.onclick = () => place(b.closest('.stepc'), b.dataset.l));
+    paintState();
+  }
+  function msg(text, cls) { const m = $('#bmsg'); m.innerHTML = text; m.className = 'bmsg ' + (cls || ''); }
+  async function place(chip, L) {
+    if (busy) return;
+    const s = STEPS.find(x => x.id === chip.dataset.id);
+    const done = lane(L).filter(x => placed.has(x.id)).length, want = lane(L)[done];
+    if (s.L !== L) {
+      mistakes++; chip.classList.remove('nope'); void chip.offsetWidth; chip.classList.add('nope');
+      msg(`Not lane ${L}. This step is about the file’s ${s.L === 'A' ? '<b>metadata</b> (its description)' : '<b>content</b> (its bytes)'}, so it belongs in lane ${s.L}.`, 'bad');
+      return;
+    }
+    if (s !== want) {
+      mistakes++; chip.classList.remove('nope'); void chip.offsetWidth; chip.classList.add('nope');
+      msg(`Right lane, wrong moment. Lane ${L} needs this first: ${want.h}.`, 'bad');
+      return;
+    }
+    busy = true;
+    placed.add(s.id);
+    const li = $(`#lane${L} li:nth-child(${done + 1})`); li.textContent = s.t; li.classList.add('filled');
+    chip.remove();
+    msg(`✓ ${L}${done + 1} placed.`, 'good');
+    await map.packet(s.e[0], s.e[1], L === 'A' ? 'a' : 'b', 480);
+    paintState();
+    busy = false;
+    if (placed.size === STEPS.length) finishBuild();
+  }
+  function finishBuild() {
+    $('#poolH').style.display = 'none';
+    const xp = mistakes <= 2 ? 30 : mistakes <= 5 ? 20 : 10;
+    msg(`Both lanes built with ${mistakes} slip${mistakes === 1 ? '' : 's'}. Status went — → pending → uploaded.`, 'good');
+    if (!builtOnce) { builtOnce = true; Q.addXP(xp, $('#bmsg')); }
+    $('#s1why').style.display = 'block';
+    if (!predicted) runPredict();
+  }
+  function runPredict() {
+    predict($('#s1pred'), {
+      step: 'Predict, then watch',
+      title: 'Rewind: lane A is done but lane B is still uploading, so the status is <code>pending</code>. Client 2 taps plan.docx right now. What should it see?',
+      options: ['A placeholder saying it’s still uploading', 'The blocks that have arrived so far', 'An error saying the file is corrupt'],
+      correct: 0,
+      act: async () => {
+        map.sub('mdb', 'plan.docx: pending', 'pend'); map.sub('c2', '⏳ uploading…', 'pend');
+        $('#m1note').textContent = 'Status pending → client 2 shows a placeholder: “uploading…”';
+        await pause(700);
+      },
+      explain: '<code>pending</code> means “the record exists, the content doesn’t yet”. So client 2 shows the file as uploading. It is not a broken file. When cloud storage confirms the upload, the status flips to <code>uploaded</code>, a second notification arrives, and client 2 can download it.',
+    }).then(() => {
+      predicted = true;
+      $('#s1playRow').style.display = '';
+    });
+  }
+  async function play() {
+    const b = $('#s1play'); if (b.disabled) return;
+    b.disabled = true; busy = true;
+    map.clearEdges(); placed = new Set(); paintState();
+    const d = Q.reduced ? 1 : 520;
+    const runLane = async (L, gaps) => {
+      for (const [k, s] of lane(L).entries()) {
+        await pause(gaps[k]);
+        await map.packet(s.e[0], s.e[1], L === 'A' ? 'a' : 'b', d);
+        placed.add(s.id); paintState();
+      }
+    };
+    // lane A is quick (small request); lane B waits on the big upload + callback
+    await Promise.all([runLane('A', [0, 80, 80, 80]), runLane('B', [0, 300, 700, 120, 80, 80])]);
+    busy = false; b.disabled = false; b.textContent = '▶ Play again';
+    $('#s1playNote').textContent = 'Lane A finished long before lane B. That gap is the “pending” window.';
+    if (!played) { played = true; Q.addXP(10, b); }
+    if (!quizShown) { quizShown = true; setTimeout(quiz, 400); }
+  }
+  function quiz() {
+    Q.quiz($('#s1quiz'), {
+      q: 'What flips the file’s status from <code>pending</code> to <code>uploaded</code>?',
+      options: ['Cloud storage’s upload-complete callback to the API servers', 'Client 1 polling the block servers until they say done', 'The notification service, after it has pinged client 2', 'A nightly job that sweeps every pending file record'],
+      correct: 0,
+      good: 'Once every block is stored, cloud storage fires an <b>upload completion callback</b> to the API servers, which update the metadata DB to <code>uploaded</code> and then tell the notification service.' + BOOK,
+      bad: 'Only cloud storage knows when the last block has landed. It sends an <b>upload completion callback</b> to the API servers, which flip the status to <code>uploaded</code>. The notification service only spreads the news afterwards.' + BOOK,
+      onDone: () => setTimeout(() => Q.clearStage(1), 900),
+    });
+  }
+  $('#s1play').onclick = play;
+  $('#s1reset').onclick = () => { if (!busy) build(); };
+  build();
+});
+
+/* ================= STAGE 2: the download flow ================= */
+Q.onStage(2, () => {
+  const HOPS = [
+    { to: 'c2', log: '1. Notification service → client 2: “something changed, come and get it.”', hint: 'The notification service has news. Who needs to hear it?' },
+    { to: 'api', log: '2. Client 2 asks the API servers for the latest metadata.', hint: 'Client 2 needs the new version’s details first. Who answers metadata requests?' },
+    { to: 'mdb', log: '3. API servers read the metadata DB.', hint: 'Where does the metadata actually live?' },
+    { to: 'api', log: '4. The metadata DB returns the rows to the API servers.', hint: 'A database answers whoever asked it.' },
+    { to: 'c2', log: '5. Client 2 receives the metadata, including the list of blocks in the new version.', hint: 'The API servers reply to the client that asked.' },
+    { to: 'blk', log: '6. Client 2 asks the block servers for the blocks it needs.', hint: 'Metadata only lists the blocks. Who hands out the actual bytes?' },
+    { to: 's3', log: '7. Block servers fetch those blocks from cloud storage.', hint: 'Block servers don’t keep blocks themselves. Where are they stored?' },
+    { to: 'blk', log: '8. Cloud storage returns the blocks to the block servers.', hint: 'Cloud storage answers whoever asked it.' },
+    { to: 'c2', log: '9. Client 2 receives the new blocks and rebuilds the file. Done!', hint: 'Who was waiting for those blocks?' },
+  ];
+  const goals = new Set(), gl = $('#s2goals'), log = $('#m2log'), hint = $('#m2hint');
+  let map, at, hop, tracing, busy = false, offline = false, queued = 0, predShown = false, quizShown = false;
+
+  function setup() {
+    map = makeMap($('#map2'), { subs: { c1: 'Bob’s laptop', c2: 'your phone', mdb: 'plan.docx v2', obq: 'waiting: 0' }, onNode: tap });
+    at = 'ntf'; hop = 0; tracing = true; offline = false; queued = 0; busy = false;
+    map.here('ntf');
+    hint.textContent = 'Start: the notification service has news. Who hears it first?'; hint.className = 'hintline';
+    $('#offBtn').textContent = '📴 Take client 2 offline';
+  }
+  async function tap(id, g) {
+    if (!tracing || busy) return;
+    const h = HOPS[hop];
+    if (id !== h.to) {
+      map.flash(id, 'wrong');
+      hint.textContent = `✗ Not ${NODES[id].nm}. Hint: ${h.hint}`; hint.className = 'hintline bad';
+      return;
+    }
+    busy = true;
+    map.here(null);
+    await map.packet(at, id, 'd', 420);
+    at = id; hop++; map.here(at);
+    logTo(log, h.log, hop === HOPS.length ? 'g' : '');
+    hint.textContent = hop < HOPS.length ? `✓ Hop ${hop} of ${HOPS.length}. Where next?` : '✓ Traced. The ping said “changed”; client 2 pulled everything else itself.';
+    hint.className = 'hintline good';
+    busy = false;
+    if (hop === HOPS.length) {
+      tracing = false; map.here(null);
+      checkGoal(gl, 'trace', goals, 25);
+      $('#offrow').classList.add('on');
+      logTo(log, 'Notice what the ping carried: no file and no blocks, just “something changed”.', 'g');
+      maybeNext();
+    }
+  }
+  $('#offBtn').onclick = async () => {
+    if (busy || tracing) { if (tracing) Q.toast('finish the trace first', $('#offBtn'), 'practice'); return; }
+    offline = !offline;
+    map.cls('c2', 'off', offline);
+    $('#offBtn').textContent = offline ? '📶 Bring client 2 back online' : '📴 Take client 2 offline';
+    if (offline) { map.sub('c2', 'offline'); logTo(log, '📴 Client 2 went offline (flight mode).', 'w'); return; }
+    map.sub('c2', 'your phone');
+    if (!queued) { logTo(log, '📶 Client 2 is back. Nothing was waiting.'); return; }
+    busy = true; map.clearEdges();
+    const n = queued;
+    logTo(log, `📶 Client 2 is back online. ${n} change${n === 1 ? '' : 's'} waiting in the offline queue.`);
+    await map.path(['obq', 'ntf', 'c2'], 'd', 380);
+    queued = 0; map.sub('obq', 'waiting: 0'); map.cls('obq', 'queued', false);
+    await map.path(['c2', 'api', 'mdb', 'api', 'c2', 'blk', 's3', 'blk', 'c2'], 'd', 260);
+    logTo(log, `→ One catch-up pull: client 2 fetched the latest metadata once, then only the blocks it was missing. ${n} edits, one sync.`, 'g');
+    busy = false;
+    if (n >= 3 && checkGoal(gl, 'drain', goals, 15)) maybeNext();
+  };
+  $('#editBtn').onclick = async () => {
+    if (busy || tracing) { if (tracing) Q.toast('finish the trace first', $('#editBtn'), 'practice'); return; }
+    busy = true; map.clearEdges();
+    const f = ['budget.xlsx', 'plan.docx', 'notes.txt', 'photo.jpg'][Math.floor(Math.random() * 4)];
+    logTo(log, `✏️ Bob edits ${f} (upload flow runs, then the notification service is told).`);
+    await map.path(['c1', 'api', 'ntf'], 'd', 300);
+    if (offline) {
+      await map.packet('ntf', 'obq', 'd', 300);
+      queued++; map.sub('obq', `waiting: ${queued}`); map.cls('obq', 'queued', true);
+      logTo(log, `→ Client 2 is offline, so the change waits in the offline backup queue (${queued}).`, 'w');
+      if (queued >= 3) checkGoal(gl, 'queue', goals, 10);
+    } else {
+      await map.packet('ntf', 'c2', 'd', 300);
+      logTo(log, '→ Client 2 is online: pinged right away, and it pulls the change.');
+    }
+    busy = false;
+  };
+  function maybeNext() {
+    if (predShown || !goals.has('trace') || !goals.has('drain')) return;
+    predShown = true;
+    const box = $('#s2pred'); box.style.display = 'block';
+    $('#blkWrap').style.display = 'block';
+    $('#blocks').innerHTML = Array.from({ length: 8 }, (_, i) => `<div class="bk${i === 1 || i === 4 ? ' chg' : ''}">${i + 1}</div>`).join('');
+    predict(box, {
+      step: 'Predict, then watch',
+      title: 'Bob changed only <b>blocks 2 and 5</b> of plan.docx. Client 2 already holds the old version. How many blocks does it download?',
+      options: ['2 blocks', '6 blocks', '8 blocks'],
+      correct: 0,
+      act: async () => {
+        for (const i of [1, 4]) { $$('#blocks .bk')[i].classList.add('got'); await pause(400); }
+        $('#bcap').textContent = 'Downloaded 2 of 8 blocks. The other 6 were already on the phone.';
+      },
+      explain: 'The new metadata lists every block of the new version. Client 2 already has six of them, so it asks the block servers for just blocks 2 and 5. It’s the same <b>delta sync</b> idea from Quest 15.2, now on the way down.',
+    }).then(() => { if (!quizShown) { quizShown = true; setTimeout(quiz, 400); } });
+  }
+  function quiz() {
+    Q.quiz($('#s2quiz'), {
+      q: 'What’s inside the notification client 2 receives?',
+      options: ['A signal that something changed; it fetches the rest', 'The whole new file, pushed straight onto the device', 'Only the changed blocks, already encrypted for it', 'The metadata rows plus a link to every block'],
+      correct: 0,
+      good: 'The ping just says “changes were made somewhere, pull the latest”.' + BOOK + ' Client 2 then fetches the metadata from the API servers and the blocks from the block servers itself.',
+      bad: 'The notification is only a nudge: “something changed”.' + BOOK + ' Client 2 then fetches the metadata from the API servers and the blocks from the block servers itself. That keeps the notification service small and fast.',
+      onDone: () => setTimeout(() => Q.clearStage(2), 900),
+    });
+  }
+  $('#s2reset').onclick = () => { if (busy) return; setup(); log.innerHTML = '<div>Bob saved a new version of plan.docx on his laptop.</div>'; };
+  setup();
+});
+
+/* ================= STAGE 3: long polling timeline ================= */
+Q.onStage(3, () => {
+  const svg = $('#tl'), log = $('#tlLog'), btn = $('#tlBtn'), gl = $('#s3goals'), goals = new Set();
+  const X0 = 8, X1 = 332, Y = { api: 44, cli: 106, ntf: 164 }, TIMEOUT = 60;
+  let T, timer = null, chooserShown = false, runs = 0;
+  const fresh = () => ({ now: 0, state: 'idle', phase: 0, polls: [], fetches: [], events: [], pend: 0, misses: 0, ok: 0, last: null, next: null, endAt: null, catchAt: null, quiet: false });
+  T = fresh();
+  const xOf = t => X0 + (t / Math.max(150, T.now + 10)) * (X1 - X0);
+  const cur = () => T.polls[T.polls.length - 1];
+
+  function draw() {
+    svg.innerHTML = '';
+    ['api', 'cli', 'ntf'].forEach(k => {
+      S('line', { class: 'ln', x1: X0, y1: Y[k], x2: X1, y2: Y[k] }, svg);
+    });
+    T.polls.forEach(p => {
+      const xa = xOf(p.open), xb = xOf(p.close ?? T.now);
+      S('rect', { class: 'bar' + (p.close == null ? ' live' : ''), x: f1(xa), y: Y.cli + 16, width: f1(Math.max(2, xb - xa)), height: Y.ntf - Y.cli - 32, rx: 4 }, svg);
+      S('line', { class: 'req', x1: f1(xa), y1: Y.cli, x2: f1(xa), y2: Y.ntf }, svg);
+      if (p.close != null && p.kind !== 'end') {
+        S('line', { class: 'resp' + (p.kind === 'timeout' ? ' to' : p.kind === 'catchup' ? ' cu' : ''), x1: f1(xb), y1: Y.ntf, x2: f1(xb), y2: Y.cli }, svg);
+        S('text', { class: 'mk', x: f1(xb), y: Y.ntf + 26 }, svg).textContent = p.kind === 'timeout' ? '⏱' : p.kind === 'catchup' ? '↺' : '✓';
+      }
+    });
+    T.fetches.filter(t => t <= T.now).forEach(t => {
+      const x = xOf(t);
+      S('line', { class: 'fetch', x1: f1(x), y1: Y.cli, x2: f1(x), y2: Y.api }, svg);
+      S('circle', { class: 'fdot', cx: f1(x), cy: Y.api, r: 4 }, svg);
+    });
+    T.events.forEach(e => {
+      const x = xOf(e.t);
+      S('circle', { class: 'ev' + (e.missed ? ' miss' : ''), cx: f1(x), cy: Y.ntf, r: 6 }, svg);
+      if (e.missed) S('text', { class: 'mk miss', x: f1(x), y: Y.ntf + 26 }, svg).textContent = '✕';
+    });
+    if (T.state !== 'idle') { const x = xOf(T.now); S('line', { class: 'now', x1: f1(x), y1: 26, x2: f1(x), y2: 196 }, svg); }
+    [['api', 'API servers (metadata)'], ['cli', 'Client 2'], ['ntf', 'Notification service']].forEach(([k, lab]) => { S('text', { class: 'lab', x: X0, y: Y[k] - 8 }, svg).textContent = lab; });
+    const p = cur();
+    $('#tlState').textContent = T.state === 'open' ? `open ${Math.round(T.now - p.open)} s${T.quiet ? ' · ⏩ quiet, time sped up' : ''}` : T.state === 'done' ? 'run over' : 'closed';
+    $('#tlOk').textContent = T.ok; $('#tlMiss').textContent = T.misses;
+  }
+  function respond(kind) {
+    const p = cur(); p.close = T.now; p.kind = kind;
+    T.state = 'closed'; T.last = kind; T.quiet = false;
+    if (kind !== 'timeout') { T.fetches.push(T.now + 1.5); T.ok++; }
+    if (kind === 'change') logTo(log, `${Math.round(T.now)} s · ✏️ ${T.evLabel} → the server answers at once: “changes!” The poll is over. Client 2 fetches the new metadata from the API servers.`, 'g');
+    if (kind === 'catchup') logTo(log, `${Math.round(T.now)} s · ↺ The server had a change waiting, so it answers straight away. Late, but not lost.`, 'w');
+    if (kind === 'timeout') {
+      logTo(log, `${Math.round(T.now)} s · ⏱ ${TIMEOUT} s and nothing changed. The server answers “no changes” (a timeout). Nothing to fetch.`);
+      if (T.phase === 3) { T.phase = 4; T.next = { t: T.now + 20, label: 'Bob adds photo.jpg' }; }
+    }
+    btn.disabled = false; btn.textContent = '↻ Reopen long poll'; btn.classList.add('nudge');
+  }
+  function fire(ev) {
+    T.next = null; T.evLabel = ev.label;
+    const missed = T.state !== 'open';
+    T.events.push({ t: T.now, missed });
+    if (missed) { T.pend++; T.misses++; logTo(log, `${Math.round(T.now)} s · ✕ ${ev.label}, but no poll is open. The server can’t reach client 2, so the news waits.`, 'e'); }
+    else respond('change');
+    if (T.phase === 1) { T.phase = 2; T.next = { t: T.now + 24, label: 'Alice renames notes.txt' }; }
+    else if (T.phase === 2) { T.phase = 3; if (T.state === 'open') T.quiet = true; }
+    else if (T.phase === 4) { T.phase = 5; T.endAt = T.now + 14; }
+  }
+  function tick() {
+    T.now += 0.1 * (T.quiet ? 15 : 6);
+    if (T.catchAt != null && T.now >= T.catchAt && T.state === 'open') { T.catchAt = null; T.pend = 0; respond('catchup'); }
+    if (T.next && T.now >= T.next.t) fire(T.next);
+    if (T.state === 'open' && T.catchAt == null && T.now - cur().open >= TIMEOUT) respond('timeout');
+    if (T.endAt != null && T.now >= T.endAt) return end();
+    draw();
+  }
+  function open() {
+    if (T.state === 'done') { restart(); return; }
+    if (T.state === 'open') return;
+    const first = T.state === 'idle';
+    T.polls.push({ open: T.now, close: null, kind: null });
+    T.state = 'open';
+    btn.disabled = true; btn.textContent = '⏳ Poll open, waiting…'; btn.classList.remove('nudge');
+    if (first) {
+      runs++;
+      logTo(log, '0 s · → Client 2 opens a long poll. The server holds the request and says nothing… yet.');
+      T.phase = 1; T.next = { t: 15, label: 'Bob edits plan.docx' };
+      checkGoal(gl, 'open', goals, 10);
+      clearInterval(timer); timer = setInterval(tick, 100);
+    } else {
+      logTo(log, `${Math.round(T.now)} s · → Reopened. Line held again.`);
+      if (T.last === 'change' || T.last === 'catchup') checkGoal(gl, 'change', goals, 10);
+      if (T.last === 'timeout') checkGoal(gl, 'timeout', goals, 10);
+      if (T.pend > 0) T.catchAt = T.now + 1;
+      if (T.phase === 3 && !T.pend) T.quiet = true;
+    }
+    draw();
+  }
+  function end() {
+    clearInterval(timer); timer = null;
+    if (T.state === 'open') { const p = cur(); p.close = T.now; p.kind = 'end'; }
+    T.state = 'done'; T.quiet = false;
+    draw();
+    logTo(log, `Run over: ${T.ok} answer${T.ok === 1 ? '' : 's'} with news, ${T.misses} change${T.misses === 1 ? '' : 's'} missed while no poll was open.`, T.misses ? 'w' : 'g');
+    if (!T.misses) checkGoal(gl, 'clean', goals, 10);
+    else logTo(log, 'Tip: reopen the moment an answer arrives. Run it again for a clean run.', 'w');
+    btn.disabled = false; btn.classList.remove('nudge'); btn.textContent = '↻ Run it again';
+    $('#tlNote').style.display = 'block';
+    if (!chooserShown) { chooserShown = true; showChooser(); }
+  }
+  function restart() {
+    clearInterval(timer); timer = null;
+    T = fresh(); log.innerHTML = '<div>New run. Client 2 is online, nothing open yet.</div>';
+    btn.textContent = '⏳ Open long poll'; btn.disabled = false; btn.classList.remove('nudge');
+    draw(); open();
+  }
+  btn.onclick = open;
+  draw();
+
+  const PRODUCTS = [
+    { t: '☁️ <b>Drive:</b> tell my phone that a file changed on my laptop.', a: 'lp', why: 'One-way (server → client) and infrequent, no bursts. The book’s pick: long polling.' },
+    { t: '💬 <b>Chat app:</b> two people typing and replying in real time.', a: 'ws', why: 'Messages flow both ways, constantly. That’s the book’s own example of where WebSocket fits.' },
+    { t: '🎨 <b>Shared drawing board:</b> every stroke streams both ways, many per second.', a: 'ws', why: 'Two-way and bursty: a persistent two-way connection beats reopening a poll after every stroke.' },
+  ];
+  function showChooser() {
+    $('#chooser').classList.add('on');
+    let n = 0;
+    $('#chooseList').innerHTML = PRODUCTS.map((p, i) => `<div class="sort-item" data-i="${i}"><p>${p.t}</p><div class="row"><button class="opt" data-k="lp">⏳ Long polling</button><button class="opt" data-k="ws">🔌 WebSocket</button></div><div class="explain"></div></div>`).join('');
+    $$('#chooseList .sort-item').forEach(item => {
+      const p = PRODUCTS[+item.dataset.i];
+      $$('.opt', item).forEach(b => b.onclick = () => {
+        $$('.opt', item).forEach(x => x.disabled = true);
+        const ok = b.dataset.k === p.a;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-k="${p.a}"]`, item).classList.add('right');
+        const ex = $('.explain', item); ex.className = 'explain show ' + (ok ? 'good' : 'bad'); ex.textContent = p.why;
+        ok ? Q.addXP(10, b) : Q.loseHeart(b);
+        if (++n === PRODUCTS.length) { $('#whyLP').style.display = 'block'; setTimeout(quiz, 500); }
+      });
+    });
+  }
+  function quiz() {
+    Q.quiz($('#s3quiz'), {
+      q: 'Give the book’s reason for choosing long polling over WebSocket in Drive.',
+      options: ['Traffic is one-way and infrequent, with no bursts', 'WebSocket isn’t supported on mobile platforms', 'Long polling delivers changes with lower latency', 'WebSocket connections can’t be encrypted with TLS'],
+      correct: 0,
+      good: 'Exactly the book’s two reasons: the server tells clients about changes but not the other way round, and those notifications are rare with no bursts. A two-way channel buys nothing here.' + BOOK,
+      bad: 'The book’s reasons are about the <i>shape of the traffic</i>: one-way (server → client) and infrequent, with no bursts. WebSocket works fine on mobile, can run over TLS (<code>wss://</code>), and isn’t slower.' + BOOK,
+      onDone: () => setTimeout(() => Q.clearStage(3), 900),
+    });
+  }
+});
+
+/* ================= STAGE 4: boss ================= */
+Q.onStage(4, () => Q.boss($('#boss'), {
+  name: '👾 The Silent Device',
+  xp: 20,
+  scenarios: [
+    { e: '📱', t: 'The phone that never hears', d: 'A user’s phone never learns about edits made on their laptop. Uploads from the laptop work fine.', a: 'poll',
+      choices: [{ k: 'poll', label: 'Check its long poll', sub: 'it must reopen after every answer or timeout' }, { k: 's3', label: 'More S3 replicas', sub: 'copy the blocks to more regions' }, { k: 'blk', label: 'Add block servers', sub: 'scale out the upload tier' }],
+      why: 'Uploads work, so storage and block servers are fine. The phone hears about changes only through its long-poll connection to the notification service. If it doesn’t reopen after each answer or timeout, it goes deaf.' },
+    { e: '⏳', t: 'Opening a half-uploaded file', d: 'Client 2 taps a file that client 1 is still uploading.', a: 'pend',
+      choices: [{ k: 'pend', label: 'Show “uploading”', sub: 'status is pending; ping again on uploaded' }, { k: 'half', label: 'Serve what’s there', sub: 'send the blocks stored so far' }, { k: 'lock', label: 'Block client 2', sub: 'deny access to the account' }],
+      why: 'The metadata exists with status <code>pending</code>, so client 2 shows a placeholder. When cloud storage’s callback flips it to <code>uploaded</code>, the notification service pings client 2 again and it downloads the real thing.' },
+    { e: '🎤', t: '“Why not WebSocket?”', d: 'The interviewer pushes back on your long-polling choice.', a: 'one',
+      choices: [{ k: 'one', label: 'One-way, rare pings', sub: 'no need for a two-way channel; that fits chat' }, { k: 'dep', label: 'WebSocket is dated', sub: 'browsers are phasing it out' }, { k: 'zero', label: 'Long polls are free', sub: 'they hold zero open connections' }],
+      why: 'Drive’s notifications go server → client only, and they’re infrequent. WebSocket’s two-way channel suits real-time chat. (WebSocket isn’t going away, and a long poll does hold a connection open while it waits.)' },
+    { e: '🧳', t: 'Back from a week offline', d: 'A tablet was switched off for a week while files kept changing.', a: 'q',
+      choices: [{ k: 'q', label: 'Catch up on reconnect', sub: 'queued changes; pull metadata, then changed blocks' }, { k: 'all', label: 'Re-download it all', sub: 'wipe the tablet and sync the whole drive' }, { k: 'gone', label: 'Those changes are lost', sub: 'pings sent while offline vanish' }],
+      why: 'The changes waited in the offline backup queue. Back online, the tablet pulls the latest metadata, then downloads only the blocks it lacks. (Real clients often do this with a “changes since cursor X” request.)' },
+    { e: '📞', t: 'Who calls it done?', d: 'Something must tell the API servers that an upload finished, so the status can flip to uploaded.', a: 'cb',
+      choices: [{ k: 'cb', label: 'Cloud storage', sub: 'its upload-completion callback' }, { k: 'c2', label: 'Client 2', sub: 'once it sees the file appear' }, { k: 'lb', label: 'Load balancer', sub: 'when the upload request ends' }],
+      why: 'Cloud storage knows when the blocks are stored, so it fires the upload completion callback to the API servers. They set <code>uploaded</code> and tell the notification service.' },
+  ],
+  outro: 'Two lanes up, a ping, then a pull down. Long polling because the pings are one-way and rare.',
+  onDone: () => Q.clearStage(4),
+}));
+
+/* ================= STAGE 5: interview drill ================= */
+Q.onStage(5, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"I save a new file on my laptop. Walk me through how it shows up on my phone."</i>',
+  placeholder: 'The laptop sends two requests in parallel…',
+  model: '"The laptop fires two requests in parallel. One adds the file\'s metadata through the API servers: it\'s stored with status <i>pending</i>, and the notification service tells my other devices a file is coming. The other sends the content to the block servers, which split it into blocks, compress and encrypt them, and store them in S3. When S3 calls back that the upload is complete, the API server flips the status to <i>uploaded</i> and the notification service tells the phone. The phone holds a long-poll connection. When it gets the ping, it fetches the metadata, then downloads only the blocks it lacks from the block servers and rebuilds the file. If the phone was offline, the change waits in the offline backup queue until it reconnects. I\'d use long polling over WebSocket because the traffic is one-way and infrequent."',
+  checks: [
+    'I said the client sends two requests in parallel (metadata and content)',
+    'I said the status goes <code>pending</code> → <code>uploaded</code>',
+    'I named cloud storage’s completion callback as what flips it',
+    'I said the ping is only a signal: the phone then pulls metadata and blocks',
+    'I chose long polling and said why (one-way, infrequent)',
+    'I covered the offline case (the offline backup queue)',
+  ],
+  onDone: () => Q.clearStage(5),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

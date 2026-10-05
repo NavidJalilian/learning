@@ -1,0 +1,122 @@
+{
+ "n": "12.4",
+ "slug": "chat-message-flows",
+ "t": "Special Delivery",
+ "d": "The 1-on-1 message flow, syncing many devices, and small-group fan-out",
+ "boss": false,
+ "badge": "📬 Badge: Courier",
+ "winTitle": "Delivered, every time",
+ "goal": "Your win today: you can trace a message from sender to receiver in the book's six steps (online and offline), explain cur_max_message_id for multi-device sync, and explain per-recipient inboxes for small groups and why they don't work for huge ones.",
+ "bookSections": "Step 3 Message flows: 1-on-1 chat flow (figure 12-12), Message synchronization across multiple devices (figure 12-13, cur_max_message_id), Small group chat flow (figures 12-14, 12-15; WeChat 500-member cap); Wrap-up: message resend mechanism (retry and queueing)",
+ "stages": [
+  {
+   "title": "Six hops to Bob",
+   "sub": "The 1-on-1 chat flow",
+   "teaches": "Figure 12-12, user A messages user B: (1) A sends the message to chat server 1. (2) Chat server 1 gets a message ID from the ID generator. (3) Chat server 1 sends the message to the message sync queue. (4) The message is stored in the key-value store. (5a) If B is online, the message goes to chat server 2, where B is connected. (5b) If B is offline, the push notification (PN) servers send a push notification. (6) Chat server 2 forwards the message to B over the persistent WebSocket. Jargon: message sync queue = a queue that hands messages to storage and to the recipient's side, so the chat server isn't stuck waiting.",
+   "interaction": "Two parts. (1) Tap-in-order: seven shuffled step cards (1, 2, 3, 4, 5a, 5b, 6). The learner taps them in order; 5a and 5b sit side by side as a fork, and either can be placed first at the fork. (2) Predict-then-watch: a diagram with A, chat server 1, ID generator, message sync queue, KV store, chat server 2, PN servers and B. A toggle sets B online or offline. Before pressing Send, the learner taps the boxes they think will light up. Then the message animates hop by hop. Online lights CS2 and B; offline lights PN servers and B's lock screen instead. Both runs store the message in the KV store.",
+   "check": "Order correct; both predictions scored. Quiz Q: 'B is offline. Is the message lost?' (no: it's already in the KV store; a push notification goes out, and B syncs when it reconnects)."
+  },
+  {
+   "title": "Many devices, one account",
+   "sub": "cur_max_message_id",
+   "teaches": "Figure 12-13: user A has a phone and a laptop, each with its own WebSocket to a chat server. Each device keeps a variable cur_max_message_id, the latest message ID it has. New messages for a device are those where (1) the recipient is the logged-in user, and (2) the message ID in the KV store is greater than that device's cur_max_message_id. Because each device keeps its own cursor, syncing is easy: on reconnect, a device asks for everything above its cursor.",
+   "interaction": "Sync sim. Left: a KV-store column of messages to user A with IDs 101-110 (some arrive live). Right: Phone (cursor 105) and Laptop (cursor 105). The learner closes the laptop (toggle). Five new messages arrive (106-110); the phone's cursor ticks up to 110 live, the laptop's stays at 105. Before reopening the laptop, the learner taps which IDs it will fetch (multi-select). Right: 106, 107, 108, 109, 110. On reopen, the query 'message_to = A AND message_id > 105' animates and the cursor jumps to 110. Bonus round: the laptop reopens with a corrupted cursor of 0; the learner predicts 'refetches everything' (correct), which shows why the cursor matters.",
+   "check": "Fetched set picked correctly; quiz Q: 'Why does each device keep its own cursor instead of one per account?' (devices go offline at different times, so each needs to know what it has)."
+  },
+  {
+   "title": "Small-group fan-out",
+   "sub": "One inbox per recipient",
+   "teaches": "Small group chat (figure 12-14): user A sends in a group with B and C. The message is copied into each member's message sync queue: one for B, one for C. Think of the sync queue as each recipient's inbox. It works well for small groups because (1) each client only checks its own inbox, which simplifies sync, and (2) storing one copy per member is cheap when the group is small. WeChat uses a similar approach and caps groups at 500. On the recipient side (figure 12-15), one inbox holds messages from many senders and groups. For large groups, a copy per member is unacceptable, so you'd store the message once and have members read it from the channel (fan-out on read). Jargon: fan-out = copying one event to many destinations.",
+   "interaction": "Fan-out slider sim. A sender avatar and a row of inbox icons. A slider sets group size: 3, 10, 100, 500, 10,000, 100,000. Pressing 'Send 1 message' animates copies flying into every inbox (above 100 it switches to a counter with a progress bar). Counters: 'copies written per message' (= members - 1) and 'storage for 1,000 messages/day at 1KB each' (computed live). Predict before sliding to 100,000: 'copies per message?' (99,999). A toggle 'Store once, read from channel' shows writes drop to 1 while each reader now queries the channel. Second mini view: B's inbox showing interleaved messages from A (1-on-1), the 'Book club' group and C, which illustrates the recipient-side picture.",
+   "check": "Prediction correct; quiz Q: 'Why per-recipient inboxes for small groups?' (simple sync, each client reads one inbox; copies are cheap at <=100 members). Q2: 'What breaks at 100,000 members?' (write amplification: 99,999 copies per message)."
+  },
+  {
+   "title": "When delivery fails",
+   "sub": "Retry, queue, and don't double-post",
+   "teaches": "The book's wrap-up: retry and queueing are the common ways to resend messages. Retries create a new risk: the same message can arrive twice (at-least-once delivery). Fix: the client attaches its own unique ID to each outgoing message, the server stores by that ID and ignores repeats (idempotency), and the receiver shows a message only once. Acknowledge only after the message is safely stored, so a crash between 'ack' and 'store' can't lose it. This goes past the book; flag it in an interview as 'beyond the basic design'. Jargon: idempotent = doing it twice has the same effect as doing it once.",
+   "interaction": "Spot-the-bug with three short flows, each a 4-line sequence diagram. Flow A: server sends 'ack' to the client, then writes to the KV store, then crashes before the write (bug: ack before persist, so the message is lost). Flow B: client times out and retries; server stores both copies, Bob sees 'Pay you back $50' twice (bug: no dedupe key). Flow C: the correct flow (client_msg_id, store, ack, dedupe on retry). The learner taps the buggy line in A and B and marks C as 'no bug'. Each fix animates.",
+   "check": "Both bugs found, C cleared. Quiz Q: 'What makes retries safe?' (a client-generated message ID plus server-side dedupe)."
+  },
+  {
+   "title": "Boss: The Lost-Mail Hydra",
+   "sub": "Every message, exactly where it belongs",
+   "teaches": "Apply the flows to tricky cases.",
+   "interaction": "Q.boss with one fixed choice set: Forward via recipient's chat server / Push notification + sync later / Fetch IDs above cur_max_message_id / Copy into each member's inbox / Store once, read from channel. Scenarios: (1) 'Bob is online on chat server 7; Alice messages him' -> Forward via recipient's chat server. (2) 'Bob's phone is off' -> Push notification + sync later. (3) 'Alice's laptop was asleep overnight and opens in the morning' -> Fetch IDs above cur_max_message_id. (4) 'A 6-person family group gets a new photo caption' -> Copy into each member's inbox. (5) 'A 200,000-member announcement channel gets a post' -> Store once, read from channel. (6) 'Bob's tablet just logged in for the first time today' -> Fetch IDs above cur_max_message_id. (7) 'A 50-person team chat on WeChat-style design' -> Copy into each member's inbox.",
+   "check": "Boss defeated."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "Trace the message out loud",
+   "teaches": "Pull it together.",
+   "interaction": "Q.drill. Prompt: 'Walk me through what happens when Alice sends Bob a message, and how Bob's phone and laptop both stay in sync.' Model answer: 'Alice's client sends over its WebSocket to chat server 1. The server gets a message ID, puts the message on the message sync queue and it's stored in the key-value store. If Bob is online, the message goes to the chat server he's connected to and down his WebSocket. If he's offline, the notification servers send a push. Each of Bob's devices keeps its own cur_max_message_id; on reconnect a device fetches messages to Bob with a higher ID. For small groups I'd copy each message into every member's inbox, which keeps sync simple, like WeChat's 500 cap. For huge groups I'd store it once and have members read from the channel. Retries use a client message ID so duplicates are dropped.'",
+   "check": "Self-grade checks: 'I covered both the online and offline branch', 'I explained cur_max_message_id per device', 'I explained inbox fan-out for small groups and its limit'."
+  }
+ ],
+ "caveats": [
+  "The book's figure doesn't say whether step 3 (sync queue) or step 4 (KV store) must finish before the sender sees 'sent'. Real systems ack the sender only after the message is durably stored, or durably queued, and then deliver.",
+  "The book doesn't spell out how chat server 1 finds the server Bob is on (step 5a). Real systems keep a user -> gateway route table (often in Redis) or publish to a per-user topic that Bob's server subscribes to.",
+  "cur_max_message_id only works if message IDs rise in a single sequence per user. With the book's per-channel local IDs, a device needs one cursor per conversation, or the server keeps a per-user inbox sequence. The book glosses over this mismatch.",
+  "'Exactly once' delivery isn't really achievable over a network. Real chat apps aim for at-least-once delivery plus deduplication, which looks like exactly-once to the user.",
+  "WeChat's 500-member cap is the book's example. Group limits change over time and by product (WhatsApp now allows much larger groups). The principle is what matters: fan-out on write only stays cheap while groups are small."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo: Design a Chat System (book chapter)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-chat-system"
+  },
+  {
+   "label": "Discord: How Discord Stores Billions of Messages",
+   "url": "https://discord.com/blog/how-discord-stores-billions-of-messages"
+  },
+  {
+   "label": "Meta Engineering: The Underlying Technology of Messages",
+   "url": "https://engineering.fb.com/2010/11/15/core-infra/the-underlying-technology-of-messages/"
+  }
+ ],
+ "id": "1204",
+ "file": "1204-chat-message-flows.html",
+ "world": 12,
+ "chapterTitle": "Design a Chat System",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-chat-system",
+ "cheatsheet": "../reference/ch12-chat-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "1201",
+   "n": "12.1",
+   "t": "Open the Pipe",
+   "d": "What a chat service does, and polling vs long polling vs WebSocket"
+  },
+  {
+   "id": "1202",
+   "n": "12.2",
+   "t": "The Switchboard",
+   "d": "Stateless vs stateful services, the scaled design, and service discovery"
+  },
+  {
+   "id": "1203",
+   "n": "12.3",
+   "t": "The Message Vault",
+   "d": "Where chat history lives, the message tables, and how to mint message IDs"
+  },
+  {
+   "id": "1204",
+   "n": "12.4",
+   "t": "Special Delivery",
+   "d": "The 1-on-1 message flow, syncing many devices, and small-group fan-out"
+  },
+  {
+   "id": "1205",
+   "n": "12.5",
+   "t": "The Green Dot",
+   "d": "Online presence: login/logout, heartbeats, and fanning out status changes"
+  },
+  {
+   "id": "1206",
+   "n": "BOSS",
+   "t": "Design It Live: Chat",
+   "d": "Full mock interview: design a chat system for 50 million daily users"
+  }
+ ]
+}

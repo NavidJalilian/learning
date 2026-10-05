@@ -1,0 +1,129 @@
+{
+ "n": "15.1",
+ "slug": "drive-scope-and-apis",
+ "t": "Claim Your Locker",
+ "d": "Scope Google Drive, run the numbers, design the upload/download/revision APIs, outgrow one server",
+ "boss": false,
+ "badge": "🗄️ Badge: Locker Keeper",
+ "winTitle": "Locker claimed!",
+ "goal": "Your win today: in the first five minutes you can scope a Google Drive design out loud (features, non-functional requirements, 10M DAU, 500 PB, ~240 upload QPS), name the three APIs and explain why large files need a resumable upload.",
+ "bookSections": "Step 1 (Understand the problem and establish design scope, Back-of-the-envelope estimation); Step 2 first half (Start with a single server, APIs, Move away from single server)",
+ "stages": [
+  {
+   "title": "What are we building?",
+   "sub": "Step 1 · ask before you draw",
+   "teaches": "The book's clarifying Q&A: most important features = upload and download files, file sync, notifications. Mobile app AND web app. Any file type. Files must be encrypted in storage. File size limit 10 GB. 10M DAU. In scope: add files (drag and drop), download files, sync across multiple devices, see file revisions, share files with friends/family/coworkers, notifications when a file is edited, deleted or shared with you. OUT of scope: Google Docs-style real-time collaborative editing (that's a different problem: operational transform / CRDTs). Non-functional requirements: reliability (data loss is unacceptable — the #1 requirement for a storage product), fast sync speed (slow sync = users leave), low bandwidth usage (matters on mobile data plans), scalability (high traffic), high availability (people keep working when some servers are slow, down or disconnected by network errors).",
+   "interaction": "Sort-the-cards: 12 feature cards fall into a tray ('Drag & drop upload', 'Download a file', 'Sync across my laptop and phone', 'See old revisions', 'Share with a coworker', 'Notify me when a shared file is edited', 'Two people typing in the same doc live', 'Encrypt files at rest', 'Reject files over 10 GB', 'Built-in photo editor', 'Never lose a byte', 'Sync must feel fast'). Learner taps each into one of three bins: 'Functional (in scope)', 'Non-functional', 'Out of scope'. Right answers: live co-editing and photo editor -> Out of scope; encryption, 'never lose a byte', 'sync must feel fast' -> Non-functional (encryption is a stated requirement, accept it in either Functional or Non-functional); the rest -> Functional. Wrong drops shake and explain. After sorting, a second mini-step: five non-functional chips (reliability, fast sync, bandwidth, scalability, availability) — learner taps the one the book calls most important for a storage product (reliability: 'data loss is unacceptable').",
+   "check": "Q.quiz: 'The interviewer says: and users can edit Google Docs together in real time, right?' Best reply: 'That's real-time collaborative editing — I'd scope it out and focus on file upload, download, sync and notifications.' Distractors: start designing operational transform; ignore the question; say Drive can't do that."
+  },
+  {
+   "title": "Run the numbers",
+   "sub": "Back-of-the-envelope, calculate-and-check",
+   "teaches": "Book assumptions: 50M signed-up users, 10M DAU. Each user gets 10 GB free. Users upload 2 files per day; average file size 500 KB. Read:write ratio 1:1. Results: total space allocated = 50M x 10 GB = 500 PB. Upload QPS = 10M x 2 / 24 h / 3600 s ≈ 231, book rounds to ~240. Peak QPS = 2 x QPS ≈ 480. Derived (not in book, flag it as such): new data per day ≈ 20M uploads x 500 KB = 10 TB/day, so the 500 PB is the *quota* promised, not what's actually used on day one. Senior habit: say the rounding out loud and move on; estimates exist to pick an architecture, not to be exact.",
+   "interaction": "Calculator cards, one at a time. Each shows the givens and an input box: (1) total allocated storage in PB (answer 500; accept 490–510); (2) upload QPS (accept 220–250; show 231 and the book's '~240'); (3) peak QPS (accept 440–500); (4) bonus: TB written per day (accept 9–11). A 'show my work' toggle reveals the chain with unit conversions (1 PB = 10^6 GB; 86,400 s/day). Each correct answer lights up a gauge on a server-rack graphic; a wrong answer shows the most common slip (e.g. forgetting to divide by 86,400 or using 50M instead of 10M DAU for QPS).",
+   "check": "Q.quiz: 'Why does the estimate use 10M (DAU) for QPS but 50M for storage?' Correct: storage is allocated to every signed-up user; traffic only comes from people active that day."
+  },
+  {
+   "title": "Three doors in",
+   "sub": "The APIs: upload, download, revisions",
+   "teaches": "Book's APIs (all require user authentication and HTTPS/SSL so data is protected in transit). (1) Upload: two kinds — simple upload for small files, and resumable upload for large files where the network may drop. Example: POST https://api.example.com/files/upload?uploadType=resumable, data = local file. Resumable upload is 3 steps: send the initial request to get a resumable URL; upload the data and monitor the upload state; if the upload is disturbed, resume it. (2) Download: GET https://api.example.com/files/download, param path. (3) Get file revisions: GET https://api.example.com/files/list_revisions, params path and limit (max number of revisions to return). Real-world detail (Google Drive API docs): the initial request returns a session URI; the client uploads in chunks (multiples of 256 KB); after a drop it asks the server how many bytes it has (server replies 308 Resume Incomplete with a Range header) and continues from there.",
+   "interaction": "Resumable-upload simulator. On screen: a 2 GB 'vacation-video.mp4' bar split into chunks, a laptop, a server, and a Wi-Fi toggle. Learner first picks a mode: Simple or Resumable. They press Upload; at ~70% the Wi-Fi drops automatically. Simple mode: the bar resets to 0% and a 'bytes wasted' counter shows ~1.4 GB. Resumable mode: three labelled steps animate (1 'POST ?uploadType=resumable -> session URL', 2 'PUT chunks…', 3 'drop! ask: how much did you get? -> 308, Range: bytes=0-1.4GB'); the learner must click 'Resume' and the bar continues from 70%. Then predict-then-watch: 'A 300 KB profile photo — which mode?' (Simple: one request, resumable's extra round trip isn't worth it.)",
+   "check": "Q.quiz: put the three resumable steps in order (tap-in-order): get resumable URL -> upload data and monitor state -> resume after disturbance. Plus one question: 'Which param stops list_revisions from returning 5,000 rows?' -> limit."
+  },
+  {
+   "title": "Outgrow the box",
+   "sub": "From one server to S3, predict-then-watch",
+   "teaches": "Book's start: one server — Apache web server, MySQL database for metadata (users, login info, file info), and a directory 'drive/' with 1 TB of storage, holding one namespace (folder) per user; a file is identified by namespace + relative path. Soon the disk is full (the book's alert: only 10 MB left). Fix 1: shard the data across storage servers by user_id. Worry: a server failure could lose data. Fix 2 (what Netflix and Airbnb do): put files in Amazon S3 — object storage with industry-leading scalability, availability, security and performance. S3 replication: same-region and cross-region; cross-region guards against losing a whole region. Then remove the other single points of failure: add a load balancer (spreads traffic; if a web server dies it routes around it), more web servers (stateless, add/remove with load), a metadata database moved off the server and replicated + sharded, and file storage = S3 replicated in two regions. Result: the 'many boxes' picture the rest of the chapter builds on.",
+   "interaction": "Predict-then-watch, three rounds on an animated single-server diagram with a disk gauge filling up. Round 1: gauge hits '10 MB left' — learner picks the next move from 4 cards (buy a bigger disk / shard by user_id / delete old files / compress everything); reveal: book shards by user_id, with a note that a bigger disk only delays the problem. Round 2: one shard server catches fire — 'what did we just lose?' (that user's files: sharding alone doesn't add copies) -> reveal S3 with same-region + cross-region replication, animate a region going dark while files are still served from the second region. Round 3: tap each remaining single point of failure on the diagram (web server, MySQL) and choose its fix (load balancer + more stateless web servers; replicate and shard the metadata DB). End state: the 4-box evolved diagram.",
+   "check": "Q.quiz: 'Why choose cross-region replication over same-region only?' Correct: survives the loss of an entire region (disaster), at the cost of extra storage and cross-region transfer."
+  },
+  {
+   "title": "Boss: The Scope Creep",
+   "sub": "Interview scenarios",
+   "teaches": "Applying scope, estimates and API choices under pressure.",
+   "interaction": "Q.boss with 5 scenario cards, 3 choices each, named '👾 The Scope Creep'. (1) 'Interviewer: we have 10M DAU, each uploads 2 files a day. Rough upload QPS?' -> ~240 (peak ~480) / 2,400 / 24,000. (2) 'A user uploads a 10 GB file on train Wi-Fi.' -> resumable upload / simple upload with retries / email it. (3) 'What's the one non-functional requirement you'd never trade away here?' -> reliability, no data loss / lowest latency / cheapest storage. (4) 'Our single server's disk is nearly full and we can't lose files.' -> move files to replicated object storage like S3 / shard across local disks only / add a cron job to delete old files. (5) 'How do you secure the APIs?' -> authenticate every call and use HTTPS / API keys in the query string over HTTP / trust the client app.",
+   "check": "Boss cleared when all 5 scenarios are answered; wrong picks cost a heart and show why."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "Scope in 60 seconds",
+   "teaches": "The opening of a Google Drive interview, compressed.",
+   "interaction": "Q.drill. Prompt: 'The interviewer says \"Design Google Drive.\" Give your first 60 seconds: scope, non-functional requirements and the key numbers.' Model answer: 'I'd focus on upload, download, sync across devices, revisions, sharing and notifications, on web and mobile, any file type up to 10 GB, encrypted at rest — and leave out real-time co-editing. The must-haves are reliability — no data loss — then fast sync, low bandwidth, scale and availability. With 50M users at 10 GB each that's 500 PB allocated; 10M DAU uploading 2 files a day is about 240 uploads per second, roughly 480 at peak. APIs: simple and resumable upload, download, and list revisions — all authenticated over HTTPS.' Self-check items: mentioned an out-of-scope item; named reliability first; 500 PB; ~240 / ~480 QPS; resumable upload for big files; auth + HTTPS.",
+   "check": "Self-graded checklist (Q.drill checks)."
+  }
+ ],
+ "caveats": [
+  "The 500 PB is storage *promised* (quota), not used. Most free users fill a small fraction; actual daily writes are around 10 TB/day under the book's own assumptions (our derivation, not the book's).",
+  "231 QPS rounds to the book's ~240; the 2x peak factor is a rule of thumb, not a measured number.",
+  "The resumable-upload details (session URI, 256 KB chunk multiples, HTTP 308 + Range) come from Google's Drive API docs, not the book; S3's equivalent is multipart upload.",
+  "Real Drive is far bigger than 50M users; the book's numbers are interview-sized."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo — Design Google Drive (book chapter)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-google-drive"
+  },
+  {
+   "label": "Google Drive API — Upload file data (simple, multipart, resumable)",
+   "url": "https://developers.google.com/drive/api/guides/manage-uploads"
+  },
+  {
+   "label": "Amazon S3",
+   "url": "https://aws.amazon.com/s3/"
+  },
+  {
+   "label": "Amazon S3 — Replicating objects (same-region and cross-region)",
+   "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/replication.html"
+  },
+  {
+   "label": "Amazon S3 — Multipart upload overview",
+   "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html"
+  }
+ ],
+ "id": "1501",
+ "file": "1501-drive-scope-and-apis.html",
+ "world": 15,
+ "chapterTitle": "Design Google Drive",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-google-drive",
+ "cheatsheet": "../reference/ch15-google-drive-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "1501",
+   "n": "15.1",
+   "t": "Claim Your Locker",
+   "d": "Scope Google Drive, run the numbers, design the upload/download/revision APIs, outgrow one server"
+  },
+  {
+   "id": "1502",
+   "n": "15.2",
+   "t": "Chop It Into Blocks",
+   "d": "The high-level design, block servers, 4 MB blocks, delta sync, compress-then-encrypt"
+  },
+  {
+   "id": "1503",
+   "n": "15.3",
+   "t": "The Metadata Ledger",
+   "d": "Strong consistency, cache invalidation, the metadata schema, and sync conflicts"
+  },
+  {
+   "id": "1504",
+   "n": "15.4",
+   "t": "Ping When It Changes",
+   "d": "The upload flow, the download flow, long-polling notifications and the offline backup queue"
+  },
+  {
+   "id": "1505",
+   "n": "15.5",
+   "t": "Thrift & Chaos",
+   "d": "Save storage space with dedup, version limits and cold storage, then survive every component failing"
+  },
+  {
+   "id": "1506",
+   "n": "BOSS",
+   "t": "Design Drive Live",
+   "d": "Full mock interview: design Google Drive with the 4-step framework"
+  }
+ ]
+}

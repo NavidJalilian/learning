@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>The Estimation Gauntlet</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: interview clock + assumptions board, chat, question deck, plan graph, whiteboard, match-up, closing builder, scorecard */
+:root { --note: #fff3b0; --note-ink: #4a3c00; --note-line: #e6d27a; --pin: #d4423f; --wire: #0d9a96; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --note: #3d3518; --note-ink: #ffefa6; --note-line: #645626; --pin: #ff6d6a; --wire: #31d3c8; }
+}
+:root[data-theme="dark"] { --note: #3d3518; --note-ink: #ffefa6; --note-line: #645626; --pin: #ff6d6a; --wire: #31d3c8; }
+
+.stage, .victory { scroll-margin-top: 150px; }
+@media (max-width: 560px) { .stage-b { padding: 18px 14px 22px; } .stage-h { padding: 16px 14px; } }
+
+/* sticky interview clock + collapsible assumptions board */
+.ivwrap { position: sticky; top: var(--hudH, 66px); z-index: 15; margin-top: 22px; }
+.ivbar { display: flex; align-items: center; gap: 12px; padding: 6px 8px 6px 14px; background: color-mix(in srgb, var(--panel) 90%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); font-size: 13px; }
+.ivbar .clk { font-family: var(--mono); font-weight: 700; font-size: 16px; white-space: nowrap; transition: color .3s; }
+.ivbar .clk small { color: var(--muted); font-weight: 400; font-size: 12px; }
+.ivbar.over .clk { color: var(--warn); }
+.ivbar .trk { flex: 1; min-width: 36px; height: 8px; border-radius: 99px; background: var(--bg-2); position: relative; overflow: hidden; border: 1px solid var(--line); }
+.ivbar .fill { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, var(--teal), var(--accent)); transition: width .6s cubic-bezier(.2,.8,.2,1); border-radius: 99px; }
+.ivbar.over .fill { background: linear-gradient(90deg, var(--warn), var(--bad)); }
+.ivbar .stp { font-weight: 700; white-space: nowrap; color: var(--accent); }
+.ivbar .stp small { color: var(--muted); font-weight: 600; }
+.bdbtn { min-height: 40px; padding: 6px 10px; font-size: 13px; white-space: nowrap; border-radius: 10px; }
+.bdbtn[aria-expanded="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.boardpanel { margin-top: 6px; padding: 12px; background: color-mix(in srgb, var(--panel) 96%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); max-height: 46vh; overflow-y: auto; }
+.boardpanel[hidden] { display: none; }
+.boardpanel p { margin: 0 0 8px; font-size: 13px; color: var(--muted); }
+@media (max-width: 560px) { .ivbar { gap: 8px; padding: 6px 6px 6px 10px; } .ivbar .stp small { display: none; } .ivbar .clk { font-size: 15px; } }
+
+/* sticky notes */
+.notes { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.note { position: relative; min-height: 58px; border-radius: 4px; padding: 12px 10px 8px; background: var(--note); color: var(--note-ink); border: 1px solid var(--note-line); font-size: 13.5px; font-weight: 600; line-height: 1.3; box-shadow: 0 3px 8px rgba(0,0,0,.12); transform: rotate(var(--r, -1.2deg)); animation: stick .45s cubic-bezier(.3,1.5,.5,1); }
+.note::before { content: ""; position: absolute; top: -5px; left: 50%; width: 11px; height: 11px; margin-left: -5px; border-radius: 50%; background: var(--pin); box-shadow: 0 2px 2px rgba(0,0,0,.25); }
+.note.empty { background: none; border: 2px dashed var(--line); color: var(--muted); box-shadow: none; transform: none; animation: none; font-weight: 500; display: grid; place-items: center; text-align: center; }
+.note.empty::before { display: none; }
+.note.given { --r: 1.4deg; }
+@keyframes stick { from { opacity: 0; transform: translateY(-14px) rotate(-8deg) scale(1.1); } }
+
+/* chat with the interviewer */
+.chat { display: flex; flex-direction: column; gap: 10px; margin: 14px 0; max-height: 320px; overflow-y: auto; padding: 6px 2px; }
+.chat:empty { display: none; }
+.msg { display: flex; gap: 8px; align-items: flex-end; max-width: 92%; animation: rise .3s; }
+.msg .av { font-size: 20px; width: 34px; height: 34px; border-radius: 50%; background: var(--accent-soft); display: grid; place-items: center; flex: none; }
+.msg .bub { padding: 9px 13px; border-radius: 16px; font-size: 15px; line-height: 1.45; }
+.msg.iv .bub { background: var(--bg-2); border-bottom-left-radius: 4px; }
+.msg.me { align-self: flex-end; }
+.msg.me .bub { background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+.msg .who { display: block; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin-bottom: 2px; }
+.typing i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); margin: 0 2px; animation: blink 1s infinite; }
+.typing i:nth-child(2) { animation-delay: .15s; } .typing i:nth-child(3) { animation-delay: .3s; }
+@keyframes blink { 50% { opacity: .2; } }
+.lbl { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 16px 0 8px; }
+
+/* step 1: question deck */
+.qdeck { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+@media (max-width: 560px) { .qdeck { grid-template-columns: 1fr; } }
+.qdeck .opt { font-size: 14.5px; padding: 10px 12px; min-height: 44px; }
+.qdeck .opt.waste { border-color: var(--warn); background: var(--warn-soft); opacity: .75; }
+.opt.nope { animation: shake .4s; }
+
+/* step 2: plan graph */
+.sim svg.plan { max-width: 520px; margin: 0 auto; }
+.plan .nd rect { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 4 3; transition: fill .3s, stroke .3s; }
+.plan .nd text { fill: var(--muted); font: 600 11.5px var(--font); text-anchor: middle; }
+.plan .nd.on rect { fill: var(--accent-soft); stroke: var(--accent); stroke-dasharray: none; }
+.plan .nd.on text { fill: var(--ink); }
+.plan .nd.miss rect { stroke: var(--bad); stroke-dasharray: none; fill: var(--bad-soft); }
+.plan .nd .ord { fill: var(--accent); }
+.plan .nd .ordt { fill: #fff; font: 700 10px var(--font); }
+.plan .edge { stroke: var(--accent); stroke-width: 2; fill: none; }
+.plan .ah { fill: var(--accent); }
+.ptiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
+@media (max-width: 640px) { .ptiles { grid-template-columns: 1fr 1fr; } }
+.ptiles .opt { text-align: center; font-weight: 600; font-size: 14.5px; padding: 10px 6px; min-height: 52px; }
+.ptiles .opt small { display: block; font-weight: 500; font-size: 12px; color: var(--muted); }
+.status { min-height: 24px; font-size: 14px; margin-top: 10px; color: var(--muted); }
+.status.e { color: var(--bad); font-weight: 600; }
+
+/* step 3: whiteboard */
+.given { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px; border-radius: 12px; background: var(--note); color: var(--note-ink); border: 1px solid var(--note-line); font-size: 13px; font-weight: 600; }
+.given span { white-space: nowrap; }
+.wb { display: grid; gap: 10px; margin-top: 14px; }
+.wrow { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--bg); transition: opacity .3s, border-color .3s, background .3s; }
+.wrow.locked { opacity: .45; }
+.wrow.g { border-color: var(--good); background: var(--good-soft); }
+.wrow.a { border-color: var(--warn); background: var(--warn-soft); }
+.wrow.r { border-color: var(--bad); background: var(--bad-soft); }
+.wrow h4 { margin: 0; font-size: 15px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.wrow h4 .n { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.wrow h4 small { font-weight: 500; font-size: 12.5px; color: var(--muted); }
+.wctl { display: grid; grid-template-columns: minmax(0, 1fr) 104px auto auto; gap: 8px; margin-top: 10px; align-items: center; }
+@media (max-width: 560px) { .wctl { grid-template-columns: minmax(0, 1fr) 96px; } .wctl .btn { width: 100%; } }
+.wctl input, .wctl select { width: 100%; min-width: 0; min-height: 42px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 8px 10px; font: inherit; font-size: 15px; }
+.wctl input { font-family: var(--mono); }
+.wctl .btn { min-height: 42px; padding: 8px 12px; font-size: 14px; }
+.fx { display: none; margin-top: 8px; font-size: 13.5px; font-family: var(--mono); color: var(--accent); }
+.fx.show { display: block; animation: rise .3s; }
+.wres { display: none; margin-top: 8px; font-size: 14px; }
+.wres.show { display: block; animation: rise .3s; }
+.rchip { display: inline-block; margin: 6px 6px 0 0; font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); }
+
+/* step 4: follow-ups, stacked single-column choices */
+#barrage .choice { grid-template-columns: 1fr; }
+#barrage .choice .opt { text-align: left; padding: 12px 14px; }
+#barrage .choice .opt b { font-size: 16px; }
+#barrage .scenario p { color: var(--ink); font-style: italic; }
+
+/* step 5: match-up */
+.match { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 38px; margin-top: 12px; }
+@media (max-width: 560px) { .match { gap: 8px 24px; } }
+.match svg.links { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+.links path { fill: none; stroke: var(--wire); stroke-width: 3; stroke-linecap: round; }
+.links path.bad { stroke: var(--bad); stroke-dasharray: 6 5; transition: opacity .6s; }
+.mcol { display: grid; gap: 8px; align-content: start; }
+.mchip, .mcard { position: relative; z-index: 1; min-height: 52px; font-size: 14px; padding: 9px 10px; }
+.mchip { font-family: var(--mono); font-weight: 600; text-align: center; }
+.mcard { text-align: left; }
+.mchip.sel { border-color: var(--accent); background: var(--accent-soft); }
+.mchip.done, .mcard.done { border-color: var(--wire); background: var(--teal-soft); }
+.closing { display: grid; gap: 12px; margin-top: 12px; }
+.slot { border: 1px solid var(--line); border-radius: 14px; padding: 12px; background: var(--bg); }
+.slot .k { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+.slot .opts .opt { font-size: 14.5px; }
+.slot .verdict { display: block; font-size: 13px; margin-top: 4px; color: var(--muted); font-weight: 500; }
+.speech { margin-top: 14px; border-left: 4px solid var(--accent); padding: 10px 14px; background: var(--accent-soft); border-radius: 0 12px 12px 0; font-size: 15px; display: none; }
+.speech.show { display: block; animation: rise .35s; }
+
+/* scorecard */
+.scorecard { margin-top: 18px; border: 1px solid var(--line); border-radius: 18px; padding: 18px; background: var(--bg); }
+.scorecard h3 { margin: 0 0 2px; font-size: 19px; }
+.sc-row { display: grid; grid-template-columns: 170px 1fr auto; gap: 12px; align-items: center; margin-top: 12px; font-size: 14.5px; }
+@media (max-width: 560px) { .sc-row { grid-template-columns: 1fr auto; } .sc-row .sc-bar { grid-column: 1 / -1; grid-row: 2; } }
+.sc-bar { height: 12px; background: var(--bg-2); border-radius: 99px; overflow: hidden; border: 1px solid var(--line); }
+.sc-bar div { height: 100%; width: 0; border-radius: 99px; background: linear-gradient(90deg, var(--teal), var(--accent)); transition: width .9s cubic-bezier(.2,.8,.2,1); }
+.verd { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 99px; white-space: nowrap; background: var(--bg-2); color: var(--muted); }
+.verd.v3 { background: var(--good-soft); color: var(--good); }
+.verd.v2 { background: var(--teal-soft); color: var(--teal); }
+.verd.v1 { background: var(--warn-soft); color: var(--warn); }
+.verd.v0 { background: var(--bad-soft); color: var(--bad); }
+.sc-overall { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.sc-overall b { font-size: 22px; }
+.sc-time { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 12px; }
+.sc-time td, .sc-time th { padding: 5px 6px; border-bottom: 1px solid var(--line); text-align: left; }
+.sc-time th { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.sc-time .ok { color: var(--good); font-weight: 700; } .sc-time .ov { color: var(--warn); font-weight: 700; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Boss · Back-of-the-Envelope Estimation</div>
+    <h1>The Estimation Gauntlet</h1>
+    <p class="lede">One prompt, one interviewer, ten minutes on the clock: "Estimate the scale of a Twitter-like service." Everything from Quests 2.1–2.4 at once, and nobody tells you which number comes next.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> given "estimate the scale of a Twitter-like service", you can ask for the right assumptions, lay out the estimation plan, compute write/read QPS, storage, cache and server counts <b>with units</b>, handle "what if" follow-ups, and say what the numbers mean for the design.</p></div>
+  </section>
+
+  <div class="ivwrap" id="ivwrap">
+    <div class="ivbar" id="ivbar">
+      <span class="clk">🕐 <b id="ivClock">00:00</b> <small>/ 10:00</small></span>
+      <div class="trk" aria-hidden="true"><div class="fill" id="ivFill"></div></div>
+      <span class="stp" id="ivStep">Step 1 <small>· scope</small></span>
+      <button class="btn bdbtn" id="boardBtn" aria-expanded="false" aria-controls="boardPanel" title="Show the assumptions board">📌 <span id="boardCount">0</span>/7</button>
+    </div>
+    <div class="boardpanel" id="boardPanel" hidden>
+      <p>The assumptions board. Every number you compute traces back to one of these notes.</p>
+      <div class="notes" id="barNotes"></div>
+    </div>
+  </div>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Scope it</h2><div class="sub">Step 1 · ask for the numbers you need (2–3 min)</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>An estimate starts like any design question: <b>clarify before you compute</b>. The book's framework says Step 1 is asking questions, not answering them<a class="cite" href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener">[2]</a>. Here that means asking for the inputs your formulas need: users, activity, sizes, how long you keep things.</p>
+      <p>The clock bar above counts <b>game time</b>. Each good question costs 15 seconds. A question that doesn't change the numbers costs 15 seconds too, and earns nothing.</p>
+      <div class="chat" id="chat1"></div>
+      <div id="deckWrap" style="display:none">
+        <div class="lbl">Assumptions board</div>
+        <div class="notes" id="stageNotes"></div>
+        <div class="lbl">Your questions (find the 6 that feed the math)</div>
+        <div class="qdeck" id="qdeck"></div>
+      </div>
+      <div id="s1q"></div>
+      <div class="callout tip" id="s1tip" style="display:none"><b>Book tip: write your assumptions down.</b> Say them out loud and keep them on the board, so you (and the interviewer) can come back to them when a number looks odd<a class="cite" href="https://bytebytego.com/courses/system-design-interview/back-of-the-envelope-estimation" target="_blank" rel="noopener">[1]</a>. The 📌 button in the clock bar keeps this board one tap away for the rest of the gauntlet.</div>
+      <div class="callout warn" id="s1caveat" style="display:none"><b>Honest caveat.</b> In a real interview, estimation is usually a few minutes inside Step 1 or 2 of a bigger design question, and some interviewers skip it entirely. The 10-minute budget here is for practice. Also, a real interviewer may say "you decide": then pick round numbers, say them out loud, and move on.</div>
+      <div class="row" id="s1replay" style="display:none;margin-top:14px"><button class="btn">↻ Replay the scoping</button></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Plan the math</h2><div class="sub">Step 2 · lay out what you'll compute, in order</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book lists the estimates interviewers ask for most: <b>QPS</b> (queries per second), <b>peak QPS</b>, <b>storage</b>, <b>cache</b> and <b>number of servers</b><a class="cite" href="https://bytebytego.com/courses/system-design-interview/back-of-the-envelope-estimation" target="_blank" rel="noopener">[1]</a>. Say the plan before you compute. It gets the interviewer's buy-in, just like Step 2 of the framework, and it shows structure.</p>
+      <p>Tap the eight estimates in an order that works: each one must come <b>after the numbers it uses</b>. There's more than one right order. An out-of-order tap costs 10 seconds.</p>
+      <div class="chat" id="chat2"></div>
+      <div class="sim">
+        <svg class="plan" id="plan" viewBox="0 0 360 252" role="img" aria-label="Dependency graph of the eight estimates"></svg>
+        <div class="sim-bar"><span class="small muted">Arrows show which earlier number each estimate uses.</span><span class="mono small" id="planCount">0 / 8</span></div>
+      </div>
+      <div class="ptiles" id="ptiles"></div>
+      <div class="status" id="planStatus" role="status"></div>
+      <div id="s2q"></div>
+      <div class="row" id="s2replay" style="display:none;margin-top:14px"><button class="btn">↻ Plan it again</button></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Crunch it</h2><div class="sub">Step 3 · numbers on the board, with units</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Work down the whiteboard. Type a number, pick its unit, check it. You can type <code>150m</code>, <code>3.5k</code> or <code>1.5e9</code>. Close is what counts here, not exact:</p>
+      <ul class="small" style="margin:0 0 6px;padding-left:20px">
+        <li><b style="color:var(--good)">Green</b>: within ±30% of the model answer, unit labeled. Full XP.</li>
+        <li><b style="color:var(--warn)">Amber</b>: the right order of magnitude (within 3×), or no unit. Half XP.</li>
+        <li><b style="color:var(--bad)">Red</b>: further off. Costs a heart and 20 seconds. One slip is charged once: if a later row is off only because it used your own earlier wrong number with the right method, that row is amber, not red.</li>
+      </ul>
+      <p class="small muted">Each row takes 25 seconds. A hint shows the formula and costs 15 seconds more. Tip: 86,400 seconds in a day is close to 100,000, so "÷ 86,400" is roughly "drop five zeros" (Quest <a href="0201-powers-of-two.html">2.1</a>).</p>
+      <div class="lbl">The interviewer's numbers</div>
+      <div class="given" id="given"></div>
+      <div class="chat" id="chat3"></div>
+      <div class="wb" id="wb"></div>
+      <div class="callout tip" id="s3bonus" style="display:none"></div>
+      <div id="s3q"></div>
+      <div class="row" id="s3replay" style="display:none;margin-top:14px"><button class="btn">↻ Wipe the board and redo it</button></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Boss: the follow-up barrage</h2><div class="sub">Step 3 · "what if…?" (latency, nines, and changing numbers)</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Now the interviewer pokes the estimate to see if you can <b>reuse</b> it. Seven follow-ups, pulling in latency numbers (Quest <a href="0202-latency-numbers.html">2.2</a>), availability nines (Quest <a href="0203-availability-nines.html">2.3</a>) and the "turn one knob" rule (Quest <a href="0204-twitter-qps-storage.html">2.4</a>). Each answer takes 15 seconds; a wrong one costs a heart and 20 seconds more.</p>
+      <div id="barrage"></div>
+      <div class="callout warn" id="s4caveat" style="display:none"><b>Honest caveats from the barrage.</b> (1) Series availability math (multiply the percentages) assumes the services fail <i>independently</i>. Shared failures, such as one bad deploy or one region outage, make the real number worse<a class="cite" href="https://sre.google/sre-book/embracing-risk/" target="_blank" rel="noopener">[6]</a>. (2) The latency figures are the book's classic table; today's hardware is faster for disks and SSDs, but a round trip across an ocean is still bounded by the speed of light<a class="cite" href="https://colin-scott.github.io/personal_website/research/interactive_latency.html" target="_blank" rel="noopener">[4]</a>.</div>
+      <div class="row" id="s4replay" style="display:none;margin-top:14px"><button class="btn">↻ Face the barrage again</button></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Wrap it up</h2><div class="sub">Step 4 · what the numbers mean for the design</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>An estimate only earns its keep if it <b>changes a decision</b>. The interviewer's real question after any number is "so what?"</p>
+      <div class="chat" id="chat5"></div>
+      <div class="lbl">Link each number to the design move it forces: tap a number, then its move</div>
+      <p class="small muted" style="margin:0">A wrong link costs a heart the first time for each number. More misses on the same number only cost time.</p>
+      <div class="match" id="match"></div>
+      <div class="status" id="matchStatus" role="status"></div>
+      <div id="closeWrap" style="display:none">
+        <div class="lbl">Build your closing statement: one sentence per slot</div>
+        <div class="closing" id="closing"></div>
+        <div class="speech" id="speech"></div>
+      </div>
+      <div id="s5q"></div>
+      <div class="callout warn" id="s5caveat" style="display:none"><b>Honest caveat.</b> How many writes one database primary can take varies hugely with hardware, schema and indexes. "A few thousand writes per second per primary" is a rough guide to say out loud, not a fact. That's why ~7,000 at peak, growing for five years, is a reason to <i>plan</i> for sharding (splitting the data across several databases), not proof you need it on day one.</div>
+      <div class="row" id="s5replay" style="display:none;margin-top:14px"><button class="btn">↻ Try a different close</button></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">The 90-second estimate + your scorecard</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div id="scorecard"></div>
+      <div class="row" id="s6replay" style="display:none;margin-top:14px"><button class="btn">↻ Say it again</button></div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Re-read <a href="https://bytebytego.com/courses/system-design-interview/back-of-the-envelope-estimation" target="_blank" rel="noopener">Ch. 2: Back-of-the-envelope Estimation</a> end to end: the powers-of-two table, the latency table, the availability table, the Twitter example and the tips list. Then skim <a href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener">Ch. 3: A Framework for System Design Interviews</a> to see where an estimate fits in a full interview. For the origin of the idea, read Jeff Dean's advice as summarised on <a href="http://highscalability.com/blog/2011/1/26/google-pro-tip-use-back-of-the-envelope-calculations-to-choo.html" target="_blank" rel="noopener">High Scalability</a>, and play with Colin Scott's <a href="https://colin-scott.github.io/personal_website/research/interactive_latency.html" target="_blank" rel="noopener">interactive latency numbers</a>.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note</h4>
+      <ul style="margin:0;padding-left:20px">
+        <li>The book's chapter is a toolkit, not a "design X" prompt. This boss stretches its Twitter example into a fuller estimate (reads, cache, servers). The book lists those as common asks but doesn't compute them.</li>
+        <li>The 10 timeline loads a day, ~1,000 requests/s per app server and ~200 bytes per cached tweet are <b>interviewer-given</b> practice assumptions, not facts. Real per-server throughput runs from hundreds to tens of thousands of requests per second, depending on the work each request does.</li>
+        <li>The 2× peak factor is a simplification. Twitter's 2013 record was about 25× its average<a class="cite" href="https://blog.twitter.com/engineering/en_us/a/2013/new-tweets-per-second-record-and-how" target="_blank" rel="noopener">[5]</a>, so real systems absorb bursts with queues, autoscaling and spare capacity.</li>
+        <li>3 full replicas is the simple answer. Big blob stores often use <i>erasure coding</i> (math-based parity, like RAID across machines) to get similar safety for roughly 1.5× the raw size instead of 3×.</li>
+        <li>Practise this one <b>out loud</b> with a timer. Clicking the right number is not the same as producing it under pressure.</li>
+      </ul>
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, <a href="https://bytebytego.com/courses/system-design-interview/back-of-the-envelope-estimation" target="_blank" rel="noopener">Ch. 2: Back-of-the-envelope Estimation</a> (ByteByteGo).</li>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, <a href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener">Ch. 3: A Framework for System Design Interviews</a> (ByteByteGo).</li>
+        <li><a href="http://highscalability.com/blog/2011/1/26/google-pro-tip-use-back-of-the-envelope-calculations-to-choo.html" target="_blank" rel="noopener">Google Pro Tip: Use Back-of-the-Envelope Calculations</a> (High Scalability, the book's reference [1]).</li>
+        <li>Colin Scott, <a href="https://colin-scott.github.io/personal_website/research/interactive_latency.html" target="_blank" rel="noopener">Latency Numbers Every Programmer Should Know</a> (the book's reference [3]).</li>
+        <li>Twitter Engineering, <a href="https://blog.twitter.com/engineering/en_us/a/2013/new-tweets-per-second-record-and-how" target="_blank" rel="noopener">New Tweets per second record, and how!</a> (2013).</li>
+        <li>Google SRE Book, <a href="https://sre.google/sre-book/embracing-risk/" target="_blank" rel="noopener">Embracing Risk</a>.</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0205',
+  winTitle: 'Gauntlet survived',
+  badge: '🧮 Badge: Napkin Master',
+  cheatsheet: '../reference/ch02-estimation-cheatsheet.html',
+});
+const { sleep, shuffle } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+const BOOK = 'https://bytebytego.com/courses/system-design-interview/back-of-the-envelope-estimation';
+const CITE = (n, url) => `<a class="cite" href="${url}" target="_blank" rel="noopener">[${n}]</a>`;
+const Q21 = '<a href="0201-powers-of-two.html">Quest 2.1</a>', Q22 = '<a href="0202-latency-numbers.html">Quest 2.2</a>';
+const Q23 = '<a href="0203-availability-nines.html">Quest 2.3</a>', Q24 = '<a href="0204-twitter-qps-storage.html">Quest 2.4</a>';
+const fmtN = n => Math.round(n).toLocaleString('en-US');
+const nudge = b => { b.classList.remove('nope'); void b.offsetWidth; b.classList.add('nope'); };
+const practice = n => Q.review || Q.isCleared(n);
+
+/* ================= interview record: clock (seconds) + signals =================
+   Stored apart from engine progress under its own key, like 0008. Each stage keeps
+   { sec, miss, sig: { cat: [got, max] } }. `miss` counts heart-worthy mistakes (counted even in
+   practice replays, where no real heart is at stake). A stage's record is wiped the first time
+   you act in it during a page load (or on replay), so replays overwrite rather than pile up. */
+const IKEY = 'sdq:v1:0205-interview';
+const BUDGET = { 1: 120, 2: 60, 3: 240, 4: 120, 5: 60 };            // seconds; sums to the 10:00 budget
+const PAR = { 1: 100, 2: 50, 3: 210, 4: 105, 5: 60 };               // perfect-play seconds per stage
+const STEPNAME = { 1: ['Step 1', 'scope'], 2: ['Step 2', 'plan'], 3: ['Step 3', 'crunch'], 4: ['Step 3', 'follow-ups'], 5: ['Step 4', 'wrap up'], 6: ['Debrief', 'scorecard'] };
+function iload() { try { return JSON.parse(localStorage.getItem(IKEY) || '{}') || {}; } catch (_) { return {}; } }
+function isave(d) { try { localStorage.setItem(IKEY, JSON.stringify(d)); } catch (_) {} }
+if (!Q.review && !Q.cleared().length) { try { localStorage.removeItem(IKEY); } catch (_) {} }
+const begun = new Set();
+let lastActive = 0;
+function tick(n, sec, cat, got, max, miss = 0) {
+  const d = iload();
+  if (!begun.has(n) || !d[n]) { begun.add(n); d[n] = { sec: 0, sig: {} }; }
+  d[n].sec += sec;
+  if (miss) d[n].miss = (d[n].miss || 0) + miss;
+  if (cat) { const s = d[n].sig[cat] || [0, 0]; s[0] += got; s[1] += max; d[n].sig[cat] = s; }
+  isave(d); lastActive = n; renderBar();
+}
+function setSig(n, k, v) { const d = iload(); if (!begun.has(n) || !d[n]) { begun.add(n); d[n] = { sec: 0, sig: {} }; } d[n][k] = v; isave(d); }
+const stageSec = (d, n) => d[n] ? d[n].sec : (Q.isCleared(n) ? PAR[n] : 0);
+const totalSec = d => [1, 2, 3, 4, 5].reduce((s, n) => s + stageSec(d, n), 0);
+const fmt = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.round(s % 60)).padStart(2, '0')}`;
+function renderBar() {
+  const d = iload(), total = totalSec(d);
+  let cur = lastActive;
+  if (!cur) { cur = 1; while (cur <= 6 && Q.isCleared(cur)) cur++; }
+  const spent = cur <= 5 ? stageSec(d, cur) : 0;
+  $('#ivClock').textContent = fmt(total);
+  $('#ivFill').style.width = Math.min(100, total / 600 * 100) + '%';
+  $('#ivbar').classList.toggle('over', total > 600 || (cur <= 5 && spent > BUDGET[cur]));
+  const [a, b] = STEPNAME[cur] || ['Done', 'interview over'];
+  $('#ivStep').innerHTML = `${a} <small>· ${b}${cur <= 5 ? ` · ${fmt(spent)} of ${fmt(BUDGET[cur])}` : ''}</small>`;
+}
+function setHudH() { const h = $('#hud'); if (h) document.documentElement.style.setProperty('--hudH', h.offsetHeight + 'px'); }
+addEventListener('resize', setHudH);
+const done = n => { Q.clearStage(n); renderBar(); renderBoard(); };
+const clockToast = (n, s, el) => Q.toast(practice(n) ? '✗ practice' : `−${s} s`, el, practice(n) ? 'practice' : 'minus');
+
+/* ================= chat helper ================= */
+function Chat(el) {
+  let queue = Promise.resolve(), first = true;
+  const add = (who, html) => {
+    const m = document.createElement('div'); m.className = 'msg ' + who;
+    m.innerHTML = who === 'iv' ? `<span class="av" aria-hidden="true">🧑🏾‍💻</span><div class="bub">${html}</div>` : `<div class="bub">${html}</div>`;
+    el.appendChild(m); el.scrollTop = el.scrollHeight; return m;
+  };
+  return {
+    iv(html) {
+      queue = queue.then(async () => {
+        const m = add('iv', '<span class="typing" aria-label="typing"><i></i><i></i><i></i></span>');
+        await sleep(Q.reduced ? 0 : 380);
+        $('.bub', m).innerHTML = (first ? '<span class="who">Dev · interviewer</span>' : '') + html; first = false;
+        el.scrollTop = el.scrollHeight;
+      });
+      return queue;
+    },
+    me(html) { queue = queue.then(() => { add('me', html); }); return queue; },
+    clear() { el.innerHTML = ''; first = true; queue = Promise.resolve(); },
+  };
+}
+
+/* ================= the assumptions board (shared view) ================= */
+const NOTES = [
+  { k: 'mau', t: '👥 300 million monthly active users' },
+  { k: 'daily', t: '📅 50% use it daily' },
+  { k: 'posts', t: '✍️ 2 posts per daily user per day' },
+  { k: 'media', t: '🖼️ 10% of posts have media, ~1 MB each' },
+  { k: 'keep', t: '🗄️ Keep data for 5 years' },
+  { k: 'reads', t: '👀 10 timeline loads per daily user per day' },
+  { k: 'peak', t: '📈 Peak ≈ 2× average (given)', given: true },
+];
+let pinned = new Set();
+function notesHTML(set) {
+  return NOTES.map((n, i) => set.has(n.k)
+    ? `<div class="note${n.given ? ' given' : ''}" style="--r:${[-1.4, 1.1, -.6, 1.6, -1.8, .8, 1.4][i]}deg">${n.t}</div>`
+    : `<div class="note empty">? not asked yet</div>`).join('');
+}
+function renderBoard() {
+  const barSet = Q.isCleared(1) ? new Set(NOTES.map(n => n.k)) : pinned;
+  $('#barNotes').innerHTML = notesHTML(barSet);
+  $('#boardCount').textContent = barSet.size;
+  $('#stageNotes').innerHTML = notesHTML(pinned);
+}
+$('#boardBtn').onclick = () => {
+  const p = $('#boardPanel'), open = p.hidden;
+  p.hidden = !open; $('#boardBtn').setAttribute('aria-expanded', String(open));
+};
+
+/* ================= STAGE 1: scope it ================= */
+const ASK = [
+  { q: 'How many monthly active users do we have?', a: '300 million monthly active users (MAU).', k: 'mau' },
+  { q: 'What share of those users are active daily?', a: 'About half of them on any given day.', k: 'daily' },
+  { q: 'How many posts does a daily user make?', a: 'Two posts a day, on average.', k: 'posts' },
+  { q: 'What share of posts carry media, and how big?', a: 'About 10% have a photo or video, around 1 MB on average.', k: 'media' },
+  { q: 'How long do we need to keep all the data?', a: 'Five years.', k: 'keep' },
+  { q: 'How often does a daily user load their timeline?', a: 'Call it 10 timeline loads a day per daily user.', k: 'reads' },
+  { q: 'Which database should we be using for tweets?', a: 'Let\'s hold that until we know the scale. The numbers will tell us.' },
+  { q: 'Which programming language is the backend in?', a: 'It doesn\'t change any of the numbers. Let\'s stay on scale.' },
+  { q: 'Should we build microservices or a monolith?', a: 'Architecture comes after the estimate. What do you need to compute it?' },
+];
+const chat1 = Chat($('#chat1'));
+let s1busy = false, asked = new Set();
+function setup1() {
+  begun.delete(1);
+  chat1.clear(); pinned = new Set(); asked = new Set(); s1busy = false;
+  $('#s1q').innerHTML = ''; $('#deckWrap').style.display = 'none';
+  ['#s1tip', '#s1caveat'].forEach(s => $(s).style.display = 'none');
+  renderBoard();
+  chat1.iv('Thanks for coming in. Let\'s do some napkin math. <b>Estimate the scale of a Twitter-like service.</b> Where do you start?').then(() => {
+    chat1.me('Before I compute anything, I\'d like to pin down a few numbers.');
+    return chat1.iv('Go ahead. Ask me what you need.');
+  }).then(showDeck);
+}
+function showDeck() {
+  $('#deckWrap').style.display = 'block';
+  $('#qdeck').innerHTML = shuffle(ASK.map((a, i) => ({ a, i }))).map(({ a, i }) => `<button class="opt" data-q="${i}">${a.q}</button>`).join('');
+  $$('#qdeck .opt').forEach(b => b.onclick = () => {
+    if (b.disabled || s1busy) return;
+    const a = ASK[+b.dataset.q]; b.disabled = true;
+    chat1.me(a.q);
+    if (a.k) {
+      b.classList.add('right'); Q.addXP(5, b); tick(1, 15, 'ask', 1, 1); asked.add(a.k);
+      chat1.iv(a.a).then(() => { pinned.add(a.k); renderBoard(); });
+      if (ASK.filter(x => x.k).every(x => asked.has(x.k))) {
+        s1busy = true;
+        $$('#qdeck .opt').forEach(x => x.disabled = true);
+        chat1.iv('That\'s everything the math needs. One freebie: assume peak traffic is about <b>2× the average</b>.').then(() => {
+          pinned.add('peak'); renderBoard();
+          $('#s1tip').style.display = 'block';
+          lockQuiz1();
+        });
+      }
+    } else {
+      b.classList.add('waste'); tick(1, 15, 'ask', 0, 1); clockToast(1, 15, b);
+      chat1.iv(a.a + ' <span class="muted">(−15 s)</span>');
+    }
+  });
+}
+function lockQuiz1() {
+  Q.quiz($('#s1q'), {
+    tag: 'Lock it in', xp: 20,
+    q: 'Before any math, what\'s the single most important habit?',
+    options: ['Say your assumptions out loud and write them down', 'Compute every number to two decimal places', 'Pick the database first so the numbers make sense'],
+    correct: 0,
+    good: 'Every later number is only as good as its inputs. Stating them lets the interviewer correct you early, and lets you both check the result later. That\'s the book\'s tip "write down your assumptions".' + CITE(1, BOOK),
+    bad: 'The book\'s tip is <b>write down your assumptions</b>. Precision is the opposite of the point (round freely), and the database choice comes <i>after</i> the numbers.' + CITE(1, BOOK),
+    onDone: ok => {
+      tick(1, 10, 'ask', ok ? 1 : 0, 1, ok ? 0 : 1);
+      $('#s1caveat').style.display = 'block'; $('#s1replay').style.display = 'flex';
+      setTimeout(() => done(1), 900);
+    },
+  });
+}
+$('#s1replay .btn').onclick = () => { $('#s1replay').style.display = 'none'; setup1(); };
+Q.onStage(1, setup1);
+
+/* ================= STAGE 2: plan the math ================= */
+const PLAN = [
+  { k: 'dau', t: 'DAU', s: 'daily active users', deps: [], x: 180, y: 22 },
+  { k: 'wq', t: 'Write QPS', s: 'posts per second', deps: ['dau'], x: 46, y: 96 },
+  { k: 'rq', t: 'Read QPS', s: 'timeline loads/s + peak', deps: ['dau'], x: 134, y: 96 },
+  { k: 'sd', t: 'Storage per day', s: 'new media each day', deps: ['dau'], x: 226, y: 96 },
+  { k: 'cache', t: 'Cache size', s: 'hot tweets in memory', deps: ['dau'], x: 314, y: 96 },
+  { k: 'pw', t: 'Peak write QPS', s: 'the busiest moments', deps: ['wq'], x: 46, y: 162 },
+  { k: 's5', t: '5-year storage', s: '× retention, × replicas', deps: ['sd'], x: 226, y: 162 },
+  { k: 'srv', t: 'Server count', s: 'how many app servers', deps: ['pw', 'rq'], x: 134, y: 228 },
+];
+const PSHORT = { dau: 'DAU', wq: 'write QPS', rq: 'read QPS', sd: 'storage/day', cache: 'cache size', pw: 'peak write', s5: '5-yr storage', srv: 'servers' };
+const W2 = 80, H2 = 30;
+const chat2 = Chat($('#chat2'));
+let order2 = [], s2done = false;
+function planSVG() {
+  const P = k => PLAN.find(p => p.k === k);
+  const edges = PLAN.flatMap(p => p.deps.map(dk => {
+    const a = P(dk), x1 = a.x, y1 = a.y + H2 / 2, x2 = p.x, y2 = p.y - H2 / 2 - 4;
+    return `<path class="edge" data-to="${p.k}" d="M${x1} ${y1} L${x2} ${y2}" marker-end="url(#pah)" style="opacity:0"/>`;
+  })).join('');
+  const nodes = PLAN.map(p => `<g class="nd" data-k="${p.k}"><rect x="${p.x - W2 / 2}" y="${p.y - H2 / 2}" width="${W2}" height="${H2}" rx="8"/><text x="${p.x}" y="${p.y + 4}">${PSHORT[p.k]}</text><g class="badge" style="display:none"><circle class="ord" cx="${p.x + W2 / 2 - 2}" cy="${p.y - H2 / 2 + 1}" r="8"/><text class="ordt" x="${p.x + W2 / 2 - 2}" y="${p.y - H2 / 2 + 4.5}"></text></g></g>`).join('');
+  return `<defs><marker id="pah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" class="ah"/></marker></defs>${edges}${nodes}`;
+}
+function drawEdge(path) {
+  path.style.opacity = 1;
+  if (Q.reduced) return;
+  const len = path.getTotalLength();
+  path.style.strokeDasharray = len; path.style.strokeDashoffset = len;
+  path.style.transition = 'none'; void path.getBoundingClientRect();
+  path.style.transition = 'stroke-dashoffset .5s ease-out'; path.style.strokeDashoffset = 0;
+}
+function setup2() {
+  begun.delete(2);
+  chat2.clear(); order2 = []; s2done = false;
+  $('#s2q').innerHTML = ''; $('#planStatus').textContent = ''; $('#planStatus').className = 'status';
+  $('#plan').innerHTML = planSVG(); $('#planCount').textContent = '0 / 8';
+  chat2.iv('Before you compute anything, walk me through your plan. What will you estimate, and in what order?');
+  $('#ptiles').innerHTML = shuffle(PLAN).map(p => `<button class="opt" data-k="${p.k}">${p.t}<small>${p.s}</small></button>`).join('');
+  $$('#ptiles .opt').forEach(b => b.onclick = () => onPlan(b));
+}
+function onPlan(b) {
+  if (s2done || b.disabled) return;
+  const p = PLAN.find(x => x.k === b.dataset.k);
+  const missing = p.deps.filter(dk => !order2.includes(dk));
+  const st = $('#planStatus');
+  if (missing.length) {
+    nudge(b); tick(2, 10, 'plan', 0, 1); clockToast(2, 10, b);
+    const nd = $(`#plan .nd[data-k="${p.k}"]`); nd.classList.add('miss'); setTimeout(() => nd.classList.remove('miss'), 900);
+    st.className = 'status e';
+    st.textContent = `${p.t} needs ${missing.map(m => PLAN.find(x => x.k === m).t).join(' and ')} first.`;
+    return;
+  }
+  order2.push(p.k); b.disabled = true; b.classList.add('right');
+  Q.addXP(5, b); tick(2, 5, 'plan', 1, 1);
+  const nd = $(`#plan .nd[data-k="${p.k}"]`); nd.classList.add('on');
+  const bd = $('.badge', nd); bd.style.display = ''; $('.ordt', bd).textContent = order2.length;
+  $$(`#plan .edge[data-to="${p.k}"]`).forEach(drawEdge);
+  $('#planCount').textContent = `${order2.length} / 8`;
+  st.className = 'status';
+  st.textContent = p.deps.length ? `${order2.length}. ${p.t}: uses ${p.deps.map(dk => PLAN.find(x => x.k === dk).t).join(' + ')}.` : `1. ${p.t}: everything else hangs off this one.`;
+  if (order2.length === PLAN.length) {
+    s2done = true;
+    chat2.me(order2.map(k => PLAN.find(x => x.k === k).t).join(' → ') + '.');
+    chat2.iv('Good plan, go. Each number feeds the next, so I can follow along.').then(() => quiz2());
+  }
+}
+function quiz2() {
+  Q.quiz($('#s2q'), {
+    tag: 'Check the wiring', xp: 20,
+    q: 'Which estimate needs peak QPS as an input?',
+    options: ['The number of app servers', 'The daily media storage', 'The daily active users'],
+    correct: 0,
+    good: 'Servers must survive the <b>busiest</b> moment, so you size them from peak QPS, not the average. Storage piles up from the daily total, and DAU is a starting input.',
+    bad: 'It\'s the <b>server count</b>: machines must survive the busiest moment, so you size them from peak QPS. Storage grows with the daily total, peak or not.',
+    onDone: ok => {
+      tick(2, 10, 'plan', ok ? 1 : 0, 1, ok ? 0 : 1);
+      $('#s2replay').style.display = 'flex';
+      setTimeout(() => done(2), 900);
+    },
+  });
+}
+$('#s2replay .btn').onclick = () => { $('#s2replay').style.display = 'none'; setup2(); };
+Q.onStage(2, setup2);
+
+/* ================= STAGE 3: crunch it ================= */
+const UNITS = { users: ['users', 1], '/s': ['rate', 1], MB: ['bytes', 1e6], GB: ['bytes', 1e9], TB: ['bytes', 1e12], PB: ['bytes', 1e15], servers: ['servers', 1] };
+const ROWS = [
+  { k: 'dau', t: 'Daily active users (DAU)', dim: 'users', nat: 'users', model: 150e6,
+    fx: 'DAU = MAU × share active daily', show: '150 million users',
+    worked: '300 million × 50% = <b>150 million DAU</b>.' },
+  { k: 'wq', t: 'Write QPS (average)', dim: 'rate', nat: '/s', model: 300e6 / 86400,
+    fx: 'write QPS = DAU × posts per user ÷ 86,400 s', show: '~3,500 /s',
+    worked: '150 million × 2 = 300 million posts a day. 300 million ÷ 86,400 ≈ 3,472, so <b>~3,500 writes/s</b>. (÷ 10<sup>5</sup> gives 3,000: close enough.)' },
+  { k: 'pw', t: 'Peak write QPS', dim: 'rate', nat: '/s', model: 2 * 300e6 / 86400,
+    fx: 'peak = average × 2', show: '~7,000 /s',
+    worked: '3,500 × 2 = <b>~7,000 writes/s</b> at peak.' },
+  { k: 'rq', t: 'Read QPS (timeline loads, average)', dim: 'rate', nat: '/s', model: 1.5e9 / 86400,
+    fx: 'read QPS = DAU × timeline loads per day ÷ 86,400 s', show: '~17,000 /s',
+    worked: '150 million × 10 = 1.5 billion loads a day. ÷ 86,400 ≈ 17,361, so <b>~17,000 reads/s</b>, and ~35,000 at a 2× peak. That\'s about 5 reads per write by request count.' },
+  { k: 'sd', t: 'New media storage per day', dim: 'bytes', nat: 'TB', model: 30e12,
+    fx: 'DAU × posts × 10% × 1 MB', show: '30 TB',
+    worked: '150 million × 2 × 10% = 30 million media files a day. × 1 MB = <b>30 TB a day</b>.' },
+  { k: 's5', t: 'Media over 5 years (one copy)', dim: 'bytes', nat: 'PB', model: 30e12 * 365 * 5,
+    fx: 'per day × 365 × 5', show: '~55 PB',
+    worked: '30 TB × 365 × 5 = 54,750 TB, so <b>~55 PB</b>. With 3 replicas, ~165 PB.' },
+  { k: 'cache', t: 'Cache: last day of tweet text', dim: 'bytes', nat: 'GB', model: 300e6 * 200, sub: 'given: ~200 bytes per tweet (text + metadata)',
+    fx: 'posts per day × ~200 bytes', show: '~60 GB',
+    worked: '300 million tweets × 200 bytes = 60 billion bytes = <b>~60 GB</b>. That fits in memory on a couple of cache servers. Media doesn\'t go here: it goes to a CDN.' },
+  { k: 'srv', t: 'App servers needed', dim: 'servers', nat: 'servers', model: 42, ok: [29, 65], near: [14, 130], sub: 'given: ~1,000 requests/s per server at peak',
+    fx: '(peak writes + peak reads) ÷ 1,000 per server', show: '~42, so ~50',
+    worked: '(7,000 + 35,000) ÷ 1,000 = 42 servers. Add headroom: <b>~50 app servers</b>.' },
+];
+const GIVEN = ['300M MAU', '50% daily', '2 posts/day', '10% media · 1 MB', '5 years', '10 timeline loads/day', 'peak = 2×'];
+const chat3 = Chat($('#chat3'));
+let ri = 0, s3res = [], uv = {};
+/* Carried slips: each row's formula, fed with the learner's OWN earlier answers. If a row is far
+   from the model answer but matches what their earlier (wrong) inputs give, it's the same mistake
+   carried forward, not a new one: amber, no heart. */
+const MODEL = Object.fromEntries(ROWS.map(r => [r.k, r.model]));
+const CARRY = {
+  wq: u => u('dau') * 2 / 86400,
+  pw: u => u('wq') * 2,
+  rq: u => u('dau') * 10 / 86400,
+  sd: u => u('dau') * 2 * 0.1 * 1e6,
+  s5: u => u('sd') * 365 * 5,
+  cache: u => u('dau') * 2 * 200,
+  srv: u => (u('pw') + 2 * u('rq')) / 1000,
+};
+const sig2 = n => n >= 100 ? fmtN(n) : String(+n.toPrecision(2));
+function parseEntry(raw) {
+  let s = String(raw).trim().toLowerCase().replace(/[,_\s]/g, '').replace(/^[~≈]/, '');
+  let unit = null;
+  const um = s.match(/(mb|gb|tb|pb|users?|servers?|\/s|qps|persecond)$/);
+  if (um) { s = s.slice(0, -um[1].length); unit = { mb: 'MB', gb: 'GB', tb: 'TB', pb: 'PB', user: 'users', users: 'users', server: 'servers', servers: 'servers', '/s': '/s', qps: '/s', persecond: '/s' }[um[1]]; }
+  const m = s.match(/^(\d*\.?\d+(?:e[+-]?\d+)?)(k|thousand|m|mn|mil|million|b|bn|billion)?$/);
+  if (!m) return null;
+  const mult = { k: 1e3, thousand: 1e3, m: 1e6, mn: 1e6, mil: 1e6, million: 1e6, b: 1e9, bn: 1e9, billion: 1e9 }[m[2]] || 1;
+  return { v: parseFloat(m[1]) * mult, sig: sigFigs(m[1]), unit };
+}
+function sigFigs(t) {
+  let d = t.split('e')[0];
+  if (d.includes('.')) return d.replace('.', '').replace(/^0+/, '').length;
+  return d.replace(/^0+/, '').replace(/0+$/, '').length;
+}
+function setup3() {
+  begun.delete(3);
+  chat3.clear(); ri = 0; s3res = []; uv = {};
+  $('#s3q').innerHTML = ''; $('#s3bonus').style.display = 'none';
+  $('#given').innerHTML = GIVEN.map(g => `<span>📌 ${g}</span>`).join('');
+  const opts = '<option value="">unit…</option>' + Object.keys(UNITS).map(u => `<option value="${u}">${u}</option>`).join('');
+  $('#wb').innerHTML = ROWS.map((r, i) => `<div class="wrow locked" data-i="${i}">
+      <h4><span class="n">${i + 1}/8</span>${r.t}${r.sub ? ` <small>${r.sub}</small>` : ''}</h4>
+      <div class="wctl">
+        <input type="text" inputmode="decimal" autocomplete="off" aria-label="${r.t}: your estimate" placeholder="your number" disabled>
+        <select aria-label="${r.t}: unit" disabled>${opts}</select>
+        <button class="btn primary q-check" disabled>Check</button>
+        <button class="btn q-hint" disabled>💡 Hint</button>
+      </div>
+      <div class="fx">${r.fx}</div>
+      <div class="wres"></div>
+    </div>`).join('');
+  $$('#wb .wrow').forEach((row, i) => {
+    const inp = $('input', row);
+    $('.q-check', row).onclick = () => check3(i);
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); check3(i); } });
+    $('.q-hint', row).onclick = e => {
+      const b = e.currentTarget; b.disabled = true; $('.fx', row).classList.add('show');
+      tick(3, 15, null); clockToast(3, 15, b);
+    };
+  });
+  chat3.iv('The board\'s yours. Work down the rows, and <b>label every number</b>.');
+  openRow(0, false);
+}
+function openRow(i, focus = true) {
+  const row = $(`#wb .wrow[data-i="${i}"]`); if (!row) return;
+  row.classList.remove('locked');
+  $$('input, select, button', row).forEach(x => x.disabled = false);
+  if (ROWS[i].k === 'cache') chat3.iv('For the cache, assume about <b>200 bytes per tweet</b> for text and metadata. Keep just the last day hot. Media stays out of this cache.');
+  if (ROWS[i].k === 'srv') chat3.iv('Assume one stateless app server handles about <b>1,000 requests per second</b> at peak. How many do we need?');
+  if (focus && !Q.reduced) row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  if (focus) $('input', row).focus({ preventScroll: true });
+}
+function check3(i) {
+  if (i !== ri) return;
+  const r = ROWS[i], row = $(`#wb .wrow[data-i="${i}"]`), inp = $('input', row), sel = $('select', row);
+  const p = parseEntry(inp.value);
+  const res = $('.wres', row);
+  if (!p) { nudge(inp); res.className = 'wres show'; res.innerHTML = '<span class="muted">Type a number first, like <code>150m</code>, <code>3500</code> or <code>3.5k</code>.</span>'; return; }
+  let u = sel.value || p.unit || '';
+  if (!sel.value && p.unit) sel.value = p.unit;
+  const unitOK = !!(u && UNITS[u] && UNITS[u][0] === r.dim);
+  const value = p.v * (unitOK ? UNITS[u][1] : UNITS[r.nat][1]);
+  const ratio = value / r.model;
+  const okR = r.ok ? [r.ok[0] / r.model, r.ok[1] / r.model] : [0.7, 1.3];
+  const nearR = r.near ? [r.near[0] / r.model, r.near[1] / r.model] : [1 / 3, 3];
+  const close = ratio >= okR[0] && ratio <= okR[1], near = ratio >= nearR[0] && ratio <= nearR[1];
+  let grade = close && unitOK ? 'g' : (close || near) ? 'a' : 'r';
+  const carried = grade === 'r' && CARRY[r.k] ? CARRY[r.k](k => uv[k] ?? MODEL[k]) : null;
+  if (carried && value / carried >= okR[0] && value / carried <= okR[1]) grade = 'c';
+  uv[r.k] = value;
+  $$('input, select, button', row).forEach(x => x.disabled = true);
+  row.classList.add(grade === 'c' ? 'a' : grade);
+  const btn = $('.q-check', row);
+  let html;
+  if (grade === 'g') { html = `<b>✓ On the money.</b> ${r.worked}`; Q.addXP(10, btn); tick(3, 25, 'num', 1, 1); }
+  else if (grade === 'a') {
+    const why = close && !unitOK ? `<b>Right number, but label your units.</b> ${u ? `"${u}" doesn't fit this row.` : 'A bare number is ambiguous.'} Write the unit at every step; it's how you catch a 1,000× slip.` + CITE(1, BOOK) : '<b>Right order of magnitude.</b> Close enough to steer a design, but check the step that drifted:';
+    html = `${why} ${r.worked}`; Q.addXP(5, btn); tick(3, 25, 'num', 0.5, 1);
+  } else if (grade === 'c') {
+    html = `<b>↪ Carried slip, not a new one.</b> Your method is right: your own earlier numbers give ~${sig2(carried / UNITS[r.nat][1])} ${r.nat}, and that's what you wrote. No heart lost, but the earlier slip is still in it. Swap in the model numbers from here on: ${r.worked}`;
+    Q.toast('no ♥ lost', btn, 'practice'); tick(3, 25, 'num', 0.5, 1);
+  } else {
+    html = `<b>✗ Off by more than 3×.</b> ${!unitOK && u ? `(And "${u}" doesn't fit this row.) ` : ''}${r.worked} <span class="muted">(−20 s)</span>`;
+    Q.loseHeart(btn); tick(3, 45, 'num', 0, 1, 1);
+  }
+  tick(3, 0, 'unit', unitOK ? 1 : 0, 1);
+  if (p.sig > 3) html += ` <span class="rchip">🎯 Round it: "${r.show}" is plenty</span>`;
+  res.className = 'wres show'; res.innerHTML = html;
+  s3res.push(grade);
+  ri++;
+  if (ri < ROWS.length) openRow(ri);
+  else finish3();
+}
+function finish3() {
+  const cnt = k => s3res.filter(x => x === k).length, g = cnt('g'), c = cnt('c'), a = cnt('a') + c;
+  const bn = $('#s3bonus'); bn.style.display = 'block';
+  bn.innerHTML = `<b>Board complete: ${g} green, ${a} amber${c ? ` (${c} carried slip${c > 1 ? 's' : ''})` : ''}, ${cnt('r')} red.</b> Bonus number a senior adds: 30 TB of new media a day ÷ 86,400 s ≈ <b>350 MB/s</b> of uploads, all day. That's a lot of bandwidth for one ingest path, which matters in the wrap-up.`;
+  chat3.iv(g >= 6 ? 'Clean board. Quick sanity check before I start poking at it.' : 'Okay. Quick sanity check before I start poking at it.').then(() => {
+    Q.quiz($('#s3q'), {
+      tag: 'Sanity check', xp: 20,
+      q: 'Run it backwards: ~3,500 writes/s × 86,400 s ≈ how many posts a day?',
+      options: ['About 300 million posts a day', 'About 3 billion posts a day', 'About 30 million posts a day'],
+      correct: 0,
+      good: '3,500 × 86,400 ≈ 3,500 × 100,000 = 350 million, close to the 300 million (150 million DAU × 2) we started from. Running a number backwards is the fastest way to catch a dropped zero.',
+      bad: '3,500 × 86,400 ≈ 3,500 × 100,000 = 350 million, so <b>about 300 million</b>, matching 150 million DAU × 2. Run numbers backwards to catch a dropped or extra zero.',
+      onDone: ok => { tick(3, 10, 'num', ok ? 1 : 0, 1, ok ? 0 : 1); $('#s3replay').style.display = 'flex'; setTimeout(() => done(3), 900); },
+    });
+  });
+}
+$('#s3replay .btn').onclick = () => { $('#s3replay').style.display = 'none'; setup3(); };
+Q.onStage(3, setup3);
+
+/* ================= STAGE 4: the follow-up barrage (Q.boss with per-scenario choices) ================= */
+const C = (k, label, sub) => ({ k, label, sub });
+const FOLLOW = [
+  { e: '📸', t: 'Media share doubles', d: '"Say 20% of posts carry media, not 10%. What\'s five years of media now?"', a: 'a',
+    choices: [C('a', 'About 110 PB', 'twice the media, twice the storage'), C('b', 'About 55 PB', 'the post count didn\'t change'), C('c', 'About 1.1 PB', 'a 10-point change is tiny')],
+    why: `Storage is a chain of multiplications, so it moves in proportion: 20% is 2× 10%, so 30 TB a day becomes 60 TB, and 55 PB becomes <b>~110 PB</b>. Name the knob, scale the answer (${Q24}).` },
+  { e: '🧬', t: 'Three replicas', d: '"We keep 3 copies of every media file for durability. Total storage?"', a: 'a',
+    choices: [C('a', 'About 165 PB', 'three full copies on separate disks'), C('b', 'About 55 PB', 'replicas can share the same disks'), C('c', 'About 18 PB', 'the 55 PB splits across three')],
+    why: `A replica is a full copy on a <i>different</i> machine; that's the point, so one dead disk loses nothing. 55 PB × 3 ≈ <b>165 PB</b>. (Big blob stores often use erasure coding to cut that overhead to ~1.5×.)` },
+  { e: '⚽', t: 'World Cup final', d: '"Everyone posts at the same moment. Is a 2× peak factor enough?"', a: 'a',
+    choices: [C('a', 'No: plan for bursts', '2× is a rule of thumb; real spikes hit ~25×'), C('b', 'Yes: 2× covers it', 'peaks never go much past double'), C('c', 'Yes: storage is fixed', 'a burst doesn\'t change our disks')],
+    why: `In August 2013 Twitter hit <b>143,199 tweets per second</b> against a typical ~5,700: about 25× average.${CITE(5, 'https://blog.twitter.com/engineering/en_us/a/2013/new-tweets-per-second-record-and-how')} Say 2× is an assumption, then plan for bursts with queues (buffer the writes) and autoscaling (add servers on demand) (${Q24}).` },
+  { e: '🌍', t: 'An ocean in the loop', d: '"Our US timeline service calls a profile service in Europe 10 times per request, one call after another. Latency?"', a: 'a',
+    choices: [C('a', 'About 1.5 s', 'from round trips alone: batch, or go in-region'), C('b', 'About 5 ms', 'it\'s just network, and networks are fast'), C('c', 'About 150 ms', 'one round trip covers all ten calls')],
+    why: `The book's table puts a California → Netherlands → California round trip at ~150 ms. Ten in a row: 10 × 150 ms = <b>1.5 s</b> before any work happens. Fix it by batching into one call or keeping profiles in-region (${Q22}).${CITE(4, 'https://colin-scott.github.io/personal_website/research/interactive_latency.html')}` },
+  { e: '🧠', t: 'Memory or disk?', d: '"Where should the ~60 GB timeline cache live?"', a: 'a',
+    choices: [C('a', 'Memory', '~100 ns vs ~10 ms a disk seek, and 60 GB fits'), C('b', 'Disk', 'cheaper per byte, and almost as fast'), C('c', 'Neither', 'just read from the database every time')],
+    why: `The book's numbers: a main-memory read is ~100 ns; a disk seek is ~10 ms. That's <b>100,000× slower</b>. "Memory is fast, disk is slow" is lesson one of the latency table, and 60 GB fits in the RAM of a couple of servers (${Q22}).` },
+  { e: '🔗', t: 'Three services in a chain', d: '"Loading the feed needs 3 services, each 99.9% available. What can we promise?"', a: 'a',
+    choices: [C('a', 'About 99.7%', 'unless we add redundancy'), C('b', 'Still 99.9%', 'the chain is as good as each part'), C('c', 'About 99.97%', 'three services back each other up')],
+    why: `In series, all three must be up: 0.999 × 0.999 × 0.999 ≈ <b>0.997</b>. That turns ~8.8 hours of downtime a year into ~26. Chains lose nines; redundancy (spares in parallel) wins them back (${Q23}).` },
+  { e: '🗄️', t: 'One big box?', d: '"Can a single database server hold all the media?"', a: 'a',
+    choices: [C('a', 'No: object storage', '~55 PB needs blob storage plus a CDN'), C('b', 'Yes: buy a huge disk', 'storage servers keep getting bigger'), C('c', 'Yes: compress it', 'photos and video shrink a lot')],
+    why: `~55 PB (165 PB with replicas) is dozens to hundreds of machines' worth of disk, far beyond one server. Photos and video are already compressed. Put media in <b>object storage</b> (a blob store like S3) and serve it through a <b>CDN</b> (edge caches near users); keep only the URL in the database.` },
+];
+function setup4() {
+  begun.delete(4);
+  $('#s4caveat').style.display = 'none'; $('#s4replay').style.display = 'none';
+  const scen = FOLLOW.map(s => ({ ...s, d: s.d, choices: shuffle(s.choices) }));
+  Q.boss($('#barrage'), {
+    name: '🎯 Follow-up barrage', xp: 15, scenarios: scen,
+    outro: 'The interviewer nods: "You can reuse your own numbers. Good."',
+    onDone: wins => {
+      setSig(4, 'wins', wins);
+      $('#s4caveat').style.display = 'block'; $('#s4replay').style.display = 'flex';
+      done(4);
+    },
+  });
+}
+// Q.boss has no per-answer hook, so watch its buttons: the engine marks right/wrong before the click bubbles here.
+$('#barrage').addEventListener('click', e => {
+  const b = e.target.closest('.choice .opt'); if (!b) return;
+  if (b.classList.contains('right')) tick(4, 15, 'fu', 1, 1);
+  else if (b.classList.contains('wrong')) { tick(4, 35, 'fu', 0, 1, 1); }
+});
+$('#s4replay .btn').onclick = () => { setup4(); $('#s4').scrollIntoView({ behavior: Q.reduced ? 'auto' : 'smooth', block: 'start' }); };
+Q.onStage(4, setup4);
+
+/* ================= STAGE 5: wrap it up ================= */
+const PAIRS = [
+  { n: '~7,000 writes/s peak', c: 'Shard (split) the tweet store across databases', hint: 'Write load, growing for 5 years, is more than one database primary comfortably takes. Which move spreads <i>writes</i> over several machines?' },
+  { n: '~35,000 reads/s peak', c: 'Read replicas plus a cache in front of the DB', hint: 'Reads outnumber writes about 5 to 1. Which move takes <i>read</i> load off the primary?' },
+  { n: '~60 GB hot tweets', c: 'Hold the hot set in an in-memory cache', hint: '60 GB is a <i>size</i>, and a small one. It fits in RAM. Which move is about where it lives?' },
+  { n: '~55 PB of media', c: 'Object storage, delivered through a CDN', hint: 'Petabytes of blobs never belong in a relational database. Which move is built for huge files?' },
+  { n: '~350 MB/s media in', c: 'A separate upload path from tweet writes', hint: 'That\'s a firehose of bytes, all day. Which move keeps it from clogging the small, fast tweet writes?' },
+  { n: '~50 app servers', c: 'A stateless tier behind a load balancer', hint: 'Fifty identical boxes need something to spread requests across them. Which move is that?' },
+];
+const SLOTS = [
+  { k: 'Restate assumptions', o: [
+    { t: 'Assuming 300M monthly users, half daily, 2 posts and 10 timeline loads a day, 10% with 1 MB media, kept 5 years…', good: true, v: 'Strong: every input, round, in one breath.' },
+    { t: 'Assuming it\'s roughly Twitter-sized, with a really large number of users posting and reading every day…', v: 'Too vague: the interviewer can\'t check anything.' },
+    { t: 'Assuming exactly 300,000,000 MAU, 49.7% daily on weekdays, 2.13 posts each and 1.04 MB per photo…', v: 'Too precise: false precision, and you made those decimals up.' }] },
+  { k: 'Headline numbers', o: [
+    { t: '…that\'s ~3,500 writes/s (7K peak), ~17K reads/s (35K peak), 30 TB of media a day, ~55 PB over five years.', good: true, v: 'Strong: rounded, labeled, and peak included.' },
+    { t: '…that\'s a lot of traffic coming in, a lot more reading than writing, and a really huge amount of storage.', v: 'Too vague: no numbers, so nothing to design against.' },
+    { t: '…that\'s 3,472.22 writes/s, 17,361.11 reads/s, 30,000,000 MB of media a day and 54,750 TB in all.', v: 'Too precise: the book\'s tip is to round. Nobody can hold these in their head.' }] },
+  { k: 'Biggest uncertainty', o: [
+    { t: 'The shakiest number is the peak factor: real events have hit ~25× average, so I\'d plan for bursts.', good: true, v: 'Strong: names the weakest input and what you\'d do about it.' },
+    { t: 'There\'s some uncertainty in any estimate like this, so all of these numbers could be off either way.', v: 'Too vague: true of every estimate, so it says nothing.' },
+    { t: 'I\'m 87% confident in each of these numbers, plus or minus 4.2%, based on what I\'ve seen elsewhere.', v: 'Too precise: invented confidence numbers sound like bluffing.' }] },
+  { k: 'What I\'d do next', o: [
+    { t: 'Next I\'d shard tweets, cache the hot set, put media in object storage behind a CDN, and measure real peaks.', good: true, v: 'Strong: every number turned into a design move.' },
+    { t: 'Next I\'d start building the system, see how it behaves in production, and then adjust things as we go.', v: 'Too vague: the estimate didn\'t change any decision.' },
+    { t: 'Next I\'d order exactly 42 servers and 165 PB of disk today, so we never need to revisit capacity again.', v: 'Too precise: estimates guide a design; they aren\'t a purchase order.' }] },
+];
+const chat5 = Chat($('#chat5'));
+let sel5 = null, linked = new Set(), links5 = [], s5slot = 0, missed5 = new Set();
+function setup5() {
+  begun.delete(5);
+  chat5.clear(); sel5 = null; linked = new Set(); links5 = []; s5slot = 0; missed5 = new Set();
+  ['#s5q', '#closing', '#speech'].forEach(s => $(s).innerHTML = '');
+  $('#speech').className = 'speech'; $('#closeWrap').style.display = 'none'; $('#s5caveat').style.display = 'none';
+  $('#matchStatus').textContent = ''; $('#matchStatus').className = 'status';
+  chat5.iv('Nice numbers. <b>So what?</b> What do they change about the design?');
+  const L = shuffle(PAIRS.map((p, i) => i)), R = shuffle(PAIRS.map((p, i) => i));
+  $('#match').innerHTML = `<svg class="links" aria-hidden="true"></svg>
+    <div class="mcol">${L.map(i => `<button class="opt mchip" data-i="${i}" aria-pressed="false">${PAIRS[i].n}</button>`).join('')}</div>
+    <div class="mcol">${R.map(i => `<button class="opt mcard" data-i="${i}">${PAIRS[i].c}</button>`).join('')}</div>`;
+  $$('#match .mchip').forEach(b => b.onclick = () => {
+    if (b.classList.contains('done')) return;
+    $$('#match .mchip').forEach(x => { x.classList.remove('sel'); x.setAttribute('aria-pressed', 'false'); });
+    sel5 = +b.dataset.i; b.classList.add('sel'); b.setAttribute('aria-pressed', 'true');
+    $('#matchStatus').className = 'status'; $('#matchStatus').textContent = `Now tap the design move for ${PAIRS[sel5].n}.`;
+  });
+  $$('#match .mcard').forEach(b => b.onclick = () => onCard(b));
+}
+function anchor(el, side) {
+  const box = $('#match').getBoundingClientRect(), r = el.getBoundingClientRect();
+  return [side === 'r' ? r.right - box.left : r.left - box.left, r.top - box.top + r.height / 2];
+}
+function linkPath(i, j, cls) {
+  const a = anchor($(`#match .mchip[data-i="${i}"]`), 'r'), b = anchor($(`#match .mcard[data-i="${j}"]`), 'l');
+  const mx = (a[0] + b[0]) / 2;
+  const p = document.createElementNS(NS, 'path');
+  p.setAttribute('d', `M${a[0]} ${a[1]} C${mx} ${a[1]} ${mx} ${b[1]} ${b[0]} ${b[1]}`);
+  if (cls) p.setAttribute('class', cls);
+  $('#match svg.links').appendChild(p); return p;
+}
+function redrawLinks() {
+  const svg = $('#match svg.links'); if (!svg) return;
+  svg.innerHTML = ''; links5.forEach(i => linkPath(i, i));
+}
+addEventListener('resize', redrawLinks);
+function onCard(b) {
+  const st = $('#matchStatus');
+  if (b.classList.contains('done')) return;
+  if (sel5 === null) { nudge(b); st.className = 'status'; st.textContent = 'Pick a number on the left first.'; return; }
+  const j = +b.dataset.i, chip = $(`#match .mchip[data-i="${sel5}"]`);
+  if (j === sel5) {
+    chip.classList.remove('sel'); chip.classList.add('done'); b.classList.add('done'); chip.setAttribute('aria-pressed', 'false');
+    links5.push(j); redrawLinks();
+    Q.addXP(5, b); tick(5, 5, 'tie', 1, 1);
+    st.className = 'status'; st.textContent = `Linked: ${PAIRS[j].n} → ${PAIRS[j].c.toLowerCase()}.`;
+    sel5 = null;
+    if (links5.length === PAIRS.length) {
+      chat5.iv('That\'s the "so what". Now close it out like you would in the room.').then(showClosing);
+    }
+  } else {
+    const p = linkPath(sel5, j, 'bad');
+    setTimeout(() => { p.style.opacity = 0; setTimeout(() => p.remove(), 600); }, 500);
+    nudge(b);
+    if (!missed5.has(sel5)) {           // first miss on this number: a heart; repeats only cost time
+      missed5.add(sel5); Q.loseHeart(b); tick(5, 15, 'tie', 0, 1, 1);
+      st.className = 'status e'; st.innerHTML = `Not that one. ${PAIRS[sel5].hint}`;
+    } else {
+      tick(5, 10, null); clockToast(5, 10, b);
+      st.className = 'status e'; st.innerHTML = `Still not that one (no heart this time, just 10 s). ${PAIRS[sel5].hint}`;
+    }
+  }
+}
+function showClosing() {
+  $('#closeWrap').style.display = 'block';
+  $('#closing').innerHTML = SLOTS.map((s, i) => `<div class="slot" data-s="${i}"><div class="k">${i + 1} · ${s.k}</div><div class="opts">${shuffle(s.o.map((o, j) => ({ o, j }))).map(({ o, j }) => `<button class="opt" data-j="${j}">${o.t}</button>`).join('')}</div></div>`).join('');
+  $$('#closing .slot').forEach(slot => $$('.opt', slot).forEach(b => b.onclick = () => {
+    const si = +slot.dataset.s, s = SLOTS[si], o = s.o[+b.dataset.j];
+    $$('.opt', slot).forEach(x => x.disabled = true);
+    b.classList.add(o.good ? 'right' : 'wrong');
+    b.insertAdjacentHTML('beforeend', `<span class="verdict">${o.v}</span>`);
+    if (!o.good) {
+      const g = $$('.opt', slot).find(x => s.o[+x.dataset.j].good);
+      g.classList.add('right'); g.insertAdjacentHTML('beforeend', `<span class="verdict">${s.o.find(x => x.good).v}</span>`);
+      Q.loseHeart(b); tick(5, 15, 'tie', 0, 1, 1);
+    } else { Q.addXP(5, b); tick(5, 5, 'tie', 1, 1); }
+    s5slot++;
+    if (s5slot === SLOTS.length) deliver5();
+  }));
+}
+async function deliver5() {
+  const sp = $('#speech');
+  sp.innerHTML = '<b>Your close, as delivered:</b> "' + SLOTS.map(s => s.o.find(x => x.good).t).join(' ').replace(/…\s*…/g, ', ') + '"';
+  sp.classList.add('show');
+  await chat5.me('(delivers the closing statement)');
+  await chat5.iv('Last one, and it\'s the question I always end on.');
+  Q.quiz($('#s5q'), {
+    tag: 'The "so what?" question', xp: 20,
+    q: 'The interviewer asks: "So what? What do these numbers actually tell us?" Best answer?',
+    options: ['Media at ~55 PB goes to object storage + CDN; the ~60 GB hot set fits in cache', 'They\'re only approximate, so they shouldn\'t change any design decision yet', 'We need exactly 42 app servers, so I\'d provision that many and no more'],
+    correct: 0,
+    good: 'That answer uses the numbers to <b>decide</b> something: the biggest pile (media) gets its own storage tier, and the small hot set lives in memory. Approximate numbers are still good enough to pick a direction.',
+    bad: 'Approximate numbers still decide things: ~55 PB of media rules out a database and calls for object storage + CDN, and a ~60 GB hot set fits in memory. And "exactly 42" treats an estimate like a measurement.',
+    onDone: ok => {
+      tick(5, 10, 'tie', ok ? 1 : 0, 1, ok ? 0 : 1);
+      const t = totalSec(iload());
+      chat5.iv(`⏱️ Clock stopped at <b>${fmt(t)}</b> of the 10:00 budget. ${t <= 600 ? 'On time. 🤝' : 'A bit over: the misses cost time. Replay any stage to tighten it.'}`);
+      $('#s5caveat').style.display = 'block'; $('#s5replay').style.display = 'flex';
+      setTimeout(() => done(5), 900);
+    },
+  });
+}
+$('#s5replay .btn').onclick = () => { $('#s5replay').style.display = 'none'; setup5(); };
+Q.onStage(5, setup5);
+
+/* ================= STAGE 6: drill + scorecard ================= */
+const CATS = [
+  { k: 'ask', n: 'Assumptions asked', from: 'Step 1 questions + lock-in' },
+  { k: 'plan', n: 'Plan order', from: 'Step 2 taps + check' },
+  { k: 'num', n: 'Numbers in tolerance', from: 'Step 3 whiteboard rows' },
+  { k: 'unit', n: 'Units labeled', from: 'Step 3, every row' },
+  { k: 'fu', n: 'Follow-ups won', from: 'the barrage' },
+  { k: 'tie', n: 'Design tie-in', from: 'Step 4 links + close' },
+  { k: 'say', n: 'The 90-second pitch', from: 'your self-grade below' },
+];
+const VERD = [[.85, 'Strong hire', 3], [.7, 'Hire', 2], [.5, 'Lean hire', 1], [0, 'No hire (yet)', 0]];
+const verdict = r => VERD.find(v => r >= v[0]);
+const LEVEL = l => VERD.find(v => v[2] === l);
+/* The signal average alone can hide a sloppy run (one bad category gets diluted by six good ones),
+   so the overall verdict is capped by the clock and by mistakes, like a real debrief:
+   any overtime drops one level (more than 2 min over drops two); 3+ mistakes drop one (6+ drop two). */
+function overall(avg, total, misses) {
+  const base = verdict(avg)[2], over = total - 600, why = [];
+  let cap = 3;
+  if (over > 0) { cap -= over > 120 ? 2 : 1; why.push(`${fmt(over)} over time`); }
+  if (misses >= 3) { cap -= misses >= 6 ? 2 : 1; why.push(`${misses} mistakes`); }
+  const lvl = Math.min(base, Math.max(0, cap));
+  return { v: LEVEL(lvl), base: LEVEL(base), capped: lvl < base, why };
+}
+const SNAME = { 1: 'Scope it', 2: 'Plan the math', 3: 'Crunch it', 4: 'Follow-ups', 5: 'Wrap it up' };
+function renderScore() {
+  const d = iload(), sums = {};
+  Object.keys(d).forEach(n => Object.entries((d[n] && d[n].sig) || {}).forEach(([k, [g, m]]) => { const s = sums[k] || [0, 0]; s[0] += g; s[1] += m; sums[k] = s; }));
+  const rows = CATS.map(c => {
+    const s = sums[c.k];
+    if (!s || !s[1]) return `<div class="sc-row"><span><b>${c.n}</b><br><span class="small muted">${c.from}</span></span><div class="sc-bar"><div></div></div><span class="verd">not played</span></div>`;
+    const r = s[0] / s[1], v = verdict(r);
+    return `<div class="sc-row"><span><b>${c.n}</b><br><span class="small muted">${c.from}</span></span><div class="sc-bar"><div data-w="${Math.round(r * 100)}"></div></div><span class="verd v${v[2]}">${Math.round(r * 100)}% · ${v[1]}</span></div>`;
+  });
+  const rated = CATS.map(c => sums[c.k]).filter(s => s && s[1]);
+  const avg = rated.length ? rated.reduce((t, s) => t + s[0] / s[1], 0) / rated.length : 0;
+  const total = totalSec(d);
+  const misses = [1, 2, 3, 4, 5].reduce((t, n) => t + ((d[n] && d[n].miss) || 0), 0);
+  const ov = rated.length ? overall(avg, total, misses) : null;
+  $('#scorecard').innerHTML = `<div class="scorecard"><div class="kicker">Interviewer's scorecard</div><h3>Your signals from this run</h3>
+    <p class="small muted" style="margin:0">Computed from your choices in every stage. Replaying a stage overwrites its part.</p>
+    ${rows.join('')}
+    <table class="sc-time"><thead><tr><th>Stage</th><th>Your time</th><th>Budget</th></tr></thead><tbody>
+    ${[1, 2, 3, 4, 5].map(n => { const played = !!d[n], s = stageSec(d, n); return `<tr><td>${SNAME[n]}</td><td>${played || Q.isCleared(n) ? fmt(s) : '—'}</td><td>${fmt(BUDGET[n])} ${played ? (s <= BUDGET[n] ? '<span class="ok">✓</span>' : '<span class="ov">over</span>') : ''}</td></tr>`; }).join('')}
+    </tbody></table>
+    <div class="sc-overall"><span>Final clock ${fmt(total)} of 10:00 ${total <= 600 ? '<span style="color:var(--good);font-weight:700">✓ on time</span>' : '<span style="color:var(--warn);font-weight:700">over time</span>'}<br><span class="small muted">Mistakes: ${misses}${misses ? ' (wrong answers and red rows: the ones that cost a heart)' : ''}</span></span><span>Overall&nbsp; <b class="sc-verdict">${ov ? ov.v[1] : '—'}</b></span></div>
+    ${ov && ov.capped ? `<p class="small" style="margin:10px 0 0;color:var(--warn)">Your signals alone read <b>${ov.base[1]}</b>, but ${ov.why.join(' and ')} pull it down. Interviewers notice both: a run that's right but slow, or right after several wrong turns, reads weaker than a clean one. Replay the stage that cost the most.</p>` : ''}</div>`;
+  requestAnimationFrame(() => setTimeout(() => $$('#scorecard .sc-bar div[data-w]').forEach(b => b.style.width = b.dataset.w + '%'), 60));
+}
+function setup6() {
+  begun.delete(6);
+  renderScore();
+  Q.drill($('#drill'), {
+    prompt: 'Dev, closing the laptop: <i>"From the top. Estimate the scale of a Twitter-like service, and tell me what it means. You have 90 seconds."</i>',
+    placeholder: 'I\'ll state my assumptions first: 300 million MAU…',
+    minWords: 40,
+    model: '"I\'ll state assumptions: 300 million MAU, half daily, 2 posts a day, 10% with ~1 MB media, 10 timeline loads a day, 5-year retention. That\'s 150 million DAU and 300 million posts a day, so ~3,500 writes per second, ~7,000 at a 2× peak. Reads are 1.5 billion timeline loads a day: ~17,000 per second, ~35,000 at peak. Media is 30 TB a day, ~55 PB over five years, ~165 PB with three replicas, so it goes in object storage behind a CDN. The last day of tweet text is ~60 GB, which fits in an in-memory cache, and memory beats disk by orders of magnitude. At ~1,000 requests per second per server I need ~50 app servers with headroom. My biggest uncertainty is the peak factor: real events have hit 25×, so I\'d add queues and autoscaling."',
+    checks: [
+      'Stated assumptions first',
+      'Gave write and read QPS, with peaks',
+      'Gave storage per day and over 5 years (with replication)',
+      'Gave cache size and server count',
+      'Tied at least two numbers to design decisions',
+      'Labeled units and rounded',
+    ],
+    onDone: n => {
+      tick(6, 0, 'say', n, 6);
+      renderScore();
+      $('#scorecard').scrollIntoView({ behavior: Q.reduced ? 'auto' : 'smooth', block: 'center' });
+      $('#s6replay').style.display = 'flex';
+      setTimeout(() => done(6), 1200);
+    },
+  });
+}
+$('#s6replay .btn').onclick = () => { $('#s6replay').style.display = 'none'; setup6(); };
+Q.onStage(6, setup6);
+
+Q.start();
+setHudH(); renderBar(); renderBoard();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,121 @@
+{
+ "n": "12.2",
+ "slug": "chat-high-level-design",
+ "t": "The Switchboard",
+ "d": "Stateless vs stateful services, the scaled design, and service discovery",
+ "boss": false,
+ "badge": "🎛️ Badge: Switchboard Operator",
+ "winTitle": "Every line connected",
+ "goal": "Your win today: you can draw the book's adjusted high-level design (API, chat, presence, notification servers, KV store, service discovery), say which parts are stateless or stateful and why, and explain how a client gets assigned a chat server and what happens when that server dies.",
+ "bookSections": "Step 2 High-level design: stateless services, stateful service, third-party integration (figure 12-7); Scalability (1M concurrent users x 10K = 10GB; figure 12-8 adjusted design); Step 3 Service discovery (ZooKeeper, figure 12-11); Wrap-up: error handling when a chat server goes offline",
+ "stages": [
+  {
+   "title": "Three kinds of service",
+   "sub": "Stateless, stateful, third-party",
+   "teaches": "The book splits the system into three groups. Stateless services: request/response features such as login, signup, user profile, group management. They sit behind a load balancer and can be a monolith or microservices; any server can answer any request. Stateful service: the chat service. Each client keeps one persistent WebSocket to one chat server and normally doesn't switch as long as that server is up. Third-party integration: push notifications, so offline users still hear about new messages (Chapter 10). One stateless service is special: service discovery, which hands the client the address of the chat server it should connect to.",
+   "interaction": "Sort-into-bins. Eight cards: Login, Signup, Change profile picture, Create a group, Send/receive messages, Online indicator, Push notification to an offline phone, 'Which chat server should I use?'. Three bins: Stateless (behind load balancer) / Stateful (persistent connection) / Third-party. Online indicator goes to Stateful (presence servers hold WebSockets, per the book's adjusted design). 'Which chat server?' goes to Stateless (service discovery). Each correct drop shows a one-line reason.",
+   "check": "All cards in the right bin; quiz Q: 'Why can't you put chat servers behind a plain round-robin load balancer like the API servers?' (the client's connection, i.e. its state, lives on one specific server)."
+  },
+  {
+   "title": "Can one box do it?",
+   "sub": "The book's memory math",
+   "teaches": "At small scale everything could live on one server. The book's estimate: 1M concurrent users, about 10KB of server memory per connection, so about 10GB of memory to hold every connection on one modern machine. It fits. But it's a single point of failure: one crash and every user is disconnected. The book says not to propose a single-server design in an interview, which is why we scale out.",
+   "interaction": "Calculate-and-check: '1,000,000 connections x 10 KB each = ? GB' with a numeric input (accept 10, also accept 9.5 to 10.5 for the 1024 vs 1000 crowd). Then a single big server icon full of 1M tiny dots; a 'Pull the plug' button. Pressing it makes every dot fall off and a red counter shows '1,000,000 users disconnected'. A follow-up button 'Split across 10 chat servers' and pulling one plug now drops ~100,000 dots, which reconnect elsewhere.",
+   "check": "Calculation correct; quiz Q: 'Memory fits on one box, so what's wrong with one box?' (single point of failure)."
+  },
+  {
+   "title": "Build the switchboard",
+   "sub": "The adjusted high-level design",
+   "teaches": "The book's adjusted design (figure 12-8). Clients talk to chat servers and presence servers over WebSocket, and to everything else over HTTP through a load balancer. Chat servers send and receive messages. Presence servers manage online/offline status. API servers handle everything else: login, signup, change profile and so on. Notification servers send push notifications. The key-value store holds chat history so an offline user can see all previous messages when they come back. Generic data such as profiles and friend lists lives in relational databases (more in 12.3).",
+   "interaction": "Architecture builder on an SVG canvas with empty dashed slots. A tray holds component tiles: Load balancer, API servers, Chat servers, Presence servers, Notification servers, Key-value store, Service discovery, plus two distractors, 'Single DB for everything' and 'Clients connect peer-to-peer'. The learner taps a tile then a slot; correct tiles snap in and their arrows fade in. Finally the learner taps each client arrow to label it HTTP or WebSocket: client->LB->API = HTTP; client<->chat servers and client<->presence servers = WebSocket. Distractors bounce back with a reason.",
+   "check": "All slots filled, distractors rejected, all arrows labelled correctly. Quiz Q: 'Where does an offline user's missed history come from when they log back in?' (the key-value store)."
+  },
+  {
+   "title": "Who picks your server?",
+   "sub": "Service discovery with ZooKeeper",
+   "teaches": "Service discovery recommends the best chat server for a client based on things like geographic location and server capacity. Apache ZooKeeper is the book's example: it registers every available chat server and picks the best one for the client. Login flow (figure 12-11): (1) user A tries to log in, (2) the load balancer sends the login request to the API servers, (3) after the backend authenticates the user, service discovery finds the best chat server, e.g. chat server 2, and returns its info, (4) user A opens a WebSocket to chat server 2. From the wrap-up: if a chat server goes offline, service discovery gives its clients a new chat server to connect to.",
+   "interaction": "Two parts. (1) Tap-in-order the four login steps above. (2) A 'ZooKeeper registry' panel lists 4 chat servers with region and load: CS1 us-east 92%, CS2 us-east 40%, CS3 eu-west 15%, CS4 us-east (status: down). User A is in New York. The learner picks which server ZooKeeper should return. Right: CS2 (near and has room; CS1 is nearly full, CS3 is far, CS4 is down). Then a 'Crash CS2' button: its 300 connected dots go grey, then call service discovery. Version one: all reconnect in the same instant and CS1 spikes red ('thundering herd'). The learner toggles 'random backoff' and replays; reconnects spread over a few seconds and load stays green.",
+   "check": "Order correct, CS2 picked; quiz Q: 'Chat server 2 dies with 200,000 open connections. What happens?' (clients detect the drop, ask service discovery for a new server, reconnect, then sync missed messages)."
+  },
+  {
+   "title": "Boss: The Overload Golem",
+   "sub": "Route the traffic right",
+   "teaches": "Each request type goes to its own kind of server.",
+   "interaction": "Q.boss with one fixed choice set: API servers (HTTP) / Chat servers (WebSocket) / Presence servers / Notification servers. Scenarios: (1) 'User updates their display name' -> API servers. (2) 'Alice sends Bob a message while Bob is connected' -> Chat servers. (3) 'Bob's phone is off and Alice just messaged him' -> Notification servers. (4) 'Carol opens the app and her friends should see a green dot' -> Presence servers. (5) 'A new user signs up' -> API servers. (6) 'Dave's phone sends a heartbeat every 5 seconds' -> Presence servers. (7) 'A logged-in client needs to know which chat server to connect to' -> API servers (login goes through the API tier, which asks service discovery; explain that in the 'why').",
+   "check": "Boss defeated."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "Sketch the switchboard out loud",
+   "teaches": "Pull it together.",
+   "interaction": "Q.drill. Prompt: 'Walk me through your high-level design for a chat app with 50 million daily users.' Model answer: 'I split it into stateless services, stateful services and third parties. Login, signup and profile are stateless API servers behind a load balancer. Chat servers are stateful: each client keeps a WebSocket to one chat server. Presence servers track who's online, also over WebSocket, and notification servers push to offline phones. Chat history goes in a key-value store, and user and friend data in a relational database. On login, service discovery (ZooKeeper) picks a nearby chat server with spare capacity. One box could hold 1M connections in about 10GB of memory, but it would be a single point of failure, so we scale out, and if a chat server dies its clients reconnect to whatever server service discovery hands them.'",
+   "check": "Self-grade checks: 'I separated stateless, stateful and third-party', 'I named the five server roles plus the KV store', 'I explained service discovery and what happens when a chat server dies'."
+  }
+ ],
+ "caveats": [
+  "10KB per connection is the book's round number. Real memory per connection depends on TLS buffers, the language runtime and kernel socket buffers. WhatsApp famously ran about 2 million connections on one Erlang/FreeBSD server in 2012, so 'how many per box' varies a lot by stack.",
+  "The book doesn't mention reconnect storms. When a server holding hundreds of thousands of connections dies, all those clients reconnect at once; real systems add randomised (jittered) exponential backoff and spare capacity.",
+  "ZooKeeper is the book's example. Many teams use Consul, etcd, or a custom 'gateway assignment' service, often behind a layer-4 load balancer. What matters is the idea of a registry of healthy servers plus a placement policy, not the product.",
+  "Real systems often keep a 'which gateway is user X on' map (a session or route table) so any service can find a user's chat server. The book leaves this implicit in step 5a of the 1-on-1 flow (12.4)."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo: Design a Chat System (book chapter)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-chat-system"
+  },
+  {
+   "label": "Apache ZooKeeper",
+   "url": "https://zookeeper.apache.org/"
+  },
+  {
+   "label": "WhatsApp blog: 1 million is so 2011",
+   "url": "https://blog.whatsapp.com/1-million-is-so-2011"
+  }
+ ],
+ "id": "1202",
+ "file": "1202-chat-high-level-design.html",
+ "world": 12,
+ "chapterTitle": "Design a Chat System",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-chat-system",
+ "cheatsheet": "../reference/ch12-chat-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "1201",
+   "n": "12.1",
+   "t": "Open the Pipe",
+   "d": "What a chat service does, and polling vs long polling vs WebSocket"
+  },
+  {
+   "id": "1202",
+   "n": "12.2",
+   "t": "The Switchboard",
+   "d": "Stateless vs stateful services, the scaled design, and service discovery"
+  },
+  {
+   "id": "1203",
+   "n": "12.3",
+   "t": "The Message Vault",
+   "d": "Where chat history lives, the message tables, and how to mint message IDs"
+  },
+  {
+   "id": "1204",
+   "n": "12.4",
+   "t": "Special Delivery",
+   "d": "The 1-on-1 message flow, syncing many devices, and small-group fan-out"
+  },
+  {
+   "id": "1205",
+   "n": "12.5",
+   "t": "The Green Dot",
+   "d": "Online presence: login/logout, heartbeats, and fanning out status changes"
+  },
+  {
+   "id": "1206",
+   "n": "BOSS",
+   "t": "Design It Live: Chat",
+   "d": "Full mock interview: design a chat system for 50 million daily users"
+  }
+ ]
+}

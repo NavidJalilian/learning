@@ -1,0 +1,138 @@
+{
+ "n": "BOSS",
+ "slug": "drive-boss-design-it-live",
+ "t": "Design Drive Live",
+ "d": "Full mock interview: design Google Drive with the 4-step framework",
+ "boss": true,
+ "badge": "👑 Badge: Drive Architect",
+ "winTitle": "Interview passed — Drive designed!",
+ "goal": "Your win today: you can run a complete Google Drive interview end to end — scope it, sketch it, deep-dive blocks, metadata, flows and notifications, survive the 'what happens when X fails?' barrage, and wrap up with trade-offs like direct-to-S3 uploads and a presence service.",
+ "bookSections": "Whole chapter: Steps 1–4, including Step 4 Wrap up (direct upload to cloud storage alternative, presence service)",
+ "stages": [
+  {
+   "title": "Scope it",
+   "sub": "Step 1 · understand the problem (3–10 min)",
+   "teaches": "Asking the right clarifying questions and pinning down numbers: features (upload/download, sync, notifications, revisions, sharing), mobile + web, any file type, encryption at rest, 10 GB file limit, 10M DAU; non-functional: reliability, fast sync, low bandwidth, scalability, availability; estimates: 50M users, 500 PB allocated, ~240 upload QPS, ~480 peak.",
+   "interaction": "Mock interviewer chat panel (like 0008). The interviewer opens: 'Design Google Drive.' The learner picks questions to ask from a deck of 8 (good: 'What are the most important features?', 'Mobile, web or both?', 'Max file size?', 'Do files need encryption?', 'How many daily active users?'; weak: 'Which database should I use?', 'Should I use Kubernetes?', 'Can I skip estimates?'). Each good question reveals an answer card that lands on a requirements board; weak ones cost a heart with feedback ('that's a design decision, not a requirement'). Then a 3-field estimate card (storage PB, QPS, peak QPS) checked against the book's numbers with tolerances. Scorecard row: Scope.",
+   "check": "Q.quiz 'lock it in': which of these is the interviewer's top non-functional requirement for a storage product? -> reliability (no data loss)."
+  },
+  {
+   "title": "Sketch it",
+   "sub": "Step 2 · high-level design and buy-in (10–15 min)",
+   "teaches": "From single server (Apache + MySQL + 1 TB drive/) to sharding, S3 with cross-region replication, LB + stateless web/API servers, replicated metadata DB; then the full component set: block servers, cloud storage, cold storage, LB, API servers, metadata DB, metadata cache, notification service, offline backup queue. APIs: simple/resumable upload, download, list_revisions; auth + HTTPS.",
+   "interaction": "Timed build (soft timer, no fail): an empty canvas; the learner taps components in from a palette and connects arrows to the user. A checker validates required links (user -> block servers -> cloud storage; user -> LB -> API servers -> metadata cache/DB; notification service -> user; offline backup queue; cloud storage -> cold storage). Missing pieces show as the interviewer's nudges ('Where do file blocks go?', 'How does my phone hear about changes?'). Then a quick API-pick: match 3 endpoints to their params (upload?uploadType=resumable / download path / list_revisions path+limit). Scorecard row: High-level design.",
+   "check": "Q.quiz: 'Interviewer: what goes through API servers versus block servers?' -> API servers: auth, profiles, metadata; block servers: file content blocks."
+  },
+  {
+   "title": "Deep dive menu",
+   "sub": "Step 3 · pick and defend",
+   "teaches": "The deep-dive map: requirement -> mechanism. Fast sync & low bandwidth -> blocks (4 MB) + delta sync + compression. Security -> encrypt blocks (compress first) + HTTPS. Strong consistency -> relational DB with ACID + invalidate cache on write. Revisions -> read-only file_version rows + ordered block rows. Concurrent edits -> first processed wins, conflict shows both copies. New file reaches other devices -> upload flow (parallel metadata + content, pending -> uploaded via completion callback) + notification via long polling + download flow. Offline devices -> offline backup queue. Storage cost -> dedup by hash, version limits, cold storage.",
+   "interaction": "Technique map (like 0008's): left column of 9 requirement cards, right column of mechanism cards; learner draws a line from each requirement to its mechanism. After matching, the interviewer picks two at random to 'go deeper' on, showing a 3-option follow-up each (e.g. 'Upload flow: what flips status to uploaded?' -> completion callback; 'Why long polling?' -> one-way, infrequent traffic). Scorecard row: Deep dive.",
+   "check": "Every requirement matched to its mechanism + both follow-ups answered."
+  },
+  {
+   "title": "Boss: the curveball barrage",
+   "sub": "Step 3 · 'what happens when…?'",
+   "teaches": "Failure handling and stress questions from the whole chapter.",
+   "interaction": "Q.boss '👾 The Curveball Barrage', 7 rapid scenarios, 3 choices each: (1) metadata DB master dies -> promote replica; (2) a notification server with ~1M connections dies -> clients reconnect elsewhere, slowly (backoff); (3) a whole region's S3 is down -> read from cross-region replica; (4) insert a byte at the start of a 1 GB file with fixed blocks -> every block changes; content-defined chunking fixes it (bonus caveat question); (5) two users save the same file within 10 ms -> first processed wins, second sees both copies; (6) a block server dies mid-upload -> other block servers pick up pending jobs, client resumes; (7) storage bill exploding -> dedup, version caps, cold storage. Scorecard row: Curveballs (hearts left).",
+   "check": "Boss cleared when all 7 are answered."
+  },
+  {
+   "title": "Wrap it up",
+   "sub": "Step 4 · the last 3–5 minutes",
+   "teaches": "Book's wrap-up: the design must be highly consistent, low network bandwidth and fast to sync. Two flows: manage file metadata and file sync; the notification service (long polling) keeps clients up to date. Alternative 1: upload files directly to cloud storage from the client instead of through block servers — faster, since the file is transferred once, but (a) the same chunking, compression and encryption logic must be implemented on every platform (iOS, Android, web), which is error-prone and takes a lot of engineering effort, and (b) a client can be hacked or manipulated, so putting encryption logic on the client isn't ideal. Alternative 2: move online/offline logic into a separate presence service, so other services can reuse it for presence. Senior extras worth one sentence each: sharing permissions/ACL tables, rate limiting uploads, monitoring sync latency.",
+   "interaction": "Trade-off scales: the learner places argument chips on two pans for 'Client uploads directly to S3' vs 'Through block servers' (chips: 'one transfer instead of two', 'logic duplicated on iOS/Android/web', 'client can be tampered with', 'block servers add a hop', 'one place to update encryption'). The scale tips with each chip; the reveal states the book's position (block servers, for the two reasons) and the honest caveat that real Dropbox chunks on the client. Then a 'pick 2 to mention' card: presence service, rate limiting, sharing ACLs, multi-region active-active — any two pass, presence service gives a bonus tip. Scorecard row: Wrap-up.",
+   "check": "Q.quiz: 'Name the two downsides the book gives for uploading directly from the client to cloud storage.' -> logic must be built for every platform; client-side encryption/logic can be tampered with."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "The 60-second version + your scorecard",
+   "teaches": "The whole design compressed into one spoken answer, plus a self-assessment.",
+   "interaction": "Q.drill. Prompt: 'You have 60 seconds left. Summarize your Google Drive design.' Model: 'Scope: upload, download, sync, revisions, sharing and notifications for 10M daily users, files up to 10 GB, about 240 uploads a second and 500 PB allocated; reliability first. Clients send metadata to stateless API servers behind a load balancer and file content to block servers, which split files into 4 MB blocks, compress, encrypt and store them in S3 replicated across regions, with cold storage for old data. Metadata — users, devices, namespaces, files, append-only versions and ordered blocks — lives in a sharded relational DB for strong consistency, with a cache invalidated on writes. Only changed blocks sync. Uploads run metadata and content in parallel, pending until S3's completion callback; a long-polling notification service pings other devices, which pull metadata and the blocks they need; offline devices catch up from a queue. Conflicts: first write wins, the loser sees both copies. Dedup, version caps and cold storage control cost; every tier has a replica or standby. Trade-off I'd revisit: direct-to-S3 client uploads, and a separate presence service.' Checks: numbers; block servers + 4 MB + compress/encrypt; delta sync; relational + cache invalidation; parallel upload + callback; long polling; conflict rule; storage savings; failure story; wrap-up trade-off. A scorecard (Scope / High-level / Deep dive / Curveballs / Wrap-up) is saved under a separate key sdq:v1:<id>-interview like 0008.",
+   "check": "Self-graded checklist + scorecard."
+  }
+ ],
+ "caveats": [
+  "Real Dropbox does chunk, hash and dedup on the client (it uploads only blocks the server doesn't have) — closer to the book's 'direct upload' alternative than to its chosen design. Both are defensible; say which and why.",
+  "The book's schema has no sharing/permission tables even though sharing is in scope; mention an ACL table if asked.",
+  "Fixed-size blocks + delta sync break on inserts; content-defined chunking is the real-world fix.",
+  "The offline backup queue is usually implemented as a per-client change cursor, not a literal queue.",
+  "The book's numbers (50M users, 10M DAU) are interview-sized; real Google Drive serves billions of users."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo — Design Google Drive (book chapter)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-google-drive"
+  },
+  {
+   "label": "Google Drive API — Upload file data",
+   "url": "https://developers.google.com/drive/api/guides/manage-uploads"
+  },
+  {
+   "label": "Neil Fraser — Differential Synchronization",
+   "url": "https://neil.fraser.name/writing/sync/"
+  },
+  {
+   "label": "Tridgell & Mackerras — The rsync algorithm",
+   "url": "https://rsync.samba.org/tech_report/"
+  },
+  {
+   "label": "How We've Scaled Dropbox (Kevin Modzelewski, 2012 talk)",
+   "url": "https://www.youtube.com/watch?v=PE4gwstWhmc"
+  },
+  {
+   "label": "Dropbox Tech — Streaming File Synchronization",
+   "url": "https://dropbox.tech/infrastructure/streaming-file-synchronization"
+  },
+  {
+   "label": "Amazon S3 Glacier storage classes",
+   "url": "https://aws.amazon.com/s3/storage-classes/glacier/"
+  }
+ ],
+ "id": "1506",
+ "file": "1506-drive-boss-design-it-live.html",
+ "world": 15,
+ "chapterTitle": "Design Google Drive",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-google-drive",
+ "cheatsheet": "../reference/ch15-google-drive-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "1501",
+   "n": "15.1",
+   "t": "Claim Your Locker",
+   "d": "Scope Google Drive, run the numbers, design the upload/download/revision APIs, outgrow one server"
+  },
+  {
+   "id": "1502",
+   "n": "15.2",
+   "t": "Chop It Into Blocks",
+   "d": "The high-level design, block servers, 4 MB blocks, delta sync, compress-then-encrypt"
+  },
+  {
+   "id": "1503",
+   "n": "15.3",
+   "t": "The Metadata Ledger",
+   "d": "Strong consistency, cache invalidation, the metadata schema, and sync conflicts"
+  },
+  {
+   "id": "1504",
+   "n": "15.4",
+   "t": "Ping When It Changes",
+   "d": "The upload flow, the download flow, long-polling notifications and the offline backup queue"
+  },
+  {
+   "id": "1505",
+   "n": "15.5",
+   "t": "Thrift & Chaos",
+   "d": "Save storage space with dedup, version limits and cold storage, then survive every component failing"
+  },
+  {
+   "id": "1506",
+   "n": "BOSS",
+   "t": "Design Drive Live",
+   "d": "Full mock interview: design Google Drive with the 4-step framework"
+  }
+ ]
+}

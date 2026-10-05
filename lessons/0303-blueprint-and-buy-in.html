@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Blueprint &amp; Buy-in</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: chat sim (stage 1), match board + mini whiteboard (stage 2), flow lanes + feed diagram (stage 3), zoom dials (stage 4) */
+:root { --pub: #5a48f0; --rd: #0d9a96; --bell: #d98200; --you-bg: #ebe8ff; --them-bg: #ece8df; --ghost: #b9b3a6; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --pub: #8f82ff; --rd: #31d3c8; --bell: #ffb547; --you-bg: #25224a; --them-bg: #22253f; --ghost: #4a4e72; }
+}
+:root[data-theme="dark"] { --pub: #8f82ff; --rd: #31d3c8; --bell: #ffb547; --you-bg: #25224a; --them-bg: #22253f; --ghost: #4a4e72; }
+
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.hint { min-height: 22px; font-size: 14px; margin-top: 10px; color: var(--muted); }
+.hint.bad { color: var(--bad); }
+.hint.good { color: var(--good); }
+.shake { animation: shake .4s; }
+
+/* ---------- stage 1: chat sim ---------- */
+.appr { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
+@media (max-width: 640px) { .appr { grid-template-columns: 1fr; } }
+.appr .opt { min-height: 44px; display: flex; flex-direction: column; gap: 2px; }
+.appr .opt b { font-size: 16px; }
+.appr .opt span { font-size: 13.5px; color: var(--muted); }
+.appr .opt.seen { border-style: dashed; }
+.clockbar { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; padding: 12px 14px; background: var(--panel); border-bottom: 1px solid var(--line); font-size: 13px; }
+.clockbar .lab { font-weight: 700; white-space: nowrap; }
+.clockbar .lab b { font-family: var(--mono); font-size: 15px; }
+.tl { position: relative; height: 14px; border-radius: 99px; background: var(--bg-2); border: 1px solid var(--line); }
+.tl .band { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--teal) 30%, transparent); border-radius: 99px; }
+.tl .needle { position: absolute; top: -4px; bottom: -4px; width: 4px; margin-left: -2px; border-radius: 2px; background: var(--ink); transition: left .6s; }
+.tl-key { grid-column: 2; display: flex; justify-content: space-between; gap: 8px; white-space: nowrap; color: var(--muted); font-size: 11.5px; font-family: var(--mono); }
+.meter { position: relative; height: 14px; border-radius: 99px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; }
+.meter i { position: absolute; inset: 0 auto 0 0; width: 50%; border-radius: 99px; background: var(--warn); transition: width .6s, background .4s; }
+.chat { padding: 14px; display: flex; flex-direction: column; gap: 8px; min-height: 180px; }
+.chat .empty { color: var(--muted); font-size: 14px; text-align: center; margin: auto; }
+.msg { max-width: 86%; padding: 9px 12px; border-radius: 14px; font-size: 14.5px; line-height: 1.45; animation: rise .3s; }
+.msg small { display: block; font-family: var(--mono); font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+.msg.you { align-self: flex-end; background: var(--you-bg); border-bottom-right-radius: 4px; }
+.msg.them { align-self: flex-start; background: var(--them-bg); border-bottom-left-radius: 4px; }
+.msg.narr { align-self: center; max-width: 95%; background: none; padding: 2px 6px; font-size: 13px; font-style: italic; color: var(--muted); text-align: center; }
+.verdict { margin: 0 14px 14px; }
+
+/* ---------- stage 2: match board + whiteboard ---------- */
+.match { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.5fr); gap: 10px; margin-top: 12px; }
+.match .col { display: grid; gap: 8px; align-content: start; }
+.match .col h4 { margin: 0; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.match .opt { min-height: 44px; font-size: 14.5px; padding: 9px 11px; position: relative; }
+.match .opt.sel { border-color: var(--accent); background: var(--accent-soft); }
+.match .opt.done { border-color: var(--good); background: var(--good-soft); color: var(--ink); }
+.match .opt .tagn { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; background: var(--good); color: #fff; font-size: 12px; font-weight: 700; margin-right: 6px; vertical-align: 1px; }
+.wb svg { max-width: 460px; margin: 0 auto; }
+.wb .gbox rect { fill: none; stroke: var(--ghost); stroke-width: 1.5; stroke-dasharray: 5 4; rx: 8; transition: fill .4s, stroke .4s; }
+.wb .gbox text { fill: var(--ghost); font: 600 12px var(--font); text-anchor: middle; dominant-baseline: central; }
+.wb .gbox.on rect { fill: var(--accent-soft); stroke: var(--accent); stroke-dasharray: none; }
+.wb .gbox.on text { fill: var(--ink); }
+.wb .gbox.on { animation: snap .45s cubic-bezier(.3,1.6,.5,1); transform-box: fill-box; transform-origin: center; }
+@keyframes snap { from { transform: scale(.6); opacity: .3; } }
+.wb .gedge { stroke: var(--ghost); stroke-width: 1.5; stroke-dasharray: 3 4; fill: none; }
+.wb .gedge.on { stroke: var(--accent); stroke-dasharray: none; stroke-width: 2; }
+.wb .gedge.on.dash { stroke-dasharray: 5 4; }
+
+/* ---------- stage 3: lanes + feed diagram ---------- */
+.lanes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+@media (max-width: 640px) { .lanes { grid-template-columns: 1fr; } }
+.lane { border: 2px solid var(--line); border-radius: 14px; background: var(--bg); padding: 0; text-align: left; display: block; width: 100%; }
+.lane.active { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.lane.full { border-color: var(--good); }
+.lane .lh { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); font-weight: 700; font-size: 15px; }
+.lane .lh span { font-size: 12px; font-weight: 600; color: var(--muted); font-family: var(--mono); white-space: nowrap; }
+.lane .lb { padding: 10px 12px; min-height: 60px; font-size: 13.5px; }
+.flowrow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 6px; }
+.flowrow .ar { color: var(--muted); font-weight: 700; }
+.flowrow.br { padding-left: 14px; }
+.tchip { display: inline-block; padding: 3px 8px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); font-weight: 600; font-size: 13px; animation: rise .3s; }
+.lane[data-lane="pub"] .tchip { border-color: color-mix(in srgb, var(--pub) 60%, var(--line)); }
+.lane[data-lane="read"] .tchip { border-color: color-mix(in srgb, var(--rd) 60%, var(--line)); }
+.lane .ph { color: var(--muted); font-style: italic; }
+.palette { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.palette .opt { min-height: 42px; padding: 8px 12px; font-size: 14px; }
+.feed svg { max-width: 520px; margin: 0 auto; }
+.feed .fb rect { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; rx: 9; transition: stroke .3s, fill .3s; }
+.feed .fb text { fill: var(--ink); font: 600 11.5px var(--font); text-anchor: middle; dominant-baseline: central; }
+.feed .fb.hot rect { stroke: var(--pub); stroke-width: 3; }
+.feed .fb.hotr rect { stroke: var(--rd); stroke-width: 3; }
+.feed .fb.store rect { fill: var(--bg-2); }
+.feed .edge { stroke: var(--line); stroke-width: 2; }
+.feed .slot rect { fill: var(--panel); stroke: var(--line); stroke-width: 1; rx: 5; transition: fill .4s; }
+.feed .slot text { fill: var(--muted); font: 600 9.5px var(--mono); text-anchor: middle; dominant-baseline: central; }
+.feed .slot .sid { fill: var(--ink); font-size: 10px; }
+.feed .slot.new rect { fill: color-mix(in srgb, var(--pub) 28%, var(--panel)); }
+.feed .slot.readme rect { fill: color-mix(in srgb, var(--rd) 30%, var(--panel)); }
+.feed .phone text { font: 600 10px var(--font); fill: var(--muted); text-anchor: middle; dominant-baseline: central; }
+.feed .phone .ico { font-size: 15px; fill: var(--ink); }
+.feed .cap { fill: var(--muted); font: 600 10px var(--font); text-anchor: middle; }
+.feed .pk { stroke: var(--bg); stroke-width: 2; }
+.feedlist { font-family: var(--mono); }
+
+/* ---------- stage 4: zoom dials ---------- */
+.zgrid { display: grid; gap: 12px; margin-top: 12px; }
+.zcard { border: 1px solid var(--line); border-radius: 14px; background: var(--bg); padding: 12px 14px; display: grid; grid-template-columns: 96px 1fr; gap: 6px 14px; align-items: center; }
+@media (max-width: 520px) { .zcard { grid-template-columns: 72px 1fr; } }
+.zcard h3 { margin: 0; font-size: 16px; }
+.zcard p.d { margin: 2px 0 0; font-size: 13.5px; color: var(--muted); }
+.zcard .dial { grid-row: span 2; width: 100%; height: auto; }
+.zcard .dial .arc { fill: none; stroke: var(--line); stroke-width: 8; stroke-linecap: round; }
+.zcard .dial .tk { fill: var(--muted); }
+.zcard .dial .ndl { stroke: var(--ink); stroke-width: 4; stroke-linecap: round; transition: transform .6s cubic-bezier(.3,1.4,.5,1); transform-origin: 50px 52px; }
+.zcard .dial .hub { fill: var(--ink); }
+.zcard.ok .dial .arc { stroke: var(--good); }
+.zcard.half .dial .arc { stroke: var(--warn); }
+.zcard.no .dial .arc { stroke: var(--bad); }
+.zcard .zbtns { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.zcard .zbtns .opt { text-align: center; padding: 8px 6px; font-size: 13.5px; min-height: 44px; }
+.zcard .explain { grid-column: 1 / -1; margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 3.3 · A Framework for System Design Interviews</div>
+    <h1>Blueprint &amp; Buy-in</h1>
+    <p class="lede">The scope is agreed. Now you pick up the marker. Sketch a rough plan fast, check it with the interviewer, and only then go deeper.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> sketch the news feed's two flows (publish and build) as boxes, decide how much API/schema detail to show, and check in with the interviewer before going deeper.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Treat Them Like a Teammate</h2><div class="sub">Blueprint first, then ask</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>This is <b>step 2</b> of the book's four-step framework: <i>propose a high-level design and get buy-in</i>. Budget: about <b>10–15 minutes</b> of a 45-minute interview.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener">[1]</a></p>
+      <p>The goal has two halves. First, a <b>blueprint</b>: a rough first plan of the main parts, drawn as boxes and arrows. Second, <b>buy-in</b>: the interviewer agrees it's a sensible base to build on. The book's advice is to work <i>with</i> the interviewer. Propose, ask for feedback, and treat them like a teammate. Many good interviewers enjoy joining in.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener">[1]</a></p>
+      <p>It's minute 9. In Quest 3.2 you scoped a <b>news feed</b>: mobile and web, users post and see friends' posts newest first, up to 5,000 friends, 10 million daily active users, posts can hold photos and video. How do you start?</p>
+
+      <div class="challenge boxed">
+        <div class="step" id="s1step">Predict first · your first pick counts</div>
+        <h3>Which opening wins buy-in?</h3>
+        <div class="appr" id="appr">
+          <button class="opt" data-a="a"><b>🎤 The grand tour</b><span>Explain every detail for 10 minutes, then ask what they think.</span></button>
+          <button class="opt" data-a="b"><b>✏️ Sketch &amp; check</b><span>Draw the main boxes in about 4 minutes, then ask if the shape is right.</span></button>
+          <button class="opt" data-a="c"><b>🤝 Hand over the pen</b><span>Ask the interviewer to sketch their design so you can match it.</span></button>
+        </div>
+      </div>
+
+      <div class="sim" id="chatSim">
+        <div class="clockbar">
+          <span class="lab">⏱ min <b id="clk">09</b></span>
+          <div class="tl" aria-hidden="true"><div class="band" style="left:20%;width:33.3%"></div><div class="needle" id="needle" style="left:20%"></div></div>
+          <span></span>
+          <div class="tl-key"><span>0</span><span>step 2 ≈ 9–24</span><span>45</span></div>
+          <span class="lab">📈 Signal</span>
+          <div class="meter" role="meter" aria-label="Interviewer signal" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" id="meterW"><i id="meter"></i></div>
+        </div>
+        <div class="chat" id="chat" aria-live="polite"><div class="empty">Pick an opening above to play it out.</div></div>
+        <div class="verdict" id="verdict"></div>
+      </div>
+      <ul class="checklist" id="s1goals">
+        <li data-g="win"><span class="box">✓</span><span>Play the opening that earns buy-in</span></li>
+        <li data-g="lose"><span class="box">✓</span><span>Play one that doesn't, and see why</span></li>
+      </ul>
+      <div class="callout tip"><b>Two more step-2 habits from the book.</b> <b>Do rough maths out loud</b> to check the blueprint can handle the scale (Quest World 2 is all about this), but ask first whether the interviewer wants it. <b>Walk through a few concrete use cases</b>, like "Alice posts, Bob opens his feed". It shapes the design, and it often turns up edge cases you hadn't thought of.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener">[1]</a></div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>The Box Toolkit</h2><div class="sub">Standard building blocks</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book suggests drawing <b>box diagrams</b> of the key parts. It lists the usual suspects: clients (mobile or web), APIs, web servers, data stores, a cache, a CDN and a message queue.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener">[1]</a> Most designs reuse the same handful of boxes, so learn what each one is <i>for</i>.</p>
+      <p>Tap a box on the left, then the job it does on the right. Each right match snaps into the mini whiteboard below. <span class="muted">(APIs, the "doors" clients knock on, get their own stage: stage 4.)</span></p>
+      <div class="match" id="match">
+        <div class="col" id="mBoxes"><h4>Box</h4></div>
+        <div class="col" id="mJobs"><h4>Job</h4></div>
+      </div>
+      <div class="hint" id="mHint" aria-live="polite"></div>
+      <div class="sim wb">
+        <svg id="wbSvg" viewBox="0 0 360 208" role="img" aria-label="Mini whiteboard: boxes appear as you match them"></svg>
+        <div class="sim-bar"><span><b id="mCount">0</b> / 7 boxes on the whiteboard</span><button class="btn" id="mReset" style="padding:6px 12px;font-size:14px;display:none">↻ Shuffle and replay</button></div>
+      </div>
+      <div class="callout"><b>Two words you'll hear a lot.</b> <b>Stateless</b> web servers keep no user data on the server itself (sessions live in a shared store), so any server can handle any request and you can add more freely. <b>Asynchronous</b> means "don't wait": the sender drops work in the queue and moves on, and a worker picks it up later.</div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Two Flows of a Feed</h2><div class="sub">Feed publishing and feed building</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book's step-2 example splits the news feed into <b>two flows</b>:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener">[1]</a></p>
+      <ul>
+        <li><b>Feed publishing.</b> A user posts. The post is saved to a cache and a database, then pushed into each friend's news feed.</li>
+        <li><b>News feed building.</b> The feed is made by gathering friends' posts, newest first (<i>reverse chronological order</i>).</li>
+      </ul>
+      <p>Two new boxes here. The <b>fanout service</b> "fans out" one post to many feeds, one per friend. The <b>news feed cache</b> stores each user's ready-made feed as a list of post IDs. Build each flow: tap a lane to choose it, then tap boxes in the order a request travels.</p>
+      <div class="lanes" id="lanes">
+        <button class="lane active" data-lane="pub" aria-pressed="true"><div class="lh">📝 Publish a post <span id="pubCount">0 / 9</span></div><div class="lb" id="pubFlow"></div></button>
+        <button class="lane" data-lane="read" aria-pressed="false"><div class="lh">📰 Load my feed <span id="readCount">0 / 5</span></div><div class="lb" id="readFlow"></div></button>
+      </div>
+      <div class="palette" id="palette" aria-label="Boxes to place"></div>
+      <div class="hint" id="laneHint" aria-live="polite">Building: <b>Publish a post</b>. Every request starts somewhere…</div>
+
+      <h3 style="margin:22px 0 4px;font-size:18px">Now watch it run</h3>
+      <p class="small muted" style="margin-top:0">Same two flows on one diagram. They meet at the news feed cache: publishing writes to it, building reads from it.</p>
+      <div class="sim feed">
+        <svg id="feedSvg" viewBox="0 0 360 384" role="img" aria-label="News feed high-level design: publishing and feed-building flows"></svg>
+        <div class="sim-bar"><span class="row" style="gap:8px"><button class="btn" id="btnPub" style="padding:7px 12px;font-size:14px">▶ Alice posts a photo</button><button class="btn" id="btnRead" style="padding:7px 12px;font-size:14px" disabled>▶ Bob opens his feed</button></span></div>
+        <div class="simlog" id="feedLog"><div>Alice has 5 friends here (the real limit is 5,000). Each friend's feed slot shows the newest post ID in it.</div></div>
+      </div>
+      <div class="challenge boxed" id="pred3" style="display:none"></div>
+      <ul class="checklist" id="s3goals">
+        <li data-g="pub"><span class="box">✓</span><span>Build the <b>publish</b> lane</span></li>
+        <li data-g="read"><span class="box">✓</span><span>Build the <b>load my feed</b> lane</span></li>
+        <li data-g="pred"><span class="box">✓</span><span>Predict, then watch Alice's post fan out</span></li>
+        <li data-g="bob"><span class="box">✓</span><span>Watch Bob's feed load</span></li>
+      </ul>
+      <div class="callout tip"><b>Reusable trick.</b> Almost every system has a <b>write path</b> (data goes in) and a <b>read path</b> (data comes out). Drawing them as two flows keeps the diagram readable and shows the interviewer you see the shape of the problem.</div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Pick the Zoom Level</h2><div class="sub">API endpoints and schema: yes or no?</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Should step 2 include <b>API endpoints</b> (the exact calls a client makes, like <code>GET /v1/me/feed</code>) and a <b>database schema</b> (the tables and their columns)? The book's answer: it depends on the problem.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener">[1]</a></p>
+      <p>For a huge prompt like "design Google search", that's too low-level for step 2. For a small one like the backend of a multiplayer poker game, it's fair game. Either way, talk it over with the interviewer.</p>
+      <p>Set the dial for each prompt. Spot on: full XP. One notch off: half.</p>
+      <div class="zgrid" id="zgrid"></div>
+      <div id="s4quiz"></div>
+      <div class="row" style="margin-top:12px"><button class="btn" id="zReset" style="display:none">↻ Reset the dials</button></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: Pushback at Minute 15</h2><div class="sub">The interviewer pokes the blueprint</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Your box diagram is on the board. Now the interviewer reacts. For each comment, pick your move: <b>adjust</b> the blueprint, <b>defend</b> it with a short reason, <b>park</b> the detail for the deep dive (step 3), or <b>ask</b> a clarifying question. Win at least 4 of 6.</p>
+      <div id="boss"></div>
+      <div class="row" id="bossRetry" style="margin-top:12px"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say It Like a Senior</h2><div class="sub">Narrate the blueprint</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> The interviewer pointed at the fanout service. What happens when someone with millions of followers posts? Picking that kind of hot spot and digging in is step 3. That's Quest 3.4, <a href="0304-dive-deep-land-clean.html"><i>Dive Deep, Land Clean</i></a>.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 3: "Step 2: Propose high-level design and get buy-in"</a>, including the two news feed figures (feed publishing and news feed building). Then see the same design built out in full in <a href="https://bytebytego.com/courses/system-design-interview/design-a-news-feed-system" target="_blank" rel="noopener">Ch. 11: Design a News Feed System</a>.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <p style="margin:0 0 8px">The chapter's figures are deliberately high-level. <b>How</b> fan-out works is a Chapter 11 topic: push the post into feeds when it's written ("fanout on write"), or gather it when someone reads ("fanout on read"), or mix the two so a celebrity with millions of followers doesn't trigger millions of writes. You only got a preview here.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-news-feed-system" target="_blank" rel="noopener">[2]</a></p>
+      <p style="margin:0 0 8px">The CDN and object storage for video are <b>our</b> addition, following the "posts can hold video" requirement. The chapter's step-2 figures only show the two flows.</p>
+      <p style="margin:0">Rough estimation in step 2 is optional. Some interviewers skip it, others insist on it, so ask first (the maths itself is in <a href="https://bytebytego.com/courses/system-design-interview/back-of-the-envelope-estimation" target="_blank" rel="noopener">Ch. 2</a><a class="cite" href="https://bytebytego.com/courses/system-design-interview/back-of-the-envelope-estimation" target="_blank" rel="noopener">[3]</a>). And the "cache in front of the database" box hides a lot of real engineering: Facebook's paper on running memcache at scale shows what it takes to keep such a cache consistent and fast.<a class="cite" href="https://www.usenix.org/conference/nsdi13/technical-sessions/presentation/nishtala" target="_blank" rel="noopener">[4]</a></p>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"why does the feed cache store post IDs instead of whole posts?"</i> or <i>"what if the interviewer disagrees with my blueprint and won't say why?"</i>
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 3 "A Framework for System Design Interviews" (ByteByteGo).</li>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 11 "Design a News Feed System" (ByteByteGo).</li>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 2 "Back-of-the-envelope Estimation" (ByteByteGo).</li>
+        <li>Nishtala et al., "Scaling Memcache at Facebook", NSDI 2013.</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0303',
+  winTitle: 'Blueprint approved',
+  badge: '📐 Badge: Whiteboard Captain',
+  cheatsheet: '../reference/ch03-framework-cheatsheet.html',
+});
+const { sleep, shuffle } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+const W = ms => sleep(Q.reduced ? Math.min(ms, 40) : ms);
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function anim(dur, f) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 1) { f(1); return res(); }
+    const t0 = performance.now();
+    const fr = now => { const p = Math.min(1, (now - t0) / dur); f(p); p < 1 ? requestAnimationFrame(fr) : res(); };
+    requestAnimationFrame(fr);
+  });
+}
+const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); Q.addXP(xp || 10, li);
+  return true;
+}
+function shakeEl(el) { el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); }
+function nextBtn(row, label, fn, primary = true) {
+  const b = document.createElement('button'); b.className = 'btn' + (primary ? ' primary' : ''); b.textContent = label; b.onclick = fn; row.appendChild(b); return b;
+}
+// Two-line SVG label: "Post\nservice"
+function label(g, x, y, text) {
+  const lines = text.split('\n');
+  lines.forEach((ln, i) => { S('text', { x, y: y + (i - (lines.length - 1) / 2) * 13 }, g).textContent = ln; });
+}
+
+/* ================= STAGE 1: the opening ================= */
+Q.onStage(1, () => {
+  const SCRIPTS = {
+    a: { lines: [
+      { m: 9, who: 'you', t: 'Let me start with the database. Users table: id, name, email, created_at. Posts get an index on user_id and created_at, and we shard by…', s: 44 },
+      { m: 12, who: 'you', t: '…the cache uses a 30-second expiry with least-recently-used eviction, and the notification worker retries with exponential backoff starting at…', s: 36 },
+      { m: 15, who: 'narr', t: 'The interviewer glances at the clock and stops writing notes.', s: 28 },
+      { m: 17, who: 'you', t: '…and for the post IDs I would use…', s: 22 },
+      { m: 19, who: 'them', t: 'Let me stop you there. I mostly wanted to hear how a post reaches friends’ feeds, and we’ve used a lot of time.', s: 14 },
+    ], ok: false, verdict: '<b>No buy-in, and the budget is half gone.</b> You spent 10 minutes on details nobody had agreed mattered. Step 2 is for a rough plan the two of you agree on, not a complete one. The interviewer wanted to steer you all along, and you never gave them a chance.' },
+    b: { lines: [
+      { m: 9, who: 'you', t: 'I’ll sketch the big pieces first. I see two flows: publishing a post, and loading your feed.', s: 56 },
+      { m: 11, who: 'you', t: 'Client, load balancer, web servers. A post service saves posts, a fanout service pushes each post into friends’ feeds, and a news feed service reads a feed back.', s: 63 },
+      { m: 13, who: 'you', t: 'Does this look like the right shape before I go deeper? And do you want a quick estimate against the 10 million daily users now, or skip it?', s: 72 },
+      { m: 13, who: 'them', t: 'Shape looks right. Skip the maths. I’m most curious about this part. (taps the fanout service)', s: 80 },
+      { m: 14, who: 'you', t: 'Let me walk one use case. Alice posts a photo. Fanout puts it in Bob’s feed, then Bob opens the app and…', s: 84 },
+      { m: 14, who: 'them', t: 'And if Alice has 5,000 friends?', s: 88 },
+      { m: 14, who: 'narr', t: 'A concrete use case just surfaced an edge case. You note it for the deep dive.', s: 90 },
+    ], ok: true, verdict: '<b>Buy-in by minute 14.</b> A rough sketch, then a direct question. The interviewer told you where to dig, the estimate question saved time, and the use case found an edge case for step 3. That’s collaboration.' },
+    c: { lines: [
+      { m: 9, who: 'you', t: 'Could you sketch how you’d design it? Then I can build on your version.', s: 40 },
+      { m: 9, who: 'them', t: 'Hmm. I’d rather see how you would approach it.', s: 30 },
+      { m: 10, who: 'you', t: 'Sure. Then… which database would you like me to use?', s: 22 },
+      { m: 10, who: 'them', t: 'Your call. Tell me what you’d pick and why.', s: 18 },
+      { m: 11, who: 'narr', t: 'The interviewer writes something down.', s: 16 },
+    ], ok: false, verdict: '<b>Collaboration isn’t delegation.</b> A teammate brings a proposal and asks what the others think. Asking for feedback is great. Asking the interviewer to make the design (or every choice in it) gives them nothing to grade.' },
+  };
+  const goals = new Set();
+  let busy = false, predicted = Q.isCleared(1), quizShown = false;
+  const btns = $$('#appr .opt');
+  function setClock(m) { $('#clk').textContent = String(m).padStart(2, '0'); $('#needle').style.left = (m / 45 * 100) + '%'; }
+  function setMeter(v) {
+    const i = $('#meter'); i.style.width = v + '%';
+    i.style.background = v < 35 ? 'var(--bad)' : v < 65 ? 'var(--warn)' : 'var(--good)';
+    $('#meterW').setAttribute('aria-valuenow', v);
+  }
+  async function play(k, b) {
+    if (busy) return; busy = true;
+    btns.forEach(x => { x.disabled = true; x.classList.remove('right', 'wrong', 'picked'); });
+    b.classList.add('picked');
+    const sc = SCRIPTS[k];
+    if (!predicted) {
+      predicted = true;
+      $('#s1step').textContent = 'Replay any opening as often as you like';
+      sc.ok ? Q.addXP(20, b) : Q.loseHeart(b);
+    }
+    const chat = $('#chat'); chat.innerHTML = ''; $('#verdict').innerHTML = '';
+    setClock(9); setMeter(50);
+    await W(300);
+    for (const ln of sc.lines) {
+      setClock(ln.m);
+      const d = document.createElement('div');
+      d.className = 'msg ' + ln.who;
+      d.innerHTML = (ln.who === 'narr' ? '' : `<small>min ${String(ln.m).padStart(2, '0')} · ${ln.who === 'you' ? 'you' : 'interviewer'}</small>`) + ln.t;
+      chat.appendChild(d);
+      setMeter(ln.s);
+      await W(ln.who === 'narr' ? 900 : 1300);
+    }
+    b.classList.remove('picked'); b.classList.add(sc.ok ? 'right' : 'wrong', 'seen');
+    $('#verdict').innerHTML = `<div class="explain show ${sc.ok ? 'good' : 'bad'}">${sc.verdict}</div>`;
+    btns.forEach(x => x.disabled = false);
+    busy = false;
+    checkGoal('#s1goals', sc.ok ? 'win' : 'lose', goals, 10);
+    maybeQuiz();
+  }
+  btns.forEach(b => b.onclick = () => play(b.dataset.a, b));
+  setMeter(50);
+  if (predicted) $('#s1step').textContent = 'Replay any opening as often as you like';
+  function maybeQuiz() {
+    if (quizShown || goals.size < 2) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s1quiz'), {
+      q: 'What does <b>buy-in</b> mean in step 2?',
+      options: ['The interviewer approves your salary range', 'You both agree the blueprint is a sound base', 'You finish the whole design before asking', 'You let the interviewer choose every part'],
+      correct: 1,
+      good: 'Buy-in is agreement that your rough plan is worth building on. You get it by proposing early and asking, so the deep dive goes where the interviewer wants it.',
+      bad: 'Buy-in is agreement that your rough plan is a sound base to go deeper from. You propose; the interviewer reacts. Finishing first or handing over every choice both skip that conversation.',
+      onDone: () => setTimeout(() => Q.clearStage(1), 900),
+    }), 400);
+  }
+});
+
+/* ================= STAGE 2: the box toolkit ================= */
+Q.onStage(2, () => {
+  const BOX = [
+    { k: 'client', ico: '📱', name: 'Client', job: 'Where every request starts: the phone app or the browser', hint: 'the client is the user’s own device, not a server.' },
+    { k: 'lb', ico: '⚖️', name: 'Load balancer', job: 'Spreads incoming traffic evenly across many web servers', hint: 'a load balancer sits in front of the web servers and shares out requests.' },
+    { k: 'web', ico: '🖥️', name: 'Web servers', job: 'Handle each request; kept stateless so you can add more', hint: 'web servers run your code for each request. Stateless means any one can take any request.' },
+    { k: 'db', ico: '🗄️', name: 'Database', job: 'Durable storage, so the data survives a crash or restart', hint: 'the database is where data lives for good, on disk.' },
+    { k: 'cache', ico: '⚡', name: 'Cache', job: 'Holds hot data in memory so we can skip the database', hint: 'a cache is a fast in-memory copy of popular data.' },
+    { k: 'cdn', ico: '🌍', name: 'CDN', job: 'Serves photos and video from a server near the user', hint: 'a CDN (content delivery network) is a fleet of servers spread around the world for static media.' },
+    { k: 'mq', ico: '📬', name: 'Message queue', short: 'Msg queue', job: 'Lets the post service hand slow work to workers later', hint: 'a message queue is a buffer: one part drops work in, another picks it up later.' },
+  ];
+  // mini whiteboard layout
+  const POS = { client: [124, 6, 112, 30], cdn: [252, 6, 104, 30], lb: [124, 58, 112, 30], web: [124, 110, 112, 30], cache: [4, 172, 112, 30], db: [124, 172, 112, 30], mq: [244, 172, 112, 30] };
+  const EDGES = [['client', 'lb'], ['client', 'cdn', 'dash'], ['lb', 'web'], ['web', 'cache'], ['web', 'db'], ['web', 'mq']];
+  const svg = $('#wbSvg');
+  const mid = (k, side) => { const [x, y, w, h] = POS[k]; return side === 'b' ? [x + w / 2, y + h] : side === 't' ? [x + w / 2, y] : side === 'r' ? [x + w, y + h / 2] : [x, y + h / 2]; };
+  let matched, nTag, selBox, selJob, quizShown = false;
+  function drawBoard() {
+    svg.innerHTML = '';
+    const eg = S('g', {}, svg);
+    EDGES.forEach(([a, b, dash]) => {
+      const [x1, y1] = dash ? mid(a, 'r') : mid(a, 'b'); const [x2, y2] = dash ? mid(b, 'l') : mid(b, 't');
+      S('line', { class: 'gedge' + (dash ? ' dash' : ''), x1, y1, x2, y2, 'data-a': a, 'data-b': b }, eg);
+    });
+    BOX.forEach(b => {
+      const [x, y, w, h] = POS[b.k];
+      const g = S('g', { class: 'gbox', 'data-k': b.k }, svg);
+      S('rect', { x, y, width: w, height: h, rx: 8 }, g);
+      S('text', { x: x + w / 2, y: y + h / 2 }, g).textContent = '?';
+    });
+  }
+  function boardOn(k) {
+    const g = $(`.gbox[data-k="${k}"]`, svg); const b = BOX.find(x => x.k === k);
+    g.classList.add('on'); $('text', g).textContent = `${b.ico} ${b.short || b.name}`;
+    $$('.gedge', svg).forEach(e => { if (matched.has(e.dataset.a) && matched.has(e.dataset.b)) e.classList.add('on'); });
+  }
+  function build() {
+    matched = new Set(); nTag = 0; selBox = null; selJob = null;
+    drawBoard();
+    $('#mBoxes').innerHTML = '<h4>Box</h4>' + shuffle(BOX).map(b => `<button class="opt" data-box="${b.k}">${b.ico} ${b.name}</button>`).join('');
+    $('#mJobs').innerHTML = '<h4>Job</h4>' + shuffle(BOX).map(b => `<button class="opt" data-job="${b.k}">${b.job}</button>`).join('');
+    $('#mCount').textContent = '0'; $('#mHint').textContent = 'Pick a box, then its job (or the other way round).'; $('#mHint').className = 'hint';
+    $$('#mBoxes .opt').forEach(b => b.onclick = () => { selBox = selBox === b ? null : b; refresh(); tryPair(); });
+    $$('#mJobs .opt').forEach(b => b.onclick = () => { selJob = selJob === b ? null : b; refresh(); tryPair(); });
+  }
+  function refresh() { $$('#match .opt').forEach(b => b.classList.toggle('sel', b === selBox || b === selJob)); }
+  function tryPair() {
+    if (!selBox || !selJob) return;
+    const bk = selBox.dataset.box, jk = selJob.dataset.job, bEl = selBox, jEl = selJob;
+    selBox = selJob = null;
+    if (bk === jk) {
+      matched.add(bk); nTag++;
+      [bEl, jEl].forEach(x => { x.classList.remove('sel'); x.classList.add('done'); x.disabled = true; x.insertAdjacentHTML('afterbegin', `<span class="tagn">${nTag}</span>`); });
+      boardOn(bk);
+      const b = BOX.find(x => x.k === bk);
+      $('#mHint').innerHTML = `✓ <b>${b.name}</b> is on the board.`; $('#mHint').className = 'hint good';
+      $('#mCount').textContent = matched.size;
+      Q.addXP(5, jEl);
+      if (matched.size === BOX.length) done();
+    } else {
+      refresh(); shakeEl(bEl); shakeEl(jEl);
+      const b = BOX.find(x => x.k === bk);
+      $('#mHint').innerHTML = `✗ Not that one. Hint: ${b.hint}`; $('#mHint').className = 'hint bad';
+      Q.loseHeart(jEl);
+    }
+  }
+  function done() {
+    $('#mHint').innerHTML = '✓ All seven on the board. That’s the starter kit for most step-2 diagrams.';
+    $('#mReset').style.display = '';
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => Q.quiz($('#s2quiz'), {
+      q: 'Posts can include video. Which box serves video quickly to users all over the world?',
+      options: ['Message queue', 'CDN', 'Load balancer', 'Relational database'],
+      correct: 1,
+      good: 'A CDN keeps copies of static media (images, video) on servers close to users, so a viewer in Tokyo doesn’t fetch from a data centre in Virginia.',
+      bad: 'That’s the CDN’s job: copies of static media on servers near users. A queue moves work, a load balancer spreads requests, and a database isn’t built to stream video worldwide.',
+      onDone: () => setTimeout(() => Q.clearStage(2), 900),
+    }), 500);
+  }
+  $('#mReset').onclick = () => { $('#mReset').style.display = 'none'; build(); };
+  build();
+});
+
+/* ================= STAGE 3: two flows ================= */
+Q.onStage(3, () => {
+  const T = {
+    user: 'User', lb: 'Load balancer', web: 'Web servers', post: 'Post service', pcache: 'Post cache', pdb: 'Post DB',
+    fanout: 'Fanout service', nfcache: 'News feed cache', notif: 'Notification service', nfsvc: 'News feed service',
+    search: 'Search index', pay: 'Payment service',
+  };
+  const PRE = {
+    pub: { user: [], lb: ['user'], web: ['lb'], post: ['web'], pcache: ['post'], pdb: ['post'], fanout: ['web'], nfcache: ['fanout'], notif: ['web'] },
+    read: { user: [], lb: ['user'], web: ['lb'], nfsvc: ['web'], nfcache: ['nfsvc'] },
+  };
+  const NAME = { pub: 'Publish a post', read: 'Load my feed' };
+  const DISTRACT = {
+    search: 'Not in either flow. Search is a separate feature, and the book’s step-2 figures don’t need it.',
+    pay: 'Nothing here takes money. Boxes you can’t justify read as over-engineering.',
+  };
+  const goals = new Set(), placed = { pub: [], read: [] }, distractHit = new Set();
+  let lane = 'pub', quizShown = false, predicted = false;
+  const hint = (html, cls) => { const h = $('#laneHint'); h.innerHTML = html; h.className = 'hint' + (cls ? ' ' + cls : ''); };
+
+  $('#palette').innerHTML = shuffle(Object.keys(T)).map(k => `<button class="opt" data-t="${k}">${T[k]}</button>`).join('');
+  function chip(k) { return `<span class="tchip">${T[k]}</span>`; }
+  function render() {
+    const p = placed.pub, r = placed.read;
+    // publish lane: main chain, then one row per service with its stores
+    let h = '';
+    const main = ['user', 'lb', 'web'].filter(k => p.includes(k));
+    if (!p.length) h = '<span class="ph">tap boxes in order…</span>';
+    else {
+      h += `<div class="flowrow">${main.map(chip).join('<span class="ar">→</span>')}</div>`;
+      [['post', ['pcache', 'pdb']], ['fanout', ['nfcache']], ['notif', []]].forEach(([s, kids]) => {
+        if (!p.includes(s)) return;
+        const ks = kids.filter(k => p.includes(k));
+        h += `<div class="flowrow br"><span class="ar">↳</span>${chip(s)}${ks.length ? '<span class="ar">→</span>' + ks.map(chip).join(' ') : ''}</div>`;
+      });
+    }
+    $('#pubFlow').innerHTML = h;
+    $('#readFlow').innerHTML = r.length ? `<div class="flowrow">${r.map(chip).join('<span class="ar">→</span>')}</div>` : '<span class="ph">tap boxes in order…</span>';
+    $('#pubCount').textContent = `${p.length} / 9`; $('#readCount').textContent = `${r.length} / 5`;
+    $$('#lanes .lane').forEach(l => {
+      const k = l.dataset.lane;
+      l.classList.toggle('active', k === lane); l.setAttribute('aria-pressed', k === lane);
+      l.classList.toggle('full', placed[k].length === Object.keys(PRE[k]).length);
+    });
+  }
+  function setLane(k) {
+    lane = k; render();
+    const full = placed[k].length === Object.keys(PRE[k]).length;
+    hint(full ? `<b>${NAME[k]}</b> is complete. Pick the other lane.` : `Building: <b>${NAME[k]}</b>.`);
+  }
+  $$('#lanes .lane').forEach(l => l.onclick = () => setLane(l.dataset.lane));
+  $$('#palette .opt').forEach(b => b.onclick = () => {
+    const k = b.dataset.t, pre = PRE[lane], have = placed[lane];
+    if (DISTRACT[k]) {
+      shakeEl(b); hint('✗ ' + DISTRACT[k], 'bad');
+      if (!distractHit.has(k)) { distractHit.add(k); Q.loseHeart(b); }
+      return;
+    }
+    if (have.length === Object.keys(pre).length) { shakeEl(b); hint(`<b>${NAME[lane]}</b> is complete. Tap the other lane to build it.`); return; }
+    if (!(k in pre)) {
+      shakeEl(b);
+      hint(lane === 'pub'
+        ? `${T[k]} isn’t part of publishing. It reads feeds, so it belongs to <b>Load my feed</b>.`
+        : `${T[k]} isn’t on the read path. In the book’s figure, loading a feed goes through the news feed service to the news feed cache.`);
+      return;
+    }
+    if (have.includes(k)) { shakeEl(b); hint(`${T[k]} is already in this lane.`); return; }
+    const missing = pre[k].filter(x => !have.includes(x));
+    if (missing.length) {
+      shakeEl(b);
+      const chainGap = ['user', 'lb', 'web'].find(x => !have.includes(x));
+      hint(chainGap
+        ? `Not yet. Follow the request: it starts at the <b>User</b> and takes each hop in turn. Next: <b>${T[chainGap]}</b>.`
+        : `Not yet: ${T[k]} comes after <b>${missing.map(x => T[x]).join(', ')}</b>.`);
+      return;
+    }
+    have.push(k); render();
+    const total = Object.keys(pre).length;
+    if (have.length === total) {
+      const g = lane;
+      hint(g === 'pub' ? '✓ Publish lane done. One request splits three ways after the web servers.' : '✓ Read lane done. Loading a feed is a short, simple path. That’s on purpose: reads are the hot path.', 'good');
+      checkGoal('#s3goals', g, goals, 20);
+      const other = g === 'pub' ? 'read' : 'pub';
+      if (placed[other].length < Object.keys(PRE[other]).length) setTimeout(() => { setLane(other); hint(`Now building: <b>${NAME[other]}</b>.`); }, 900);
+      maybeQuiz();
+    } else hint(`✓ ${T[k]} placed (${have.length} of ${total}).`, 'good');
+  });
+  render();
+
+  /* ---- the diagram ---- */
+  const svg = $('#feedSvg');
+  const B = {
+    user: [120, 6, 120, 32, '📱 User'], lb: [120, 60, 120, 30, 'Load balancer'], web: [120, 112, 120, 30, 'Web servers'],
+    post: [4, 172, 84, 40, 'Post\nservice'], notif: [94, 172, 84, 40, 'Notification\nservice'], fanout: [184, 172, 84, 40, 'Fanout\nservice'], nfsvc: [274, 172, 84, 40, 'News feed\nservice'],
+    pcache: [4, 240, 40, 40, 'Post\ncache', 1], pdb: [48, 240, 40, 40, 'Post\nDB', 1], nfcache: [184, 240, 174, 70, '', 1],
+  };
+  const FR = ['Bob', 'Cy', 'Dee', 'Eli', 'Fay'];
+  const top = k => [B[k][0] + B[k][2] / 2, B[k][1]], bot = k => [B[k][0] + B[k][2] / 2, B[k][1] + B[k][3]];
+  const slotC = i => [190 + i * 33.5 + 14, 290], phoneC = i => [112 + i * 58, 352];
+  const eg = S('g', {}, svg);
+  [['user', 'lb'], ['lb', 'web'], ['web', 'post'], ['web', 'notif'], ['web', 'fanout'], ['web', 'nfsvc'], ['post', 'pcache'], ['post', 'pdb'], ['fanout', 'nfcache'], ['nfsvc', 'nfcache']].forEach(([a, b]) => {
+    let [x1, y1] = bot(a), [x2, y2] = top(b);
+    if (b === 'nfcache') x2 = x1;
+    S('line', { class: 'edge', x1, y1, x2, y2 }, eg);
+  });
+  const boxG = {};
+  Object.entries(B).forEach(([k, [x, y, w, h, t, store]]) => {
+    const g = S('g', { class: 'fb' + (store ? ' store' : '') }, svg);
+    S('rect', { x, y, width: w, height: h, rx: 9 }, g);
+    if (t) label(g, x + w / 2, y + h / 2, t);
+    boxG[k] = g;
+  });
+  S('text', { class: 'cap', x: 271, y: 256 }, svg).textContent = 'News feed cache (post IDs)';
+  const SEED = [877, 869, 858, 851, 845];
+  const slots = FR.map((n, i) => {
+    const g = S('g', { class: 'slot' }, svg);
+    S('rect', { x: 190 + i * 33.5, y: 264, width: 29, height: 40 }, g);
+    S('text', { x: 190 + i * 33.5 + 14.5, y: 275 }, g).textContent = n;
+    const id = S('text', { class: 'sid', x: 190 + i * 33.5 + 14.5, y: 293 }, g); id.textContent = SEED[i];
+    return { g, id };
+  });
+  S('text', { class: 'cap', x: 228, y: 330 }, svg).textContent = 'Alice’s friends’ phones';
+  const phones = FR.map((n, i) => {
+    const [x, y] = phoneC(i);
+    const g = S('g', { class: 'phone' }, svg);
+    const ic = S('text', { class: 'ico', x, y }, g); ic.textContent = '📱';
+    S('text', { x, y: y + 20 }, g).textContent = n;
+    return ic;
+  });
+  const fx = S('g', {}, svg);
+  async function fly([x1, y1], [x2, y2], color, dur = 520) {
+    const c = S('circle', { class: 'pk', r: 6, cx: x1, cy: y1 }, fx); c.style.fill = color;
+    await anim(dur, p => { const e = ease(p); c.setAttribute('cx', x1 + (x2 - x1) * e); c.setAttribute('cy', y1 + (y2 - y1) * e); });
+    c.remove();
+  }
+  function flash(k, cls) { const g = boxG[k]; g.classList.add(cls); setTimeout(() => g.classList.remove(cls), Q.reduced ? 200 : 700); }
+  let running = false, published = false;
+  const PUB = 'var(--pub)', RD = 'var(--rd)', BELL = 'var(--bell)';
+  async function hop(a, b, color, cls) { await fly(bot(a), top(b), color); flash(b, cls); }
+  async function publish() {
+    running = true; $('#btnPub').disabled = true; $('#btnRead').disabled = true;
+    slots.forEach(s => s.g.classList.remove('new', 'readme')); phones.forEach(p => p.textContent = '📱');
+    logTo('feedLog', '📸 Alice posts a photo: <b>POST /v1/me/feed</b>');
+    flash('user', 'hot');
+    await hop('user', 'lb', PUB, 'hot'); await hop('lb', 'web', PUB, 'hot');
+    logTo('feedLog', 'Web servers hand the post to three services at once.');
+    await Promise.all([hop('web', 'post', PUB, 'hot'), hop('web', 'fanout', PUB, 'hot'), hop('web', 'notif', PUB, 'hot')]);
+    await Promise.all([
+      hop('post', 'pcache', PUB, 'hot'), hop('post', 'pdb', PUB, 'hot'),
+      ...slots.map((s, i) => fly(bot('fanout'), [slotC(i)[0], 266], PUB, 520 + i * 90).then(() => { s.id.textContent = '901'; s.g.classList.add('new'); })),
+      ...phones.map((p, i) => fly(bot('notif'), [phoneC(i)[0], phoneC(i)[1] - 8], BELL, 700 + i * 90).then(() => { p.textContent = '🔔'; })),
+    ]);
+    logTo('feedLog', 'Post service: post <b>901</b> saved in the post cache and post DB.', 'g');
+    logTo('feedLog', 'Fanout service: post ID 901 pushed to the top of all 5 friends’ feeds.', 'g');
+    logTo('feedLog', 'Notification service: 5 friends get a 🔔 "new post" alert.', 'w');
+    published = true; running = false;
+    $('#btnPub').disabled = false; $('#btnRead').disabled = false;
+    $('#btnPub').textContent = '↻ Alice posts again';
+  }
+  async function read() {
+    running = true; $('#btnPub').disabled = true; $('#btnRead').disabled = true;
+    slots.forEach(s => s.g.classList.remove('readme'));
+    logTo('feedLog', '📰 Bob opens his feed: <b>GET /v1/me/feed</b>');
+    flash('user', 'hotr');
+    await hop('user', 'lb', RD, 'hotr'); await hop('lb', 'web', RD, 'hotr'); await hop('web', 'nfsvc', RD, 'hotr');
+    await fly(bot('nfsvc'), [slotC(0)[0], 266], RD); slots[0].g.classList.add('readme');
+    await W(250);
+    await fly([slotC(0)[0], 266], bot('nfsvc'), RD); flash('nfsvc', 'hotr');
+    await fly(top('nfsvc'), bot('web'), RD); flash('web', 'hotr');
+    await fly(top('web'), bot('lb'), RD); await fly(top('lb'), bot('user'), RD); flash('user', 'hotr');
+    const ids = published ? '[901, 877, 862, 840]' : '[877, 862, 840, 833]';
+    logTo('feedLog', `News feed cache → Bob’s feed = <b class="feedlist">${ids}</b>, newest first. Just IDs: Ch. 11 then fills in the text and photos from other caches.`, 'g');
+    running = false; $('#btnPub').disabled = false; $('#btnRead').disabled = false;
+    checkGoal('#s3goals', 'bob', goals, 10); maybeQuiz();
+  }
+  function askPredict() {
+    const box = $('#pred3'); box.style.display = '';
+    const opts = ['Post DB', 'News feed cache', 'Notification service'], correct = 1;
+    box.innerHTML = `<div class="step">Predict first</div><h3>Alice is about to post. Later, when Bob opens his feed, which box will his feed be read from?</h3><div class="opts"></div><div class="explain"></div>`;
+    shuffle(opts.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = async () => {
+        $$('.opt', box).forEach(x => x.disabled = true); b.classList.add('picked');
+        box.scrollIntoView({ behavior: Q.reduced ? 'auto' : 'smooth', block: 'nearest' });
+        await publish();
+        const ok = i === correct;
+        b.classList.add(ok ? 'right' : 'wrong'); if (!ok) $(`.opt[data-i="${correct}"]`, box).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Watch the slots.</b> ') + 'The fanout service wrote post 901 straight into each friend’s slot in the <b>news feed cache</b>. Bob’s feed is already built before he asks for it, so reading it is one quick lookup. The post DB is the long-term record, and the notification service only sends alerts.';
+        ok ? Q.addXP(20, b) : Q.loseHeart(b);
+        predicted = true; goals.add('pred'); $('#s3goals [data-g="pred"]').classList.add('done');
+        maybeQuiz();
+      };
+      $('.opts', box).appendChild(b);
+    });
+  }
+  $('#btnPub').onclick = () => { if (running) return; if (!predicted) askPredict(); else publish(); };
+  $('#btnRead').onclick = () => { if (!running) read(); };
+  function maybeQuiz() {
+    if (quizShown || goals.size < 4) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s3quiz'), {
+      q: 'Which service puts a new post into friends’ feeds?',
+      options: ['Notification service', 'Fanout service', 'Load balancer', 'News feed service'],
+      correct: 1,
+      good: 'The fanout service takes one post and writes it into many feeds, one per friend. The notification service only tells friends something is new, and the news feed service reads feeds back.',
+      bad: 'It’s the fanout service: one post in, many feed entries out. Notifications are just alerts, the news feed service reads feeds, and the load balancer only spreads requests.',
+      onDone: () => setTimeout(() => Q.clearStage(3), 900),
+    }), 500);
+  }
+});
+
+/* ================= STAGE 4: zoom dials ================= */
+Q.onStage(4, () => {
+  const LV = ['Boxes only', 'Boxes + key APIs', 'Boxes + APIs + schema'];
+  const CARDS = [
+    { e: '🔎', t: 'Design Google search', d: 'Crawl the web, index it, rank results, serve billions of queries.', a: 0,
+      why: 'A huge system: crawling, indexing, ranking, serving. Endpoints and tables would eat your whole step 2, and the book calls that level too low here.' },
+    { e: '🃏', t: 'Backend for a multiplayer poker game', d: 'Tables, seats, hands, bets, players joining and leaving.', a: 2,
+      why: 'Small and well-bounded. The book calls endpoints and schema fair game here: the game state and the calls that change it <i>are</i> the design.' },
+    { e: '📰', t: 'News feed, 10 million daily users', d: 'Publish posts, read a feed of friends’ posts.', a: 1,
+      why: 'A middle ground. Boxes for the two flows, plus the two calls that define them: <code>POST /v1/me/feed</code> to publish and <code>GET /v1/me/feed</code> to read (the ones Ch. 11 uses). Tables can wait.' },
+    { e: '🔗', t: 'URL shortener', d: 'Turn a long URL into a short one, and redirect back.', a: 2,
+      why: 'Small system. Two endpoints (shorten, redirect) and one table (short code ↔ long URL) are most of the design. Ch. 8 sketches the API in its high-level design and gets to the table right after.' },
+    { e: '▶️', t: 'Design YouTube', d: 'Upload, transcode and stream video to the world.', a: 0,
+      why: 'Big system with many moving parts. Start with the boxes for the upload and streaming flows. Add APIs only if the interviewer asks.' },
+  ];
+  let doneN = 0, quizShown = false;
+  function needle(card, i) { $('.ndl', card).style.transform = `rotate(${(i - 1) * 60}deg)`; }
+  function build() {
+    doneN = 0;
+    $('#zgrid').innerHTML = CARDS.map((c, ci) => `<div class="zcard" data-c="${ci}">
+      <svg class="dial" viewBox="0 0 100 62" aria-hidden="true"><path class="arc" d="M10 52 A40 40 0 0 1 90 52"/>
+        <circle class="tk" cx="15.4" cy="32" r="3"/><circle class="tk" cx="50" cy="12" r="3"/><circle class="tk" cx="84.6" cy="32" r="3"/>
+        <line class="ndl" x1="50" y1="52" x2="50" y2="20" style="transform:rotate(-90deg)"/><circle class="hub" cx="50" cy="52" r="5"/></svg>
+      <h3>${c.e} ${c.t}</h3><p class="d">${c.d}</p>
+      <div class="zbtns">${LV.map((l, i) => `<button class="opt" data-i="${i}">${l}</button>`).join('')}</div>
+      <div class="explain"></div></div>`).join('');
+    $$('#zgrid .zcard').forEach(card => {
+      const c = CARDS[+card.dataset.c];
+      $$('.zbtns .opt', card).forEach(b => b.onclick = () => {
+        const i = +b.dataset.i, off = Math.abs(i - c.a);
+        $$('.zbtns .opt', card).forEach(x => x.disabled = true);
+        needle(card, i);
+        b.classList.add(off === 0 ? 'right' : 'wrong');
+        if (off) $(`.zbtns .opt[data-i="${c.a}"]`, card).classList.add('right');
+        card.classList.add(off === 0 ? 'ok' : off === 1 ? 'half' : 'no');
+        const ex = $('.explain', card);
+        ex.className = 'explain show ' + (off === 0 ? 'good' : 'bad');
+        ex.innerHTML = (off === 0 ? '<b>Spot on.</b> ' : off === 1 ? `<b>One notch off: half credit.</b> Best fit: <i>${LV[c.a]}</i>. ` : `<b>Two notches off.</b> Best fit: <i>${LV[c.a]}</i>. `) + c.why + (off === 1 ? ' <i>When unsure, ask the interviewer.</i>' : '');
+        if (off === 0) Q.addXP(15, b); else if (off === 1) Q.addXP(7, b); else Q.loseHeart(b);
+        if (++doneN === CARDS.length) finish();
+      });
+    });
+  }
+  function finish() {
+    $('#zReset').style.display = '';
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => Q.quiz($('#s4quiz'), {
+      q: 'You’re not sure whether to sketch the database schema now. Best move?',
+      options: ['Always draw the full schema right away', 'Never draw a schema in an interview', 'Ask the interviewer if they want it now', 'Draw it quietly in a corner of the board'],
+      correct: 2,
+      good: 'The book’s advice is simply to talk to the interviewer about it. One quick question saves you from spending ten minutes on the wrong level of detail.',
+      bad: 'Neither "always" nor "never" is right: it depends on the problem. When unsure, ask the interviewer whether they want it now or later.',
+      onDone: () => setTimeout(() => Q.clearStage(4), 900),
+    }), 500);
+  }
+  $('#zReset').onclick = () => build();
+  build();
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => {
+  const cfg = {
+    name: '🧱 The Whiteboard Wall',
+    xp: 15,
+    choices: [
+      { k: 'adjust', label: 'Adjust', sub: 'change the blueprint' },
+      { k: 'defend', label: 'Defend', sub: 'give a short reason' },
+      { k: 'park', label: 'Park it', sub: 'for the deep dive' },
+      { k: 'ask', label: 'Ask', sub: 'clarify first' },
+    ],
+    scenarios: [
+      { e: '🔔', t: '"Do we even need a notification service?"', d: 'The interviewer taps that box on your diagram.', a: 'defend',
+        why: 'The requirement says friends see new posts, and an alert is how they find out without refreshing. One sentence of "why", then move on. Don’t rip out a box just because it was questioned.' },
+      { e: '📶', t: '"Most users are on phones with weak networks. Videos load slowly."', d: 'Posts can hold video, and there’s nothing on your board for media.', a: 'adjust',
+        why: 'A valid gap. Add object storage for the media files and a CDN to serve them from servers near users. Taking good feedback quickly is a strong signal.' },
+      { e: '⭐', t: '"How exactly does fanout handle a celebrity with millions of followers?"', d: 'It’s minute 15 and you haven’t drawn the read flow yet.', a: 'park',
+        why: 'Great question, wrong moment. Say so, write "celebrity fanout" on the board, finish the blueprint, and make it a deep-dive topic in step 3.' },
+      { e: '⚡', t: '"Make it faster."', d: 'That’s all they say.', a: 'ask',
+        why: 'Faster at what? Posting, or loading the feed? Which number matters: average latency or the slowest 1% of requests? You can’t design for a goal you haven’t pinned down.' },
+      { e: '🐢', t: '"Your post service saves to the DB, then fans out to every friend, all before replying. Posting feels slow."', d: 'They’re right: the user waits for 5,000 feed writes.', a: 'adjust',
+        why: 'Save the post, reply right away, and put the fanout work on a message queue for workers to do in the background. Posting gets fast, and friends see the post moments later.' },
+      { e: '🗄️', t: '"Why put a cache in front of the post DB?"', d: 'They seem to be testing whether you know.', a: 'defend',
+        why: 'Feeds are read far more often than posts are written, and recent posts are read again and again. A cache serves those hot reads from memory and takes load off the database. Give the reason; keep the box.' },
+    ],
+    outro: 'Adjust when the point is valid, defend with a reason when it isn’t, and park details until the deep dive.',
+    onDone: wins => {
+      const r = $('#bossRetry'); r.innerHTML = '';
+      if (wins >= 4) { Q.clearStage(5); nextBtn(r, '↻ Fight the Wall again (practice)', start, false); }
+      else { r.innerHTML = `<p class="small" style="margin:0;flex-basis:100%">${wins} of 6 isn’t enough. The Wall holds. You need at least 4. Rematches pay less XP.</p>`; nextBtn(r, '⚔️ Rematch', start); }
+    },
+  };
+  let round = 0;
+  function start() {
+    round++;
+    $('#bossRetry').innerHTML = '';
+    Q.boss($('#boss'), { ...cfg, xp: round === 1 ? 15 : 5, name: round === 1 ? cfg.name : `${cfg.name} · rematch ${round - 1}` });
+  }
+  start();
+});
+
+/* ================= STAGE 6: interview drill ================= */
+Q.onStage(6, () => Q.drill($('#drill'), {
+  prompt: 'Scope is agreed. The interviewer hands you the marker: <i>"Walk me through your high-level design for the news feed."</i>',
+  placeholder: 'I’ll split it into two flows…',
+  model: '"I\'ll split it into two flows. Publishing: the client goes through a load balancer to stateless web servers. The post service saves the post to a database with a cache in front. A fanout service then pushes the post ID into each friend\'s feed in a news feed cache, and a notification service pings them. Reading: the client hits the news feed service, which reads the ready-made list of post IDs from the feed cache, newest first. Media goes to object storage and is served through a CDN. Before I go deeper, does this shape match what you want to focus on?"',
+  checks: ['I split it into a publish flow and a read flow', 'I named the fanout service and the news feed cache', 'I mentioned the load balancer and web servers', 'I ended by checking in with the interviewer'],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

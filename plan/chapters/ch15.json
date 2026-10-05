@@ -1,0 +1,397 @@
+{
+  "world": 15,
+  "chapterTitle": "Design Google Drive",
+  "worldName": "The Cloud Locker",
+  "quests": [
+    {
+      "n": "15.1",
+      "slug": "drive-scope-and-apis",
+      "t": "Claim Your Locker",
+      "d": "Scope Google Drive, run the numbers, design the upload/download/revision APIs, outgrow one server",
+      "boss": false,
+      "badge": "🗄️ Badge: Locker Keeper",
+      "winTitle": "Locker claimed!",
+      "goal": "Your win today: in the first five minutes you can scope a Google Drive design out loud (features, non-functional requirements, 10M DAU, 500 PB, ~240 upload QPS), name the three APIs and explain why large files need a resumable upload.",
+      "bookSections": "Step 1 (Understand the problem and establish design scope, Back-of-the-envelope estimation); Step 2 first half (Start with a single server, APIs, Move away from single server)",
+      "stages": [
+        {
+          "title": "What are we building?",
+          "sub": "Step 1 · ask before you draw",
+          "teaches": "The book's clarifying Q&A: most important features = upload and download files, file sync, notifications. Mobile app AND web app. Any file type. Files must be encrypted in storage. File size limit 10 GB. 10M DAU. In scope: add files (drag and drop), download files, sync across multiple devices, see file revisions, share files with friends/family/coworkers, notifications when a file is edited, deleted or shared with you. OUT of scope: Google Docs-style real-time collaborative editing (that's a different problem: operational transform / CRDTs). Non-functional requirements: reliability (data loss is unacceptable — the #1 requirement for a storage product), fast sync speed (slow sync = users leave), low bandwidth usage (matters on mobile data plans), scalability (high traffic), high availability (people keep working when some servers are slow, down or disconnected by network errors).",
+          "interaction": "Sort-the-cards: 12 feature cards fall into a tray ('Drag & drop upload', 'Download a file', 'Sync across my laptop and phone', 'See old revisions', 'Share with a coworker', 'Notify me when a shared file is edited', 'Two people typing in the same doc live', 'Encrypt files at rest', 'Reject files over 10 GB', 'Built-in photo editor', 'Never lose a byte', 'Sync must feel fast'). Learner taps each into one of three bins: 'Functional (in scope)', 'Non-functional', 'Out of scope'. Right answers: live co-editing and photo editor -> Out of scope; encryption, 'never lose a byte', 'sync must feel fast' -> Non-functional (encryption is a stated requirement, accept it in either Functional or Non-functional); the rest -> Functional. Wrong drops shake and explain. After sorting, a second mini-step: five non-functional chips (reliability, fast sync, bandwidth, scalability, availability) — learner taps the one the book calls most important for a storage product (reliability: 'data loss is unacceptable').",
+          "check": "Q.quiz: 'The interviewer says: and users can edit Google Docs together in real time, right?' Best reply: 'That's real-time collaborative editing — I'd scope it out and focus on file upload, download, sync and notifications.' Distractors: start designing operational transform; ignore the question; say Drive can't do that."
+        },
+        {
+          "title": "Run the numbers",
+          "sub": "Back-of-the-envelope, calculate-and-check",
+          "teaches": "Book assumptions: 50M signed-up users, 10M DAU. Each user gets 10 GB free. Users upload 2 files per day; average file size 500 KB. Read:write ratio 1:1. Results: total space allocated = 50M x 10 GB = 500 PB. Upload QPS = 10M x 2 / 24 h / 3600 s ≈ 231, book rounds to ~240. Peak QPS = 2 x QPS ≈ 480. Derived (not in book, flag it as such): new data per day ≈ 20M uploads x 500 KB = 10 TB/day, so the 500 PB is the *quota* promised, not what's actually used on day one. Senior habit: say the rounding out loud and move on; estimates exist to pick an architecture, not to be exact.",
+          "interaction": "Calculator cards, one at a time. Each shows the givens and an input box: (1) total allocated storage in PB (answer 500; accept 490–510); (2) upload QPS (accept 220–250; show 231 and the book's '~240'); (3) peak QPS (accept 440–500); (4) bonus: TB written per day (accept 9–11). A 'show my work' toggle reveals the chain with unit conversions (1 PB = 10^6 GB; 86,400 s/day). Each correct answer lights up a gauge on a server-rack graphic; a wrong answer shows the most common slip (e.g. forgetting to divide by 86,400 or using 50M instead of 10M DAU for QPS).",
+          "check": "Q.quiz: 'Why does the estimate use 10M (DAU) for QPS but 50M for storage?' Correct: storage is allocated to every signed-up user; traffic only comes from people active that day."
+        },
+        {
+          "title": "Three doors in",
+          "sub": "The APIs: upload, download, revisions",
+          "teaches": "Book's APIs (all require user authentication and HTTPS/SSL so data is protected in transit). (1) Upload: two kinds — simple upload for small files, and resumable upload for large files where the network may drop. Example: POST https://api.example.com/files/upload?uploadType=resumable, data = local file. Resumable upload is 3 steps: send the initial request to get a resumable URL; upload the data and monitor the upload state; if the upload is disturbed, resume it. (2) Download: GET https://api.example.com/files/download, param path. (3) Get file revisions: GET https://api.example.com/files/list_revisions, params path and limit (max number of revisions to return). Real-world detail (Google Drive API docs): the initial request returns a session URI; the client uploads in chunks (multiples of 256 KB); after a drop it asks the server how many bytes it has (server replies 308 Resume Incomplete with a Range header) and continues from there.",
+          "interaction": "Resumable-upload simulator. On screen: a 2 GB 'vacation-video.mp4' bar split into chunks, a laptop, a server, and a Wi-Fi toggle. Learner first picks a mode: Simple or Resumable. They press Upload; at ~70% the Wi-Fi drops automatically. Simple mode: the bar resets to 0% and a 'bytes wasted' counter shows ~1.4 GB. Resumable mode: three labelled steps animate (1 'POST ?uploadType=resumable -> session URL', 2 'PUT chunks…', 3 'drop! ask: how much did you get? -> 308, Range: bytes=0-1.4GB'); the learner must click 'Resume' and the bar continues from 70%. Then predict-then-watch: 'A 300 KB profile photo — which mode?' (Simple: one request, resumable's extra round trip isn't worth it.)",
+          "check": "Q.quiz: put the three resumable steps in order (tap-in-order): get resumable URL -> upload data and monitor state -> resume after disturbance. Plus one question: 'Which param stops list_revisions from returning 5,000 rows?' -> limit."
+        },
+        {
+          "title": "Outgrow the box",
+          "sub": "From one server to S3, predict-then-watch",
+          "teaches": "Book's start: one server — Apache web server, MySQL database for metadata (users, login info, file info), and a directory 'drive/' with 1 TB of storage, holding one namespace (folder) per user; a file is identified by namespace + relative path. Soon the disk is full (the book's alert: only 10 MB left). Fix 1: shard the data across storage servers by user_id. Worry: a server failure could lose data. Fix 2 (what Netflix and Airbnb do): put files in Amazon S3 — object storage with industry-leading scalability, availability, security and performance. S3 replication: same-region and cross-region; cross-region guards against losing a whole region. Then remove the other single points of failure: add a load balancer (spreads traffic; if a web server dies it routes around it), more web servers (stateless, add/remove with load), a metadata database moved off the server and replicated + sharded, and file storage = S3 replicated in two regions. Result: the 'many boxes' picture the rest of the chapter builds on.",
+          "interaction": "Predict-then-watch, three rounds on an animated single-server diagram with a disk gauge filling up. Round 1: gauge hits '10 MB left' — learner picks the next move from 4 cards (buy a bigger disk / shard by user_id / delete old files / compress everything); reveal: book shards by user_id, with a note that a bigger disk only delays the problem. Round 2: one shard server catches fire — 'what did we just lose?' (that user's files: sharding alone doesn't add copies) -> reveal S3 with same-region + cross-region replication, animate a region going dark while files are still served from the second region. Round 3: tap each remaining single point of failure on the diagram (web server, MySQL) and choose its fix (load balancer + more stateless web servers; replicate and shard the metadata DB). End state: the 4-box evolved diagram.",
+          "check": "Q.quiz: 'Why choose cross-region replication over same-region only?' Correct: survives the loss of an entire region (disaster), at the cost of extra storage and cross-region transfer."
+        },
+        {
+          "title": "Boss: The Scope Creep",
+          "sub": "Interview scenarios",
+          "teaches": "Applying scope, estimates and API choices under pressure.",
+          "interaction": "Q.boss with 5 scenario cards, 3 choices each, named '👾 The Scope Creep'. (1) 'Interviewer: we have 10M DAU, each uploads 2 files a day. Rough upload QPS?' -> ~240 (peak ~480) / 2,400 / 24,000. (2) 'A user uploads a 10 GB file on train Wi-Fi.' -> resumable upload / simple upload with retries / email it. (3) 'What's the one non-functional requirement you'd never trade away here?' -> reliability, no data loss / lowest latency / cheapest storage. (4) 'Our single server's disk is nearly full and we can't lose files.' -> move files to replicated object storage like S3 / shard across local disks only / add a cron job to delete old files. (5) 'How do you secure the APIs?' -> authenticate every call and use HTTPS / API keys in the query string over HTTP / trust the client app.",
+          "check": "Boss cleared when all 5 scenarios are answered; wrong picks cost a heart and show why."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "Scope in 60 seconds",
+          "teaches": "The opening of a Google Drive interview, compressed.",
+          "interaction": "Q.drill. Prompt: 'The interviewer says \"Design Google Drive.\" Give your first 60 seconds: scope, non-functional requirements and the key numbers.' Model answer: 'I'd focus on upload, download, sync across devices, revisions, sharing and notifications, on web and mobile, any file type up to 10 GB, encrypted at rest — and leave out real-time co-editing. The must-haves are reliability — no data loss — then fast sync, low bandwidth, scale and availability. With 50M users at 10 GB each that's 500 PB allocated; 10M DAU uploading 2 files a day is about 240 uploads per second, roughly 480 at peak. APIs: simple and resumable upload, download, and list revisions — all authenticated over HTTPS.' Self-check items: mentioned an out-of-scope item; named reliability first; 500 PB; ~240 / ~480 QPS; resumable upload for big files; auth + HTTPS.",
+          "check": "Self-graded checklist (Q.drill checks)."
+        }
+      ],
+      "caveats": [
+        "The 500 PB is storage *promised* (quota), not used. Most free users fill a small fraction; actual daily writes are around 10 TB/day under the book's own assumptions (our derivation, not the book's).",
+        "231 QPS rounds to the book's ~240; the 2x peak factor is a rule of thumb, not a measured number.",
+        "The resumable-upload details (session URI, 256 KB chunk multiples, HTTP 308 + Range) come from Google's Drive API docs, not the book; S3's equivalent is multipart upload.",
+        "Real Drive is far bigger than 50M users; the book's numbers are interview-sized."
+      ],
+      "sources": [
+        { "label": "ByteByteGo — Design Google Drive (book chapter)", "url": "https://bytebytego.com/courses/system-design-interview/design-google-drive" },
+        { "label": "Google Drive API — Upload file data (simple, multipart, resumable)", "url": "https://developers.google.com/drive/api/guides/manage-uploads" },
+        { "label": "Amazon S3", "url": "https://aws.amazon.com/s3/" },
+        { "label": "Amazon S3 — Replicating objects (same-region and cross-region)", "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/replication.html" },
+        { "label": "Amazon S3 — Multipart upload overview", "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html" }
+      ]
+    },
+    {
+      "n": "15.2",
+      "slug": "drive-blocks-and-delta-sync",
+      "t": "Chop It Into Blocks",
+      "d": "The high-level design, block servers, 4 MB blocks, delta sync, compress-then-encrypt",
+      "boss": false,
+      "badge": "🧱 Badge: Block Smith",
+      "winTitle": "Blocks forged!",
+      "goal": "Your win today: you can sketch the full high-level design (block servers, cloud + cold storage, API servers, metadata DB + cache, notification service, offline backup queue) and explain how splitting files into blocks makes sync fast and cheap with delta sync and compression.",
+      "bookSections": "Step 2 (High-level design: the component list); Step 3 (Block servers: delta sync, compression)",
+      "stages": [
+        {
+          "title": "Build the map",
+          "sub": "Step 2 · the high-level design, drag-to-place",
+          "teaches": "Book's high-level design components and what each does: User (browser or mobile app). Block servers: upload blocks to cloud storage; a file is split into blocks, each with a unique hash stored in the metadata DB; each block is stored as an independent object in S3; to rebuild a file, join its blocks in order. Block size: the book follows Dropbox's max of 4 MB. Cloud storage: the file's blocks live here (S3). Cold storage: for inactive data that's rarely accessed. Load balancer: spreads requests evenly among API servers. API servers: everything except the upload flow — user authentication, managing user profile, updating file metadata. Metadata database: metadata of users, files, blocks, versions (files themselves live in the cloud). Metadata cache: some metadata cached for fast retrieval. Notification service: a publisher/subscriber system that tells clients when a file is added/edited/removed elsewhere so they can pull the latest changes. Offline backup queue: if a client is offline and can't pull changes, the queue stores them so they sync when the client is back online.",
+          "interaction": "Drag-to-place architecture board. A blank diagram with labelled empty slots and arrows (user -> [ ] -> cloud storage, user -> [LB] -> [ ] -> [ ]+[ ], [ ] -> user, etc.). A tray holds 8 component tiles: Block servers, Cloud storage, Cold storage, Load balancer, API servers, Metadata DB, Metadata cache, Notification service, Offline backup queue. Each tile, when tapped, shows a one-line job description; learner drops it into a slot. Correct drop snaps and glows; wrong drop bounces with a hint ('this one only handles uploading blocks'). Finished board = the book's figure, and it is reused as a mini-map in later quests.",
+          "check": "Q.quiz: 'A client's laptop was closed all weekend while a coworker edited 30 shared files. Which component makes sure it catches up?' -> Offline backup queue (with the notification service). Distractors: cold storage, metadata cache, load balancer."
+        },
+        {
+          "title": "Split, squash, lock, ship",
+          "sub": "The block-server pipeline, sort-in-order",
+          "teaches": "Book flow: a new file is split into smaller blocks, each block is compressed, then encrypted, then uploaded to cloud storage. Compression algorithms depend on file type: gzip/bzip2 for text; images and video use different algorithms (often already compressed). Order matters: compress BEFORE encrypt — good encryption makes output look random, and random data doesn't compress. Each block is identified by a hash of its content (the book just says 'unique hash value'; in practice a cryptographic hash like SHA-256), stored in the metadata DB alongside block order.",
+          "interaction": "Tap-in-order: four shuffled pipeline tiles (Split into 4 MB blocks / Compress / Encrypt / Upload to S3) — learner taps them in order. Then a 'spot-the-bug' twist: a teammate's pipeline runs Encrypt then Compress; a live meter shows a 40 MB log file compressing to 6 MB in the right order but staying ~40 MB in the wrong order. Learner clicks the line that's wrong and picks the reason from 3 options (encrypted bytes look random so compression finds no patterns).",
+          "check": "Q.quiz: 'Which file is LEAST worth gzipping?' -> an .mp4 video (already compressed). Others: a CSV, a .log file, a JSON export."
+        },
+        {
+          "title": "Only send what changed",
+          "sub": "Delta sync, predict-then-watch",
+          "teaches": "Delta sync: when a file is modified, only the modified blocks are synced, not the whole file (the book's figure: only 'block 2' and 'block 5' are uploaded). Two wins: less bandwidth, faster sync — both non-functional requirements from step 1. How the system knows which blocks changed: compare each block's hash with the stored hash list. 10 blocks x 4 MB = a 40 MB file; editing 2 blocks sends 8 MB (20%). Also enables resumable uploads at block granularity and cross-file dedup later (quest 15.5).",
+          "interaction": "Predict-then-watch on a 40 MB 'thesis.docx' drawn as 10 numbered 4 MB blocks with short hash labels (a3f…, 9bc…). Round 1: learner edits a paragraph (button 'edit chapter 2' and 'edit chapter 5'); before syncing they type how many MB will be uploaded (answer 8). Watch: blocks 2 and 5 flash with new hashes and fly to the cloud; a counter shows '8 MB sent, 32 MB saved'. Round 2 (the honest caveat): 'insert one byte at the very start of the file' — predict how many blocks change with fixed-size 4 MB blocks. Watch: every boundary shifts, all 10 hashes change, 40 MB sent. Then a toggle 'content-defined chunking' (boundaries chosen by a rolling hash of the content, like rsync / Dropbox's real approach) re-runs it: only block 1 changes. Learner notes the takeaway in one tap: 'fixed blocks break on inserts; content-defined boundaries fix it'.",
+          "check": "Q.quiz: 'A 40 MB file in 4 MB blocks; you edit bytes inside blocks 3, 4 and 9 without changing the file's length. How much does delta sync upload?' -> 12 MB."
+        },
+        {
+          "title": "Lock it in",
+          "sub": "Quick recall",
+          "teaches": "Consolidation: 4 MB max block (Dropbox), hash per block in metadata DB, blocks stored as independent S3 objects, rebuild by joining blocks in order, delta sync, compress-then-encrypt, cold storage for inactive data, the offline backup queue's job.",
+          "interaction": "Three rapid Q.quiz cards in a row (tag 'Recall'): (1) 'How is a file rebuilt for download?' -> join its blocks in block order. (2) 'Where are the block hashes kept?' -> metadata DB (not S3, not the cache only). (3) 'What does an API server NOT do in this design?' -> upload file blocks (that's the block servers).",
+          "check": "All three quizzes answered."
+        },
+        {
+          "title": "Boss: The Bandwidth Hog",
+          "sub": "Interview scenarios",
+          "teaches": "Applying blocks, delta sync and pipeline order.",
+          "interaction": "Q.boss '👾 The Bandwidth Hog', 4 scenarios, 3 choices each. (1) 'A user fixes a typo in a 2 GB video project file; the whole 2 GB re-uploads. What's missing?' -> delta sync on blocks / a bigger pipe / a CDN. (2) 'Mobile users complain sync burns their data plan.' -> delta sync + compression / upload at night only / disable mobile sync. (3) 'Security asks that S3 never sees plaintext; ops asks that we compress. In what order?' -> compress then encrypt / encrypt then compress / either, it doesn't matter. (4) 'Why does the API server not just accept the whole file?' -> block servers own chunking/compressing/encrypting so API servers stay light and the block logic lives in one place / API servers can't speak HTTPS / S3 forbids it.",
+          "check": "Boss cleared when all 4 are answered."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "Explain block storage in 45 seconds",
+          "teaches": "Pulling the high-level design and block servers together.",
+          "interaction": "Q.drill. Prompt: 'Interviewer: how do files get from the client into storage, and how do you keep sync fast?' Model: 'Clients talk to API servers through a load balancer for metadata, and to block servers for file content. Block servers split each file into blocks of up to 4 MB, compress them, encrypt them, and store each as its own object in S3, with each block's hash and order in the metadata DB. When a file changes we compare hashes and only upload the blocks that changed — delta sync — which saves bandwidth and makes sync fast. Rarely used data moves to cold storage, a notification service tells other devices something changed, and an offline backup queue holds changes for devices that are offline.' Checks: block size ~4 MB; compress before encrypt; hashes in metadata DB; delta sync; notification service; offline backup queue.",
+          "check": "Self-graded checklist."
+        }
+      ],
+      "caveats": [
+        "Fixed-size blocks make delta sync fragile: inserting bytes near the start shifts every block boundary. Real sync engines use rsync-style rolling hashes or content-defined chunking so only the touched region changes. The book doesn't cover this.",
+        "In the book, block servers do the chunking, yet delta sync only saves *upload* bandwidth if the client knows which blocks changed. Real Dropbox clients chunk and hash locally and upload only blocks the server lacks; the book revisits this as an alternative in its wrap-up.",
+        "4 MB is Dropbox's block size, not a universal rule; bigger blocks mean fewer metadata rows but coarser deltas.",
+        "'Unique hash value' in practice means a cryptographic hash such as SHA-256; a weak hash would let two different blocks collide."
+      ],
+      "sources": [
+        { "label": "ByteByteGo — Design Google Drive (book chapter)", "url": "https://bytebytego.com/courses/system-design-interview/design-google-drive" },
+        { "label": "Tridgell & Mackerras — The rsync algorithm (tech report)", "url": "https://rsync.samba.org/tech_report/" },
+        { "label": "Dropbox Tech — Streaming File Synchronization", "url": "https://dropbox.tech/infrastructure/streaming-file-synchronization" },
+        { "label": "How We've Scaled Dropbox (Kevin Modzelewski, 2012 talk)", "url": "https://www.youtube.com/watch?v=PE4gwstWhmc" }
+      ]
+    },
+    {
+      "n": "15.3",
+      "slug": "drive-metadata-and-conflicts",
+      "t": "The Metadata Ledger",
+      "d": "Strong consistency, cache invalidation, the metadata schema, and sync conflicts",
+      "boss": false,
+      "badge": "📒 Badge: Ledger Keeper",
+      "winTitle": "Ledger balanced!",
+      "goal": "Your win today: you can explain why Drive's metadata needs strong consistency (and a relational DB), sketch the user/device/namespace/file/file_version/block schema, and say exactly what happens when two people edit the same file at once.",
+      "bookSections": "Step 3 (High consistency requirement, Metadata database); Step 2 (Sync conflicts)",
+      "stages": [
+        {
+          "title": "No two truths",
+          "sub": "Strong consistency, spot-the-bug",
+          "teaches": "Book: the system needs strong consistency by default — it's unacceptable for one file to be shown differently by different clients at the same time. This must hold for the metadata cache and DB layers. Memory caches use an eventual consistency model by default, so: (1) data in cache replicas and the master must be consistent; (2) invalidate caches on database write so cache and DB hold the same value. Choosing the DB: relational databases support ACID natively (Atomicity, Consistency, Isolation, Durability — a write either fully happens or not at all, and readers see committed state); NoSQL databases do not support ACID properties by default, so getting strong consistency would mean programming it into the sync logic. So the book picks a relational database for metadata.",
+          "interaction": "Spot-the-bug simulation with two phones ('Alice laptop', 'Alice phone'), an API server, a metadata cache and a metadata DB. Learner presses 'Save v2 on laptop': the DB row flips to v2 but the code path shown in a little code panel skips 'cache.delete(file_id)'. Phone then reads through the cache and shows v1 while the laptop shows v2 — a red 'TWO TRUTHS' banner. Learner clicks the faulty line in the code panel (3 candidate lines) and chooses the fix: 'invalidate the cache entry on every DB write'. Rerun: both devices show v2. Follow-up toggle: 'store metadata in an eventually consistent NoSQL store' -> the sim shows a window where reads disagree, with the label 'you'd have to build consistency yourself'.",
+          "check": "Q.quiz: 'Why does the book pick a relational DB for metadata?' -> it supports ACID natively, which gives strong consistency for file metadata. Distractors: it's cheaper; it stores large files better; NoSQL can't be sharded."
+        },
+        {
+          "title": "Draw the tables",
+          "sub": "The metadata schema, build-and-trace",
+          "teaches": "Book's simplified schema (only the most important tables): user (user_id, user_name, created_at — basic info like profile, email, photo); device (device_id, user_id, last_logged_in_at — one user can have many devices; device info is stored, e.g. for push notification IDs); namespace (a user's root directory; id, owner); file (id, file_name, relative_path, is_directory, latest_version, checksum, workspace/namespace id, created_at, last_modified — everything about the latest file); file_version (id, file_id, device_id, version_number, last_modified — the version history; existing rows are READ-ONLY to keep revision history intact); block (block_id, file_version_id, block_order — everything about a file block; any version of a file can be reconstructed by joining all its blocks in the correct order). Relationships: user 1-N device, user 1-N namespace, namespace 1-N file, file 1-N file_version, file_version 1-N block.",
+          "interaction": "Two-part. Part A, build: six empty table cards and a tray of field chips (block_order, version_number, relative_path, last_logged_in_at, latest_version, is_directory, checksum, file_version_id, device_id…). Learner drops each field onto the right table; then draws 1-N links by tapping parent then child. Part B, trace: 'Alice opens revision 3 of /reports/q3.pdf' — learner taps tables in the order the server reads them: namespace -> file (by relative_path) -> file_version (version_number = 3) -> block rows (ordered by block_order) -> fetch blocks from S3. Wrong taps highlight what that table can't tell you.",
+          "check": "Q.quiz (spot-the-bug): 'A developer runs UPDATE file_version SET last_modified = now() WHERE id = 42 to fix a timestamp.' What rule did they break? -> file_version rows are read-only to keep revision history intact; add a new version instead."
+        },
+        {
+          "title": "Two hands, one file",
+          "sub": "Sync conflicts, predict-then-watch",
+          "teaches": "Book: with many users, sync conflicts happen when two users modify the same file (or folder) at the same time. Strategy: the first version that gets processed wins; the version processed later receives a conflict. The system then presents both copies of the file to the conflicted user: the user's local copy and the latest version from the server. The user can merge both files or override one version with the other. (Book references Neil Fraser's 'Differential Synchronization' for multi-user editing.) Real-world: Dropbox saves the losing side as a 'conflicted copy' file next to the original instead of silently overwriting.",
+          "interaction": "Predict-then-watch timeline. Two lanes (User 1, User 2) both editing budget.xlsx v5 offline. They come online; packets race to the server — the learner sees User 1's arrives at t=1.02 s and User 2's at t=1.05 s. Predict: which becomes v6? (User 1, first processed.) What happens to User 2? choices: silently overwritten / gets a conflict and sees both copies / server merges cell-by-cell automatically. Watch: User 2's screen shows a split card 'Your local copy' vs 'Server v6' with three buttons: Merge, Keep mine (becomes v7), Keep theirs. Learner picks any; the file_version table on the side grows accordingly (never edits v6 — ties back to read-only versions).",
+          "check": "Q.quiz: 'Why not just let the last write win silently?' -> the first user's edits would vanish without anyone knowing — data loss, breaking the #1 requirement (reliability)."
+        },
+        {
+          "title": "Boss: The Split-Brain Sprite",
+          "sub": "Interview scenarios",
+          "teaches": "Applying consistency, schema and conflict handling.",
+          "interaction": "Q.boss '👾 The Split-Brain Sprite', 4 scenarios. (1) 'After an edit, the phone shows the old file name for a minute while the laptop shows the new one.' -> stale metadata cache; invalidate on write / add more cache replicas / lower the TTL to 59 seconds. (2) 'Interviewer: why not store metadata in Cassandra for scale?' -> possible, but we'd lose native ACID and have to build strong consistency ourselves; relational + sharding fits / Cassandra can't store strings / NoSQL is always slower. (3) 'User wants revision 3 from last week.' -> look up file_version 3 and join its blocks by block_order / restore S3 bucket snapshot / impossible once v4 exists. (4) 'Two coworkers save the same slide deck within 50 ms.' -> first processed wins, second gets a conflict with both copies shown / server picks the bigger file / reject both.",
+          "check": "Boss cleared when all 4 are answered."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "Consistency + conflicts in 45 seconds",
+          "teaches": "Tying consistency, schema and conflicts into one answer.",
+          "interaction": "Q.drill. Prompt: 'Interviewer: how do you keep every device seeing the same file, and what if two people edit it at once?' Model: 'File metadata needs strong consistency — two clients must never see different versions of the same file. So I'd keep metadata in a relational database for native ACID, shard it by user, and invalidate the metadata cache on every write so the cache never serves stale versions. The schema is user, device, namespace, file, file_version and block; versions are append-only and each version maps to an ordered list of block hashes, so any revision can be rebuilt. For concurrent edits, the first change processed wins; the later one gets a conflict and the user sees both their local copy and the server's latest, and can merge or pick one — nothing is silently lost.' Checks: strong consistency; relational/ACID; invalidate cache on write; file_version append-only; blocks ordered; first-processed wins + both copies shown.",
+          "check": "Self-graded checklist."
+        }
+      ],
+      "caveats": [
+        "'Relational because ACID' is the book's simplification. Large real systems use sharded MySQL with custom layers (Dropbox's Edgestore) or globally consistent stores (Google Spanner); some NoSQL stores now offer transactions. The real point is: metadata needs transactions and strong consistency.",
+        "Invalidating the cache on write still leaves tiny race windows (a reader can re-populate the cache with an old value between the DB write and the delete); production systems add versioned cache entries or leases.",
+        "The book's schema is deliberately simplified; it omits sharing/permissions tables even though sharing is an in-scope feature. Say so if the interviewer asks about ACLs.",
+        "'First processed wins' is not merging. Real-time co-editing (Google Docs) uses operational transform / CRDTs, which is out of scope here."
+      ],
+      "sources": [
+        { "label": "ByteByteGo — Design Google Drive (book chapter)", "url": "https://bytebytego.com/courses/system-design-interview/design-google-drive" },
+        { "label": "Neil Fraser — Differential Synchronization", "url": "https://neil.fraser.name/writing/sync/" },
+        { "label": "Dropbox Tech — Rewriting the heart of our sync engine (Nucleus)", "url": "https://dropbox.tech/infrastructure/rewriting-the-heart-of-our-sync-engine" },
+        { "label": "Amazon S3 strong consistency", "url": "https://aws.amazon.com/s3/consistency/" }
+      ]
+    },
+    {
+      "n": "15.4",
+      "slug": "drive-upload-download-notify",
+      "t": "Ping When It Changes",
+      "d": "The upload flow, the download flow, long-polling notifications and the offline backup queue",
+      "boss": false,
+      "badge": "🔔 Badge: Sync Herald",
+      "winTitle": "Every device in sync!",
+      "goal": "Your win today: you can walk through the upload flow (two parallel requests, pending -> uploaded), the download flow, and defend long polling over WebSocket for Drive's notifications.",
+      "bookSections": "Step 3 (Upload flow, Download flow, Notification service)",
+      "stages": [
+        {
+          "title": "Two lanes at once",
+          "sub": "The upload flow, tap-in-order",
+          "teaches": "Book: two requests are sent in parallel. Lane A — add file metadata: 1. Client 1 sends a request to add the metadata of the new file. 2. Store the new file metadata in the metadata DB and change the file upload status to 'pending'. 3. Notify the notification service that a new file is being added. 4. The notification service notifies relevant clients (client 2) that a file is being uploaded. Lane B — upload files to cloud storage: 2.1 Client 1 uploads the file's content to block servers. 2.2 Block servers chunk the files into blocks, compress, encrypt and upload them to cloud storage. 2.3 Once the file is uploaded, cloud storage triggers an upload completion callback; the request is sent to API servers. 2.4 File status changes to 'uploaded' in the metadata DB. 2.5 Notify the notification service that a file status changed to 'uploaded'. 2.6 The notification service notifies relevant clients (client 2) that the file is fully uploaded. Editing a file follows the same flow.",
+          "interaction": "Two-lane sequence builder over the 15.2 mini-map. Ten shuffled step chips; learner taps them into Lane A (metadata) or Lane B (content), in order. A status pill on the file ('—' -> 'pending' -> 'uploaded') updates live as steps land, and client 2's screen shows 'uploading…' then 'ready'. Then predict-then-watch: 'Client 2 tries to open the file while the status is still pending — what should it see?' (a placeholder / 'still uploading', not a broken file). Finally press Play to animate both lanes running in parallel with packets moving along arrows.",
+          "check": "Q.quiz: 'What flips the file's status from pending to uploaded?' -> cloud storage's upload-completion callback reaching the API servers. Distractors: client 1 polling; the notification service; a nightly job."
+        },
+        {
+          "title": "Catch up",
+          "sub": "The download flow, trace it",
+          "teaches": "Book: download is triggered when a file is added or edited elsewhere. How does a client know? If client A is online while the file is changed by another client, the notification service informs client A that changes were made somewhere and it needs to pull the latest data. If client A is offline, data is saved to the cache (the offline backup queue); when the client comes back online, it pulls the latest changes. Steps: 1. Notification service informs client 2 of a change. 2. Client 2 sends a request to fetch metadata. 3. API servers call the metadata DB. 4. Metadata is returned to the API servers. 5. Client 2 receives the metadata. 6. Client 2 sends requests to block servers to download blocks. 7. Block servers download blocks from cloud storage. 8. Cloud storage returns blocks to block servers. 9. Client 2 receives all the new blocks to reconstruct the file. Key insight: the notification carries 'something changed', not the file; the client pulls metadata, then only the blocks it needs.",
+          "interaction": "Trace mode: the learner drives a glowing packet by clicking the next hop on the diagram (Notification -> Client 2 -> API -> Metadata DB -> API -> Client 2 -> Block servers -> Cloud storage -> Block servers -> Client 2). A wrong hop flashes red with a hint. Then a second run with a 'Client 2 offline' switch: the notification goes into the Offline backup queue icon (a counter ticks up as 3 more edits happen); flipping the client online drains the queue and triggers one catch-up pull. Last: predict how many blocks client 2 downloads if only blocks 2 and 5 changed and it already holds the rest (2 — delta sync works on download too).",
+          "check": "Q.quiz: 'What's inside the notification client 2 receives?' -> a signal that something changed (it then fetches metadata and blocks itself); not the file content."
+        },
+        {
+          "title": "Hold the line",
+          "sub": "Long polling vs WebSocket, predict-then-watch",
+          "teaches": "Book: the notification service lets clients know about file changes. Options: long polling (Dropbox uses it) and WebSocket (persistent, bi-directional). Book picks long polling because (1) communication is not bi-directional — the server sends info about file changes to the client, not vice versa; (2) WebSocket suits real-time bi-directional communication like chat; for Drive, notifications are sent infrequently with no burst of data. How long polling works here: each client opens a long-poll connection to the notification service; the server holds it open until a change is detected or it times out; if changes are detected the client closes the connection and must connect to the metadata server to download the latest changes; after a response or a timeout, the client immediately sends a new request to keep the connection open.",
+          "interaction": "Timeline sim: a horizontal time axis with a client lane and a server lane. Learner presses 'Open long poll': a bar stretches across (request held open). Random events: 'Bob edits plan.docx' -> the server responds, bar ends, client fetches metadata (a side-trip arrow), then immediately reopens a new poll — learner must click 'Reopen' within a few seconds or a red 'missed change' marker appears on the next event. A 'timeout' event (no changes for 60 s) shows the same reopen. Then a chooser: three product cards (Drive file-change alerts / a chat app / a multiplayer drawing board) — learner assigns Long polling or WebSocket to each (Drive -> long polling; chat and drawing -> WebSocket), with the book's two reasons revealed.",
+          "check": "Q.quiz: 'Give the book's reason for long polling over WebSocket in Drive.' -> traffic is one-way (server -> client) and infrequent with no bursts. Distractors: WebSocket isn't supported on mobile; long polling has lower latency; WebSocket can't use HTTPS."
+        },
+        {
+          "title": "Boss: The Silent Device",
+          "sub": "Interview scenarios",
+          "teaches": "Applying the upload/download flows and notification design.",
+          "interaction": "Q.boss '👾 The Silent Device', 5 scenarios. (1) 'A user's phone never learns about edits made on the laptop.' -> check its long-poll connection; it must reopen after every response or timeout / increase S3 replication / add block servers. (2) 'Client 2 opens a file that client 1 is still uploading.' -> status is pending, show 'uploading', notify again on 'uploaded' / serve half the blocks / block client 2's account. (3) 'Interviewer: why not WebSocket?' -> one-way, infrequent notifications don't need a bi-directional channel; WebSocket fits chat / WebSocket is deprecated / long polling uses zero connections. (4) 'A tablet was off for a week.' -> its pending changes wait in the offline backup queue; on reconnect it pulls metadata then the changed blocks / it re-downloads the whole drive / it's out of luck. (5) 'Who tells the API server the upload finished?' -> cloud storage's completion callback / client 2 / the load balancer.",
+          "check": "Boss cleared when all 5 are answered."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "Walk the flows in 60 seconds",
+          "teaches": "The end-to-end story of one upload reaching another device.",
+          "interaction": "Q.drill. Prompt: 'Interviewer: I save a new file on my laptop. Walk me through how it shows up on my phone.' Model: 'The laptop fires two requests in parallel. One adds the file's metadata through the API servers — it's stored with status pending, and the notification service tells my other devices a file is coming. The other sends content to block servers, which split it into blocks, compress, encrypt and store them in S3. When S3 calls back that the upload is complete, the API server flips the status to uploaded and the notification service tells the phone. The phone holds a long-poll connection; when it gets the ping it fetches the metadata, then downloads only the blocks it lacks from block servers and rebuilds the file. If the phone was offline, the change waits in the offline backup queue. I'd use long polling over WebSocket because the traffic is one-way and infrequent.' Checks: two parallel requests; pending -> uploaded; completion callback; notification is a signal then pull; long polling + why; offline backup queue.",
+          "check": "Self-graded checklist."
+        }
+      ],
+      "caveats": [
+        "The book's 'offline backup queue' is a fuzzy concept. Real sync clients usually just store a cursor (the last change they saw) and ask the server for everything since that cursor when they reconnect — no per-device queue needed.",
+        "S3 can emit event notifications on object creation, but with multi-block uploads 'the file is complete' really means 'all blocks of this version are stored', which the server has to track itself.",
+        "Long polling vs WebSocket is a close call today; many products use WebSocket or server-sent events for server-to-client push. Either answer is fine in an interview if you give the reason.",
+        "Notifications only carry 'something changed'; correctness comes from re-reading metadata, so a lost notification delays sync but doesn't corrupt data."
+      ],
+      "sources": [
+        { "label": "ByteByteGo — Design Google Drive (book chapter)", "url": "https://bytebytego.com/courses/system-design-interview/design-google-drive" },
+        { "label": "How We've Scaled Dropbox (Kevin Modzelewski, 2012 talk)", "url": "https://www.youtube.com/watch?v=PE4gwstWhmc" },
+        { "label": "MDN — The WebSocket API", "url": "https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API" },
+        { "label": "Amazon S3 — Event notifications", "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/EventNotifications.html" }
+      ]
+    },
+    {
+      "n": "15.5",
+      "slug": "drive-storage-and-failures",
+      "t": "Thrift & Chaos",
+      "d": "Save storage space with dedup, version limits and cold storage, then survive every component failing",
+      "boss": false,
+      "badge": "🧯 Badge: Chaos Tamer",
+      "winTitle": "Lean and unbreakable!",
+      "goal": "Your win today: you can name the book's three storage-saving techniques and, for any component an interviewer points at, say what happens when it fails and how the system recovers.",
+      "bookSections": "Step 3 (Save storage space, Failure handling)",
+      "stages": [
+        {
+          "title": "Same block, stored once",
+          "sub": "De-duplication, watch the counter",
+          "teaches": "Book: to support file version history and ensure reliability, multiple versions of the same file are stored across multiple data centers, which fills storage fast. Technique 1, de-duplicate data: eliminate redundant blocks at the account level. Two blocks are identical if they have the same hash value — store one copy and point both files' block rows at it. Example: a user saves the same 20 MB slide deck in three folders -> 20 MB stored, not 60 MB; a new version that changes 1 of 5 blocks adds 4 MB, not 20 MB.",
+          "interaction": "Dedup lab. A user's drive panel with drag-in sample files (deck.pptx 5 blocks, deck-copy.pptx identical, deck-v2.pptx with 1 changed block, photo.jpg 3 blocks). Each block is a coloured tile labelled with its hash. As the learner drags files in, two meters update side by side: 'Logical size' and 'Stored with dedup'. Before each drop the learner predicts the new 'stored' number (multiple-choice of 3 values). Expected: deck 20 MB stored; copy +0 MB; v2 +4 MB; photo +12 MB. Final readout shows the % saved.",
+          "check": "Q.quiz: 'How does the system decide two blocks are duplicates?' -> same hash value. Distractors: same file name; same size; same upload time."
+        },
+        {
+          "title": "Keep what matters",
+          "sub": "Version limits and cold storage, tune the sliders",
+          "teaches": "Technique 2, adopt an intelligent data backup strategy: (a) set a limit on the number of versions kept — when the limit is reached, the oldest version is replaced with the new one; (b) keep valuable versions only — some files are edited very often (e.g. a document saved 1,000 times in a short period), and saving every version would be wasteful; give more weight to recent versions; experiment to find the best number. Technique 3, move infrequently used data to cold storage: data not active for months or years; cold storage like Amazon S3 Glacier is much cheaper than S3. Approximate public list prices (us-east-1, check current): S3 Standard ~$0.023/GB-month; S3 Glacier Deep Archive ~$0.00099/GB-month (~23x cheaper) — but retrieval takes hours, not milliseconds.",
+          "interaction": "Cost console. Inputs: a slider 'max versions per file' (1–1000), a toggle 'thin out bursts (keep recent versions denser)', and a slider 'move to cold storage after N months untouched'. A simulated user population (a mix of 'hot', 'warm' and 'forgotten' files, plus one 'autosave-every-10-seconds' doc) feeds a monthly storage bill chart and two risk lights: 'Restore old version?' (red if versions cap is below 10) and 'Open old file fast?' (amber when cold-storage cutoff is under 1 month, because retrieval takes hours). Learner goal: get the bill under a target while keeping both lights green; any setting around 'cap 50–100 versions, thinning on, cold after 6–12 months' passes. Reveal shows the book's three techniques as a checklist.",
+          "check": "Q.quiz: 'A user wants to open a 3-year-old file stored in Glacier Deep Archive right now. What's the catch?' -> retrieval takes hours, so cold storage only suits data that's truly rarely accessed."
+        },
+        {
+          "title": "Pull the plug",
+          "sub": "Failure handling, chaos board",
+          "teaches": "Book's failure table. Load balancer failure: a secondary becomes active and picks up the traffic; LBs monitor each other with heartbeats (periodic 'I'm alive' signals). Block server failure: other servers pick up unfinished or pending jobs. Cloud storage failure: S3 buckets are replicated multiple times in different regions; if files aren't available in one region, fetch them from another. API server failure: stateless, so the LB stops sending traffic to it and redirects to others. Metadata cache failure: cache servers are replicated multiple times; if one goes down, access other nodes to fetch data, and bring up a new cache server to replace the failed one. Metadata DB failure — master down: promote one of the slaves to act as the new master and bring up a new slave; slave down: use another slave for reads and bring another DB server up to replace the failed one. Notification service failure: every online user keeps a long-poll connection; each notification server is connected with many users — per the Dropbox talk in 2012, over 1 million connections are open per machine. If a server goes down, all its long-poll connections are lost, so clients must reconnect to a different server; even though one server can keep many open connections, it can't reconnect all the lost ones at once, so reconnecting is relatively slow. Offline backup queue failure: queues are replicated multiple times; if one queue fails, its consumers may need to re-subscribe to the backup queue.",
+          "interaction": "Chaos board over the full architecture mini-map. Each component has a red 'kill' button. Learner kills one at a time (all 8 must be tried to clear the stage). On each kill, before any animation, three recovery cards appear; learner predicts the right one (e.g. kill 'Metadata DB master' -> 'promote a replica to master, add a new replica' vs 'serve writes from cache' vs 'restore last night's backup'). Then the animation plays the book's recovery (secondary LB lights up, replica crowned, traffic rerouted around a dead API server, region B serving S3 reads). Special notification-server kill: 1,000,000 dots (rendered as a density cloud) detach and stream to other servers over a visible 'reconnect storm' timer; a toggle 'add random jitter + backoff to reconnects' flattens the spike (honest caveat).",
+          "check": "Q.quiz: 'Why is losing a notification server slower to recover from than losing an API server?' -> ~1M long-lived connections drop at once and all clients must reconnect elsewhere; API servers are stateless request handlers the LB simply routes around."
+        },
+        {
+          "title": "Boss: The Hoarder & the Gremlin",
+          "sub": "Interview scenarios",
+          "teaches": "Applying storage savings and failure recovery.",
+          "interaction": "Q.boss '👾 The Hoarder & the Gremlin', 5 scenarios. (1) 'Storage costs doubled; half of it is copies of the same installers.' -> block-level dedup by hash / bigger disks / delete files over 1 GB. (2) 'One doc autosaves every 10 seconds and has 40,000 versions.' -> cap versions and keep valuable, recent ones / store every version forever / disable autosave for that user. (3) 'The metadata DB master just died at 3 a.m.' -> promote a replica to master and add a new replica / go read-only until morning / serve metadata from S3. (4) 'An entire AWS region is down.' -> serve blocks from the cross-region replica / wait / fail all downloads. (5) 'A notification server crashes; 1M phones lose their connection.' -> clients reconnect to other notification servers (with backoff); sync resumes, just slowly / users must reinstall the app / data is lost.",
+          "check": "Boss cleared when all 5 are answered."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "Thrift + resilience in 45 seconds",
+          "teaches": "Combining cost control and failure handling into one confident answer.",
+          "interaction": "Q.drill. Prompt: 'Interviewer: storage is our biggest bill and we can never lose data. What do you do?' Model: 'Three things save space: de-duplicate at the block level, since identical blocks share a hash and are stored once; keep a smart version history — cap the number of versions and keep the valuable, recent ones instead of every autosave; and move data nobody's touched for months to cold storage like Glacier, which is far cheaper but slow to retrieve. For reliability, every layer has a backup: S3 is replicated across regions, the metadata DB promotes a replica if the master dies, API servers are stateless behind a load balancer with a standby, caches and queues are replicated, and if a notification server dies its clients reconnect elsewhere — slowly, since it held about a million connections.' Checks: dedup by hash; version cap + keep valuable versions; cold storage + retrieval trade-off; cross-region S3; DB replica promotion; notification reconnect cost.",
+          "check": "Self-graded checklist."
+        }
+      ],
+      "caveats": [
+        "The book dedups at the account level. Cross-user dedup saves more but leaks information (an attacker can test whether someone else already stored a given file by whether the upload is instant), so many providers limit it.",
+        "Dedup and encryption pull against each other: if every user's blocks are encrypted with different keys, identical plaintext becomes different ciphertext. Dedup must hash before encryption (or use convergent encryption), which has its own privacy trade-offs.",
+        "Cold-storage prices are approximate list prices and change; minimum storage durations and retrieval fees also apply.",
+        "'Over 1 million connections per machine' is a 2012 Dropbox talk figure; the reconnect-storm problem is real, and the standard fix (jittered exponential backoff) isn't in the book.",
+        "Promoting a replica after a master failure can lose the last few writes if replication was asynchronous; for metadata that needs strong consistency, use synchronous or semi-synchronous replication, or a consensus-based store."
+      ],
+      "sources": [
+        { "label": "ByteByteGo — Design Google Drive (book chapter)", "url": "https://bytebytego.com/courses/system-design-interview/design-google-drive" },
+        { "label": "Amazon S3 Glacier storage classes", "url": "https://aws.amazon.com/s3/storage-classes/glacier/" },
+        { "label": "Amazon S3 pricing", "url": "https://aws.amazon.com/s3/pricing/" },
+        { "label": "Dropbox Tech — Inside the Magic Pocket (Dropbox's block storage)", "url": "https://dropbox.tech/infrastructure/inside-the-magic-pocket" },
+        { "label": "How We've Scaled Dropbox (Kevin Modzelewski, 2012 talk)", "url": "https://www.youtube.com/watch?v=PE4gwstWhmc" },
+        { "label": "AWS Architecture Blog — Exponential Backoff and Jitter", "url": "https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/" }
+      ]
+    },
+    {
+      "n": "BOSS",
+      "slug": "drive-boss-design-it-live",
+      "t": "Design Drive Live",
+      "d": "Full mock interview: design Google Drive with the 4-step framework",
+      "boss": true,
+      "badge": "👑 Badge: Drive Architect",
+      "winTitle": "Interview passed — Drive designed!",
+      "goal": "Your win today: you can run a complete Google Drive interview end to end — scope it, sketch it, deep-dive blocks, metadata, flows and notifications, survive the 'what happens when X fails?' barrage, and wrap up with trade-offs like direct-to-S3 uploads and a presence service.",
+      "bookSections": "Whole chapter: Steps 1–4, including Step 4 Wrap up (direct upload to cloud storage alternative, presence service)",
+      "stages": [
+        {
+          "title": "Scope it",
+          "sub": "Step 1 · understand the problem (3–10 min)",
+          "teaches": "Asking the right clarifying questions and pinning down numbers: features (upload/download, sync, notifications, revisions, sharing), mobile + web, any file type, encryption at rest, 10 GB file limit, 10M DAU; non-functional: reliability, fast sync, low bandwidth, scalability, availability; estimates: 50M users, 500 PB allocated, ~240 upload QPS, ~480 peak.",
+          "interaction": "Mock interviewer chat panel (like 0008). The interviewer opens: 'Design Google Drive.' The learner picks questions to ask from a deck of 8 (good: 'What are the most important features?', 'Mobile, web or both?', 'Max file size?', 'Do files need encryption?', 'How many daily active users?'; weak: 'Which database should I use?', 'Should I use Kubernetes?', 'Can I skip estimates?'). Each good question reveals an answer card that lands on a requirements board; weak ones cost a heart with feedback ('that's a design decision, not a requirement'). Then a 3-field estimate card (storage PB, QPS, peak QPS) checked against the book's numbers with tolerances. Scorecard row: Scope.",
+          "check": "Q.quiz 'lock it in': which of these is the interviewer's top non-functional requirement for a storage product? -> reliability (no data loss)."
+        },
+        {
+          "title": "Sketch it",
+          "sub": "Step 2 · high-level design and buy-in (10–15 min)",
+          "teaches": "From single server (Apache + MySQL + 1 TB drive/) to sharding, S3 with cross-region replication, LB + stateless web/API servers, replicated metadata DB; then the full component set: block servers, cloud storage, cold storage, LB, API servers, metadata DB, metadata cache, notification service, offline backup queue. APIs: simple/resumable upload, download, list_revisions; auth + HTTPS.",
+          "interaction": "Timed build (soft timer, no fail): an empty canvas; the learner taps components in from a palette and connects arrows to the user. A checker validates required links (user -> block servers -> cloud storage; user -> LB -> API servers -> metadata cache/DB; notification service -> user; offline backup queue; cloud storage -> cold storage). Missing pieces show as the interviewer's nudges ('Where do file blocks go?', 'How does my phone hear about changes?'). Then a quick API-pick: match 3 endpoints to their params (upload?uploadType=resumable / download path / list_revisions path+limit). Scorecard row: High-level design.",
+          "check": "Q.quiz: 'Interviewer: what goes through API servers versus block servers?' -> API servers: auth, profiles, metadata; block servers: file content blocks."
+        },
+        {
+          "title": "Deep dive menu",
+          "sub": "Step 3 · pick and defend",
+          "teaches": "The deep-dive map: requirement -> mechanism. Fast sync & low bandwidth -> blocks (4 MB) + delta sync + compression. Security -> encrypt blocks (compress first) + HTTPS. Strong consistency -> relational DB with ACID + invalidate cache on write. Revisions -> read-only file_version rows + ordered block rows. Concurrent edits -> first processed wins, conflict shows both copies. New file reaches other devices -> upload flow (parallel metadata + content, pending -> uploaded via completion callback) + notification via long polling + download flow. Offline devices -> offline backup queue. Storage cost -> dedup by hash, version limits, cold storage.",
+          "interaction": "Technique map (like 0008's): left column of 9 requirement cards, right column of mechanism cards; learner draws a line from each requirement to its mechanism. After matching, the interviewer picks two at random to 'go deeper' on, showing a 3-option follow-up each (e.g. 'Upload flow: what flips status to uploaded?' -> completion callback; 'Why long polling?' -> one-way, infrequent traffic). Scorecard row: Deep dive.",
+          "check": "Every requirement matched to its mechanism + both follow-ups answered."
+        },
+        {
+          "title": "Boss: the curveball barrage",
+          "sub": "Step 3 · 'what happens when…?'",
+          "teaches": "Failure handling and stress questions from the whole chapter.",
+          "interaction": "Q.boss '👾 The Curveball Barrage', 7 rapid scenarios, 3 choices each: (1) metadata DB master dies -> promote replica; (2) a notification server with ~1M connections dies -> clients reconnect elsewhere, slowly (backoff); (3) a whole region's S3 is down -> read from cross-region replica; (4) insert a byte at the start of a 1 GB file with fixed blocks -> every block changes; content-defined chunking fixes it (bonus caveat question); (5) two users save the same file within 10 ms -> first processed wins, second sees both copies; (6) a block server dies mid-upload -> other block servers pick up pending jobs, client resumes; (7) storage bill exploding -> dedup, version caps, cold storage. Scorecard row: Curveballs (hearts left).",
+          "check": "Boss cleared when all 7 are answered."
+        },
+        {
+          "title": "Wrap it up",
+          "sub": "Step 4 · the last 3–5 minutes",
+          "teaches": "Book's wrap-up: the design must be highly consistent, low network bandwidth and fast to sync. Two flows: manage file metadata and file sync; the notification service (long polling) keeps clients up to date. Alternative 1: upload files directly to cloud storage from the client instead of through block servers — faster, since the file is transferred once, but (a) the same chunking, compression and encryption logic must be implemented on every platform (iOS, Android, web), which is error-prone and takes a lot of engineering effort, and (b) a client can be hacked or manipulated, so putting encryption logic on the client isn't ideal. Alternative 2: move online/offline logic into a separate presence service, so other services can reuse it for presence. Senior extras worth one sentence each: sharing permissions/ACL tables, rate limiting uploads, monitoring sync latency.",
+          "interaction": "Trade-off scales: the learner places argument chips on two pans for 'Client uploads directly to S3' vs 'Through block servers' (chips: 'one transfer instead of two', 'logic duplicated on iOS/Android/web', 'client can be tampered with', 'block servers add a hop', 'one place to update encryption'). The scale tips with each chip; the reveal states the book's position (block servers, for the two reasons) and the honest caveat that real Dropbox chunks on the client. Then a 'pick 2 to mention' card: presence service, rate limiting, sharing ACLs, multi-region active-active — any two pass, presence service gives a bonus tip. Scorecard row: Wrap-up.",
+          "check": "Q.quiz: 'Name the two downsides the book gives for uploading directly from the client to cloud storage.' -> logic must be built for every platform; client-side encryption/logic can be tampered with."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "The 60-second version + your scorecard",
+          "teaches": "The whole design compressed into one spoken answer, plus a self-assessment.",
+          "interaction": "Q.drill. Prompt: 'You have 60 seconds left. Summarize your Google Drive design.' Model: 'Scope: upload, download, sync, revisions, sharing and notifications for 10M daily users, files up to 10 GB, about 240 uploads a second and 500 PB allocated; reliability first. Clients send metadata to stateless API servers behind a load balancer and file content to block servers, which split files into 4 MB blocks, compress, encrypt and store them in S3 replicated across regions, with cold storage for old data. Metadata — users, devices, namespaces, files, append-only versions and ordered blocks — lives in a sharded relational DB for strong consistency, with a cache invalidated on writes. Only changed blocks sync. Uploads run metadata and content in parallel, pending until S3's completion callback; a long-polling notification service pings other devices, which pull metadata and the blocks they need; offline devices catch up from a queue. Conflicts: first write wins, the loser sees both copies. Dedup, version caps and cold storage control cost; every tier has a replica or standby. Trade-off I'd revisit: direct-to-S3 client uploads, and a separate presence service.' Checks: numbers; block servers + 4 MB + compress/encrypt; delta sync; relational + cache invalidation; parallel upload + callback; long polling; conflict rule; storage savings; failure story; wrap-up trade-off. A scorecard (Scope / High-level / Deep dive / Curveballs / Wrap-up) is saved under a separate key sdq:v1:<id>-interview like 0008.",
+          "check": "Self-graded checklist + scorecard."
+        }
+      ],
+      "caveats": [
+        "Real Dropbox does chunk, hash and dedup on the client (it uploads only blocks the server doesn't have) — closer to the book's 'direct upload' alternative than to its chosen design. Both are defensible; say which and why.",
+        "The book's schema has no sharing/permission tables even though sharing is in scope; mention an ACL table if asked.",
+        "Fixed-size blocks + delta sync break on inserts; content-defined chunking is the real-world fix.",
+        "The offline backup queue is usually implemented as a per-client change cursor, not a literal queue.",
+        "The book's numbers (50M users, 10M DAU) are interview-sized; real Google Drive serves billions of users."
+      ],
+      "sources": [
+        { "label": "ByteByteGo — Design Google Drive (book chapter)", "url": "https://bytebytego.com/courses/system-design-interview/design-google-drive" },
+        { "label": "Google Drive API — Upload file data", "url": "https://developers.google.com/drive/api/guides/manage-uploads" },
+        { "label": "Neil Fraser — Differential Synchronization", "url": "https://neil.fraser.name/writing/sync/" },
+        { "label": "Tridgell & Mackerras — The rsync algorithm", "url": "https://rsync.samba.org/tech_report/" },
+        { "label": "How We've Scaled Dropbox (Kevin Modzelewski, 2012 talk)", "url": "https://www.youtube.com/watch?v=PE4gwstWhmc" },
+        { "label": "Dropbox Tech — Streaming File Synchronization", "url": "https://dropbox.tech/infrastructure/streaming-file-synchronization" },
+        { "label": "Amazon S3 Glacier storage classes", "url": "https://aws.amazon.com/s3/storage-classes/glacier/" }
+      ]
+    }
+  ],
+  "cheatsheetOutline": "One page, 'The Cloud Locker — Design Google Drive'. Header strip: key numbers — 50M users, 10M DAU, 10 GB free/user, 10 GB max file, 2 uploads/user/day, 500 KB avg file, 500 PB allocated, ~240 upload QPS (~480 peak), 4 MB max block, ~1M long-poll connections per notification server (Dropbox 2012). Section 15.1 Claim Your Locker: in-scope vs out-of-scope features; non-functional list with reliability first; the three APIs (upload simple/resumable with its 3 steps, download, list_revisions with limit) + auth/HTTPS; evolution single server -> shard by user_id -> S3 (same/cross-region replication) -> LB + stateless servers + replicated metadata DB. Section 15.2 Chop It Into Blocks: component table (block servers, cloud storage, cold storage, LB, API servers, metadata DB, metadata cache, notification service, offline backup queue — one line each); pipeline split -> compress -> encrypt -> upload (why compress first); delta sync example (2 of 10 blocks); caveat box on content-defined chunking. Section 15.3 The Metadata Ledger: strong consistency rules (cache replicas consistent with master, invalidate on write); relational for ACID; schema diagram user/device/namespace/file/file_version(read-only)/block(block_order); sync-conflict rule (first processed wins, loser sees local + server copy, merge or override). Section 15.4 Ping When It Changes: upload flow two lanes with numbered steps and pending -> uploaded via completion callback; download flow 9 steps; long polling vs WebSocket decision with the book's two reasons; offline backup queue. Section 15.5 Thrift & Chaos: three storage savers (dedup by hash at account level; version cap + keep valuable versions; cold storage e.g. Glacier); failure table — LB, block server, cloud storage, API server, metadata cache, metadata DB master/slave, notification service, offline backup queue — each with its recovery. Boss section: final architecture diagram (labelled), 4-step interview script with time boxes, requirement -> mechanism map, wrap-up trade-offs (direct-to-S3 client upload: faster but per-platform logic + tamperable client; presence service). Footer: honest caveats list (quota vs usage, fixed blocks vs content-defined chunking, real Dropbox chunks on client, dedup vs encryption/privacy, offline queue ~ change cursor, schema lacks ACLs) and sources."
+}

@@ -1,0 +1,1145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Shatter the Single Server</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: channel colours, the one-box sim (stage 1), napkin calculator (stage 2),
+   the improved-design diagram (stages 3–4), queue-isolation sim (stage 3), order game + API bug hunt (stage 4) */
+:root { --c-ios: #5a48f0; --c-and: #1d9a52; --c-sms: #c27400; --c-mail: #2f7fd8; --on-c: #ffffff; --mk: #f0b400; --mk-ink: #1c1a26; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --c-ios: #8f82ff; --c-and: #43d98a; --c-sms: #ffb547; --c-mail: #5aa9ff; --on-c: #0e0f1d; --mk: #ffd23f; --mk-ink: #1c1a26; }
+}
+:root[data-theme="dark"] { --c-ios: #8f82ff; --c-and: #43d98a; --c-sms: #ffb547; --c-mail: #5aa9ff; --on-c: #0e0f1d; --mk: #ffd23f; --mk-ink: #1c1a26; }
+
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.bignum { font-family: var(--mono); font-weight: 700; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+
+/* ---- shared SVG text + boxes ---- */
+svg .lbl { fill: var(--ink); font: 600 14px var(--font); text-anchor: middle; }
+svg .lbl.s { font-size: 11.5px; }
+svg .lbl.xs { font-size: 10.5px; font-weight: 500; fill: var(--muted); }
+svg .cap { fill: var(--muted); font: 700 10.5px var(--font); letter-spacing: .1em; text-anchor: middle; }
+svg .emo { font-size: 22px; text-anchor: middle; }
+svg .nbox { fill: var(--panel); stroke: var(--line); stroke-width: 2; }
+
+/* ---- stage 1: the one box ---- */
+.v1 .srvbox { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2.5; transition: fill .4s, stroke .4s; }
+.v1 .cell { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; }
+.v1 .lane { stroke: var(--muted); stroke-width: 2.5; opacity: .5; transition: opacity .4s, stroke .4s; }
+.v1 .tpbox { transition: opacity .4s; }
+.v1 .down { fill: var(--bad); font: 700 26px var(--font); text-anchor: middle; display: none; }
+.v1.dead .srvbox { fill: var(--bad-soft); stroke: var(--bad); }
+.v1.dead .lane { stroke: var(--bad); stroke-dasharray: 4 6; opacity: .3; }
+.v1.dead .tpbox, .v1.dead .dev, .v1.dead .cells { opacity: .3; }
+.v1.dead .down { display: block; }
+.v1 .mtrack { fill: var(--bg-2); stroke: var(--line); }
+.v1 .mfill { transition: width .3s, fill .3s; }
+.v1 .mtxt { fill: var(--ink); font: 700 12px var(--mono); }
+.v1 .mtxt.r { text-anchor: end; }
+.v1 .spin { fill: none; stroke: var(--warn); stroke-width: 3; stroke-dasharray: 30 20; transform-box: fill-box; transform-origin: center; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.v1 .pile rect { fill: var(--warn); }
+.v1 .pk { stroke: var(--bg); stroke-width: 1.5; }
+.v1 .xfl { fill: var(--bad); font: 700 16px var(--font); text-anchor: middle; dominant-baseline: central; animation: fadeout .7s forwards; }
+@keyframes fadeout { to { opacity: 0; transform: translateY(-8px); } }
+.v1 .mk { cursor: pointer; }
+.v1 .mk .hit { fill: transparent; stroke: none; }
+.v1 .mk circle { fill: var(--mk); stroke: var(--ink); stroke-width: 2; }
+.v1 .mk circle.halo { fill: none; stroke: var(--mk); stroke-width: 3; pointer-events: none; transform-box: fill-box; transform-origin: center; animation: mkpulse 1.6s ease-out infinite; }
+.v1 .mk text { fill: var(--mk-ink); font: 700 16px var(--font); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.v1 .mk:focus { outline: none; }
+.v1 .mk:focus circle, .v1 .mk:hover circle { stroke-width: 4; }
+.v1 .mk.ok circle { fill: var(--good); }
+.v1 .mk.ok circle.hit { fill: transparent; }
+.v1 .mk.ok circle.halo { display: none; }
+.v1 .mk.ok text { fill: #fff; }
+@keyframes mkpulse { from { opacity: .9; transform: scale(1); } to { opacity: 0; transform: scale(1.9); } }
+.ctl { display: grid; gap: 4px; padding: 12px 14px 4px; background: var(--panel); border-top: 1px solid var(--line); }
+.ctl label { display: flex; justify-content: space-between; font-weight: 600; font-size: 14px; gap: 8px; flex-wrap: wrap; }
+.ctl input[type=range] { width: 100%; accent-color: var(--accent); height: 32px; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 10px 14px; background: var(--panel); border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
+.stats b { display: block; font: 700 17px var(--mono); color: var(--ink); }
+.stats b.bad { color: var(--bad); }
+.stats b.warn { color: var(--warn); }
+.lbls { margin: 6px 0 10px; }
+.lbl-btn { min-height: 42px; border: 2px solid var(--line); background: var(--panel); border-radius: 12px; padding: 8px 14px; font-weight: 600; font-size: 14.5px; }
+.lbl-btn[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.lbl-btn.done { border-color: var(--good); background: var(--good-soft); color: var(--muted); }
+.mklegend { font-size: 14px; display: grid; gap: 2px; margin: 0 0 6px; }
+.mklegend b { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--mk); color: var(--mk-ink); font-size: 12px; margin-right: 6px; }
+
+/* ---- stage 2: napkin calculator ---- */
+.spec { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; margin: 14px 0; }
+.spec div { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 14.5px; }
+.spec b { display: block; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.calc { display: grid; gap: 10px; margin-top: 10px; }
+.crow { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; background: var(--bg); }
+.crow .cl { font-weight: 700; min-width: 110px; }
+.crow .cd { font-family: var(--mono); font-size: 14px; color: var(--muted); flex: 1; min-width: 150px; }
+.crow .inwrap { display: inline-flex; align-items: center; gap: 6px; }
+.crow input { width: 92px; min-height: 42px; border: 2px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink); font: 600 16px var(--mono); padding: 6px 10px; }
+.crow.ok { border-color: var(--good); background: var(--good-soft); }
+.crow.ok input { border-color: var(--good); }
+.crow .btn { padding: 8px 14px; min-height: 42px; }
+.crow .cmsg { flex-basis: 100%; font-size: 14px; display: none; }
+.crow .cmsg.show { display: block; animation: rise .3s; }
+.hintbox { display: none; margin-top: 8px; }
+.hintbox.on { display: block; animation: rise .3s; }
+.total { margin-top: 12px; font-size: 16px; display: none; }
+.total.show { display: block; animation: rise .35s; }
+.news { display: none; margin-top: 14px; }
+.news.show { display: block; animation: rise .35s; }
+.bars2 { display: grid; gap: 10px; margin-top: 14px; }
+.b2 { display: grid; grid-template-columns: 112px 1fr 76px; gap: 8px; align-items: center; font-size: 13.5px; }
+.b2 .track { height: 26px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.b2 .fill { height: 100%; width: 0; border-radius: 7px 0 0 7px; transition: width 1.4s cubic-bezier(.2,.8,.2,1); }
+.b2 .v { font: 700 14px var(--mono); text-align: right; }
+.mult { font-size: 17px; font-weight: 700; margin-top: 8px; display: none; }
+.mult.show { display: block; animation: rise .4s; }
+
+/* ---- improved design diagram (stages 3–4) ---- */
+.archwrap svg { display: block; width: 100%; max-width: 400px; max-height: 64vh; margin: 0 auto; }
+.arch .part { transition: opacity .4s; }
+.arch .part.hidden { opacity: 0; }
+.arch .part.pop { animation: popin .5s cubic-bezier(.3,1.5,.5,1); transform-box: fill-box; transform-origin: center; }
+@keyframes popin { from { opacity: 0; transform: scale(.85); } }
+.arch .nbox { transition: stroke .3s, fill .3s; }
+.arch .part.hl .nbox { stroke: var(--accent); stroke-width: 3; fill: var(--accent-soft); }
+.arch .wire { stroke: var(--muted); stroke-width: 2; opacity: .55; }
+.arch .wire.dash { stroke-dasharray: 4 4; }
+.arch .slot { fill: none; stroke: var(--muted); stroke-width: 2; stroke-dasharray: 6 6; opacity: .6; }
+.arch .slotq { fill: var(--muted); font: 700 22px var(--font); text-anchor: middle; dominant-baseline: central; opacity: .6; }
+.arch .slotg.gone { display: none; }
+.arch .slotg.next .slot { stroke: var(--accent); opacity: 1; }
+.arch .slotg.next .slotq { fill: var(--accent); opacity: 1; }
+.arch .qcell { stroke: none; }
+.arch .lb { fill: var(--bg-2); stroke: var(--line); stroke-width: 1.5; }
+.arch .ping { fill: var(--xp); stroke: var(--ink); stroke-width: 2; }
+.duo { display: grid; gap: 16px; align-items: start; }
+@media (min-width: 720px) { .duo { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.tray { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.tray .opt { text-align: center; min-height: 48px; font-size: 14.5px; padding: 8px; }
+.tray .opt.used { opacity: .45; }
+.bq { font-weight: 600; margin: 0; min-height: 3em; }
+.bstep { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+
+/* ---- queue isolation sim (stage 3, round 2) ---- */
+.pq { display: grid; gap: 8px; margin: 10px 0; border: 1px solid var(--line); border-radius: 14px; padding: 12px; background: var(--bg); }
+.pq .pp { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pq .opt { text-align: center; min-height: 44px; }
+.qsim { display: grid; gap: 12px; margin-top: 14px; }
+@media (min-width: 720px) { .qsim { grid-template-columns: 1fr 1fr; } }
+.lay { border: 1px solid var(--line); border-radius: 14px; padding: 12px; background: var(--bg); }
+.lay h4 { margin: 0 0 8px; font-size: 15px; }
+.qrow { display: grid; grid-template-columns: 74px 1fr; gap: 8px; align-items: start; margin: 6px 0; font-size: 12.5px; }
+.qrow .ql { font-weight: 700; color: var(--muted); padding-top: 1px; }
+.strip { display: flex; flex-wrap: wrap; gap: 3px; min-height: 16px; align-content: flex-start; padding: 3px; border-radius: 6px; background: var(--bg-2); border: 1px solid var(--line); }
+.strip.big { min-height: 64px; }
+.m { width: 11px; height: 11px; border-radius: 3px; }
+.m.ios { background: var(--c-ios); } .m.and { background: var(--c-and); } .m.sms { background: var(--c-sms); } .m.mail { background: var(--c-mail); }
+.more { font: 600 11px var(--mono); color: var(--muted); }
+.wks { display: flex; flex-wrap: wrap; gap: 4px; }
+.wk { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; font-size: 12px; background: var(--good-soft); border: 1px solid var(--good); }
+.wk.stuck { background: var(--warn-soft); border-color: var(--warn); }
+.qstats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; font-size: 12.5px; color: var(--muted); }
+.qstats b { display: block; font: 700 17px var(--mono); color: var(--ink); }
+.qstats b.bad { color: var(--bad); }
+.qstats b.good { color: var(--good); }
+.qclock { margin-top: 10px; font: 600 13.5px var(--mono); text-align: center; }
+
+/* ---- stage 4: order game + API bug hunt ---- */
+.olist { list-style: none; padding: 0; margin: 10px 0; display: grid; gap: 6px; counter-reset: st; }
+.olist li { counter-increment: st; position: relative; padding: 8px 10px 8px 42px; border-radius: 12px; background: var(--good-soft); font-size: 14.5px; animation: rise .3s; transition: background .3s, box-shadow .3s; }
+.olist li::before { content: counter(st); position: absolute; left: 10px; top: 8px; width: 24px; height: 24px; border-radius: 8px; background: var(--good); color: #fff; font-weight: 700; font-size: 13px; display: grid; place-items: center; }
+.olist li.now { background: var(--accent-soft); box-shadow: 0 0 0 2px var(--accent); }
+.olist li.now::before { background: var(--accent); }
+.pool { display: grid; gap: 8px; }
+.pool .opt { font-size: 14.5px; min-height: 44px; }
+.code { background: var(--code-bg); color: var(--code-ink); border-radius: 14px; padding: 14px; font: 13.5px/1.75 var(--mono); overflow-x: auto; margin-top: 10px; }
+.code .ln { white-space: pre-wrap; overflow-wrap: anywhere; padding-left: 2ch; text-indent: -2ch; }
+.tok { text-indent: 0; }
+.tok { font: inherit; color: inherit; background: rgba(255,255,255,.06); border: 1px dashed rgba(223,227,255,.35); border-radius: 6px; padding: 3px 5px; min-height: 30px; }
+.tok:hover { border-color: #9fa8ff; background: rgba(159,168,255,.15); }
+.tok.bug { border: 2px solid #ff8a8a; background: rgba(255,138,138,.18); color: #ffb3b3; }
+.tok.fine { border-style: solid; border-color: rgba(110,231,168,.6); }
+.tok.bonus { border: 2px solid #6ee7a8; background: rgba(110,231,168,.18); }
+.code .k { color: #9fa8ff; }
+.code .c { color: #8a8fb5; }
+@media (max-width: 480px) { .code { font-size: 12px; padding: 12px 10px; } }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 10.2 · Design a Notification System</div>
+    <h1>Shatter the Single Server</h1>
+    <p class="lede">Your first notification system is one box that does everything. Stress it until it cracks. Then break it into servers, queues and workers, and follow one ping all the way to a lock screen.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can draw the book's improved high-level design (services → notification servers + cache/DB → one queue per channel → workers → third parties → devices), name the three problems it fixes, and narrate the 6-step send flow.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Version 1: one box</h2><div class="sub">The naive design and its three cracks</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>In <a href="1001-notification-channels.html">Quest 10.1</a> you met the three roads to a user: push (through Apple's APNs<a class="cite" href="https://developer.apple.com/documentation/usernotifications" target="_blank" rel="noopener">[4]</a> or Google's FCM<a class="cite" href="https://firebase.google.com/docs/cloud-messaging" target="_blank" rel="noopener">[5]</a>), SMS and email. Now, who asks for a notification to be sent?</p>
+      <p>The book calls them <b>services</b>: anything that wants to tell a user something. It might be a micro-service, a <b>cron job</b> (a task that runs on a timer), or a whole distributed system. Think of a billing service that emails "your payment is due", or a shop that texts "your package arrives tomorrow".<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-notification-system" target="_blank" rel="noopener">[1]</a></p>
+      <p>The book's first sketch puts <b>one notification server</b> in the middle. It offers an <b>API</b> (calls other programs can make) to the services. It also builds the <b>payload</b> (the message in the exact format each provider wants) for APNs, FCM, the SMS provider and the email provider. Everything lives inside it: the database, the cache, the HTML email renderer and the sender.</p>
+      <p><b>Your job: break it.</b> Drag the traffic up, launch a campaign, then pull the plug.</p>
+
+      <div class="sim">
+        <svg id="box1" viewBox="0 0 520 352" role="img" aria-label="Version 1: three services send to one notification server, which sends to APNs, FCM, SMS and email providers"></svg>
+        <div class="ctl">
+          <label for="rate"><span>Traffic from services: <span class="bignum" id="rateVal">300</span> /s</span><span class="muted small">this toy box handles 1,500 /s</span></label>
+          <input type="range" id="rate" min="100" max="5000" step="100" value="300" aria-label="Notifications per second sent by services">
+        </div>
+        <div class="sim-bar">
+          <span class="row" style="gap:8px"><button class="btn" id="bfBtn">🛍️ Black Friday campaign</button><button class="btn" id="killBtn">💀 Kill the server</button></span>
+        </div>
+        <div class="stats">
+          <div>Delivered<b id="stDel">0/s</b></div>
+          <div>Waiting in memory<b id="stWait">0</b></div>
+          <div>Dropped<b id="stDrop">0</b></div>
+        </div>
+        <div class="simlog" id="log1"><div>300 notifications a second. CPU is comfortable. Everything works… for now.</div></div>
+      </div>
+      <ul class="checklist" id="s1goals">
+        <li data-g="peak"><span class="box">✓</span><span>Drag the traffic past what one box can handle. Watch the CPU meter.</span></li>
+        <li data-g="bf"><span class="box">✓</span><span>Launch the <b>Black Friday</b> campaign and watch the pile-up</span></li>
+        <li data-g="kill"><span class="box">✓</span><span>Kill the server. What still works?</span></li>
+      </ul>
+
+      <div class="challenge boxed" id="crack" style="display:none">
+        <div class="step">Name the cracks</div>
+        <h3>Three yellow letters just appeared on the diagram. Pick a problem below, then tap the letter that shows it.</h3>
+        <div class="mklegend">
+          <span><b>A</b>the lanes out of the box (remember when they all went dark?)</span>
+          <span><b>B</b>what's packed inside the box: DB, cache, renderer and sender together</span>
+          <span><b>C</b>the CPU meter, plus the sender's spinner waiting on providers</span>
+        </div>
+        <div class="row lbls" id="lbls">
+          <button class="lbl-btn" data-k="spof" aria-pressed="false">Single point of failure</button>
+          <button class="lbl-btn" data-k="scale" aria-pressed="false">Hard to scale</button>
+          <button class="lbl-btn" data-k="perf" aria-pressed="false">Performance bottleneck</button>
+        </div>
+        <div class="explain" id="crackMsg"></div>
+      </div>
+      <div class="callout" id="s1note" style="display:none"><b>The book's three problems with version 1.</b> <b>Single point of failure (SPOF):</b> one server, so when it dies every notification stops. <b>Hard to scale:</b> the database, the cache and every processing step share one machine, so you can't grow one part without growing all of them. <b>Performance bottleneck:</b> building notifications is heavy work (rendering HTML emails, waiting for slow providers to answer), and doing it all in one place overloads the box at peak hours.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-notification-system" target="_blank" rel="noopener">[1]</a></div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>How big is big?</h2><div class="sub">Back-of-the-envelope on the book's numbers</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Before you redesign anything, size the problem. In the book, the interviewer and candidate agree on this scope:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-notification-system" target="_blank" rel="noopener">[1]</a></p>
+      <div class="spec">
+        <div><b>📊 Volume per day</b>10 million mobile pushes, 1 million SMS, 5 million emails</div>
+        <div><b>⏱️ Soft real-time</b>Send as soon as possible. A small delay under heavy load is fine.</div>
+        <div><b>📱 Devices</b>iOS, Android, and laptop or desktop</div>
+        <div><b>🔔 Triggers</b>Client apps, or jobs scheduled on the server side</div>
+        <div><b>🙅 Opt-out</b>Users can turn notifications off and stop getting them</div>
+      </div>
+      <p>Interviewers like a quick per-second estimate (that's step 1 of the book's framework<a class="cite" href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener">[2]</a>). Divide each daily number by the seconds in a day. Round answers are fine: anything within 25% counts.</p>
+      <div class="row"><button class="btn" id="hintBtn" aria-expanded="false">💡 Hint</button></div>
+      <div class="callout tip hintbox" id="hintBox"><b>Napkin trick.</b> A day has 86,400 seconds. For quick maths, call it 100,000 (10<sup>5</sup>). Example: 3,000,000 a day ÷ 100,000 ≈ 30 a second. Rounding down a bit is fine; the exact answer is about 16% higher.</div>
+      <div class="calc" id="calc"></div>
+      <div class="total" id="total"></div>
+      <div class="challenge boxed news" id="news">
+        <div class="step">Then the news breaks</div>
+        <h3>A news app pushes a breaking alert to <b>2,000,000</b> phones over <b>10 minutes</b>. How many pushes a second is that?</h3>
+        <div class="crow" id="burstRow">
+          <span class="cl">🚨 Burst</span><span class="cd">2,000,000 in 10 min</span>
+          <span class="inwrap"><input id="burstIn" type="text" inputmode="decimal" autocomplete="off" aria-label="Burst pushes per second"><span>/s</span></span>
+          <button class="btn primary" id="burstBtn">Check</button>
+          <div class="cmsg" id="burstMsg"></div>
+        </div>
+        <div class="bars2" id="bars2" style="display:none">
+          <div class="b2"><span>Average push</span><div class="track"><div class="fill" id="barAvg" style="background:var(--c-ios)"></div></div><span class="v">116/s</span></div>
+          <div class="b2"><span>Breaking news</span><div class="track"><div class="fill" id="barBurst" style="background:var(--bad)"></div></div><span class="v">3,333/s</span></div>
+        </div>
+        <div class="mult" id="mult">≈ 29× the average push rate, in the same 10 minutes.</div>
+      </div>
+      <div class="callout warn"><b>Honest caveat.</b> The book only gives the daily totals. The per-second numbers and the breaking-news burst are our own napkin maths, added so you can see why "16 million a day" still needs a design built for spikes.</div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Three fixes</h2><div class="sub">Build the improved design</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book fixes version 1 with three moves:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-notification-system" target="_blank" rel="noopener">[1]</a></p>
+      <ol>
+        <li><b>Move the database and cache out</b> of the notification server, so each can scale on its own.</li>
+        <li><b>Add more notification servers</b> and let them scale out automatically (<b>horizontal scaling</b>: more machines, not a bigger machine).</li>
+        <li><b>Add message queues</b> to <b>decouple</b> the parts. A queue is a waiting line: one side drops messages in, the other side takes them out at its own speed, and neither has to wait for the other.</li>
+      </ol>
+      <div class="challenge boxed">
+        <div class="step">Round 1 · Rebuild it</div>
+        <div class="duo">
+          <div class="archwrap"><svg id="arch3" class="arch" viewBox="0 0 360 456" role="img" aria-label="Improved design with empty slots to fill"></svg></div>
+          <div>
+            <div class="bstep" id="bstep">Slot 1 of 5</div>
+            <p class="bq" id="bq"></p>
+            <div class="tray" id="tray"></div>
+            <div class="explain" id="bmsg"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="challenge boxed" id="iso" style="display:none">
+        <div class="step">Round 2 · Predict, then watch</div>
+        <h3>The SMS provider goes down for 15 minutes. What happens to <b>iOS pushes</b>?</h3>
+        <div class="pq" data-l="shared"><span>With <b>one shared queue</b> for every channel, iOS pushes are…</span><div class="pp"><button class="opt" data-v="late">Delayed</button><button class="opt" data-v="ok">Unaffected</button></div></div>
+        <div class="pq" data-l="split"><span>With <b>four queues, one per channel</b>, iOS pushes are…</span><div class="pp"><button class="opt" data-v="late">Delayed</button><button class="opt" data-v="ok">Unaffected</button></div></div>
+        <div class="row"><button class="btn primary" id="watchBtn" disabled>▶ Watch the outage</button></div>
+        <div class="qsim">
+          <div class="lay" id="layShared"><h4>One shared queue</h4><div class="qbody"></div><div class="qstats"></div></div>
+          <div class="lay" id="laySplit"><h4>One queue per channel</h4><div class="qbody"></div><div class="qstats"></div></div>
+        </div>
+        <div class="qclock" id="qclock">minute 0 · SMS provider ✅ up</div>
+        <div class="legend" style="justify-content:center;margin-top:8px"><span><i style="background:var(--c-ios)"></i>iOS</span><span><i style="background:var(--c-and)"></i>Android</span><span><i style="background:var(--c-sms)"></i>SMS</span><span><i style="background:var(--c-mail)"></i>Email</span><span>⚙️ worker free</span><span>⏳ worker stuck retrying SMS</span></div>
+        <div class="explain" id="isoMsg"></div>
+      </div>
+      <div class="callout tip" id="s3note" style="display:none"><b>Why queues, in the book's words (paraphrased).</b> Queues remove the dependency between components, and they act as <b>buffers</b> when a large batch of notifications must go out. Each notification type gets <b>its own queue</b>, so an outage at one third-party service doesn't hold up the others.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-notification-system" target="_blank" rel="noopener">[1]</a> <span class="muted">Toy model: 7 workers, 30-second ticks, and an SMS send that hangs for 90 seconds before it's put back on the queue to retry.</span></div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Follow the ping</h2><div class="sub">The 6-step flow + the send API</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Here's the improved design in full. One iOS push travels through it in six steps.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-notification-system" target="_blank" rel="noopener">[1]</a> Put the steps in order, then watch the ping take that route.</p>
+      <div class="duo">
+        <div class="archwrap"><svg id="arch4" class="arch" viewBox="0 0 360 456" role="img" aria-label="The improved notification design with the path of one iOS push"></svg></div>
+        <div class="challenge boxed" style="margin-top:0">
+          <div class="step">Order the six steps</div>
+          <h3 style="margin-bottom:6px">Tap the step that happens next.</h3>
+          <ol class="olist" id="olist"></ol>
+          <div class="pool" id="pool"></div>
+          <div class="row" style="margin-top:10px"><button class="btn" id="replayBtn" style="display:none">▶ Replay the ping</button></div>
+        </div>
+      </div>
+
+      <div class="challenge">
+        <div class="step">Spot the bug</div>
+        <h3>The book's sample API for sending an email. One thing in this request looks off. Tap it.</h3>
+        <div class="code" id="api"></div>
+        <div class="explain" id="apiMsg"></div>
+      </div>
+      <div class="callout" id="apiNote" style="display:none"><b>Paths that say what they do.</b> Put a version and the channel in the path, e.g. <code>POST /v1/email/send</code>, <code>/v1/sms/send</code>, <code>/v1/push/send</code>. Then a wrong body for a path is an easy validation error, and clients can move to <code>/v2</code> later without breaking.</div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Backlog Hydra</h2><div class="sub">Which component saves you?</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Six incidents on the improved design. For each one, pick the part that fixes it: the <b>message queue</b>, <b>more notification servers</b>, the <b>cache</b>, or <b>more workers</b>. Tip: the book says to watch the <b>number of queued notifications</b>. If it keeps growing, workers aren't keeping up.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-notification-system" target="_blank" rel="noopener">[1]</a><a class="cite" href="https://www.datadoghq.com/blog/rabbitmq-monitoring/" target="_blank" rel="noopener">[3]</a></p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">Sketch the high-level design out loud</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> This design is fast, but can it <i>lose</i> a notification? What if a worker crashes mid-send, or sends the same push twice? That's <a href="1003-notification-reliability.html">Quest 10.3, <i>Never Lose a Ping</i></a>.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-notification-system" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 10 "Design a Notification System"</a>: Step 1 (the scope) and Step 2's "Notification sending/receiving flow", covering the first design, its problems, the improved design and the six steps. Then skim Apple's <a href="https://developer.apple.com/documentation/usernotifications" target="_blank" rel="noopener">User Notifications docs</a> and the <a href="https://firebase.google.com/docs/cloud-messaging" target="_blank" rel="noopener">FCM docs</a> to see what the workers actually call.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <ul style="margin:0;padding-left:20px">
+        <li><b>The queues can become the new single point of failure.</b> The book doesn't say this. A queue that lives on one broker machine is just a new single box. Real systems replicate it: Kafka copies each partition to several brokers,<a class="cite" href="https://kafka.apache.org/documentation/#replication" target="_blank" rel="noopener">[7]</a> and RabbitMQ has <i>quorum queues</i> replicated with the Raft protocol.<a class="cite" href="https://www.rabbitmq.com/docs/quorum-queues" target="_blank" rel="noopener">[6]</a></li>
+        <li><b>Split by priority, not just channel.</b> The book splits queues by channel only. Real systems often add priority lanes too. A one-time login code (OTP) should never wait behind a 2-million-email marketing blast, even though both are "email".</li>
+        <li><b>The sample path is a typo.</b> The book's email example posts to <code>/v/sms/send</code>. Version and channel your paths clearly, e.g. <code>/v1/email/send</code>.</li>
+        <li><b>Stateless servers are what make autoscaling easy.</b> The notification servers keep no user data of their own (it's all in the cache and DB), so any server can answer any request, and adding or removing one is safe.</li>
+      </ul>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"why do the workers call the third parties, and not the notification servers directly?"</i> or <i>"Kafka or RabbitMQ for these queues?"</i> Follow-up questions are part of the quest.
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 10 "Design a Notification System" (ByteByteGo).</li>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 3 "A Framework for System Design Interviews" (ByteByteGo).</li>
+        <li>Datadog, "Key metrics for RabbitMQ monitoring" (the book's reference on queue monitoring).</li>
+        <li>Apple Developer, "User Notifications" documentation (APNs).</li>
+        <li>Google, Firebase Cloud Messaging documentation.</li>
+        <li>RabbitMQ documentation, "Quorum Queues".</li>
+        <li>Apache Kafka documentation, "Replication".</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '1002',
+  badge: '🏗️ Badge: Decoupler',
+  winTitle: 'The monolith is rubble!',
+  cheatsheet: '../reference/ch10-notification-cheatsheet.html',
+});
+const { sleep, shuffle } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function T(parent, x, y, s, cls) { const t = S('text', { x, y, class: cls || 'lbl' }, parent); t.textContent = s; return t; }
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); while (l.children.length > 40) l.firstChild.remove(); l.scrollTop = l.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); Q.addXP(xp || 10, li);
+  return true;
+}
+function keyActivate(el, fn) {
+  el.addEventListener('click', fn);
+  el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(e); } });
+}
+function anim(dur, f) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 1) { f(1); return res(); }
+    const t0 = performance.now();
+    const fr = now => { const p = Math.min(1, (now - t0) / dur); f(p); p < 1 ? requestAnimationFrame(fr) : res(); };
+    requestAnimationFrame(fr);
+  });
+}
+const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+function poly(pts) { const lens = []; let total = 0; for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); lens.push(l); total += l; } return { pts, lens, total }; }
+function polyAt(p, d) {
+  let acc = 0;
+  for (let i = 0; i < p.lens.length; i++) {
+    if (d <= acc + p.lens[i]) { const t = p.lens[i] ? (d - acc) / p.lens[i] : 0; const a = p.pts[i], b = p.pts[i + 1]; return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]; }
+    acc += p.lens[i];
+  }
+  return p.pts[p.pts.length - 1];
+}
+const fmt = n => Math.round(n).toLocaleString('en-US');
+const CHV = { ios: 'var(--c-ios)', and: 'var(--c-and)', sms: 'var(--c-sms)', mail: 'var(--c-mail)' };
+
+/* ---------- the improved design diagram (stages 3 and 4) ---------- */
+const CH = [
+  { k: 'ios', q: 'iOS PN', tp: 'APNs', dev: '📱', dl: 'iPhone' },
+  { k: 'and', q: 'Android PN', tp: 'FCM', dev: '📱', dl: 'Android' },
+  { k: 'sms', q: 'SMS', tp: 'SMS svc', dev: '💬', dl: 'phone' },
+  { k: 'mail', q: 'Email', tp: 'Email svc', dev: '💻', dl: 'inbox' },
+];
+const CX = [47, 134, 221, 308];
+const SLOTS = { srv: [6, 54, 230, 94], store: [244, 4, 110, 142], q: [6, 172, 348, 70], wk: [6, 256, 348, 50], tp: [6, 322, 348, 56] };
+function drawArch(svg, build) {
+  svg.innerHTML = '';
+  const parts = {}, slots = {};
+  const P = k => (parts[k] = S('g', { class: 'part', 'data-part': k }, svg));
+  const box = (g, x, y, w, h, cls) => S('rect', { x, y, width: w, height: h, rx: 10, class: cls || 'nbox' }, g);
+  const wire = (g, x1, y1, x2, y2, dash) => S('line', { x1, y1, x2, y2, class: 'wire' + (dash ? ' dash' : '') }, g);
+  // services
+  const svc = P('svc');
+  [10, 86, 162].forEach((x, i) => { box(svc, x, 8, 70, 38); T(svc, x + 35, 32, ['Service 1', 'Service 2', 'Service N'][i], 'lbl s'); });
+  // notification servers behind a load balancer
+  const srv = P('srv');
+  [45, 121, 197].forEach(x => wire(srv, x, 46, x, 60));
+  S('rect', { x: 10, y: 60, width: 222, height: 18, rx: 9, class: 'lb' }, srv); T(srv, 121, 73, 'load balancer', 'lbl xs');
+  [10, 86, 162].forEach(x => { wire(srv, x + 35, 78, x + 35, 92); box(srv, x, 92, 70, 50); T(srv, x + 35, 114, '🖥️', 'emo').style.fontSize = '17px'; T(srv, x + 35, 134, 'notif. server', 'lbl xs'); });
+  // cache + DB, outside the servers
+  const store = P('store');
+  wire(store, 232, 117, 248, 36, true); wire(store, 232, 117, 248, 112, true);
+  box(store, 248, 8, 102, 56); T(store, 299, 32, '⚡', 'emo').style.fontSize = '18px'; T(store, 299, 54, 'Cache', 'lbl s');
+  box(store, 248, 84, 102, 56); T(store, 299, 108, '🗄️', 'emo').style.fontSize = '18px'; T(store, 299, 130, 'DB', 'lbl s');
+  // one queue per channel
+  const q = P('q');
+  CH.forEach((c, i) => {
+    wire(q, 121, 142, CX[i], 176);
+    box(q, CX[i] - 37, 176, 74, 60); T(q, CX[i], 194, c.q, 'lbl xs').style.fill = 'var(--ink)';
+    for (let j = 0; j < 5; j++) { const r = S('rect', { x: CX[i] - 30 + j * 12.5, y: 204, width: 9, height: 22, rx: 2, class: 'qcell' }, q); r.style.fill = CHV[c.k]; r.style.opacity = 1 - j * .15; }
+  });
+  // workers
+  const wk = P('wk');
+  CH.forEach((c, i) => { wire(wk, CX[i], 236, CX[i], 260); box(wk, CX[i] - 37, 260, 74, 42); T(wk, CX[i], 286, '⚙️ workers', 'lbl xs').style.fill = 'var(--ink)'; });
+  // third parties
+  const tp = P('tp');
+  CH.forEach((c, i) => { wire(tp, CX[i], 302, CX[i], 326); box(tp, CX[i] - 37, 326, 74, 48); T(tp, CX[i], 355, c.tp, 'lbl s'); });
+  // devices
+  const dev = P('dev');
+  CH.forEach((c, i) => { wire(dev, CX[i], 374, CX[i], 398); T(dev, CX[i], 428, c.dev, 'emo'); T(dev, CX[i], 450, c.dl, 'lbl xs'); });
+  if (build) {
+    Object.entries(SLOTS).forEach(([k, [x, y, w, h]]) => {
+      parts[k].classList.add('hidden');
+      const g = S('g', { class: 'slotg' }, svg);
+      S('rect', { x, y, width: w, height: h, rx: 12, class: 'slot' }, g);
+      T(g, x + w / 2, y + h / 2, '?', 'slotq');
+      slots[k] = g;
+    });
+  }
+  return { parts, slots, ping: S('circle', { r: 8, class: 'ping', cx: -20, cy: -20 }, svg) };
+}
+
+/* ================= STAGE 1: the one box ================= */
+Q.onStage(1, () => {
+  const CAP = 1500, MAXWAIT = 3000;
+  const st = { rate: 300, backlog: 0, dropped: 0, dead: false, bf: 0, lastProc: 0, dropFrac: 0, cpu: 0 };
+  const goals = new Set();
+  const svg = $('#box1');
+  const SV = ['Billing', 'Shop', 'Cron job'];
+  const TP = [{ k: 'ios', n: 'APNs', s: 'iOS push', dev: '📱', w: 5 }, { k: 'and', n: 'FCM', s: 'Android push', dev: '📱', w: 5 }, { k: 'sms', n: 'SMS', s: 'text message', dev: '💬', w: 1 }, { k: 'mail', n: 'Email', s: 'inbox', dev: '💻', w: 5 }];
+  const MK = [
+    { id: 'A', a: 'spof', lab: 'the lanes out of the box' },
+    { id: 'B', a: 'scale', lab: 'everything packed inside the box' },
+    { id: 'C', a: 'perf', lab: 'the CPU meter and the slow sender' },
+  ];
+  // Two layouts: wide (left → right) and narrow phones (top → bottom), so labels stay readable at 375px.
+  const LAY = {
+    wide: {
+      vb: [520, 352], capS: [52, 16], capT: [424, 16], svcH: 56,
+      svc: i => ({ x: 6, y: 34 + i * 112, w: 92 }), svcOut: b => [b.x + b.w, b.y + 28],
+      box: { x: 134, y: 24, w: 210, h: 316 }, title: [239, 48],
+      cell: i => ({ x: 148 + (i % 2) * 94, y: 62 + Math.floor(i / 2) * 88, w: 88, h: 78 }),
+      spin: [318, 168], cpu: { x: 148, y: 266, w: 182 }, pile: { x: 148, y: 296, per: 15 }, down: [239, 190],
+      MID: [134, 182], OUT: [344, 182],
+      tp: i => ({ x: 378, y: 26 + i * 80, w: 92, h: 60 }), tpIn: b => [b.x, b.y + 30],
+      devLane: b => [b.x + b.w, b.y + 30, b.x + b.w + 14, b.y + 30], dev: b => [b.x + b.w + 30, b.y + 38], tpEnd: b => [b.x + b.w + 20, b.y + 30],
+      mk: { A: [361, 182], B: [239, 147], C: [239, 274] },
+    },
+    tall: {
+      vb: [360, 536], capS: [180, 14], capT: [180, 424], svcH: 46,
+      svc: i => ({ x: 8 + i * 118, y: 22, w: 108 }), svcOut: b => [b.x + b.w / 2, b.y + 46],
+      box: { x: 14, y: 96, w: 332, h: 304 }, title: [180, 122],
+      cell: i => ({ x: 26 + (i % 2) * 160, y: 136 + Math.floor(i / 2) * 84, w: 148, h: 74 }),
+      spin: [318, 236], cpu: { x: 26, y: 324, w: 308 }, pile: { x: 26, y: 352, per: 24 }, down: [180, 270],
+      MID: [180, 96], OUT: [180, 400],
+      tp: i => ({ x: 8 + i * 88, y: 434, w: 80, h: 56 }), tpIn: b => [b.x + b.w / 2, b.y],
+      devLane: b => [b.x + 40, b.y + 56, b.x + 40, b.y + 66], dev: b => [b.x + 40, b.y + 92], tpEnd: b => [b.x + 40, b.y + 76],
+      mk: { A: [104, 418], B: [180, 215], C: [180, 332] },
+    },
+  };
+  const mq = matchMedia('(max-width: 560px)');
+  let L, root, pkG, mkG, cpuFill, cpuTxt, spin, pile, inPaths = [];
+  const okMarks = new Set();
+  function build() {
+    L = mq.matches ? LAY.tall : LAY.wide;
+    svg.setAttribute('viewBox', `0 0 ${L.vb[0]} ${L.vb[1]}`);
+    svg.innerHTML = '';
+    packets.length = 0;
+    root = S('g', { class: 'v1' }, svg);
+    const lanesG = S('g', {}, root); pkG = S('g', {}, root);
+    T(root, L.capS[0], L.capS[1], 'SERVICES', 'cap'); T(root, L.capT[0], L.capT[1], 'THIRD PARTIES', 'cap');
+    inPaths = SV.map((n, i) => {
+      const b = L.svc(i), o = L.svcOut(b);
+      S('rect', { class: 'nbox', x: b.x, y: b.y, width: b.w, height: L.svcH, rx: 12 }, root); T(root, b.x + b.w / 2, b.y + L.svcH / 2 + 5, n, 'lbl');
+      S('line', { class: 'lane', x1: o[0], y1: o[1], x2: L.MID[0], y2: L.MID[1] }, lanesG);
+      return poly([o, L.MID]);
+    });
+    const B = L.box;
+    S('rect', { class: 'srvbox', x: B.x, y: B.y, width: B.w, height: B.h, rx: 16 }, root);
+    T(root, L.title[0], L.title[1], 'Notification server', 'lbl').style.fontSize = '15px';
+    const cells = S('g', { class: 'cells' }, root);
+    [['🗄️', 'Database'], ['⚡', 'Cache'], ['🎨', 'HTML render'], ['📤', 'Sender']].forEach(([e, l], i) => {
+      const c = L.cell(i);
+      S('rect', { class: 'cell', x: c.x, y: c.y, width: c.w, height: c.h, rx: 10 }, cells);
+      T(cells, c.x + c.w / 2, c.y + c.h / 2, e, 'emo'); T(cells, c.x + c.w / 2, c.y + c.h - 12, l, 'lbl s');
+    });
+    spin = S('circle', { class: 'spin', cx: L.spin[0], cy: L.spin[1], r: 8, visibility: 'hidden' }, root);
+    T(root, L.cpu.x, L.cpu.y - 8, 'CPU', 'mtxt');
+    cpuTxt = T(root, L.cpu.x + L.cpu.w, L.cpu.y - 8, '0%', 'mtxt r');
+    S('rect', { class: 'mtrack', x: L.cpu.x, y: L.cpu.y, width: L.cpu.w, height: 16, rx: 8 }, root);
+    cpuFill = S('rect', { class: 'mfill', x: L.cpu.x, y: L.cpu.y, width: 0, height: 16, rx: 8 }, root);
+    pile = S('g', { class: 'pile' }, root);
+    T(root, L.down[0], L.down[1], '💀 DOWN', 'down');
+    TP.forEach((t, i) => {
+      const b = L.tp(i), inn = L.tpIn(b), dl = L.devLane(b), dv = L.dev(b);
+      S('line', { class: 'lane', x1: L.OUT[0], y1: L.OUT[1], x2: inn[0], y2: inn[1] }, lanesG);
+      S('line', { class: 'lane', x1: dl[0], y1: dl[1], x2: dl[2], y2: dl[3] }, lanesG);
+      const g = S('g', { class: 'tpbox' }, root);
+      S('rect', { class: 'nbox', x: b.x, y: b.y, width: b.w, height: b.h, rx: 12 }, g);
+      T(g, b.x + b.w / 2, b.y + 27, t.n, 'lbl'); T(g, b.x + b.w / 2, b.y + 45, t.s, 'lbl xs');
+      T(root, dv[0], dv[1], t.dev, 'emo dev');
+      t.path = poly([L.OUT, inn, L.tpEnd(b)]);
+    });
+    // hotspot markers (hidden until the "name the cracks" round); a big invisible circle is the tap target
+    mkG = S('g', { visibility: crackOn ? 'visible' : 'hidden' }, root);
+    MK.forEach(m => {
+      const [x, y] = L.mk[m.id];
+      const g = S('g', { class: 'mk' + (okMarks.has(m.id) ? ' ok' : ''), tabindex: crackOn ? 0 : -1, role: 'button', 'aria-label': `Marker ${m.id}: ${m.lab}` }, mkG);
+      S('circle', { cx: x, cy: y, r: 16, class: 'halo' }, g); S('circle', { cx: x, cy: y, r: 16 }, g); T(g, x, y, m.id);
+      S('circle', { cx: x, cy: y, r: 27, class: 'hit' }, g);
+      m.el = g;
+      keyActivate(g, () => markerTap(m));
+    });
+    if (st) render();
+  }
+  const packets = [];
+  let crackOn = false;
+
+  /* --- model: one tick = 100 ms --- */
+  const eff = () => st.bf > 0 ? 5000 : st.rate;
+  function tick() {
+    const r = eff(), arr = r / 10;
+    let proc = 0, drop = 0;
+    if (st.dead) { drop = arr; st.dropped += drop; }
+    else {
+      proc = Math.min(CAP / 10, st.backlog + arr);
+      st.backlog += arr - proc;
+      if (st.backlog > MAXWAIT) { drop = st.backlog - MAXWAIT; st.dropped += drop; st.backlog = MAXWAIT; }
+    }
+    st.lastProc = proc * 10;
+    st.dropFrac = arr ? drop / arr : 0;
+    st.cpu = st.dead ? 0 : (st.backlog > 1 ? 100 : Math.min(100, r / CAP * 100));
+    if (st.bf > 0) {
+      st.bf--;
+      if (st.bf === 0) {
+        logTo('log1', `Campaign over. ${fmt(st.dropped)} notifications dropped so far; ${fmt(st.backlog)} still waiting.`, 'w');
+        if (checkGoal('#s1goals', 'bf', goals)) maybeCrack();
+      }
+    }
+    if (!st.dead && !goals.has('peak') && st.rate > CAP && st.backlog > 400) {
+      logTo('log1', `CPU pinned at 100%. ${fmt(st.rate)}/s arrive, only ${fmt(CAP)}/s get out. The rest pile up in memory.`, 'e');
+      if (checkGoal('#s1goals', 'peak', goals)) maybeCrack();
+    }
+    render();
+  }
+  function render() {
+    const c = st.cpu;
+    cpuFill.setAttribute('width', (L.cpu.w * c / 100).toFixed(1));
+    cpuFill.style.fill = c >= 95 ? 'var(--bad)' : c >= 70 ? 'var(--warn)' : 'var(--good)';
+    cpuTxt.textContent = st.dead ? 'off' : Math.round(c) + '%';
+    spin.setAttribute('visibility', !st.dead && c >= 80 ? 'visible' : 'hidden');
+    const n = Math.min(30, Math.ceil(st.backlog / 100));
+    if (pile.childElementCount !== n) { pile.innerHTML = ''; for (let i = 0; i < n; i++) S('rect', { x: L.pile.x + (i % L.pile.per) * 12.4, y: L.pile.y + Math.floor(i / L.pile.per) * 14, width: 10, height: 10, rx: 2 }, pile); }
+    $('#stDel').textContent = fmt(st.lastProc) + '/s';
+    const w = $('#stWait'); w.textContent = fmt(st.backlog); w.className = st.backlog > 1 ? 'warn' : '';
+    const d = $('#stDrop'); d.textContent = fmt(st.dropped); d.className = st.dropped > 0 ? 'bad' : '';
+    root.classList.toggle('dead', st.dead);
+  }
+  build();
+  mq.addEventListener && mq.addEventListener('change', build);
+  setInterval(tick, 100);
+
+  /* --- packets (visual only) --- */
+  let visible = true, last = 0, acc = 0;
+  if ('IntersectionObserver' in window) new IntersectionObserver(es => { visible = es[0].isIntersecting; }).observe(svg);
+  const pickTP = () => { let r = Math.random() * 16; for (const t of TP) { if ((r -= t.w) < 0) return t; } return TP[0]; };
+  function spawn(path, color, speed, onEnd) {
+    if (packets.length > 70) return;
+    const el = S('circle', { r: 5, class: 'pk' }, pkG); el.style.fill = color;
+    packets.push({ path, d: 0, speed, el, onEnd });
+  }
+  function flash(x, y) { const t = T(pkG, x, y, '✕', 'xfl'); setTimeout(() => t.remove(), 700); }
+  function spawnIn() {
+    const t = pickTP();
+    spawn(inPaths[Math.random() * 3 | 0], CHV[t.k], 190, () => {
+      if (st.dead || Math.random() < st.dropFrac) { flash(L.MID[0] + (Math.random() * 30 - 15), L.MID[1] + 4); return; }
+      spawn(t.path, CHV[t.k], st.cpu >= 100 ? 70 : 170);
+    });
+  }
+  function frame(now) {
+    const dt = Math.min(.05, last ? (now - last) / 1000 : 0); last = now;
+    if (visible && !Q.reduced) {
+      acc += Math.min(14, 2 + eff() / 380) * dt;
+      while (acc >= 1) { acc--; spawnIn(); }
+      for (let i = packets.length - 1; i >= 0; i--) {
+        const p = packets[i]; p.d += p.speed * dt;
+        if (p.d >= p.path.total) { p.el.remove(); packets.splice(i, 1); p.onEnd && p.onEnd(); continue; }
+        const [x, y] = polyAt(p.path, p.d); p.el.setAttribute('cx', x.toFixed(1)); p.el.setAttribute('cy', y.toFixed(1));
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  /* --- controls --- */
+  $('#rate').addEventListener('input', e => {
+    st.rate = +e.target.value; $('#rateVal').textContent = fmt(st.rate);
+    if (st.rate <= CAP && st.backlog === 0 && !st.dead) { /* calm */ }
+  });
+  $('#bfBtn').onclick = () => {
+    if (st.dead) { Q.toast('restart the server first', $('#bfBtn'), 'practice'); return; }
+    if (st.bf > 0) return;
+    st.bf = 50;
+    logTo('log1', '🛍️ Black Friday! Marketing fires 5,000 notifications a second for a few seconds: emails with big HTML templates, plus pushes.', 'w');
+  };
+  $('#killBtn').onclick = () => {
+    st.dead = !st.dead;
+    if (st.dead) {
+      const lost = st.backlog; st.dropped += lost; st.backlog = 0; st.bf = 0;
+      $('#killBtn').textContent = '🔌 Restart the server';
+      logTo('log1', `💀 The one server died.${lost > 1 ? ` The ${fmt(lost)} waiting in its memory are gone.` : ''} Billing, Shop and Cron can't send anything: every lane is dark.`, 'e');
+      if (checkGoal('#s1goals', 'kill', goals)) maybeCrack();
+    } else {
+      $('#killBtn').textContent = '💀 Kill the server';
+      logTo('log1', '🔌 Server restarted. Notifications flow again.', 'g');
+    }
+    render();
+  };
+
+  /* --- name the cracks --- */
+  let sel = null, named = 0;
+  const EXPLAIN = {
+    spof: 'When the only box died, every lane went dark at once. Nothing else could take over. That\'s a <b>single point of failure</b>.',
+    scale: 'Database, cache, renderer and sender all share one machine. If only the database needs more power, you still have to grow the whole box. That\'s <b>hard to scale</b>.',
+    perf: 'The CPU maxed out and the sender sat waiting on providers. Heavy rendering plus slow third-party replies, all in one place, overloads the box at peak. That\'s a <b>performance bottleneck</b>.',
+  };
+  function maybeCrack() {
+    if (crackOn || goals.size < 3) return;
+    crackOn = true;
+    $('#crack').style.display = 'block';
+    mkG.setAttribute('visibility', 'visible');
+    MK.forEach(m => m.el.setAttribute('tabindex', 0));
+    if (!Q.reduced) setTimeout(() => svg.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
+    logTo('log1', 'Three cracks found. Name them below.', 'g');
+  }
+  $$('#lbls .lbl-btn').forEach(b => b.onclick = () => {
+    if (b.classList.contains('done')) return;
+    sel = b.dataset.k;
+    $$('#lbls .lbl-btn').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+  });
+  function markerTap(m) {
+    if (!crackOn || m.el.classList.contains('ok')) return;
+    const msg = $('#crackMsg');
+    if (!sel) { msg.className = 'explain show bad'; msg.innerHTML = 'Pick a problem first (the buttons above), then tap a letter.'; return; }
+    const btn = $(`#lbls .lbl-btn[data-k="${sel}"]`);
+    if (sel === m.a) {
+      m.el.classList.add('ok'); okMarks.add(m.id); m.el.setAttribute('aria-label', `Marker ${m.id}: ${btn.textContent}`);
+      btn.classList.add('done'); btn.setAttribute('aria-pressed', 'false'); btn.disabled = true;
+      msg.className = 'explain show good'; msg.innerHTML = `<b>${m.id} = ${btn.textContent}.</b> ${EXPLAIN[m.a]}`;
+      Q.addXP(10, m.el); sel = null; named++;
+      if (named === 3) finishCrack();
+    } else {
+      msg.className = 'explain show bad'; msg.innerHTML = `<b>Not that one.</b> Letter ${m.id} points at ${m.lab}. Which problem did that show?`;
+      Q.loseHeart(m.el);
+    }
+  }
+  let quizShown = false;
+  function finishCrack() {
+    $('#s1note').style.display = 'block';
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => Q.quiz($('#s1quiz'), {
+      q: 'Rendering HTML emails and waiting on the email provider slows everything down at peak. Which of the book\'s three problems is that?',
+      options: ['Performance bottleneck', 'Single point of failure', 'Hard to scale', 'Data loss'],
+      correct: 0,
+      good: 'Heavy work (HTML rendering) plus slow outside calls, all in one box, overloads it when traffic peaks.',
+      bad: 'Nothing died and nothing was lost. The box was simply too busy doing heavy work and waiting on providers. That\'s the <b>performance bottleneck</b>.',
+      onDone: () => setTimeout(() => Q.clearStage(1), 900),
+    }), 500);
+  }
+  render();
+});
+
+/* ================= STAGE 2: napkin maths ================= */
+Q.onStage(2, () => {
+  const ROWS = [
+    { k: 'push', l: '📱 Push', day: 10e6 },
+    { k: 'sms', l: '💬 SMS', day: 1e6 },
+    { k: 'email', l: '✉️ Email', day: 5e6 },
+  ];
+  const done = new Set();
+  const parse = v => { const n = parseFloat(String(v).replace(/[,\s_]/g, '').replace(/\/s$/i, '')); return isFinite(n) ? n : NaN; };
+  $('#calc').innerHTML = ROWS.map(r => `<div class="crow" data-k="${r.k}"><span class="cl">${r.l}</span><span class="cd">${fmt(r.day)} / day</span>
+    <span class="inwrap"><input type="text" inputmode="decimal" autocomplete="off" aria-label="${r.l.slice(3)} per second"><span>/s</span></span>
+    <button class="btn">Check</button><div class="cmsg"></div></div>`).join('');
+  ROWS.forEach(r => {
+    const row = $(`#calc .crow[data-k="${r.k}"]`), inp = $('input', row), btn = $('.btn', row), msg = $('.cmsg', row);
+    const exact = r.day / 86400;
+    const check = () => {
+      if (done.has(r.k)) return;
+      const v = parse(inp.value);
+      if (isNaN(v)) { msg.className = 'cmsg show'; msg.textContent = 'Type a number first.'; return; }
+      if (Math.abs(v - exact) / exact <= .25) {
+        done.add(r.k); row.classList.add('ok'); inp.disabled = true; btn.disabled = true;
+        msg.className = 'cmsg show'; msg.innerHTML = `✓ ${fmt(r.day)} ÷ 86,400 ≈ <b>${exact.toFixed(exact < 20 ? 1 : 0)}/s</b>. Napkin version: ${fmt(r.day)} ÷ 10<sup>5</sup> = ${fmt(r.day / 1e5)}/s.`;
+        Q.addXP(10, btn);
+        if (done.size === 3) allDone();
+      } else {
+        msg.className = 'cmsg show'; msg.innerHTML = `✗ ${fmt(v)}/s is off. Divide the daily number by the seconds in a day (about 86,400, or 10<sup>5</sup> for napkin maths).`;
+        Q.loseHeart(btn);
+      }
+    };
+    btn.onclick = check;
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') check(); });
+  });
+  $('#hintBtn').onclick = () => { const on = $('#hintBox').classList.toggle('on'); $('#hintBtn').setAttribute('aria-expanded', on); };
+  function allDone() {
+    const t = $('#total'); t.classList.add('show');
+    t.innerHTML = '<b>Total ≈ 185 notifications a second</b> (16 million ÷ 86,400). That\'s tiny: one ordinary server could handle it. So why bother with a big design?';
+    setTimeout(() => $('#news').classList.add('show'), 500);
+  }
+  let burstDone = false;
+  const burstCheck = () => {
+    if (burstDone) return;
+    const v = parse($('#burstIn').value), msg = $('#burstMsg');
+    if (isNaN(v)) { msg.className = 'cmsg show'; msg.textContent = 'Type a number first.'; return; }
+    if (v >= 2500 && v <= 4500) {
+      burstDone = true; $('#burstRow').classList.add('ok'); $('#burstIn').disabled = true; $('#burstBtn').disabled = true;
+      msg.className = 'cmsg show'; msg.innerHTML = '✓ 10 minutes = 600 seconds. 2,000,000 ÷ 600 ≈ <b>3,333/s</b>.';
+      Q.addXP(15, $('#burstBtn'));
+      $('#bars2').style.display = 'grid';
+      requestAnimationFrame(() => requestAnimationFrame(() => { $('#barAvg').style.width = (116 / 3333 * 100) + '%'; $('#barBurst').style.width = '100%'; }));
+      setTimeout(() => { $('#mult').classList.add('show'); quiz(); }, Q.reduced ? 50 : 1400);
+    } else {
+      msg.className = 'cmsg show'; msg.innerHTML = `✗ ${fmt(v)}/s is off. How many seconds are in 10 minutes? Divide 2,000,000 by that.`;
+      Q.loseHeart($('#burstBtn'));
+    }
+  };
+  $('#burstBtn').onclick = burstCheck;
+  $('#burstIn').addEventListener('keydown', e => { if (e.key === 'Enter') burstCheck(); });
+  let quizShown = false;
+  function quiz() {
+    if (quizShown) return; quizShown = true;
+    Q.quiz($('#s2quiz'), {
+      q: 'Average load is only about 185 notifications a second. Why still design for scale?',
+      options: ['Traffic is bursty: one alert can be ~30× the average', '185 a second already needs about a hundred servers', 'Third-party providers demand a minimum send rate', 'It doesn\'t matter: one server will handle it fine'],
+      correct: 0,
+      good: 'You design for the peak, not the average. A campaign or breaking news fires millions in minutes. That\'s exactly the burst a queue soaks up.',
+      bad: 'The average is easy. The danger is the <b>burst</b>: one campaign or breaking-news alert can run at many times the average for minutes. Queues are there to soak that up.',
+      onDone: () => setTimeout(() => Q.clearStage(2), 900),
+    });
+  }
+});
+
+/* ================= STAGE 3: three fixes ================= */
+Q.onStage(3, () => {
+  /* --- round 1: rebuild it --- */
+  const A = drawArch($('#arch3'), true);
+  const ITEMS = [
+    { k: 'srv', l: '🖥️ Notification servers' },
+    { k: 'store', l: '⚡🗄️ Cache + DB' },
+    { k: 'q', l: '📬 Message queues' },
+    { k: 'wk', l: '⚙️ Workers' },
+    { k: 'tp', l: '🌐 Third-party services' },
+    { k: 'mono', l: '📦 One big server' },
+  ];
+  const STEPS = [
+    { k: 'srv', q: 'A service calls the send API. What answers it, and keeps answering when one box dies?',
+      ok: '<b>Notification servers</b>, several of them behind a load balancer, adding more automatically when busy. They offer the API (only to internal or verified callers, to stop spam), do basic checks like "is this a valid email or phone number?", look up what they need, and hand the work on.' },
+    { k: 'store', q: 'The server needs the user\'s email address, device token and the message template. Where does it look now that they\'ve moved out of the server?',
+      ok: '<b>Cache + DB</b>, outside the servers. The cache keeps user info, device info and notification templates close at hand. The database stores users, notifications and settings.' },
+    { k: 'q', q: 'The notification is ready. Where does the server put it so it can reply to the service straight away?',
+      ok: '<b>Message queues</b>, one per channel: iOS push, Android push, SMS, email. The server drops the event in and moves on. The queue soaks up bursts.' },
+    { k: 'wk', q: 'Who takes events off the queues and does the slow job of sending?',
+      ok: '<b>Workers</b>: servers that pull events from the queues and send each one to the right provider.' },
+    { k: 'tp', q: 'Who actually puts the message on the phone or in the inbox?',
+      ok: '<b>Third-party services</b>: APNs, FCM, the SMS provider and the email provider. They do the last hop to the device.' },
+  ];
+  const WRONG = {
+    mono: 'That\'s version 1, the box you just broke. The whole point is to split it up.',
+    srv: 'The notification servers are the front door. Look at what this step needs.',
+    store: 'Cache + DB hold data. They don\'t receive requests or send anything.',
+    q: 'Queues hold events in line. They don\'t receive the request, look things up, or deliver.',
+    wk: 'Workers come after the queues. They pull work; they don\'t answer the API.',
+    tp: 'Third parties are the last hop to the device, not this step.',
+  };
+  let bi = 0, busy = false;
+  $('#tray').innerHTML = ITEMS.map(it => `<button class="opt" data-k="${it.k}">${it.l}</button>`).join('');
+  function showStep() {
+    Object.values(A.slots).forEach(s => s.classList.remove('next'));
+    if (bi >= STEPS.length) return;
+    $('#bstep').textContent = `Slot ${bi + 1} of ${STEPS.length}`;
+    $('#bq').textContent = STEPS[bi].q;
+    A.slots[STEPS[bi].k].classList.add('next');
+  }
+  $$('#tray .opt').forEach(b => b.onclick = async () => {
+    if (busy || bi >= STEPS.length || b.classList.contains('used')) return;
+    const s = STEPS[bi], msg = $('#bmsg');
+    if (b.dataset.k === s.k) {
+      busy = true;
+      b.classList.add('used', 'right'); b.disabled = true;
+      A.slots[s.k].classList.add('gone');
+      const p = A.parts[s.k]; p.classList.remove('hidden'); p.classList.add('pop');
+      msg.className = 'explain show good'; msg.innerHTML = s.ok;
+      Q.addXP(5, b);
+      bi++;
+      await sleep(Q.reduced ? 50 : 500);
+      busy = false;
+      if (bi < STEPS.length) showStep();
+      else {
+        $('#bstep').textContent = 'Built';
+        $('#bq').textContent = 'That\'s the book\'s improved design. Services → notification servers (+ cache and DB) → a queue per channel → workers → third parties → devices.';
+        $('#iso').style.display = 'block';
+      }
+    } else {
+      b.classList.remove('wrong'); void b.offsetWidth; b.classList.add('wrong');
+      setTimeout(() => b.classList.remove('wrong'), 500);
+      msg.className = 'explain show bad'; msg.innerHTML = '<b>Not here.</b> ' + WRONG[b.dataset.k];
+      Q.loseHeart(b);
+    }
+  });
+  showStep();
+
+  /* --- round 2: shared queue vs one queue per channel --- */
+  const ARR = ['ios', 'and', 'mail', 'ios', 'and', 'sms'];
+  const WK = { ios: 2, and: 2, sms: 2, mail: 1 };
+  const QL = { ios: 'iOS PN', and: 'Android PN', sms: 'SMS', mail: 'Email' };
+  const OUTAGE_AT = 4, TICKS = 34;
+  function makeSim(split) {
+    const st = { t: 0, qs: split ? { ios: [], and: [], sms: [], mail: [] } : { all: [] }, workers: [] };
+    if (split) for (const ch in WK) for (let i = 0; i < WK[ch]; i++) st.workers.push({ q: ch, stuck: 0, msg: null });
+    else for (let i = 0; i < 7; i++) st.workers.push({ q: 'all', stuck: 0, msg: null });
+    return {
+      st,
+      step(outage) {
+        st.workers.forEach(w => { if (w.stuck > 0) { w.stuck--; if (!w.stuck) { st.qs[w.q].push(w.msg); w.msg = null; } } });
+        ARR.forEach(ch => st.qs[split ? ch : 'all'].push({ ch, born: st.t }));
+        st.workers.forEach(w => { if (w.stuck) return; const m = st.qs[w.q].shift(); if (!m) return; if (m.ch === 'sms' && outage) { w.stuck = 3; w.msg = m; } });
+        st.t++;
+      },
+      oldest(ch) { let o = null; for (const k in st.qs) for (const m of st.qs[k]) if (m.ch === ch && (o === null || m.born < o)) o = m.born; return o === null ? 0 : st.t - o; },
+      depth() { return Object.values(st.qs).reduce((s, q) => s + q.length, 0); },
+    };
+  }
+  const strip = (arr, cap, big) => `<div class="strip${big ? ' big' : ''}">${arr.slice(0, cap).map(m => `<span class="m ${m.ch}"></span>`).join('')}${arr.length > cap ? `<span class="more">+${arr.length - cap}</span>` : ''}</div>`;
+  const wks = ws => `<div class="wks">${ws.map(w => `<span class="wk${w.stuck ? ' stuck' : ''}" title="${w.stuck ? 'stuck retrying SMS' : 'free'}">${w.stuck ? '⏳' : '⚙️'}</span>`).join('')}</div>`;
+  function renderSim(el, sim, split) {
+    const s = sim.st;
+    let html;
+    if (split) html = Object.keys(WK).map(ch => `<div class="qrow"><span class="ql" style="color:${CHV[ch]}">${QL[ch]}</span><div>${strip(s.qs[ch], 40)}${wks(s.workers.filter(w => w.q === ch))}</div></div>`).join('');
+    else html = `<div class="qrow"><span class="ql">all</span><div>${strip(s.qs.all, 64, true)}</div></div><div class="qrow"><span class="ql">workers</span>${wks(s.workers)}</div>`;
+    $('.qbody', el).innerHTML = html;
+    const ow = sim.oldest('ios') * 0.5;
+    $('.qstats', el).innerHTML = `<div>Waiting in queue<b>${sim.depth()}</b></div><div>Oldest iOS push waiting<b class="${ow > 0 ? 'bad' : 'good'}">${ow ? ow.toFixed(1) + ' min' : '0 min'}</b></div>`;
+  }
+  const picks = {};
+  let played = false, running = false;
+  $$('#iso .pq').forEach(pq => $$('.opt', pq).forEach(b => b.onclick = () => {
+    if (running || played) return;
+    picks[pq.dataset.l] = b.dataset.v;
+    $$('.opt', pq).forEach(x => x.classList.toggle('picked', x === b));
+    $('#watchBtn').disabled = !(picks.shared && picks.split);
+  }));
+  const simS0 = makeSim(false), simP0 = makeSim(true);
+  renderSim($('#layShared'), simS0, false); renderSim($('#laySplit'), simP0, true);
+  $('#watchBtn').onclick = async () => {
+    if (running) return; running = true;
+    $('#watchBtn').disabled = true;
+    const a = makeSim(false), b = makeSim(true);
+    for (let t = 0; t < TICKS; t++) {
+      const out = t >= OUTAGE_AT;
+      a.step(out); b.step(out);
+      const mins = (t + 1) * 0.5;
+      $('#qclock').textContent = out ? `minute ${(mins - OUTAGE_AT * 0.5).toFixed(1)} of the outage · SMS provider ❌ down` : `minute ${mins.toFixed(1)} · SMS provider ✅ up`;
+      if (!Q.reduced || t === TICKS - 1) { renderSim($('#layShared'), a, false); renderSim($('#laySplit'), b, true); }
+      if (!Q.reduced) await sleep(260);
+    }
+    $('#qclock').textContent = '15 minutes of SMS outage';
+    running = false;
+    const iosA = (a.oldest('ios') * 0.5).toFixed(1);
+    if (!played) {
+      played = true;
+      const okS = picks.shared === 'late', okP = picks.split === 'ok';
+      $$('#iso .pq').forEach(pq => {
+        const right = pq.dataset.l === 'shared' ? 'late' : 'ok';
+        $$('.opt', pq).forEach(x => { x.disabled = true; if (x.dataset.v === right) x.classList.add('right'); else if (x.classList.contains('picked')) x.classList.add('wrong'); });
+      });
+      okS ? Q.addXP(10, $('#layShared')) : Q.loseHeart($('#layShared'));
+      okP ? Q.addXP(10, $('#laySplit')) : Q.loseHeart($('#laySplit'));
+      const ex = $('#isoMsg'); ex.className = 'explain show ' + (okS && okP ? 'good' : 'bad');
+      ex.innerHTML = `${okS && okP ? '<b>Called both.</b> ' : '<b>Here\'s what happened.</b> '}<b>Shared queue:</b> every SMS hung a worker for 90 seconds, then went back in line to retry. More and more workers got stuck (⏳), the line grew for everyone, and the oldest iOS push had waited <b>${iosA} minutes</b>. <b>Per-channel queues:</b> only the SMS queue swelled. iOS, Android and email kept their own workers and never waited.`;
+      $('#watchBtn').textContent = '↻ Replay the outage'; $('#watchBtn').disabled = false;
+      $('#s3note').style.display = 'block';
+      setTimeout(quiz, 600);
+    } else $('#watchBtn').disabled = false;
+  };
+  let quizShown = false;
+  function quiz() {
+    if (quizShown) return; quizShown = true;
+    Q.quiz($('#s3quiz'), {
+      q: 'Why does the book give each notification type its own queue?',
+      options: ['So one provider outage can\'t hold up the other channels', 'Because one queue can only store one message format', 'Because separate queues cost less to run than one', 'So workers never need to know which channel it is'],
+      correct: 0,
+      good: 'Isolation. A broken SMS provider backs up only the SMS queue. Push and email keep flowing.',
+      bad: 'Queues happily hold mixed messages, and cost isn\'t the reason. It\'s <b>isolation</b>: a broken SMS provider should back up only the SMS queue, not push and email.',
+      onDone: () => setTimeout(() => Q.clearStage(3), 900),
+    });
+  }
+});
+
+/* ================= STAGE 4: follow the ping ================= */
+Q.onStage(4, () => {
+  const A = drawArch($('#arch4'), false);
+  const STEPS = [
+    { t: 'A service calls the notification servers\' API to send a notification', hl: ['svc', 'srv'], path: [[45, 27], [45, 69], [45, 117]] },
+    { t: 'The server fetches user info, device token and settings from the cache or DB', hl: ['store'], path: [[45, 117], [232, 117], [262, 60], [232, 117], [45, 117]] },
+    { t: 'The server puts the event on the matching queue: an iOS push goes to the iOS PN queue', hl: ['q'], path: [[45, 117], [47, 215]] },
+    { t: 'Workers pull the event off the queue', hl: ['wk'], path: [[47, 215], [47, 281]] },
+    { t: 'Workers send it to the third-party service (APNs for iOS)', hl: ['tp'], path: [[47, 281], [47, 350]] },
+    { t: 'The third-party service delivers it to the user\'s device', hl: ['dev'], path: [[47, 350], [47, 420]] },
+  ];
+  let next = 0, ordered = false, bugFound = false, playing = false;
+  const pool = $('#pool'), olist = $('#olist');
+  function deal() {
+    next = 0; olist.innerHTML = '';
+    pool.innerHTML = shuffle(STEPS.map((s, i) => ({ s, i }))).map(({ s, i }) => `<button class="opt" data-i="${i}">${s.t}</button>`).join('');
+    $$('.opt', pool).forEach(b => b.onclick = () => {
+      if (ordered) return;
+      const i = +b.dataset.i;
+      if (i === next) {
+        Q.addXP(5, b);
+        b.remove();
+        olist.insertAdjacentHTML('beforeend', `<li data-i="${i}">${STEPS[i].t}</li>`);
+        next++;
+        if (next === STEPS.length) { ordered = true; $('#replayBtn').style.display = ''; play().then(maybeQuiz); }
+      } else {
+        b.classList.remove('wrong'); void b.offsetWidth; b.classList.add('wrong');
+        setTimeout(() => b.classList.remove('wrong'), 500);
+        Q.loseHeart(b);
+        Q.toast(next === 0 ? 'what starts it?' : `that's not step ${next + 1}`, b, 'practice');
+      }
+    });
+  }
+  async function play() {
+    if (playing) return; playing = true;
+    const lis = $$('li', olist);
+    for (let k = 0; k < STEPS.length; k++) {
+      const s = STEPS[k];
+      lis.forEach((l, j) => l.classList.toggle('now', j === k));
+      Object.entries(A.parts).forEach(([key, g]) => g.classList.toggle('hl', s.hl.includes(key)));
+      const p = poly(s.path);
+      await anim(Math.max(500, p.total * 7), t => { const [x, y] = polyAt(p, p.total * ease(t)); A.ping.setAttribute('cx', x.toFixed(1)); A.ping.setAttribute('cy', y.toFixed(1)); });
+      await sleep(Q.reduced ? 0 : 450);
+    }
+    await sleep(Q.reduced ? 0 : 600);
+    lis.forEach(l => l.classList.remove('now'));
+    Object.values(A.parts).forEach(g => g.classList.remove('hl'));
+    A.ping.setAttribute('cx', -20); A.ping.setAttribute('cy', -20);
+    playing = false;
+  }
+  $('#replayBtn').onclick = () => play();
+  deal();
+
+  /* --- spot the bug in the book's API request --- */
+  const TOK = {
+    post: 'POST is right. Sending creates something new (a notification), so it isn\'t a GET.',
+    host: 'Just a placeholder domain. Nothing wrong there.',
+    path: null,
+    uid: 'Looks odd, but it\'s deliberate. We\'ll come back to it once you find the real bug.',
+    from: 'A sender email address. That fits an email.',
+    subj: 'Emails have subject lines. That fits.',
+    type: 'The body\'s content type. Plain text is fine (it could be HTML too).',
+  };
+  const tb = (k, s) => `<button class="tok" data-k="${k}">${s}</button>`;
+  $('#api').innerHTML = [
+    `${tb('post', 'POST')} ${tb('host', 'https://api.example.com')}${tb('path', '/v/sms/send')}`,
+    '<span class="c">// request body</span>',
+    '{',
+    `  <span class="k">"to"</span>: [ { ${tb('uid', '"user_id": 123456')} } ],`,
+    `  <span class="k">"from"</span>: { ${tb('from', '"email": "from_address@example.com"')} },`,
+    `  <span class="k">"subject"</span>: ${tb('subj', '"Hello, World!"')},`,
+    `  <span class="k">"content"</span>: [ { <span class="k">"type"</span>: ${tb('type', '"text/plain"')}, <span class="k">"value"</span>: "Hello, World!" } ]`,
+    '}',
+  ].map(l => `<div class="ln">${l}</div>`).join('');
+  let bonus = false;
+  $$('#api .tok').forEach(b => b.onclick = () => {
+    const k = b.dataset.k, msg = $('#apiMsg');
+    if (k === 'path') {
+      if (bugFound) return;
+      bugFound = true; b.classList.add('bug');
+      msg.className = 'explain show good';
+      msg.innerHTML = '<b>Found it.</b> The body is clearly an email (a sender address, a subject line), but the path says <code>sms</code>. The book\'s sample has this mismatch, so treat it as a typo. The version is just <code>/v</code> too. <br><b>Bonus:</b> now tap <code>"user_id"</code> to see why sending an ID, not an address, is a <i>good</i> idea.';
+      Q.addXP(15, b);
+      $('#apiNote').style.display = 'block';
+      maybeQuiz();
+      return;
+    }
+    if (k === 'uid' && bugFound) {
+      if (bonus) return;
+      bonus = true; b.classList.add('bonus');
+      msg.className = 'explain show good';
+      msg.innerHTML = '<b>Why only a user_id is good.</b> The caller says <i>who</i>, not <i>where</i>. The notification server looks up the email address, phone number or device tokens <b>and</b> the user\'s notification settings in one central place. Fifty services don\'t each keep their own copy of contact details, and none of them can skip a user\'s opt-out by accident. That\'s step 2 of the flow.';
+      Q.addXP(5, b);
+      return;
+    }
+    if (b.classList.contains('fine')) return;
+    if (bugFound) { msg.className = 'explain show good'; msg.innerHTML = TOK[k]; b.classList.add('fine'); return; }
+    b.classList.add('fine');
+    msg.className = 'explain show bad'; msg.innerHTML = '<b>That part is fine.</b> ' + TOK[k];
+    Q.loseHeart(b);
+  });
+
+  let quizShown = false;
+  function maybeQuiz() {
+    if (quizShown || !ordered || !bugFound) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s4quiz'), {
+      q: 'In step 2, what does the notification server fetch before it puts the event on a queue?',
+      options: ['User info, device tokens and settings, from cache or DB', 'The rendered HTML email, fetched from the third party', 'Nothing yet: the workers look everything up later', 'Delivery receipts that APNs sent for earlier pushes'],
+      correct: 0,
+      good: 'Metadata: who the user is, where to reach them (device token, email, phone), and whether they\'ve opted in. Cache first, database if it\'s not there.',
+      bad: 'In the book\'s flow the <b>server</b> does the lookup in step 2: user info, device token and notification settings, from the cache or the database. Then the event goes on the queue.',
+      onDone: () => setTimeout(() => Q.clearStage(4), 900),
+    }), 500);
+  }
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss'), {
+  name: '🐉 Backlog Hydra',
+  xp: 15,
+  choices: [
+    { k: 'q', label: '📬 Queue', sub: 'buffer & isolate' },
+    { k: 'srv', label: '🖥️ Servers', sub: 'more, autoscaled' },
+    { k: 'cache', label: '⚡ Cache', sub: 'skip the DB' },
+    { k: 'wk', label: '⚙️ Workers', sub: 'drain faster' },
+  ],
+  scenarios: [
+    { e: '📣', t: 'The 9:00 email blast', d: 'Marketing schedules 2 million emails for 9:00 sharp. The servers must accept the whole batch in seconds, but the email provider only takes so many a second.', a: 'q',
+      why: 'The queue soaks up the burst. Servers drop events on the email queue and reply at once; workers drain it as fast as the provider allows. Acting as a buffer is one of the two jobs the book gives queues.' },
+    { e: '💀', t: 'A server dies at lunch', d: 'One notification server\'s virtual machine crashes at 12:30. Services keep calling the send API.', a: 'srv',
+      why: 'With several notification servers behind a load balancer, the others carry on and autoscaling replaces the lost one. In version 1 this was the single point of failure.' },
+    { e: '🔥', t: 'The database is melting', d: 'Every send reads the same popular user records, device tokens and templates from the DB. DB CPU sits at 90%.', a: 'cache',
+      why: 'The book caches user info, device info and notification templates. Hot data that is read often and rarely changes is exactly what a cache is for.' },
+    { e: '📈', t: 'The iOS queue keeps growing', d: 'The iOS PN queue gets longer all afternoon. APNs is healthy and answering fast.', a: 'wk',
+      why: 'If the provider is fine but the queue still grows, events arrive faster than workers can drain them. Add workers. The book says to watch the number of queued notifications for exactly this.' },
+    { e: '📵', t: 'The SMS provider is down', d: 'The SMS provider is out for an hour. Push and email must still go out on time.', a: 'q',
+      why: 'One queue per channel. SMS events pile up in their own queue while iOS, Android and email keep flowing. That isolation is why the book gives each type its own queue.' },
+    { e: '🚦', t: 'The API can\'t keep up', d: 'Services call the send API faster than the servers can validate requests and look up data. Response times climb.', a: 'srv',
+      why: 'Validation and lookups happen in the notification server tier, before anything reaches a queue. The servers are stateless, so add more (scale out). Workers and queues come later in the flow and can\'t help here.' },
+  ],
+  outro: 'The pattern: bursts and outages → queues. Dead or overloaded API tier → more servers. Hot reads → cache. Growing queue with a healthy provider → more workers.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: interview drill ================= */
+Q.onStage(6, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"Sketch your high-level design for the notification system. And why not just one notification server?"</i>',
+  placeholder: 'One server would be a single point of failure, so…',
+  model: '"A single server is a single point of failure. It can\'t scale its database, cache and processing separately, and it becomes a bottleneck when it\'s rendering emails and waiting on providers at peak. So: services call an internal, authenticated API on a fleet of stateless notification servers that autoscale. They validate the request, look up user info, device tokens and settings in a cache backed by the database, and put an event on a queue. There\'s one queue per channel, so an SMS outage doesn\'t block push or email, and the queues absorb bursts like a 2-million-email campaign. Workers pull from each queue and call APNs, FCM, the SMS provider or the email provider, which deliver to the device. Average load is only about 185 a second for 16 million a day, but it\'s bursty, which is why the queues matter."',
+  checks: ['I named the 3 problems of one server (SPOF, hard to scale, bottleneck)', 'I described servers → cache/DB → per-channel queues → workers → third parties', 'I said why per-channel queues (isolation) and why queues at all (bursts, decoupling)'],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

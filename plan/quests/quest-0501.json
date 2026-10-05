@@ -1,0 +1,115 @@
+{
+ "n": "5.1",
+ "slug": "consistent-hashing-ring-math",
+ "t": "Ring Math",
+ "d": "Count how many keys hash % N really moves, size up the hash space, look a key up in code, and find exactly which keys move when a server joins or leaves",
+ "boss": false,
+ "badge": "📐 Badge: Ring Surveyor",
+ "winTitle": "The ring adds up",
+ "goal": "Your win today: you can put numbers on the rehashing problem (adding 1 server to N moves about N/(N+1) of keys with % N, but only about 1/(N+1) on a ring), explain the hash space and how arcs become ownership shares, sketch the lookup as a binary search over sorted positions, and walk an interviewer through exactly which keys move, and from which server, when a node joins or leaves.",
+ "bookSections": "Ch. 5: The rehashing problem; Consistent hashing (definition, k/n); Hash space and hash ring; Hash servers; Hash keys; Server lookup; Add a server; Remove a server; Find affected keys (both cases).",
+ "stages": [
+  {
+   "title": "Do the rehash math",
+   "sub": "Put an exact number on 'most keys move'",
+   "teaches": "Book setup: N cache servers, pick one with serverIndex = hash(key) % N. Works while N never changes. When a server is added or removed, N changes, so most keys get a new index; in a cache those keys are now looked up on the wrong server, so a wave of cache misses falls through to the database. Exact math (new to this quest, 0002 only shows it visually): for uniformly random hashes, a key keeps its server when going N -> N+1 only if hash % N equals hash % (N+1), which happens for 1 key in N+1. So modulo moves N/(N+1) of keys: 4->5 moves 80%, 9->10 moves 90%, 99->100 moves 99%. Shrinking N -> N-1 moves (N-1)/N: 4->3 moves 75%. Consistent hashing, by contrast, only moves about k/n keys on average (k = number of keys, n = number of slots/servers): adding the (N+1)th server moves about 1/(N+1) of keys, removing one of N moves about 1/N (just the dead server's share). Key insight: modulo gets WORSE as the cluster grows, the ring gets BETTER. Second subtle point: after a removal, the servers are renumbered (0..N-2), so 'server 1 died' also shifts every index above it; that is part of why the mapping scrambles.",
+   "interaction": "Part A, hand calculation (calculate-and-check). A table of 8 user keys with small made-up hash values (do NOT copy the book's table): alice 1044, bob 2208, carol 3917, dave 4521, erin 5374, frank 6610, grace 7085, heidi 8862. Column 1 (hash % 4) is pre-filled: 0, 0, 1, 1, 2, 2, 1, 2. The banner says 'One of the 4 cache servers died, so N = 3.' For each row the learner taps 0 / 1 / 2 to fill hash % 3 (correct: 0, 0, 2, 0, 1, 1, 2, 0). A wrong tap shakes and shows the division (e.g. '3917 = 3 x 1305 + 2'). When all 8 are filled, rows whose server changed turn red and a counter shows '6 of 8 keys moved (75%)'. Then the learner types a prediction for 'With a ring instead, how many of these 8 keys would move on average?' (accept 2; explain: only the dead server's ~1/4 share). Part B, the curve. A slider N = 2..100 and a small two-line chart (x = cluster size N, y = % of keys moved when one server is added): red line N/(N+1) for % N, green line 1/(N+1) for the ring, with readouts at the slider value. Predict-then-watch: before unlocking the slider, ask 'At N = 50, adding one server moves what share of keys with % N?' options 'About 2%' / 'About 50%' / 'About 98%' (correct: about 98%). Then the slider reveals the curves. Add a small 'See it with 100 keys' link to Quest 6.2 stage 1 (lessons/0002-consistent-hashing.html) for the colour-grid version.",
+   "check": "All 8 hash % 3 cells correct; prediction made; Q.quiz: 'A 20-server cache using hash % N adds one server. Roughly what share of cached keys now miss?' options 'About 5%' / 'About 50%' / 'About 95%' -> correct 'About 95%' (20/21). Good-feedback mentions a ring would move about 1/21, under 5%."
+  },
+  {
+   "title": "Bend the number line",
+   "sub": "Hash space, hash ring, and what an arc is worth",
+   "teaches": "Hash space: every value a hash function can output. The book's example uses SHA-1, whose output runs from 0 to 2^160 - 1 (2^160 is about 1.46 x 10^48). Join the two ends of that number line and you get the hash ring. Servers are hashed (by IP address or name) onto the ring; keys are hashed onto the same ring with the same function, with no modulo step. A server's partition is the arc between the previous server (anticlockwise) and itself; the share of keys it gets is that arc length divided by the whole space. Arc formula with wrap-around: share = ((pos_server - pos_prev) mod S) / S, where S is the size of the space. Why such a huge space? So that positions practically never collide: with a trillion (10^12) keys the chance that any two share a SHA-1 position is about n^2 / 2^161, roughly 3 x 10^-25. Real systems: Amazon Dynamo hashes keys with MD5 (128-bit space); Cassandra's default Murmur3Partitioner uses 64-bit signed tokens from -2^63 to 2^63 - 1. Ring size doesn't change the idea, only the resolution.",
+   "interaction": "Opening animation: a horizontal number line labelled 0 ... 2^160 - 1 curls into a circle (the two ends meet at the top, labelled '2^160 - 1 | 0'). Then a toy 8-bit space 0..255 replaces it (labels in decimal, with angle = pos / 256 x 360). Three calculate-and-check cards, each drawn on the toy ring: (1) Two servers, s0 at 64 and s1 at 192. 'What share of keys does s1 own?' number input in % -> 50 (arc 64..192 = 128/256). (2) Three servers s0 at 32, s1 at 112, s2 at 240. 'Share of s0?' -> 18.75% (arc from 240 wraps through 0 to 32 = 48/256); a wrong answer animates the wrap-around arc in colour and shows the mod formula. (3) 'A key hashes to 250. Which server stores it?' tap s0/s1/s2 -> s0 (walk clockwise, wrap past 0). After the cards, a 'Scale it up' panel shows the same arcs relabelled in SHA-1 units (e.g. 2^158 for a quarter of the ring) and the collision maths as a one-line reveal.",
+   "check": "All three cards correct (wrong answers cost a heart but allow retry); Q.quiz: 'Why does the book use a hash space as large as 0 to 2^160 - 1?' options 'So positions basically never collide, and keys spread smoothly around the ring' / 'So the ring can hold at most 2^160 servers' / 'Because bigger hash values are faster to compare' -> first."
+  },
+  {
+   "title": "Clockwise, in code",
+   "sub": "Server lookup is a binary search with a wrap",
+   "teaches": "The book describes lookup as 'walk clockwise from the key until you hit a server'. Nobody literally walks: an implementation keeps the server positions (tokens) in a sorted array and binary-searches for the first position >= the key's hash. If the hash is larger than every token, the walk wraps past the top of the ring, so the answer is the first (smallest) token. Lookup is O(log T) for T tokens: 256,000 tokens (1,000 servers x 256 virtual nodes) needs about 18 comparisons. Boundary convention matters: a key that lands exactly on a server position belongs to that server (>=). The ring itself is tiny metadata that every client or router keeps a copy of; it changes only when membership changes.",
+   "interaction": "Part A, trace it. Sorted tokens [12, 40, 71, 93] in a 0..99 toy ring (s0..s3), drawn as both an array and a ring. Four keys appear one at a time: 5, 40, 41, 97. For each, the learner taps the owning token in the array. Correct answers: 5 -> 12, 40 -> 40 (exactly on it, >= rule), 41 -> 71, 97 -> wrap -> 12. After each tap, the binary search animates (lo/mid/hi pointers moving over the array) and the ring shows the clockwise walk. Part B, spot the bug. Show this 8-line function and ask 'Which line gives the wrong server for key 97?': line 1 'function lookup(tokens, h) {  // tokens sorted ascending', line 2 '  let lo = 0, hi = tokens.length - 1;', line 3 '  while (lo < hi) {', line 4 '    const mid = (lo + hi) >> 1;', line 5 '    if (tokens[mid] < h) lo = mid + 1;', line 6 '    else hi = mid;', line 7 '  }', line 8 '  return tokens[lo];'. Correct: line 2 (or line 8 also accepted): with hi = length - 1, a hash above the last token returns 93, which is anticlockwise of the key. Reveal the fix: hi = tokens.length and return tokens[lo % tokens.length]. One heart per wrong line tap; explanation shown either way.",
+   "check": "All four traces correct and the bug found; Q.quiz: 'Your ring has 1,000 servers with 256 virtual nodes each. About how many comparisons does one lookup take?' options 'About 18' / 'About 1,000' / 'About 256,000' -> about 18 (log2 256,000)."
+  },
+  {
+   "title": "Who has to move?",
+   "sub": "The book's method for finding affected keys",
+   "teaches": "Book's step-by-step rule. Adding a server: start at the new server and go anticlockwise until you reach the previous server; every key in that arc moves to the new server, and they all come from the new server's clockwise neighbour (the server that used to own the arc). Removing a server: start at the removed server and go anticlockwise until the previous server; every key in that arc moves to the removed server's clockwise neighbour. Nothing else on the ring changes. Ops consequence: when a node joins a real store, you know exactly which source to stream data from, and the transfer is bounded to one arc. With virtual nodes (link to Quest 6.2 stage 4 for the lab) the same rule runs once per virtual node, so a joining server pulls a small arc from several different servers, and a leaving server hands small arcs to several servers. That spreads the copy work, which is good for speed and for not overloading one neighbour.",
+   "interaction": "'Highlighter' sim on a 0..99 toy ring. Servers A at 10, B at 35, C at 60, D at 85. Twelve keys at 3, 14, 22, 30, 41, 47, 55, 63, 70, 78, 88, 95, coloured by owner (first server at position >= key, wrapping). Three rounds. In each, the change is shown as a dashed ghost; the learner taps every key they think will move (taps toggle a yellow ring), then taps the server they will move FROM / TO when asked, then presses 'Apply'. The sim then animates the anticlockwise sweep from the changed server back to the previous server, highlighting the arc, and scores: +XP per correct key, -1 heart per false positive or missed key (max one heart per round). Round 1 (add E at 50): moving keys 41, 47; from C to E. Round 2 (remove A at 10): moving keys 88, 95, 3 (the arc wraps past 0); all to B. Round 3 (add E with 3 virtual nodes at 20, 50, 90 on the original ring): moving keys 14 (from B), 41 and 47 (from C), 88 (from A); the learner must tag each moved key with its source. After round 3, a counter shows: 4 of 12 keys moved, pulled from 3 different servers, versus round 1 where one server gave up everything.",
+   "check": "All three rounds completed; Q.quiz: 'Server X is removed from a basic ring (one position per server). Which keys move?' options 'The keys between X and the server anticlockwise of it; they go to X's clockwise neighbour' / 'The keys between X and the server clockwise of it; they go to X's anticlockwise neighbour' / 'Every key on the ring is re-hashed' -> first."
+  },
+  {
+   "title": "Boss: The Migration Planner",
+   "sub": "Who has to stream data for this change?",
+   "teaches": "Applying 'find affected keys' to real operations, including two traps: changing the hash function re-maps nearly everything (every key and server gets a new position), and hashing servers by something unstable (like an IP address that changes on reboot) makes a server jump to a new spot, which is a remove plus an add.",
+   "interaction": "Q.boss with 3 choices: { k: 'one', label: 'One neighbour', sub: 'a single server hands over or takes over one arc' }, { k: 'few', label: 'A few servers, a little each', sub: 'several small arcs change hands' }, { k: 'all', label: 'Nearly every key moves', sub: 'the mapping is scrambled' }. Seven scenarios: (1) Basic ring, one position per server; a new server joins -> one (only its clockwise neighbour gives up an arc). (2) Ring with 128 virtual nodes per server; a new server joins -> few (it takes a small arc next to each of its 128 positions, from many different servers). (3) Cache clients use hash(key) % 12; ops adds a 13th box -> all (12/13, about 92%, remap). (4) Basic ring; a server is removed for maintenance -> one (its clockwise neighbour receives its whole arc). (5) Virtual-node ring; a server crashes -> few (its slices scatter to many servers). (6) You switch the ring's hash function from SHA-1 to Murmur3 to save CPU -> all (every key and every server lands somewhere new; plan this like a full migration). (7) Servers are placed on the ring by hashing their IP; a basic-ring server reboots and gets a new IP -> few (its old arc goes to one neighbour and its new arc is taken from another: a remove plus an add; that's why you hash a stable server ID). Outro: 'Count the arcs that change. One position = one neighbour; many virtual nodes = a little from many; a new N or a new hash function = everything.'",
+   "check": "Q.boss round completed under the engine's hearts rules."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "Explain a node join, with numbers",
+   "teaches": "Model answer pulls together the quest: the math, the lookup, and the affected-keys walk.",
+   "interaction": "Q.drill. Prompt: the interviewer says 'We have 20 cache servers on hash % N and want to add 5 more for the holiday peak. What happens, and how would you do it instead?' Model answer (paraphrase freely): 'With hash % N, going from 20 to 21 servers moves about 20/21 of keys, so roughly 95% of the cache misses at once and the database takes the hit. I'd put servers and keys on a hash ring and look keys up with a binary search over the sorted server positions, wrapping at the top. When a server joins, only the keys between it and the server anticlockwise of it move, and they come from its clockwise neighbour, so each new server takes roughly 1/(N+1) of keys. With virtual nodes that work is split into small arcs pulled from many servers. I'd add the five servers one at a time and watch the miss rate.' Self-check boxes: 'I put a number on the % N damage (about N/(N+1))', 'I described lookup as clockwise / first position >= hash, with wrap', 'I said exactly which keys move on a join and where they come from'.",
+   "check": "Drill self-graded."
+  }
+ ],
+ "caveats": [
+  "The N/(N+1) and 1/(N+1) figures assume hashes are uniformly random and, for the ring, that load is even (which needs virtual nodes, see Quest 5.2). On a basic ring with one random position per server, the amount that moves on a join can be far above or below 1/(N+1).",
+  "The book uses SHA-1 as its example hash. SHA-1 is broken for security uses (collisions have been found on purpose), but placement on a ring isn't a security feature, so that doesn't matter here. Real systems prefer fast non-cryptographic hashes such as Murmur3 (Cassandra) or used MD5 (Dynamo).",
+  "For a cache, 'moving' a key just means a miss and a refill from the database. For a database, the keys in the affected arc must actually be copied to the new owner before it starts serving them; the book's chapter stops at deciding which keys move.",
+  "The toy rings use 0..255 or 0..99 so every key is visible. Real rings have 2^64 to 2^160 positions and millions of keys."
+ ],
+ "sources": [
+  {
+   "label": "Alex Xu, System Design Interview Vol. 1, Ch. 5 'Design Consistent Hashing' (ByteByteGo)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-consistent-hashing"
+  },
+  {
+   "label": "Karger et al., 'Consistent Hashing and Random Trees', STOC 1997",
+   "url": "https://dl.acm.org/doi/10.1145/258533.258660"
+  },
+  {
+   "label": "Wikipedia, 'Consistent hashing'",
+   "url": "https://en.wikipedia.org/wiki/Consistent_hashing"
+  },
+  {
+   "label": "Tom White, 'Consistent Hashing' (2007 blog post with a sorted-map implementation)",
+   "url": "https://tom-e-white.com/2007/11/consistent-hashing.html"
+  },
+  {
+   "label": "DeCandia et al., 'Dynamo: Amazon's Highly Available Key-value Store', SOSP 2007 (section 4.2: MD5, 128-bit space)",
+   "url": "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf"
+  },
+  {
+   "label": "Apache Cassandra docs, 'Dynamo' architecture page (Murmur3 tokens, virtual nodes)",
+   "url": "https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html"
+  }
+ ],
+ "id": "0501",
+ "file": "0501-consistent-hashing-ring-math.html",
+ "world": 5,
+ "chapterTitle": "Design Consistent Hashing",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-consistent-hashing",
+ "cheatsheet": "../reference/ch05-consistent-hashing-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "0501",
+   "n": "5.1",
+   "t": "Ring Math",
+   "d": "Count how many keys hash % N really moves, size up the hash space, look a key up in code, and find exactly which keys move when a server joins or leaves"
+  },
+  {
+   "id": "0502",
+   "n": "5.2",
+   "t": "Cracks in the Ring",
+   "d": "The two problems with the basic ring in numbers, why virtual nodes fix one of them, and who runs consistent hashing in production (Dynamo, Cassandra, Discord, Akamai, Maglev)"
+  },
+  {
+   "id": "0503",
+   "n": "BOSS",
+   "t": "Hash It Live",
+   "d": "Full mock interview: design how a growing cache fleet decides which server holds each key"
+  }
+ ]
+}

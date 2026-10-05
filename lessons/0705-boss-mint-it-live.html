@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Mint It Live</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: interview clock, chat, question deck, approach cards + scorecard table, bit bar, number checks, ID decoder, wrap-up, drill timer, final scorecard */
+:root { --f-sign: #6a6778; --f-ts: #5a48f0; --f-dc: #0a7f7c; --f-mc: #a86400; --f-seq: #c43a37; --on-f: #ffffff; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --f-sign: #9a98b4; --f-ts: #8f82ff; --f-dc: #31d3c8; --f-mc: #ffb547; --f-seq: #ff6d6a; --on-f: #0e0f1d; }
+}
+:root[data-theme="dark"] { --f-sign: #9a98b4; --f-ts: #8f82ff; --f-dc: #31d3c8; --f-mc: #ffb547; --f-seq: #ff6d6a; --on-f: #0e0f1d; }
+
+.stage, .victory { scroll-margin-top: 150px; }
+@media (max-width: 560px) { .stage-b { padding: 18px 14px 22px; } .stage-h { padding: 16px 14px; } }
+
+/* sticky interview clock */
+.ivbar { position: sticky; top: var(--hudH, 66px); z-index: 15; margin-top: 22px; display: flex; align-items: center; gap: 12px; padding: 8px 14px; background: color-mix(in srgb, var(--panel) 90%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); font-size: 13px; }
+.ivbar .clk { font-family: var(--mono); font-weight: 700; font-size: 16px; white-space: nowrap; }
+.ivbar .clk small { color: var(--muted); font-weight: 400; font-size: 12px; }
+.ivbar.over .clk { color: var(--warn); }
+.ivbar .trk { flex: 1; min-width: 40px; height: 8px; border-radius: 99px; background: var(--bg-2); position: relative; overflow: hidden; border: 1px solid var(--line); }
+.ivbar .fill { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, var(--teal), var(--accent)); transition: width .6s cubic-bezier(.2,.8,.2,1); border-radius: 99px; }
+.ivbar.over .fill { background: linear-gradient(90deg, var(--warn), var(--bad)); }
+.ivbar .stp { font-weight: 700; white-space: nowrap; color: var(--accent); }
+.ivbar .stp small { color: var(--muted); font-weight: 600; }
+@media (max-width: 560px) { .ivbar { gap: 9px; padding: 7px 11px; } .ivbar .stp small { display: none; } }
+
+/* chat with the interviewer */
+.chat { display: flex; flex-direction: column; gap: 10px; margin: 14px 0; max-height: 340px; overflow-y: auto; padding: 6px 2px; }
+.chat:empty { display: none; }
+.msg { display: flex; gap: 8px; align-items: flex-end; max-width: 92%; animation: rise .3s; }
+.msg .av { font-size: 20px; width: 34px; height: 34px; border-radius: 50%; background: var(--accent-soft); display: grid; place-items: center; flex: none; }
+.msg .bub { padding: 9px 13px; border-radius: 16px; font-size: 15px; line-height: 1.45; min-width: 0; overflow-wrap: anywhere; }
+.msg.iv .bub { background: var(--bg-2); border-bottom-left-radius: 4px; }
+.msg.me { align-self: flex-end; }
+.msg.me .bub { background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+.msg.me .bub code { background: rgba(255,255,255,.18); color: #fff; }
+.msg .who { display: block; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin-bottom: 2px; }
+.typing i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); margin: 0 2px; animation: blink 1s infinite; }
+.typing i:nth-child(2) { animation-delay: .15s; } .typing i:nth-child(3) { animation-delay: .3s; }
+@keyframes blink { 50% { opacity: .2; } }
+
+/* framework strip */
+.fw { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 14px 0 6px; }
+@media (max-width: 640px) { .fw { grid-template-columns: repeat(2, 1fr); } }
+.fw div { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--bg); }
+.fw b { display: block; font-size: 14px; }
+.fw span { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.fw i { font-style: normal; font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: .08em; text-transform: uppercase; }
+
+/* stage 1: question deck + requirement board */
+.lbl { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-top: 16px; }
+.qdeck { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+@media (max-width: 560px) { .qdeck { grid-template-columns: 1fr; } }
+.qdeck .opt { font-size: 14.5px; padding: 10px 12px; min-height: 44px; }
+.qdeck .opt.waste { border-color: var(--warn); background: var(--warn-soft); opacity: .75; }
+.qdeck .opt.bonus { border-color: var(--teal); background: var(--teal-soft); }
+.reqs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin: 10px 0 4px; }
+.req { border: 1.5px dashed var(--line); border-radius: 10px; padding: 7px 10px; font-size: 13px; color: var(--muted); min-height: 36px; display: flex; align-items: center; gap: 6px; }
+.req.got { border-style: solid; border-color: var(--good); background: var(--good-soft); color: var(--ink); font-weight: 600; animation: rise .35s; }
+.req.bon { border-color: var(--teal); }
+.req.bon.got { border-color: var(--teal); background: var(--teal-soft); }
+.req.missed { border-color: var(--warn); color: var(--warn); }
+.pick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+@media (max-width: 560px) { .pick { grid-template-columns: 1fr; } }
+.pick .opt { font-size: 14.5px; min-height: 44px; }
+.pick .opt .ord { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--good); color: #fff; font-size: 12px; font-weight: 700; margin-right: 6px; }
+.opt.nope { animation: shake .4s; }
+
+/* stage 2: approaches */
+.apps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
+@media (max-width: 640px) { .apps { grid-template-columns: 1fr 1fr; } }
+.apps .opt { text-align: center; padding: 12px 8px; min-height: 96px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.apps .opt .e { font-size: 24px; line-height: 1; }
+.apps .opt b { font-size: 15px; }
+.apps .opt small { font-size: 12px; color: var(--muted); }
+.apps .opt .vd { font-size: 12px; font-weight: 700; margin-top: 3px; }
+.apps .opt.out { border-color: var(--bad); background: var(--bad-soft); }
+.apps .opt.out .vd { color: var(--bad); }
+.apps .opt.win { border-color: var(--good); background: var(--good-soft); }
+.apps .opt.win .vd { color: var(--good); }
+.apps .opt.asking { border-color: var(--accent); background: var(--accent-soft); }
+.rchips { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+@media (max-width: 560px) { .rchips { grid-template-columns: 1fr 1fr; } }
+.rchips .opt { font-size: 14px; text-align: center; padding: 10px 6px; min-height: 44px; }
+.rchips .opt small { display: block; font-size: 11px; color: var(--muted); }
+.cmpwrap { overflow-x: auto; margin-top: 16px; }
+.cmp { width: 100%; border-collapse: collapse; font-size: 14px; }
+.cmp th { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: 6px 4px; border-bottom: 2px solid var(--line); text-align: center; }
+.cmp th:first-child, .cmp td:first-child { text-align: left; }
+.cmp td { padding: 7px 4px; border-bottom: 1px solid var(--line); text-align: center; font-weight: 700; }
+.cmp td:first-child { font-weight: 600; white-space: nowrap; }
+.cmp .y { color: var(--good); } .cmp .n { color: var(--bad); } .cmp .m { color: var(--warn); } .cmp .u { color: var(--line); }
+.cmp tr.on { animation: rise .35s; }
+
+/* stage 3: bit bar, numbers, decoder */
+.task { margin-top: 18px; border: 1px solid var(--line); border-radius: 16px; padding: 16px; background: var(--bg); }
+.task.done { border-color: var(--good); }
+.task h3 { margin: 2px 0 8px; font-size: 17px; }
+.task .tk { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.task.done .tk { color: var(--good); }
+.bits { display: flex; height: 46px; border-radius: 10px; overflow: hidden; border: 2px solid var(--line); background: repeating-linear-gradient(90deg, var(--bg-2) 0 6px, var(--panel) 6px 7px); margin-top: 6px; }
+.bseg { display: grid; place-items: center; color: var(--on-f); font: 700 13px var(--mono); min-width: 12px; animation: grow .45s cubic-bezier(.2,.8,.2,1); overflow: hidden; white-space: nowrap; border-right: 2px solid var(--panel); }
+@keyframes grow { from { transform: scaleX(0); transform-origin: left; } }
+.bseg.sign { background: var(--f-sign); } .bseg.ts { background: var(--f-ts); } .bseg.dc { background: var(--f-dc); } .bseg.mc { background: var(--f-mc); } .bseg.seq { background: var(--f-seq); }
+.ruler { display: flex; justify-content: space-between; font: 600 11px var(--mono); color: var(--muted); margin-top: 4px; }
+.blegend { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 8px; font-size: 13px; min-height: 20px; }
+.blegend span::before { content: ""; display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; background: var(--c); }
+.btiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
+@media (max-width: 640px) { .btiles { grid-template-columns: 1fr 1fr; } }
+.btiles .opt { text-align: center; font-weight: 600; font-size: 14px; padding: 10px 6px; min-height: 48px; }
+.btiles .opt small { display: block; font: 600 12px var(--mono); color: var(--muted); }
+.calc { display: grid; gap: 12px; }
+.calc .cq { font-size: 15px; margin: 0 0 6px; }
+.calc .ci { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.calc input { width: 150px; max-width: 100%; min-height: 44px; border-radius: 10px; border: 2px solid var(--line); background: var(--panel); color: var(--ink); font: 600 16px var(--mono); padding: 8px 10px; }
+.calc input.ok { border-color: var(--good); background: var(--good-soft); }
+.calc input.no { border-color: var(--bad); animation: shake .4s; }
+.calc .unit { font-size: 14px; color: var(--muted); }
+.calc .btn { min-height: 44px; }
+.calc .hint { font-size: 14px; color: var(--muted); margin-top: 6px; display: none; }
+.calc .hint.show { display: block; animation: rise .3s; }
+.calc .res { font-size: 14px; margin-top: 6px; }
+.idbox { font-family: var(--mono); font-size: 13px; border-radius: 12px; padding: 12px; background: var(--code-bg); color: var(--code-ink); word-break: break-all; line-height: 1.7; }
+.idbox .dec { font-size: 16px; font-weight: 600; color: #fff; }
+.idbox .b-sign { color: #c9c7d9; } .idbox .b-ts { color: #b3a9ff; } .idbox .b-dc { color: #5fe3d9; } .idbox .b-mc { color: #ffc56b; } .idbox .b-seq { color: #ff8f8c; }
+.decode { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; }
+.decode td { padding: 6px 4px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.decode td:last-child { font-family: var(--mono); text-align: right; overflow-wrap: anywhere; }
+.decode tr { animation: rise .35s; }
+
+/* stage 5: wrap-up */
+.wrapcards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+@media (max-width: 560px) { .wrapcards { grid-template-columns: 1fr; } }
+.wrapcards .opt { font-size: 14.5px; min-height: 44px; }
+.wrapcards .opt.picked { background: var(--accent-soft); }
+.wrapcards .opt.picked.right { background: var(--good-soft); }
+.wrapcards .opt.picked.wrong { background: var(--bad-soft); }
+.wrapcards .opt .verdict { display: block; font-size: 13px; margin-top: 4px; color: var(--muted); }
+
+/* stage 6: drill timer + scorecard */
+.dtimer { display: flex; align-items: center; gap: 10px; margin: 6px 0 12px; font: 700 15px var(--mono); }
+.dtimer .trk { flex: 1; height: 8px; border-radius: 99px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; }
+.dtimer .trk div { height: 100%; width: 100%; background: linear-gradient(90deg, var(--teal), var(--accent)); transition: width 1s linear; }
+.dtimer.over { color: var(--warn); }
+.dtimer.over .trk div { background: var(--warn); }
+.dtimer small { font: 500 13px var(--font); color: var(--muted); }
+.scorecard { margin-top: 18px; border: 1px solid var(--line); border-radius: 18px; padding: 18px; background: var(--bg); }
+.scorecard h3 { margin: 0 0 2px; font-size: 19px; }
+.sc-row { display: grid; grid-template-columns: 170px 1fr auto; gap: 12px; align-items: center; margin-top: 12px; font-size: 14.5px; }
+@media (max-width: 560px) { .sc-row { grid-template-columns: 1fr auto; } .sc-row .sc-bar { grid-column: 1 / -1; grid-row: 2; } }
+.sc-bar { height: 12px; background: var(--bg-2); border-radius: 99px; overflow: hidden; border: 1px solid var(--line); }
+.sc-bar div { height: 100%; width: 0; border-radius: 99px; background: linear-gradient(90deg, var(--teal), var(--accent)); transition: width .9s cubic-bezier(.2,.8,.2,1); }
+.verd { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 99px; white-space: nowrap; background: var(--bg-2); color: var(--muted); }
+.verd.v3 { background: var(--good-soft); color: var(--good); }
+.verd.v2 { background: var(--teal-soft); color: var(--teal); }
+.verd.v1 { background: var(--warn-soft); color: var(--warn); }
+.verd.v0 { background: var(--bad-soft); color: var(--bad); }
+.sc-overall { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.sc-overall b { font-size: 22px; }
+.sc-time { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 14px; }
+.sc-time td, .sc-time th { padding: 5px 6px; border-bottom: 1px solid var(--line); text-align: left; }
+.sc-time th { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.sc-time .ok { color: var(--good); font-weight: 700; } .sc-time .ov { color: var(--warn); font-weight: 700; }
+.sc-vic { margin: 4px auto 14px; display: inline-block; background: rgba(255,255,255,.18); padding: 8px 14px; border-radius: 12px; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Boss · Design a Unique ID Generator</div>
+    <h1>Mint It Live</h1>
+    <p class="lede">One prompt, one interviewer, a running clock. Everything from Quests 7.1–7.4 comes back, but this time nobody tells you which topic comes next. You drive the interview.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can run the whole interview yourself: scope it in under 5 minutes, compare four approaches with the scorecard, land on Snowflake with the 1|41|5|5|12 layout and its numbers, survive the "what if" questions, and wrap up with the book's three talking points.</p></div>
+  </section>
+
+  <div class="ivbar" id="ivbar" aria-live="polite">
+    <span class="clk">🕐 <b id="ivClock">00:00</b> <small>/ 45:00</small></span>
+    <div class="trk"><div class="fill" id="ivFill"></div></div>
+    <span class="stp" id="ivStep">Step 1 <small>· scope</small></span>
+  </div>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Scope it</h2><div class="sub">Step 1 · understand the problem (3–10 min)</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Every interview in the book follows the same four steps<a class="cite" href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener">[7]</a>. The bar above is your <b>game clock</b>: each move costs game-minutes. Good moves also earn <i>signal</i>, the evidence an interviewer writes down to decide "hire" or "no hire".</p>
+      <div class="fw">
+        <div><i>Step 1</i><b>Scope the problem</b><span>3–10 min</span></div>
+        <div><i>Step 2</i><b>High-level design</b><span>10–15 min</span></div>
+        <div><i>Step 3</i><b>Deep dive</b><span>10–25 min</span></div>
+        <div><i>Step 4</i><b>Wrap up</b><span>3–5 min</span></div>
+      </div>
+      <div class="chat" id="chat1"></div>
+      <div id="deckWrap" style="display:none">
+        <div class="lbl">Requirements board</div>
+        <div class="reqs" id="reqs"></div>
+        <div class="lbl">Bonus finds (a strong candidate asks these too)</div>
+        <div class="reqs" id="bonus"></div>
+        <div class="lbl">Your questions · 1 game-minute each, time-wasters cost 2</div>
+        <div class="qdeck" id="qdeck"></div>
+      </div>
+      <div id="restate"></div>
+      <div class="callout warn" id="s1caveat" style="display:none"><b>Honest caveat.</b> The five requirements follow the book's own scoping dialogue<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems" target="_blank" rel="noopener">[1]</a>. The two bonus answers (several data centers, runs for decades) are our framing: the book never asks them out loud, but its design quietly assumes both. That's why it spends bits on a datacenter ID and worries about a 69-year limit. Also, say "<b>roughly</b> ordered by time". Claiming strict order across machines invites a clock-skew follow-up.</div>
+      <div class="row" id="s1replay" style="display:none;margin-top:14px"><button class="btn">↻ Replay the scoping</button></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Sketch it</h2><div class="sub">Step 2 · four options, one pick</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book lists four ways to mint IDs<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems" target="_blank" rel="noopener">[1]</a>. Interviewers reward you for <b>naming the options and saying why each one loses</b>. Jumping straight to the answer earns less. Propose an approach by tapping it. When the interviewer pushes back, tap the requirement it breaks.</p>
+      <div class="chat" id="chat2"></div>
+      <div class="apps" id="apps"></div>
+      <div id="push"></div>
+      <div class="cmpwrap" id="cmpwrap" style="display:none">
+        <div class="lbl" style="margin-top:0">Your whiteboard scorecard</div>
+        <table class="cmp" id="cmp"><thead><tr><th>Approach</th><th title="Unique">🔑</th><th title="Ordered by time">🕐</th><th title="Numeric only">🔢</th><th title="Fits in 64 bits">📏</th><th title="10,000+ IDs per second">⚡</th><th title="No single point of failure">🛟</th></tr></thead><tbody></tbody></table>
+        <p class="small muted" style="margin:6px 0 0">🔑 unique · 🕐 time-ordered · 🔢 numeric · 📏 64-bit · ⚡ 10k+/s · 🛟 no single point of failure. ~ = only up to a point.</p>
+      </div>
+      <div class="row" id="s2replay" style="display:none;margin-top:14px"><button class="btn">↻ Wipe the whiteboard and pitch again</button></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Show me the bits</h2><div class="sub">Step 3 · deep dive on timestamp and sequence</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The interviewer hands you the marker: <i>"Show me the bits."</i> Three quick tasks, in any order. Wrong tiles cost a game-minute. A wrong number costs a heart the first time.</p>
+
+      <div class="task" id="taskA">
+        <div class="tk">Task A · the layout</div>
+        <h3>Fill the 64-bit bar, left to right (bit 63 → bit 0)</h3>
+        <div class="bits" id="bits" role="img" aria-label="Empty 64-bit bar"></div>
+        <div class="ruler"><span>bit 63</span><span id="bitsUsed">0 / 64 bits</span><span>bit 0</span></div>
+        <div class="blegend" id="blegend"></div>
+        <div class="btiles" id="btiles"></div>
+        <div class="explain" id="bitsEx"></div>
+      </div>
+
+      <div class="task" id="taskB">
+        <div class="tk">Task B · the numbers</div>
+        <h3>The interviewer fires three quick questions</h3>
+        <div class="calc" id="calc"></div>
+      </div>
+
+      <div class="task" id="taskC">
+        <div class="tk">Task C · decode one</div>
+        <h3>"Here's an ID from production. When was it minted?"</h3>
+        <div class="idbox" id="idbox"></div>
+        <div class="row" style="margin-top:10px"><button class="btn primary" id="shiftBtn">Shift right 22 bits</button></div>
+        <div id="shiftOut"></div>
+        <div id="decodeQ"></div>
+        <table class="decode" id="decodeT" style="display:none"><tbody></tbody></table>
+      </div>
+      <div class="row" id="s3replay" style="display:none;margin-top:14px"><button class="btn">↻ Redo the deep dive</button></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Boss: the curveball barrage</h2><div class="sub">Step 3 · "what happens when…?"</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Now the interviewer starts poking holes. Eight curveballs. For each one, pick the <b>kind of fix</b> a senior engineer reaches for. Every card then names the exact mechanism, so read the "why".</p>
+      <div class="sim" style="padding:14px" id="barrage"></div>
+      <div class="callout warn" id="s4caveat" style="display:none"><b>Honest caveats from the barrage.</b> (1) Twitter's original Snowflake <i>refused</i> to mint IDs while its clock was behind the last timestamp it had used. It logged an error and rejected requests until time caught up<a class="cite" href="https://github.com/twitter-archive/snowflake" target="_blank" rel="noopener">[9]</a>. Waiting a few milliseconds instead is a common variant. (2) NTP can either <i>step</i> a clock (jump it) or <i>slew</i> it (run it slightly fast or slow until it's right). Slewing never moves time backwards, which is why ID generators prefer it<a class="cite" href="https://en.wikipedia.org/wiki/Network_Time_Protocol" target="_blank" rel="noopener">[5]</a>. (3) JavaScript numbers are exact only up to 2<sup>53</sup> − 1<a class="cite" href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number/MAX_SAFE_INTEGER" target="_blank" rel="noopener">[8]</a>. That's why APIs that hand out Snowflake IDs also send them as strings.</div>
+      <div class="row" id="s4replay" style="display:none;margin-top:14px"><button class="btn">↻ Face the barrage again</button></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Wrap it up</h2><div class="sub">Step 4 · the last 3–5 minutes</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book ends this chapter with three extra talking points for when you have time left<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems" target="_blank" rel="noopener">[1]</a>. You have about four minutes. Pick the three that are worth saying.</p>
+      <div class="chat" id="chat5"></div>
+      <p class="small muted" id="wrapHint">Pick exactly <b>3</b> talking points, then deliver them.</p>
+      <div class="wrapcards" id="wrapcards"></div>
+      <div class="row" style="margin-top:12px"><button class="btn primary" id="deliver" disabled>🎤 Deliver my close (0 / 3)</button></div>
+      <div id="recap"></div>
+      <div class="row" id="s5replay" style="display:none;margin-top:14px"><button class="btn">↻ Try a different close</button></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">The 90-second version + your scorecard</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div class="dtimer" id="dtimer"><span id="dtLeft">1:30</span><div class="trk"><div id="dtFill"></div></div><small id="dtNote">starts when you type</small></div>
+      <div id="drill"></div>
+      <div id="scorecard"></div>
+      <div class="row" id="s6replay" style="display:none;margin-top:14px"><button class="btn">↻ Pitch it again</button></div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Re-read all of <a href="https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems" target="_blank" rel="noopener">Ch. 7: Design a Unique ID Generator in Distributed Systems</a>. It's short, so read it end to end in one sitting, as if you were the interviewer. Then read Twitter's own <a href="https://blog.twitter.com/engineering/en_us/a/2010/announcing-snowflake.html" target="_blank" rel="noopener">"Announcing Snowflake"</a> post and Flickr's <a href="https://code.flickr.net/2010/02/08/ticket-servers-distributed-unique-primary-keys-on-the-cheap/" target="_blank" rel="noopener">ticket-server write-up</a>. They are the two real systems the chapter compares.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note</h4>
+      <b>The book's answer is from 2010.</b> If an interviewer allows 128 bits, <b>UUIDv7</b> is a strong modern answer. It puts a 48-bit millisecond timestamp in front of random bits, so it is time-ordered and needs no machine IDs<a class="cite" href="https://www.rfc-editor.org/rfc/rfc9562" target="_blank" rel="noopener">[6]</a>. Other real options: Sonyflake (a Snowflake variant with 10 ms ticks and a longer lifetime), and database sequences that hand out <i>ranges</i> of IDs to each server. On high availability, the book gives one line. In practice the simplest design is a generator <b>library embedded in every service</b>: no network hop, nothing to go down, with machine IDs assigned at deploy time.
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). Try <i>"play the interviewer and grill me on clock skew"</i> or <i>"how would this change if IDs had to be 32 bits?"</i> Running this interview out loud, once, against a real 45-minute timer, is the best practice there is.
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 7 "Design a Unique ID Generator in Distributed Systems" (ByteByteGo).</li>
+        <li>Twitter Engineering, "Announcing Snowflake", 2010.</li>
+        <li>Flickr Code, "Ticket Servers: Distributed Unique Primary Keys on the Cheap", 2010.</li>
+        <li>Wikipedia, "Universally unique identifier".</li>
+        <li>Wikipedia, "Network Time Protocol" (clock stepping vs slewing).</li>
+        <li>IETF RFC 9562, "Universally Unique IDentifiers (UUIDs)", 2024 (UUIDv7).</li>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 3 "A Framework for System Design Interviews" (ByteByteGo).</li>
+        <li>MDN, <code>Number.MAX_SAFE_INTEGER</code>.</li>
+        <li>Twitter, <code>snowflake</code> source code (archived on GitHub), clock-moving-backwards check.</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0705',
+  badge: '👑 Badge: Master of the Mint',
+  winTitle: 'Interview cleared: IDs minted at scale',
+  cheatsheet: '../reference/ch07-unique-id-cheatsheet.html',
+});
+const { sleep, shuffle } = Q;
+const BOOK = 'https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems';
+const CITE = (n, url) => `<a class="cite" href="${url}" target="_blank" rel="noopener">[${n}]</a>`;
+const B = CITE(1, BOOK);
+const quiet = el => Q.review || Q.isCleared(+el.closest('.stage').dataset.stage);
+
+/* ================= interview record: clock + signals =================
+   Kept apart from the engine's progress, under its own key. Each stage keeps { min, sig: { cat: [got, max] } };
+   stage 6 also keeps { self: [..10 booleans], secs }. A stage's record is wiped the first time you act in it
+   during a page load, so replays overwrite instead of piling up. */
+const IKEY = 'sdq:v1:0705-interview';
+const PAR = { 1: 8, 2: 12, 3: 9.5, 4: 10, 5: 4 };
+const STEPS = [
+  { name: 'Step 1 · Scope', stages: [1], lo: 3, hi: 10 },
+  { name: 'Step 2 · High-level design', stages: [2], lo: 10, hi: 15 },
+  { name: 'Step 3 · Deep dive', stages: [3, 4], lo: 10, hi: 25 },
+  { name: 'Step 4 · Wrap up', stages: [5], lo: 3, hi: 5 },
+];
+function iload() { try { return JSON.parse(localStorage.getItem(IKEY) || '{}') || {}; } catch (_) { return {}; } }
+function isave(d) { try { localStorage.setItem(IKEY, JSON.stringify(d)); } catch (_) {} }
+if (!Q.review && ![1, 2, 3, 4, 5, 6].some(n => Q.isCleared(n))) { try { localStorage.removeItem(IKEY); } catch (_) {} }
+const begun = new Set();
+function rec(n) { const d = iload(); if (!begun.has(n) || !d[n]) { begun.add(n); d[n] = { min: 0, sig: {} }; } return d; }
+function tick(n, min, cat, got, max) {
+  const d = rec(n);
+  d[n].min += min;
+  if (cat) { const s = d[n].sig[cat] || [0, 0]; s[0] += got; s[1] += max; d[n].sig[cat] = s; }
+  isave(d); renderBar();
+}
+const stageMin = (d, n) => d[n] ? d[n].min : (Q.isCleared(n) ? PAR[n] : 0);
+const fmt = m => { const s = Math.round(m * 60); return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; };
+function renderBar() {
+  const d = iload();
+  const total = [1, 2, 3, 4, 5].reduce((s, n) => s + stageMin(d, n), 0);
+  let cur = 1; while (cur <= 6 && Q.isCleared(cur)) cur++;
+  const st = STEPS.find(s => s.stages.includes(cur));
+  const spent = st ? st.stages.reduce((s, n) => s + stageMin(d, n), 0) : 0;
+  $('#ivClock').textContent = fmt(total);
+  $('#ivFill').style.width = Math.min(100, total / 45 * 100) + '%';
+  $('#ivbar').classList.toggle('over', !!(total > 45 || (st && spent > st.hi)));
+  const [a, b] = st ? st.name.split(' · ') : [cur === 6 ? 'Debrief' : 'Done', 'interview over'];
+  $('#ivStep').innerHTML = `${a} <small>· ${b.toLowerCase()}${st ? ` · ${fmt(spent)} of ${st.lo}–${st.hi}m` : ''}</small>`;
+}
+function setHudH() { const h = $('#hud'); if (h) document.documentElement.style.setProperty('--hudH', h.offsetHeight + 'px'); }
+addEventListener('resize', setHudH);
+const done = n => { Q.clearStage(n); renderBar(); };
+const minus = (el, text) => Q.toast(quiet(el) ? '✗ practice' : text, el, quiet(el) ? 'practice' : 'minus');
+
+/* ================= chat helper ================= */
+function Chat(el) {
+  let queue = Promise.resolve(), first = true;
+  const add = (who, html) => {
+    const m = document.createElement('div'); m.className = 'msg ' + who;
+    m.innerHTML = who === 'iv' ? `<span class="av" aria-hidden="true">🧑🏽‍💼</span><div class="bub">${html}</div>` : `<div class="bub">${html}</div>`;
+    el.appendChild(m); el.scrollTop = el.scrollHeight; return m;
+  };
+  return {
+    iv(html) {
+      queue = queue.then(async () => {
+        const m = add('iv', '<span class="typing" aria-label="typing"><i></i><i></i><i></i></span>');
+        await sleep(Q.reduced ? 0 : 380);
+        $('.bub', m).innerHTML = (first ? '<span class="who">Sam · interviewer</span>' : '') + html; first = false;
+        el.scrollTop = el.scrollHeight;
+      });
+      return queue;
+    },
+    me(html) { queue = queue.then(() => { add('me', html); }); return queue; },
+    clear() { el.innerHTML = ''; first = true; queue = Promise.resolve(); },
+  };
+}
+function nudge(b) { b.classList.remove('nope'); void b.offsetWidth; b.classList.add('nope'); }
+
+/* ================= STAGE 1: scope it ================= */
+const ASK = [
+  { q: 'What properties must every ID have?', a: 'Two things: every ID must be <b>unique</b>, and the IDs must be <b>sortable</b>.', r: '🔑 Unique', kind: 'core' },
+  { q: 'Does each new ID go up by exactly 1?', a: 'No. They go up <b>with time</b>, not necessarily by 1. Anything minted this evening should be bigger than anything minted this morning.', r: '🕐 Ordered by time', kind: 'core' },
+  { q: 'Can an ID contain letters, or only digits?', a: '<b>Numbers only.</b>', r: '🔢 Numeric only', kind: 'core' },
+  { q: 'How long is an ID allowed to be?', a: 'It has to fit in <b>64 bits</b>.', r: '📏 Fits in 64 bits', kind: 'core' },
+  { q: 'How many IDs per second at peak?', a: 'The system should mint <b>10,000 IDs per second</b>, and more is better.', r: '⚡ 10,000+ IDs/s', kind: 'core' },
+  { q: 'One data center, or several of them?', a: 'Several. Assume <b>multiple data centers</b>, each minting IDs.', r: '🌍 Multiple data centers', kind: 'bonus' },
+  { q: 'How long must the system keep running?', a: 'Years. Design for <b>decades</b>, not a demo.', r: '⏳ Runs for decades', kind: 'bonus' },
+  { q: 'Which programming language should I use?', a: 'Whatever you like. That isn\'t what we\'re testing today.', kind: 'weak' },
+  { q: 'Which database brand should we buy?', a: 'Let\'s not go vendor shopping yet. What do the IDs actually need to do?', kind: 'weak' },
+  { q: 'Should the IDs look pretty inside URLs?', a: 'They\'re internal record IDs. Pretty URLs are a different problem.', kind: 'weak' },
+];
+const CORE = ASK.filter(a => a.kind === 'core'), BONUS = ASK.filter(a => a.kind === 'bonus');
+const chat1 = Chat($('#chat1'));
+let found = 0, s1live = false;
+function setup1() {
+  chat1.clear(); found = 0; s1live = true; begun.delete(1);
+  $('#restate').innerHTML = ''; $('#deckWrap').style.display = 'none'; $('#s1caveat').style.display = 'none';
+  $('#reqs').innerHTML = CORE.map((a, i) => `<div class="req" data-r="${i}">? requirement ${i + 1}</div>`).join('');
+  $('#bonus').innerHTML = BONUS.map((a, i) => `<div class="req bon" data-b="${i}">? bonus ${i + 1}</div>`).join('');
+  chat1.iv('Hi, thanks for coming in. Today\'s prompt: <b>design a unique ID generator in distributed systems.</b> That\'s all you get. Where do you want to start?').then(() => {
+    chat1.me('Before I design anything, can I ask some questions to pin down the scope?');
+    return chat1.iv('Go ahead.');
+  }).then(showDeck);
+}
+function showDeck() {
+  $('#deckWrap').style.display = 'block';
+  $('#qdeck').innerHTML = shuffle(ASK.map((a, i) => ({ a, i }))).map(({ a, i }) => `<button class="opt" data-q="${i}">${a.q}</button>`).join('');
+  $$('#qdeck .opt').forEach(b => b.onclick = async () => {
+    if (b.disabled || !s1live) return;
+    const a = ASK[+b.dataset.q]; b.disabled = true;
+    chat1.me(a.q);
+    if (a.kind === 'core') {
+      b.classList.add('right'); Q.addXP(6, b); tick(1, 1, 'req', 1, 1); found++;
+      const slot = $(`#reqs .req[data-r="${CORE.indexOf(a)}"]`); slot.classList.add('got'); slot.innerHTML = a.r;
+      chat1.iv(a.a);
+      if (found === CORE.length) {
+        s1live = false;
+        $$('#qdeck .opt').forEach(x => x.disabled = true);
+        const missed = BONUS.filter(x => !$(`#bonus .req[data-b="${BONUS.indexOf(x)}"]`).classList.contains('got'));
+        missed.forEach(x => { const s = $(`#bonus .req[data-b="${BONUS.indexOf(x)}"]`); s.classList.add('missed'); s.textContent = 'missed: ' + x.q.replace(/\?$/, ''); });
+        if (missed.length) await chat1.iv(`That covers the core. <span class="muted">(Worth asking next time: ${missed.map(x => '<i>' + x.q.toLowerCase() + '</i>').join(' and ')} The design depends on it.)</span>`);
+        await chat1.iv('Before you design anything, play the requirements back to me.');
+        restate();
+      }
+    } else if (a.kind === 'bonus') {
+      b.classList.add('bonus'); Q.addXP(10, b); tick(1, 1, 'req', 1, 1);
+      const slot = $(`#bonus .req[data-b="${BONUS.indexOf(a)}"]`); slot.classList.add('got'); slot.innerHTML = a.r;
+      chat1.iv(a.a + ' <span class="muted">(good catch: this shapes the bit layout later)</span>');
+    } else {
+      b.classList.add('waste'); minus(b, '−2 min'); tick(1, 2, 'req', 0, 1);
+      chat1.iv(a.a + ' <span class="muted">(−2 min)</span>');
+    }
+  });
+}
+const PLAY = [
+  { t: 'IDs are unique', ok: true }, { t: 'Ordered by time, not +1', ok: true }, { t: 'Numbers only', ok: true },
+  { t: 'Fit in 64 bits', ok: true }, { t: '10,000+ IDs per second', ok: true },
+  { t: 'Each ID is the last one +1', ok: false, r: 'I said they go up with <b>time</b>, not by exactly 1.' },
+  { t: '128 bits is fine', ok: false, r: 'No. The limit was <b>64 bits</b>.' },
+  { t: 'Letters are allowed', ok: false, r: 'I said <b>numbers only</b>.' },
+];
+function restate() {
+  let n = 0, slips = 0;
+  $('#restate').innerHTML = `<div class="challenge"><div class="step">Play it back</div><h3>Tap the five requirements you agreed on</h3>
+    <p class="small muted" style="margin-top:-6px">Order doesn't matter. Tapping one the interviewer never said costs a heart.</p><div class="pick" id="playChips"></div></div>`;
+  $('#playChips').innerHTML = shuffle(PLAY.map((p, i) => ({ p, i }))).map(({ p, i }) => `<button class="opt" data-p="${i}">${p.t}</button>`).join('');
+  $$('#playChips .opt').forEach(b => b.onclick = async () => {
+    if (b.disabled || n >= 5) return;
+    const p = PLAY[+b.dataset.p]; b.disabled = true;
+    if (p.ok) {
+      n++; b.classList.add('right'); b.innerHTML = `<span class="ord">${n}</span>${p.t}`; tick(1, 0.2, 'req', 1, 1);
+      if (n === 5) {
+        $$('#playChips .opt').forEach(x => x.disabled = true);
+        chat1.me('So: unique, numeric IDs that fit in 64 bits, roughly ordered by time, and at least 10,000 a second.');
+        Q.addXP(slips ? 10 : 20, b);
+        await chat1.iv('Exactly. That\'s the scope. Let\'s design.');
+        $('#s1caveat').style.display = 'block'; $('#s1replay').style.display = 'flex';
+        setTimeout(() => done(1), 700);
+      }
+    } else {
+      slips++; b.classList.add('wrong'); Q.loseHeart(b); tick(1, 0.5, 'req', 0, 1);
+      chat1.iv(p.r);
+    }
+  });
+}
+$('#s1replay .btn').onclick = () => { $('#s1replay').style.display = 'none'; setup1(); };
+Q.onStage(1, setup1);
+
+/* ================= STAGE 2: sketch it ================= */
+const REQS = [
+  { k: 'uniq', t: '🔑 Unique' }, { k: 'time', t: '🕐 Ordered by time' }, { k: 'num', t: '🔢 Numeric only' },
+  { k: 'b64', t: '📏 Fits in 64 bits' }, { k: 'rate', t: '⚡ 10,000+ IDs/s' }, { k: 'spof', t: '🛟 No single point of failure', s: 'implied' },
+];
+const APPS = [
+  { k: 'mm', e: '🔁', n: 'Multi-master', s: 'each DB counts by k', a: 'time', also: [],
+    pitch: 'Several databases each use <code>auto_increment</code>, but each steps by <i>k</i>, the number of servers.',
+    ask: 'With 2 servers, server 1 hands out 1, 3, 5… and server 2 hands out 2, 4, 6…. Server 2 is twice as busy. Are these IDs <b>ordered by time across servers</b>?',
+    good: 'Right. Each server\'s IDs go up, but <b>across servers they don\'t follow time</b>: a busy server races ahead. It also scales badly. Adding or removing a server changes <i>k</i>, and it\'s hard to run across several data centers.',
+    row: ['y', 'n', 'y', 'y', 'y', 'y'], vd: '✗ not time-ordered' },
+  { k: 'uuid', e: '🎲', n: 'UUID', s: 'random, no coordination', a: 'b64', also: ['time', 'num'],
+    pitch: 'Each server generates a UUID on its own, with no coordination at all.',
+    ask: 'No coordination. I like that. But what\'s the <b>length</b> of a UUID?',
+    good: 'Right: <b>128 bits</b>, twice our budget. And there\'s more: random UUIDs don\'t go up with time, and their usual text form contains letters.' + CITE(4, 'https://en.wikipedia.org/wiki/Universally_unique_identifier'),
+    alsoSay: 'True, that fails too. But I asked about <b>length</b>: a UUID is 128 bits, twice our 64-bit budget.',
+    row: ['y', 'n', 'n', 'n', 'y', 'y'], vd: '✗ 128 bits' },
+  { k: 'ticket', e: '🎟️', n: 'Ticket server', s: 'one central counter', a: 'spof', also: [],
+    pitch: 'One central database with <code>auto_increment</code> hands out every ID, the way Flickr did it.' + CITE(3, 'https://code.flickr.net/2010/02/08/ticket-servers-distributed-unique-primary-keys-on-the-cheap/'),
+    ask: 'Numeric, simple, and fine for small and medium apps. But <b>what if that box dies?</b>',
+    good: 'Right: it\'s a <b>single point of failure</b>. When it goes down, everything that needs an ID stops. Run two or more ticket servers and you take on a new problem: keeping them in sync.',
+    row: ['y', 'y', 'y', 'y', 'm', 'n'], vd: '✗ single point of failure' },
+  { k: 'snow', e: '❄️', n: 'Snowflake', s: 'split the 64 bits', row: ['y', 'y', 'y', 'y', 'y', 'y'], vd: '✓ all six' },
+];
+const RQIDX = Object.fromEntries(REQS.map((r, i) => [r.k, i]));
+const chat2 = Chat($('#chat2'));
+let rejected = new Set(), s2busy = false, s2done = false;
+function setup2() {
+  chat2.clear(); rejected = new Set(); s2busy = false; s2done = false; begun.delete(2);
+  $('#push').innerHTML = ''; $('#cmp tbody').innerHTML = ''; $('#cmpwrap').style.display = 'none';
+  chat2.iv('Good scope. So how would you mint these IDs? Walk me through your options.');
+  $('#apps').innerHTML = APPS.map(a => `<button class="opt" data-a="${a.k}"><span class="e" aria-hidden="true">${a.e}</span><b>${a.n}</b><small>${a.s}</small><span class="vd"></span></button>`).join('');
+  $$('#apps .opt').forEach(b => b.onclick = () => propose(b));
+}
+function addRow(A) {
+  $('#cmpwrap').style.display = 'block';
+  const sym = { y: '✓', n: '✗', m: '~' };
+  $('#cmp tbody').insertAdjacentHTML('beforeend', `<tr class="on"><td>${A.e} ${A.n}</td>${A.row.map(v => `<td class="${v}">${sym[v]}</td>`).join('')}</tr>`);
+}
+async function propose(b) {
+  if (s2busy || s2done || b.disabled) return;
+  const A = APPS.find(x => x.k === b.dataset.a);
+  if (A.k === 'snow') {
+    if (rejected.size < 3) {
+      nudge(b); tick(2, 0.5, 'hld', 0, 0.5);
+      chat2.me('I\'d go with a Snowflake-style layout.');
+      chat2.iv(`Maybe. But <b>why not something simpler?</b> Talk me through the obvious options first. <span class="muted">(${3 - rejected.size} left to rule out)</span>`);
+      return;
+    }
+    s2done = true; b.disabled = true; b.classList.add('win'); $('.vd', b).textContent = A.vd;
+    chat2.me('So none of the simple options meets all the requirements. I\'d use the Snowflake approach: split the 64 bits into sections, a timestamp, a datacenter ID, a machine ID and a sequence number, so every machine mints IDs on its own with no coordination.');
+    Q.addXP(15, b); tick(2, 3, 'hld', 1, 1); addRow(A);
+    await chat2.iv('Sounds good. <b>Show me the bits.</b>' + B);
+    $('#s2replay').style.display = 'flex';
+    setTimeout(() => done(2), 800);
+    return;
+  }
+  s2busy = true; b.disabled = true; b.classList.add('asking');
+  $$('#apps .opt').forEach(x => { if (x !== b) x.disabled = true; });
+  chat2.me(A.pitch);
+  await chat2.iv(A.ask);
+  $('#push').innerHTML = `<div class="challenge"><div class="step">Interviewer pushback · ${A.n}</div><h3>Which requirement does it break?</h3>
+    <div class="rchips">${REQS.map(r => `<button class="opt" data-r="${r.k}">${r.t}${r.s ? `<small>${r.s}</small>` : ''}</button>`).join('')}</div><div class="explain"></div></div>`;
+  $$('#push .rchips .opt').forEach(c => c.onclick = async () => {
+    $$('#push .rchips .opt').forEach(x => x.disabled = true);
+    const k = c.dataset.r, ex = $('#push .explain');
+    let say;
+    if (k === A.a) { c.classList.add('right'); Q.addXP(15, c); tick(2, 3, 'hld', 1, 1); say = A.good; ex.className = 'explain show good'; ex.innerHTML = '<b>Correct.</b> ' + A.good; }
+    else if (A.also.includes(k)) { c.classList.add('right'); $(`#push .opt[data-r="${A.a}"]`).classList.add('right'); Q.addXP(8, c); tick(2, 3, 'hld', 0.5, 1); say = A.alsoSay; ex.className = 'explain show good'; ex.innerHTML = '<b>Also true.</b> ' + A.good; }
+    else { c.classList.add('wrong'); $(`#push .opt[data-r="${A.a}"]`).classList.add('right'); Q.loseHeart(c); tick(2, 4, 'hld', 0, 1); say = 'Hmm, that one actually holds. ' + A.good; ex.className = 'explain show bad'; ex.innerHTML = '<b>Not quite.</b> ' + A.good; }
+    chat2.me(`It breaks "${REQS[RQIDX[k]].t.replace(/^\S+\s/, '').toLowerCase()}".`);
+    await chat2.iv(say);
+    rejected.add(A.k); b.classList.remove('asking'); b.classList.add('out'); $('.vd', b).textContent = A.vd; addRow(A);
+    s2busy = false;
+    $$('#apps .opt').forEach(x => { if (!rejected.has(x.dataset.a)) x.disabled = false; });
+    if (rejected.size === 3) chat2.iv('Fair. All three of those fall short somewhere. So what <i>would</i> you build?');
+  });
+}
+$('#s2replay .btn').onclick = () => { $('#s2replay').style.display = 'none'; setup2(); };
+Q.onStage(2, setup2);
+
+/* ================= STAGE 3: show me the bits ================= */
+const FIELDS = [
+  { k: 'sign', n: 'Sign', b: 1, c: '--f-sign', d: 'always 0' },
+  { k: 'ts', n: 'Timestamp', b: 41, c: '--f-ts', d: 'ms since epoch' },
+  { k: 'dc', n: 'Datacenter ID', b: 5, c: '--f-dc', d: 'fixed at startup' },
+  { k: 'mc', n: 'Machine ID', b: 5, c: '--f-mc', d: 'fixed at startup' },
+  { k: 'seq', n: 'Sequence', b: 12, c: '--f-seq', d: 'counter, resets each ms' },
+];
+const DECOYS = [
+  { k: 'x1', n: 'Timestamp', b: 32, why: '32 bits of milliseconds run out after 2<sup>32</sup> ms ≈ <b>49.7 days</b>. Far too short.' },
+  { k: 'x2', n: 'Sequence', b: 16, why: 'With 16 sequence bits the total would be 1 + 41 + 5 + 5 + 16 = 68. That doesn\'t fit in 64.' },
+  { k: 'x3', n: 'Random', b: 8, why: 'Snowflake has <b>no random bits</b>. Every section is either fixed at startup or comes from the clock and a counter.' },
+];
+let tasksDone = new Set();
+function checkStage3() { if (tasksDone.size === 3) { $('#s3replay').style.display = 'flex'; setTimeout(() => done(3), 900); } }
+function finishTask(k) { tasksDone.add(k); $('#task' + k).classList.add('done'); checkStage3(); }
+function setup3() {
+  tasksDone = new Set(); begun.delete(3);
+  ['A', 'B', 'C'].forEach(k => $('#task' + k).classList.remove('done'));
+  setupBits(); setupCalc(); setupDecode();
+}
+function setupBits() {
+  let placed = 0, slips = 0;
+  const bar = $('#bits'), ex = $('#bitsEx');
+  bar.innerHTML = '<div class="rest" style="flex:64"></div>'; bar.setAttribute('aria-label', 'Empty 64-bit bar');
+  $('#blegend').innerHTML = ''; $('#bitsUsed').textContent = '0 / 64 bits'; ex.className = 'explain';
+  const tiles = shuffle([...FIELDS.map(f => ({ ...f, real: true })), ...DECOYS]);
+  $('#btiles').innerHTML = tiles.map(t => `<button class="opt" data-t="${t.k}">${t.n}<small>${t.b} bit${t.b > 1 ? 's' : ''}</small></button>`).join('');
+  $$('#btiles .opt').forEach(b => b.onclick = () => {
+    if (b.disabled || placed >= 5) return;
+    const t = tiles.find(x => x.k === b.dataset.t);
+    if (!t.real) {
+      b.disabled = true; b.classList.add('wrong'); slips++; minus(b, '−1 min'); tick(3, 1, 'dd', 0, 0.5);
+      ex.className = 'explain show bad'; ex.innerHTML = `<b>${t.n} · ${t.b} bits? No.</b> ${t.why}`;
+      return;
+    }
+    const want = FIELDS[placed];
+    if (t.k !== want.k) {
+      nudge(b); slips++; minus(b, '−1 min'); tick(3, 1, 'dd', 0, 0.5);
+      ex.className = 'explain show bad'; ex.innerHTML = `<b>Not yet.</b> ${placed === 0 ? 'Bit 63, the leftmost bit, comes first. What sits there?' : `After the ${FIELDS[placed - 1].n.toLowerCase()} comes a different section. Read left to right: what\'s next?`}`;
+      return;
+    }
+    placed++; b.disabled = true; b.classList.add('right'); tick(3, 0.6, 'dd', 1, 1);
+    const used = FIELDS.slice(0, placed).reduce((s, f) => s + f.b, 0);
+    const rest = $('.rest', bar);
+    rest.insertAdjacentHTML('beforebegin', `<div class="bseg ${t.k}" style="flex:${t.b}" title="${t.n}: ${t.b} bits">${t.b >= 5 ? t.b : ''}</div>`);
+    rest.style.flex = 64 - used; if (used === 64) rest.remove();
+    $('#bitsUsed').textContent = `${used} / 64 bits`;
+    $('#blegend').insertAdjacentHTML('beforeend', `<span style="--c:var(${t.c})"><b>${t.n}</b> ${t.b} · ${t.d}</span>`);
+    bar.setAttribute('aria-label', '64-bit bar: ' + FIELDS.slice(0, placed).map(f => `${f.n} ${f.b} bits`).join(', '));
+    ex.className = 'explain';
+    if (placed === 5) {
+      $$('#btiles .opt').forEach(x => x.disabled = true);
+      Q.addXP(slips ? 10 : 20, b);
+      ex.className = 'explain show good';
+      ex.innerHTML = `<b>1 | 41 | 5 | 5 | 12 = 64.</b> The sign bit is always 0. The <b>datacenter and machine IDs are chosen at startup</b> and then stay fixed; changing one by accident can cause ID collisions, so changes need care. The <b>timestamp and sequence are produced at runtime</b>, for every ID.${B}`;
+      finishTask('A');
+    }
+  });
+}
+const NUMS = [
+  { id: 'yrs', q: 'The timestamp is 41 bits of milliseconds: 2<sup>41</sup> − 1 = 2,199,023,255,551 ms. <b>How many years</b> until it overflows?', unit: 'years', ok: v => v >= 69 && v <= 70,
+    hint: 'One year ≈ 365.25 × 24 × 3,600 × 1,000 = 31,557,600,000 ms. Divide.',
+    good: '<b>≈ 69 years</b> (69.7, to be exact). Measured from Twitter\'s epoch in November 2010, that runs out around mid-2080. After that you need a new epoch, or a way to migrate the IDs.' },
+  { id: 'seq', q: 'The sequence number is 12 bits. <b>How many IDs per millisecond</b> can one machine mint?', unit: 'IDs / ms', ok: v => v === 4096,
+    hint: '12 bits can count 2<sup>12</sup> different values: 2 × 2 × … twelve times.',
+    good: '<b>2<sup>12</sup> = 4,096</b> per millisecond per machine. That\'s over 4 million a second per machine, so 10,000 a second is easy. The sequence resets to 0 every millisecond. If a machine ever needs a 4,097th ID in one millisecond, it waits for the next millisecond.' },
+  { id: 'gen', q: 'Datacenter ID is 5 bits, machine ID is 5 bits. <b>How many generators</b> can run at once without ever coordinating?', unit: 'generators', ok: v => v === 1024,
+    hint: '5 bits give 32 datacenters, and 5 more bits give 32 machines in each one.',
+    good: '<b>32 × 32 = 2<sup>10</sup> = 1,024</b> generators. Each has its own (datacenter, machine) pair, so two of them can never mint the same ID, even in the same millisecond.' },
+];
+function setupCalc() {
+  const solved = new Set();
+  $('#calc').innerHTML = NUMS.map(n => `<div class="cq-wrap" data-n="${n.id}"><p class="cq">${n.q}</p>
+    <div class="ci"><input type="text" inputmode="decimal" autocomplete="off" aria-label="${n.unit}" id="in-${n.id}"><span class="unit">${n.unit}</span><button class="btn primary">Check</button></div>
+    <div class="hint">💡 ${n.hint}</div><div class="res"></div></div>`).join('');
+  NUMS.forEach(n => {
+    const w = $(`.cq-wrap[data-n="${n.id}"]`), inp = $('input', w), btn = $('.btn', w);
+    let tries = 0;
+    const check = () => {
+      if (solved.has(n.id)) return;
+      const v = parseFloat(inp.value.replace(/[,\s_]/g, ''));
+      if (isNaN(v)) { nudge(inp); return; }
+      if (n.ok(v)) {
+        solved.add(n.id); inp.classList.remove('no'); inp.classList.add('ok'); inp.readOnly = true; btn.disabled = true;
+        Q.addXP(tries ? 5 : 15, btn); tick(3, 1.5, 'dd', tries ? 0.5 : 1, 1);
+        $('.res', w).innerHTML = '<span style="color:var(--good)">✓</span> ' + n.good;
+        if (solved.size === NUMS.length) finishTask('B');
+      } else {
+        inp.classList.remove('no'); void inp.offsetWidth; inp.classList.add('no');
+        if (!tries) { Q.loseHeart(btn); tick(3, 1, 'dd', 0, 0); } else { minus(btn, '−1 min'); tick(3, 1, 'dd', 0, 0); }
+        tries++; $('.hint', w).classList.add('show');
+        $('.res', w).innerHTML = '<span style="color:var(--bad)">✗</span> Not quite. Use the hint and try again.';
+      }
+    };
+    btn.onclick = check;
+    inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); check(); } };
+  });
+}
+const EPOCH = 1288834974657n, TS = 297616116568n, DCID = 12n, MCID = 7n, SEQ = 5n;
+const ID = (TS << 22n) | (DCID << 17n) | (MCID << 12n) | SEQ;
+function setupDecode() {
+  const bin = ID.toString(2).padStart(64, '0');
+  const cuts = [['sign', 0, 1], ['ts', 1, 42], ['dc', 42, 47], ['mc', 47, 52], ['seq', 52, 64]];
+  $('#idbox').innerHTML = `<div class="dec">${ID.toString()}</div><div>${cuts.map(([k, a, z]) => `<span class="b-${k}">${bin.slice(a, z)}</span>`).join(' ')}</div>`;
+  $('#shiftOut').innerHTML = ''; $('#decodeQ').innerHTML = ''; $('#decodeT').style.display = 'none'; $('#decodeT tbody').innerHTML = '';
+  const sb = $('#shiftBtn'); sb.disabled = false;
+  sb.onclick = () => {
+    sb.disabled = true; tick(3, 0.5, 'dd', 1, 1);
+    const ts = ID >> 22n;
+    $('#shiftOut').innerHTML = `<div class="explain show good" style="margin-top:10px">Shifting right by 22 drops the 5 + 5 + 12 low bits (datacenter, machine, sequence). What's left is the timestamp: <code>${ts.toLocaleString('en-US')}</code> ms after the <b>custom epoch</b>, a start date the system picks instead of 1970. Twitter's epoch is <code>1288834974657</code>, which is Nov 04, 2010, 01:42:54 UTC.${B}</div>`;
+    Q.quiz($('#decodeQ'), {
+      tag: 'Decode it', xp: 20,
+      q: `Add the epoch to <code>${ts.toLocaleString('en-US')}</code> ms and read it as a UTC date. When was this ID minted?`,
+      options: ['2020-04-09, 16:51 UTC', '1979-06-07, 15:08 UTC', '2010-11-04, 01:42 UTC', '2061-02-10, 18:34 UTC'],
+      correct: 0,
+      good: '297,616,116,568 + 1,288,834,974,657 = 1,586,451,091,225 ms since 1970, which is <b>April 9, 2020, 16:51:31 UTC</b>. (1979 is what you get if you forget the epoch. 2010 is the epoch itself.)',
+      bad: 'Add the two: 297,616,116,568 + 1,288,834,974,657 = 1,586,451,091,225 ms since 1970, which is <b>April 9, 2020, 16:51:31 UTC</b>. 1979 is the trap if you forget the epoch, and 2010 is the epoch itself.',
+      onDone: ok => {
+        tick(3, ok ? 1.5 : 2.5, 'dd', ok ? 1 : 0, 1);
+        const rows = [['Sign', '0'], ['Timestamp', `${TS} ms → 2020-04-09 16:51:31 UTC`], ['Datacenter ID', String((ID >> 17n) & 31n)], ['Machine ID', String((ID >> 12n) & 31n)], ['Sequence', String(ID & 4095n) + ' (the 6th ID that millisecond)']];
+        $('#decodeT').style.display = 'table';
+        $('#decodeT tbody').innerHTML = rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('');
+        finishTask('C');
+      },
+    });
+  };
+}
+$('#s3replay .btn').onclick = () => { $('#s3replay').style.display = 'none'; setup3(); };
+Q.onStage(3, setup3);
+
+/* ================= STAGE 4: curveball barrage (Q.boss) ================= */
+const CHOICES = [
+  { k: 'clock', label: 'Guard the clock', sub: 'NTP, refuse/wait if time goes back' },
+  { k: 'tune', label: 'Re-tune the bits', sub: 'change section lengths or epoch' },
+  { k: 'ops', label: 'Ops & assignment', sub: 'unique machine IDs, redundancy' },
+  { k: 'api', label: 'Change how IDs are used', sub: 'format, exposure, expectations' },
+];
+const CURVE = [
+  { e: '⏪', t: 'NTP stepped a clock back 20 ms', d: '"One generator\'s clock just jumped back 20 ms. It keeps minting. What could go wrong, and what do you do?"', a: 'clock',
+    why: 'Time went backwards, so the generator could reuse timestamps it already used, with the same sequence numbers: <b>duplicate IDs</b>. The guard: remember the last timestamp you used. If the clock reads earlier than that, <b>refuse or wait</b> until it catches up. Better still, have NTP <i>slew</i> the clock (run it slightly slow) instead of stepping it back.' },
+  { e: '📅', t: '"We need to run past 2080"', d: '"Leadership wants this to keep working past 2080. Does it?"', a: 'tune',
+    why: 'Not with Twitter\'s 2010 epoch: 2<sup>41</sup> − 1 ms ≈ 69.7 years, so it runs out around mid-2080. <b>Re-tune</b>: pick a newer custom epoch, or move bits into the timestamp. The book\'s point: fewer sequence bits and more timestamp bits suit long-lived apps with low traffic.' + B },
+  { e: '🌐', t: 'The web app shows IDs ending in 00', d: '"Our ID is <code>1248292468187230213</code>, but the web app shows <code>1248292468187230200</code>. Lookups fail."', a: 'api',
+    why: 'JavaScript stores numbers as 64-bit floats, so integers are exact only up to 2<sup>53</sup> − 1 (9,007,199,254,740,991). Snowflake IDs are about 2<sup>60</sup>, so the last digits get rounded. Fix how IDs are <b>used</b>: send them to clients as <b>strings</b> in JSON.' + CITE(8, 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number/MAX_SAFE_INTEGER') },
+  { e: '📈', t: '60 machines in one data center', d: '"The autoscaler wants 60 generators in our biggest data center."', a: 'tune',
+    why: '5 machine bits allow only <b>32 machines</b> per data center. <b>Re-tune</b> the split: for example 4 datacenter bits (16 DCs) and 6 machine bits (64 machines). Or treat all 10 bits as one worker ID (1,024 workers anywhere). The sections are a choice, not a law.' },
+  { e: '🔌', t: 'The ID box reboots', d: '"The ID service host rebooted and every write that needed an ID failed for two minutes."', a: 'ops',
+    why: 'The book\'s third wrap-up point: an ID generator is <b>mission-critical</b> and must be highly available. Run several generators, each with its own machine ID, so any one can serve. Or embed the generator as a library in every service, so there\'s no separate box to lose.' + B },
+  { e: '👯', t: 'Two containers, both machine ID 7', d: '"Two containers in the same data center both started with machine ID 7."', a: 'ops',
+    why: 'Same datacenter ID + same machine ID + same millisecond + same sequence = <b>the same ID</b>. Machine IDs must be <b>assigned carefully at startup</b> from one place, such as a coordination service (for example ZooKeeper) or deploy config, with an alarm on duplicates. The book warns that changing these IDs by accident causes collisions.' },
+  { e: '🔐', t: 'IDs as password-reset tokens', d: '"Product wants to put these IDs in password-reset links. They\'re unique, so they\'re safe, right?"', a: 'api',
+    why: 'Unique is not the same as secret. A Snowflake ID reveals <b>when it was minted and where</b>, and its neighbours are easy to guess. Use a separate token from a cryptographically secure random generator, for example 128 random bits, for anything secret.' },
+  { e: '🔀', t: 'Later event, smaller ID', d: '"Event B happened 2 ms after event A, on a different machine, but got a smaller ID. Bug?"', a: 'clock',
+    why: 'Not a bug: <b>clock skew</b>. Machines\' clocks are never perfectly in sync, so IDs are only <b>roughly</b> time-ordered across machines (strictly ordered within one machine). NTP keeps the skew small. In the interview, say "roughly sorted by time".' + CITE(5, 'https://en.wikipedia.org/wiki/Network_Time_Protocol') },
+];
+function setup4() {
+  $('#s4replay').style.display = 'none';
+  begun.delete(4);
+  Q.boss($('#barrage'), {
+    name: '🎯 Curveball barrage', scenarios: CURVE, choices: CHOICES, xp: 15,
+    outro: 'Every one of these comes straight out of the chapter\'s wrap-up, or from running Snowflake for real.',
+    onDone: wins => {
+      tick(4, wins * 1.25 + (CURVE.length - wins) * 2.25, 'dd', wins, CURVE.length);
+      $('#s4caveat').style.display = 'block'; $('#s4replay').style.display = 'flex';
+      done(4);
+    },
+  });
+}
+$('#s4replay .btn').onclick = setup4;
+Q.onStage(4, setup4);
+
+/* ================= STAGE 5: wrap up ================= */
+const CLOSE = [
+  { t: 'Clock synchronization', good: true, r: 'Yes. The design assumed every generator shares one clock, and across machines that isn\'t true. <b>NTP</b> is the most popular fix.' },
+  { t: 'Section length tuning', good: true, r: 'Good. The bit split is a dial. For example, fewer sequence bits and more timestamp bits suit low-traffic apps that must live a long time.' },
+  { t: 'High availability', good: true, r: 'Right. Every write needs an ID, so the generator is mission-critical. It has to be highly available.' },
+  { t: 'Switch to UUIDv4 instead', good: false, r: 'That breaks two requirements we agreed on: 64 bits and numbers only.' },
+  { t: 'Add a cache in front of the generator', good: false, r: 'A cache returns stored answers. For an ID generator, that means handing out the same ID twice.' },
+  { t: 'Use a blockchain for ordering', good: false, r: 'Global agreement on every ID is slow, and it solves a problem we don\'t have.' },
+  { t: 'Shard the ticket server', good: false, r: 'We already rejected the ticket server. Splitting it brings back multi-master\'s ordering problem.' },
+  { t: 'Rewrite the generator in Rust', good: false, r: 'Language doesn\'t change the design. 10,000 IDs a second is easy in any language.' },
+];
+const RECAP = [
+  { t: '64-bit Snowflake: 1 | 41 | 5 | 5 | 12', ok: true },
+  { t: 'Roughly time-ordered, no coordination', ok: true },
+  { t: '~69 years and 4,096 IDs per ms per machine', ok: true },
+  { t: 'Strictly ordered across every machine', ok: false, r: 'Only roughly. Clock skew between machines breaks strict order.' },
+  { t: '128-bit IDs with random bits for safety', ok: false, r: 'That\'s a UUID, which we rejected: 128 bits is twice our budget.' },
+  { t: 'One ticket server hands out every ID', ok: false, r: 'That\'s the single point of failure we rejected.' },
+];
+const chat5 = Chat($('#chat5'));
+function setup5() {
+  chat5.clear(); begun.delete(5);
+  $('#recap').innerHTML = '';
+  const dl = $('#deliver');
+  dl.disabled = true; dl.textContent = '🎤 Deliver my close (0 / 3)'; dl.style.display = ''; dl.dataset.locked = '0';
+  $('#wrapHint').style.display = '';
+  chat5.iv('We\'ve got about four minutes left. Anything you\'d add to the design?');
+  const wc = $('#wrapcards');
+  wc.innerHTML = shuffle(CLOSE.map((c, i) => ({ c, i }))).map(({ c, i }) => `<button class="opt" data-w="${i}" aria-pressed="false">${c.t}</button>`).join('');
+  $$('.opt', wc).forEach(b => b.onclick = () => {
+    if (dl.dataset.locked === '1') return;
+    const on = !b.classList.contains('picked');
+    if (on && $$('.opt.picked', wc).length >= 3) { nudge(b); return; }
+    b.classList.toggle('picked', on); b.setAttribute('aria-pressed', on);
+    const k = $$('.opt.picked', wc).length;
+    dl.disabled = k !== 3; dl.textContent = `🎤 Deliver my close (${k} / 3)`;
+  });
+}
+$('#deliver').onclick = async e => {
+  const btn = e.currentTarget; if (btn.disabled || btn.dataset.locked === '1') return;
+  btn.disabled = true; btn.dataset.locked = '1';
+  const picks = $$('#wrapcards .opt.picked');
+  $$('#wrapcards .opt').forEach(b => b.disabled = true);
+  let good = 0;
+  for (const b of picks) {
+    const c = CLOSE[+b.dataset.w];
+    chat5.me(c.t + '.');
+    b.classList.add(c.good ? 'right' : 'wrong');
+    b.insertAdjacentHTML('beforeend', `<span class="verdict">${c.good ? '✓ one of the book\'s three' : '✗ weak close'}</span>`);
+    if (c.good) { good++; Q.addXP(10, b); tick(5, 1, 'wrap', 1, 1); } else { Q.loseHeart(b); tick(5, 2, 'wrap', 0, 1); }
+    await chat5.iv(c.r);
+  }
+  $$('#wrapcards .opt').forEach(b => { const c = CLOSE[+b.dataset.w]; if (c.good && !b.classList.contains('picked')) { b.classList.add('right'); b.insertAdjacentHTML('beforeend', '<span class="verdict">one of the book\'s three</span>'); } });
+  btn.style.display = 'none'; $('#wrapHint').style.display = 'none';
+  await chat5.iv('Last thing: give me the design in two sentences. What are the three facts you\'d put in them?');
+  recap();
+};
+function recap() {
+  let n = 0;
+  $('#recap').innerHTML = `<div class="challenge"><div class="step">Two-sentence recap</div><h3>Tap the 3 facts that belong in your summary</h3><div class="pick" id="recapChips"></div><div class="explain" id="recapEx"></div></div>`;
+  $('#recapChips').innerHTML = shuffle(RECAP.map((p, i) => ({ p, i }))).map(({ p, i }) => `<button class="opt" data-p="${i}">${p.t}</button>`).join('');
+  $$('#recapChips .opt').forEach(b => b.onclick = async () => {
+    if (b.disabled || n >= 3) return;
+    const p = RECAP[+b.dataset.p]; b.disabled = true;
+    const ex = $('#recapEx');
+    if (p.ok) {
+      n++; b.classList.add('right'); Q.addXP(7, b); tick(5, 0.35, 'wrap', 1, 1);
+      if (n === 3) {
+        $$('#recapChips .opt').forEach(x => x.disabled = true);
+        ex.className = 'explain show good';
+        ex.innerHTML = '<b>That\'s the recap.</b> "I used a Snowflake-style 64-bit ID: 1 sign bit, 41 bits of milliseconds, 5 + 5 bits of datacenter and machine, and 12 bits of sequence, so IDs are roughly time-ordered with no coordination. It lasts about 69 years and each machine can mint 4,096 IDs per millisecond." A strong close might add what you\'d <i>monitor</i>: clock offset, how often generators wait for the next millisecond, and duplicate-ID alarms.';
+        await chat5.iv('That\'s a strong finish. Thanks, I have what I need. 🤝');
+        $('#s5replay').style.display = 'flex';
+        setTimeout(() => done(5), 700);
+      }
+    } else {
+      b.classList.add('wrong'); Q.loseHeart(b); tick(5, 0.5, 'wrap', 0, 1);
+      ex.className = 'explain show bad'; ex.innerHTML = '<b>Not that one.</b> ' + p.r;
+    }
+  });
+}
+$('#s5replay .btn').onclick = () => { $('#s5replay').style.display = 'none'; setup5(); };
+Q.onStage(5, setup5);
+
+/* ================= STAGE 6: drill + scorecard ================= */
+const CHECKS = [
+  'I listed all five requirements: unique, numeric, 64-bit, time-ordered, 10k+/s',
+  'I said <b>roughly</b> time-ordered, not strictly',
+  'I named the three alternatives: multi-master, UUID, ticket server',
+  'I gave the reason each one loses',
+  'I gave the layout 1 | 41 | 5 | 5 | 12 and what each section holds',
+  'I gave the numbers: ~69 years, 4,096 per ms per machine, 1,024 generators',
+  'I named the clock risks: going backwards, and skew between machines',
+  'I gave the defences: NTP, and refuse or wait when time goes back',
+  'I mentioned tuning the section lengths (or the epoch) to our needs',
+  'I covered high availability and careful machine-ID assignment',
+];
+const CATS = [
+  { n: 'Requirements', idx: [0, 1] },
+  { n: 'Alternatives', idx: [2, 3] },
+  { n: 'Layout & numbers', idx: [4, 5] },
+  { n: 'Clock risks', idx: [6, 7] },
+  { n: 'Wrap-up points', idx: [8, 9] },
+];
+const LIVE = [
+  { k: 'req', n: 'Step 1 · scoping' }, { k: 'hld', n: 'Step 2 · options' }, { k: 'dd', n: 'Step 3 · deep dive' }, { k: 'wrap', n: 'Step 4 · wrap-up' },
+];
+const VERD = [[.85, 'Strong hire', 3], [.7, 'Hire', 2], [.5, 'Lean hire', 1], [0, 'No hire (yet)', 0]];
+const verdict = r => VERD.find(v => r >= v[0]);
+function selfScore(d) { return d[6] && Array.isArray(d[6].self) ? d[6].self.filter(Boolean).length : null; }
+function renderScore() {
+  const d = iload(), sums = {};
+  [1, 2, 3, 4, 5].forEach(n => Object.entries((d[n] && d[n].sig) || {}).forEach(([k, [g, m]]) => { const s = sums[k] || [0, 0]; s[0] += g; s[1] += m; sums[k] = s; }));
+  const self = d[6] && d[6].self, score = selfScore(d);
+  const selfRows = CATS.map(c => {
+    if (!self) return `<div class="sc-row"><span><b>${c.n}</b></span><div class="sc-bar"><div></div></div><span class="verd">not graded</span></div>`;
+    const g = c.idx.filter(i => self[i]).length;
+    return `<div class="sc-row"><span><b>${c.n}</b></span><div class="sc-bar"><div data-w="${g * 50}"></div></div><span class="verd v${g === 2 ? 3 : g === 1 ? 1 : 0}">${g} / 2</span></div>`;
+  }).join('');
+  const liveRows = LIVE.map(c => {
+    const s = sums[c.k];
+    if (!s || !s[1]) return `<div class="sc-row"><span><b>${c.n}</b></span><div class="sc-bar"><div></div></div><span class="verd">not played</span></div>`;
+    const r = Math.max(0, s[0] / s[1]), v = verdict(r);
+    return `<div class="sc-row"><span><b>${c.n}</b></span><div class="sc-bar"><div data-w="${Math.round(r * 100)}"></div></div><span class="verd v${v[2]}">${Math.round(r * 100)}% · ${v[1]}</span></div>`;
+  }).join('');
+  const steps = STEPS.map(s => { const played = s.stages.every(n => d[n]); const m = s.stages.reduce((t, n) => t + stageMin(d, n), 0); return { ...s, m, played, ok: m <= s.hi }; });
+  const total = [1, 2, 3, 4, 5].reduce((t, n) => t + stageMin(d, n), 0);
+  const secs = d[6] && d[6].secs;
+  $('#scorecard').innerHTML = `<div class="scorecard"><div class="kicker">Interviewer's scorecard</div><h3>Your 90-second pitch: ${score == null ? '— / 10' : score + ' / 10'}</h3>
+    <p class="small muted" style="margin:0">From your self-grade: two points per area.${secs ? ` Pitch took ${secs} s ${secs <= 90 ? '<b style="color:var(--good)">✓ inside 90 s</b>' : '<b style="color:var(--warn)">over 90 s</b>'}.` : ''}</p>
+    ${selfRows}
+    <div class="lbl">Signals from the live rounds</div>
+    ${liveRows}
+    <table class="sc-time"><thead><tr><th>Step</th><th>Your time</th><th>Book's range</th></tr></thead><tbody>
+    ${steps.map(s => `<tr><td>${s.name}</td><td>${s.played || s.stages.some(n => Q.isCleared(n)) ? fmt(s.m) : '—'}</td><td>${s.lo}–${s.hi} min ${s.played ? (s.ok ? '<span class="ok">✓</span>' : '<span class="ov">over</span>') : ''}</td></tr>`).join('')}
+    </tbody></table>
+    <div class="sc-overall"><span>Total ${fmt(total)} of 45:00 ${total <= 45 ? '<span style="color:var(--good);font-weight:700">✓ on time</span>' : '<span style="color:var(--warn);font-weight:700">over time</span>'}</span><span>Pitch&nbsp; <b>${score == null ? '—' : verdict(score / 10)[1]}</b></span></div></div>`;
+  requestAnimationFrame(() => setTimeout(() => $$('#scorecard .sc-bar div[data-w]').forEach(b => b.style.width = b.dataset.w + '%'), 60));
+}
+let dtTimer = null;
+function resetTimer() {
+  clearInterval(dtTimer); dtTimer = null;
+  $('#dtimer').classList.remove('over'); $('#dtLeft').textContent = '1:30'; $('#dtFill').style.width = '100%'; $('#dtNote').textContent = 'starts when you type';
+}
+function setup6() {
+  resetTimer(); begun.delete(6);
+  renderScore();
+  let t0 = 0, used = 0;
+  Q.drill($('#drill'), {
+    prompt: 'Sam, at the door: <i>"Last thing. Give me the whole design, start to finish, in 90 seconds."</i>',
+    placeholder: 'Requirements first: unique, numeric…',
+    minWords: 40,
+    model: '"Requirements: unique, numeric, 64-bit, roughly time-ordered, and 10,000+ per second. Multi-master isn\'t time-ordered across servers and scales badly; UUIDs are 128 bits and unordered; a ticket server is a single point of failure. So I\'d use Snowflake: 1 sign bit, 41 bits of milliseconds since a custom epoch for about 69 years, 5 datacenter bits and 5 machine bits so 1,024 generators never need to coordinate, and 12 sequence bits for 4,096 IDs per millisecond per machine. The risks are clocks: I\'d run NTP, and refuse or wait if time goes backwards; ordering is only rough across machines. I\'d tune the bit sections to our lifetime and burst needs, assign machine IDs carefully, and run the generator highly available."',
+    checks: CHECKS,
+    onDone: () => {
+      const self = $$('#drill .selfgrade input').map(x => x.checked);
+      const d = rec(6); d[6].self = self; d[6].secs = used || null; isave(d);
+      renderScore(); paintVictoryScore();
+      $('#scorecard').scrollIntoView({ behavior: Q.reduced ? 'auto' : 'smooth', block: 'center' });
+      $('#s6replay').style.display = 'flex';
+      setTimeout(() => done(6), 1200);
+    },
+  });
+  const ta = $('#drill textarea'), rv = $('#drill .q-reveal');
+  const stop = () => { if (dtTimer) { clearInterval(dtTimer); dtTimer = null; used = Math.round((Date.now() - t0) / 1000); $('#dtNote').textContent = `stopped at ${used} s`; } };
+  ta.addEventListener('input', () => {
+    if (t0) return;
+    t0 = Date.now(); $('#dtNote').textContent = 'talking…';
+    dtTimer = setInterval(() => {
+      const s = Math.round((Date.now() - t0) / 1000), left = 90 - s;
+      $('#dtLeft').textContent = left >= 0 ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` : `+${-left}s`;
+      $('#dtFill').style.width = Math.max(0, left / 90 * 100) + '%';
+      if (left < 0 && !$('#dtimer').classList.contains('over')) { $('#dtimer').classList.add('over'); $('#dtNote').textContent = 'time\'s up: finish your sentence'; }
+    }, 1000);
+  });
+  rv.addEventListener('click', stop);
+}
+$('#s6replay .btn').onclick = () => { $('#s6replay').style.display = 'none'; setup6(); };
+Q.onStage(6, setup6);
+
+/* ================= victory card: add the interview score ================= */
+function paintVictoryScore() {
+  const v = $('#victory'); if (!v || !$('.vstats', v)) return;
+  const d = iload(), score = selfScore(d);
+  const total = [1, 2, 3, 4, 5].reduce((t, n) => t + stageMin(d, n), 0);
+  let el = $('.sc-vic', v);
+  if (!el) { el = document.createElement('div'); el.className = 'sc-vic'; $('.vstats', v).after(el); }
+  el.innerHTML = `🎙️ Interview score: <b>${score == null ? '—' : score} / 10</b> · clock ${fmt(total)} of 45:00`;
+}
+new MutationObserver(() => { if ($('#victory .vstats') && !$('#victory .sc-vic')) paintVictoryScore(); }).observe($('#victory'), { childList: true });
+
+Q.start();
+setHudH(); renderBar();
+})();
+</script>
+</body>
+</html>

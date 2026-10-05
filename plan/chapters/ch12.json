@@ -1,0 +1,412 @@
+{
+  "world": 12,
+  "chapterTitle": "Design a Chat System",
+  "worldName": "Chatterbox Citadel",
+  "quests": [
+    {
+      "n": "12.1",
+      "slug": "chat-connections",
+      "t": "Open the Pipe",
+      "d": "What a chat service does, and polling vs long polling vs WebSocket",
+      "boss": false,
+      "badge": "🔌 Badge: Pipe Fitter",
+      "winTitle": "The pipe is open",
+      "goal": "Your win today: you can explain why the server, not the client, is the hard side of chat, walk through polling, long polling and WebSocket with each one's weakness, and defend WebSocket for both sending and receiving.",
+      "bookSections": "Step 1 (understand the problem and establish design scope: 1-on-1 + group, mobile + web, 50M DAU, 100-member groups, text < 100,000 chars, history forever); Step 2 opening: the chat service's three jobs, sender-side HTTP keep-alive, Polling, Long polling, WebSocket (figures 12-2 to 12-6)",
+      "stages": [
+        {
+          "title": "Clients never talk directly",
+          "sub": "The chat service has three jobs",
+          "teaches": "Book scope first, in one card: 1-on-1 and group chat (max 100 members), mobile app + web, 50 million DAU, text only, message under 100,000 characters, online indicator, multiple devices per account, push notifications, chat history kept forever, end-to-end encryption not required for now. Then the core idea: client A never connects to client B. Every message goes through a chat service that has three jobs: (1) receive messages from clients, (2) find the right recipients and relay the message, (3) if a recipient is offline, hold the message on the server until they come online. The sending side is easy: the client opens an HTTP connection and sends; a keep-alive header keeps it open so you don't redo the TCP handshake each time (Facebook first sent messages over HTTP). The hard side is receiving: HTTP is client-initiated, so the server has no natural way to push a message to B. Jargon: DAU = daily active users; keep-alive = reuse one TCP connection for many requests.",
+          "interaction": "A three-box diagram: phone A, a 'Chat service' box, phone B. A text field + Send button on A. Sending animates a message bubble A -> service -> B. A toggle on B: 'B online / offline'. With B offline, the bubble stops in a small 'held' tray under the service (badge counts held messages); flipping B back online drains the tray to B. A second toggle 'Let A connect straight to B' is disabled with a tooltip 'Not in this design: clients don't know each other's addresses, and B may be offline'. Then a prompt: 'Which leg is the hard one?' with two buttons on the arrows: A->service or service->B. Right answer: service->B (the server has to start the conversation, and HTTP doesn't let it).",
+          "check": "Quiz (3 Qs): which of the three jobs covers 'B's phone is off'? (hold until online); why is sending over HTTP fine? (client starts it; keep-alive avoids repeated handshakes); what's the hard part? (server-initiated delivery to the receiver)."
+        },
+        {
+          "title": "Polling",
+          "sub": "Are we there yet? Are we there yet?",
+          "teaches": "Polling: the client asks the server 'any new messages?' on a fixed interval. Simple, but costly: most answers are 'no', each one burns a request, server work and battery, and latency is up to one full interval. Shorter interval = lower latency but more waste; longer interval = less waste but slower delivery. You can't win both.",
+          "interaction": "Predict-then-watch timeline sim. A horizontal 60-second track; 4 messages for B arrive at random moments (shown as stars on the server row). A slider sets the poll interval (1s, 5s, 15s, 30s). Before pressing Run, the learner predicts for 5s: 'about how many empty responses?' (choices ~2 / ~8 / ~50). Running animates poll ticks on the client row; each tick returns either an empty grey response or the waiting message(s). Live counters: requests sent, empty responses, average delivery delay. Expected at 5s: 12 requests, ~8 empty, average delay ~2.5s. Then the learner re-runs at 1s and 30s and sees waste and latency trade places.",
+          "check": "Prediction scored (~8 is right at 5s). One quiz Q: 'Halving the poll interval does what?' (roughly doubles requests, halves the average wait)."
+        },
+        {
+          "title": "Long polling",
+          "sub": "Hold the line, but it still leaks",
+          "teaches": "Long polling: the client sends a request and the server holds it open until a message arrives or a timeout passes; then the client immediately asks again. Fewer empty answers than polling. The book's three drawbacks: (1) sender and receiver may be on different chat servers: HTTP servers are usually stateless and a round-robin load balancer can send the sender's request to a server that doesn't hold the receiver's open connection; (2) the server has no good way to tell if a client has disconnected; (3) it's still inefficient: a user who rarely chats still reconnects after every timeout.",
+          "interaction": "Spot-the-problem matching. Three short looping mini-animations, each a little failure: (a) round-robin LB arrow sends A's message to Server 1 while B's held request sits on Server 2 (message waits/goes nowhere), (b) B's phone quietly vanishes but Server 2 keeps holding the request with a '?' over it, (c) a sleepy user 'zzz' whose connection times out and reconnects every 30s with no messages ever. Below are three drawback cards: 'Wrong server', 'Can't tell you left', 'Wasted reconnects'. The learner drags (or taps card then animation) to match each card to its animation. Wrong matches cost a heart and shake.",
+          "check": "All three matched correctly. Quiz Q: 'Why does a stateless round-robin load balancer hurt long polling?' (the request carrying B's message may land on a server that isn't holding B's connection)."
+        },
+        {
+          "title": "WebSocket",
+          "sub": "One pipe, both directions",
+          "teaches": "WebSocket: the client starts with a normal HTTP request that asks to 'upgrade' (header Upgrade: websocket); the server answers 101 Switching Protocols and from then on the same connection is persistent and bi-directional, so the server can push any time. It uses port 80/443, so it usually gets through firewalls. The book uses WebSocket for sending as well as receiving: it simplifies the design and the implementation on both client and server. The cost: connections are long-lived state on the server, so connection management on the server side is now the critical problem (this sets up 12.2). Back-of-envelope: 1M online users polling every 5s = 200,000 requests/s, almost all empty; over WebSocket it's 1M open connections and traffic only when there's something to say.",
+          "interaction": "Two parts. (1) Tap-in-order the handshake: 'Client: HTTP GET with Upgrade: websocket' -> 'Server: 101 Switching Protocols' -> 'Connection stays open' -> 'Server pushes a message any time' -> 'Client sends on the same connection'. (2) Calculate-and-check: 'One million online users each poll every 5 seconds. Requests per second?' numeric input; accept 200,000 (+/-5%). Then a three-lane race replays the same 4-message, 60-second scenario from stage 2 for polling (5s), long polling (30s timeout) and WebSocket side by side, with request counters; WebSocket ends with 1 connection + 4 pushes.",
+          "check": "Order correct; calculation within tolerance; quiz Q: 'Why use WebSocket for sending too, when HTTP would work?' (one connection for both directions, simpler design)."
+        },
+        {
+          "title": "Boss: The Lag Wraith",
+          "sub": "Pick the right connection style",
+          "teaches": "Choosing the transport is a trade-off, not a reflex. Polling fits rare, non-urgent updates; long polling is a fallback when WebSockets are blocked; WebSocket fits real-time two-way traffic.",
+          "interaction": "Q.boss with one fixed choice set: Polling / Long polling / WebSocket. Scenarios: (1) 'Friends chat in real time and expect messages instantly in both directions' -> WebSocket. (2) 'An admin dashboard shows a count that changes about once an hour' -> Polling (cheap and simple at that rate). (3) 'Some corporate networks strip the Upgrade header, so WebSockets fail; you still want near-real-time messages' -> Long polling (fallback). (4) 'You measure 1M users polling every 2s and 99% of answers are empty' -> WebSocket. (5) 'A weather widget refreshes every 10 minutes' -> Polling. (6) 'The receiver must get a message the moment a friend sends it, and the server must notice quickly when the phone drops off' -> WebSocket (persistent connection; close/heartbeat signals).",
+          "check": "Boss HP to zero; each wrong answer shows the 'why'."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "The interview answer, in your words",
+          "teaches": "Pull it together in 30 seconds.",
+          "interaction": "Q.drill. Prompt: interviewer asks 'How does the server get a new message to the receiver?'. Model answer: 'Sending is easy, the client starts an HTTP request. Receiving is the hard part because the server has to start the conversation. Polling wastes requests and adds up to a full interval of delay. Long polling helps, but with a stateless load balancer the sender can land on a different server than the one holding the receiver's connection, the server can't tell when a client has gone, and idle users keep reconnecting. So I'd use WebSocket: it starts as HTTP, upgrades, and stays open in both directions over 80/443. I'd use it for sending too. The cost is that chat servers become stateful, so connection management matters.'",
+          "check": "Self-grade checks: 'I said why receiving is the hard side', 'I named at least two long-polling drawbacks', 'I picked WebSocket for both directions and named the cost (stateful servers)'."
+        }
+      ],
+      "caveats": [
+        "The book says long polling 'can't tell if a client disconnected'. Real servers do notice TCP resets or failed writes eventually; the problem is a quietly dead connection (phone lost signal) can look alive for a long time. WebSocket has the same issue, which is why real systems add heartbeats or pings (see 12.5).",
+        "WebSocket over 443 usually passes firewalls, but some proxies still break it. Libraries like Socket.IO and SignalR fall back to long polling automatically, and production chat systems keep a fallback.",
+        "Server-Sent Events (SSE) is a fourth option the book skips: server-to-client push over plain HTTP. It's fine for one-way feeds; chat needs two-way traffic, so WebSocket is still the natural pick.",
+        "The 200,000 requests/s polling figure is our worked example using the book's 1M concurrent users, not a number from the book."
+      ],
+      "sources": [
+        { "label": "ByteByteGo: Design a Chat System (book chapter)", "url": "https://bytebytego.com/courses/system-design-interview/design-a-chat-system" },
+        { "label": "RFC 6455: The WebSocket Protocol", "url": "https://datatracker.ietf.org/doc/html/rfc6455" },
+        { "label": "MDN: The WebSocket API", "url": "https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API" },
+        { "label": "Erlang at Facebook (Eugene Letuchy, chat over HTTP long polling)", "url": "https://www.erlang-factory.com/upload/presentations/31/EugeneLetuchy-ErlangatFacebook.pdf" }
+      ]
+    },
+    {
+      "n": "12.2",
+      "slug": "chat-high-level-design",
+      "t": "The Switchboard",
+      "d": "Stateless vs stateful services, the scaled design, and service discovery",
+      "boss": false,
+      "badge": "🎛️ Badge: Switchboard Operator",
+      "winTitle": "Every line connected",
+      "goal": "Your win today: you can draw the book's adjusted high-level design (API, chat, presence, notification servers, KV store, service discovery), say which parts are stateless or stateful and why, and explain how a client gets assigned a chat server and what happens when that server dies.",
+      "bookSections": "Step 2 High-level design: stateless services, stateful service, third-party integration (figure 12-7); Scalability (1M concurrent users x 10K = 10GB; figure 12-8 adjusted design); Step 3 Service discovery (ZooKeeper, figure 12-11); Wrap-up: error handling when a chat server goes offline",
+      "stages": [
+        {
+          "title": "Three kinds of service",
+          "sub": "Stateless, stateful, third-party",
+          "teaches": "The book splits the system into three groups. Stateless services: request/response features such as login, signup, user profile, group management. They sit behind a load balancer and can be a monolith or microservices; any server can answer any request. Stateful service: the chat service. Each client keeps one persistent WebSocket to one chat server and normally doesn't switch as long as that server is up. Third-party integration: push notifications, so offline users still hear about new messages (Chapter 10). One stateless service is special: service discovery, which hands the client the address of the chat server it should connect to.",
+          "interaction": "Sort-into-bins. Eight cards: Login, Signup, Change profile picture, Create a group, Send/receive messages, Online indicator, Push notification to an offline phone, 'Which chat server should I use?'. Three bins: Stateless (behind load balancer) / Stateful (persistent connection) / Third-party. Online indicator goes to Stateful (presence servers hold WebSockets, per the book's adjusted design). 'Which chat server?' goes to Stateless (service discovery). Each correct drop shows a one-line reason.",
+          "check": "All cards in the right bin; quiz Q: 'Why can't you put chat servers behind a plain round-robin load balancer like the API servers?' (the client's connection, i.e. its state, lives on one specific server)."
+        },
+        {
+          "title": "Can one box do it?",
+          "sub": "The book's memory math",
+          "teaches": "At small scale everything could live on one server. The book's estimate: 1M concurrent users, about 10KB of server memory per connection, so about 10GB of memory to hold every connection on one modern machine. It fits. But it's a single point of failure: one crash and every user is disconnected. The book says not to propose a single-server design in an interview, which is why we scale out.",
+          "interaction": "Calculate-and-check: '1,000,000 connections x 10 KB each = ? GB' with a numeric input (accept 10, also accept 9.5 to 10.5 for the 1024 vs 1000 crowd). Then a single big server icon full of 1M tiny dots; a 'Pull the plug' button. Pressing it makes every dot fall off and a red counter shows '1,000,000 users disconnected'. A follow-up button 'Split across 10 chat servers' and pulling one plug now drops ~100,000 dots, which reconnect elsewhere.",
+          "check": "Calculation correct; quiz Q: 'Memory fits on one box, so what's wrong with one box?' (single point of failure)."
+        },
+        {
+          "title": "Build the switchboard",
+          "sub": "The adjusted high-level design",
+          "teaches": "The book's adjusted design (figure 12-8). Clients talk to chat servers and presence servers over WebSocket, and to everything else over HTTP through a load balancer. Chat servers send and receive messages. Presence servers manage online/offline status. API servers handle everything else: login, signup, change profile and so on. Notification servers send push notifications. The key-value store holds chat history so an offline user can see all previous messages when they come back. Generic data such as profiles and friend lists lives in relational databases (more in 12.3).",
+          "interaction": "Architecture builder on an SVG canvas with empty dashed slots. A tray holds component tiles: Load balancer, API servers, Chat servers, Presence servers, Notification servers, Key-value store, Service discovery, plus two distractors, 'Single DB for everything' and 'Clients connect peer-to-peer'. The learner taps a tile then a slot; correct tiles snap in and their arrows fade in. Finally the learner taps each client arrow to label it HTTP or WebSocket: client->LB->API = HTTP; client<->chat servers and client<->presence servers = WebSocket. Distractors bounce back with a reason.",
+          "check": "All slots filled, distractors rejected, all arrows labelled correctly. Quiz Q: 'Where does an offline user's missed history come from when they log back in?' (the key-value store)."
+        },
+        {
+          "title": "Who picks your server?",
+          "sub": "Service discovery with ZooKeeper",
+          "teaches": "Service discovery recommends the best chat server for a client based on things like geographic location and server capacity. Apache ZooKeeper is the book's example: it registers every available chat server and picks the best one for the client. Login flow (figure 12-11): (1) user A tries to log in, (2) the load balancer sends the login request to the API servers, (3) after the backend authenticates the user, service discovery finds the best chat server, e.g. chat server 2, and returns its info, (4) user A opens a WebSocket to chat server 2. From the wrap-up: if a chat server goes offline, service discovery gives its clients a new chat server to connect to.",
+          "interaction": "Two parts. (1) Tap-in-order the four login steps above. (2) A 'ZooKeeper registry' panel lists 4 chat servers with region and load: CS1 us-east 92%, CS2 us-east 40%, CS3 eu-west 15%, CS4 us-east (status: down). User A is in New York. The learner picks which server ZooKeeper should return. Right: CS2 (near and has room; CS1 is nearly full, CS3 is far, CS4 is down). Then a 'Crash CS2' button: its 300 connected dots go grey, then call service discovery. Version one: all reconnect in the same instant and CS1 spikes red ('thundering herd'). The learner toggles 'random backoff' and replays; reconnects spread over a few seconds and load stays green.",
+          "check": "Order correct, CS2 picked; quiz Q: 'Chat server 2 dies with 200,000 open connections. What happens?' (clients detect the drop, ask service discovery for a new server, reconnect, then sync missed messages)."
+        },
+        {
+          "title": "Boss: The Overload Golem",
+          "sub": "Route the traffic right",
+          "teaches": "Each request type goes to its own kind of server.",
+          "interaction": "Q.boss with one fixed choice set: API servers (HTTP) / Chat servers (WebSocket) / Presence servers / Notification servers. Scenarios: (1) 'User updates their display name' -> API servers. (2) 'Alice sends Bob a message while Bob is connected' -> Chat servers. (3) 'Bob's phone is off and Alice just messaged him' -> Notification servers. (4) 'Carol opens the app and her friends should see a green dot' -> Presence servers. (5) 'A new user signs up' -> API servers. (6) 'Dave's phone sends a heartbeat every 5 seconds' -> Presence servers. (7) 'A logged-in client needs to know which chat server to connect to' -> API servers (login goes through the API tier, which asks service discovery; explain that in the 'why').",
+          "check": "Boss defeated."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "Sketch the switchboard out loud",
+          "teaches": "Pull it together.",
+          "interaction": "Q.drill. Prompt: 'Walk me through your high-level design for a chat app with 50 million daily users.' Model answer: 'I split it into stateless services, stateful services and third parties. Login, signup and profile are stateless API servers behind a load balancer. Chat servers are stateful: each client keeps a WebSocket to one chat server. Presence servers track who's online, also over WebSocket, and notification servers push to offline phones. Chat history goes in a key-value store, and user and friend data in a relational database. On login, service discovery (ZooKeeper) picks a nearby chat server with spare capacity. One box could hold 1M connections in about 10GB of memory, but it would be a single point of failure, so we scale out, and if a chat server dies its clients reconnect to whatever server service discovery hands them.'",
+          "check": "Self-grade checks: 'I separated stateless, stateful and third-party', 'I named the five server roles plus the KV store', 'I explained service discovery and what happens when a chat server dies'."
+        }
+      ],
+      "caveats": [
+        "10KB per connection is the book's round number. Real memory per connection depends on TLS buffers, the language runtime and kernel socket buffers. WhatsApp famously ran about 2 million connections on one Erlang/FreeBSD server in 2012, so 'how many per box' varies a lot by stack.",
+        "The book doesn't mention reconnect storms. When a server holding hundreds of thousands of connections dies, all those clients reconnect at once; real systems add randomised (jittered) exponential backoff and spare capacity.",
+        "ZooKeeper is the book's example. Many teams use Consul, etcd, or a custom 'gateway assignment' service, often behind a layer-4 load balancer. What matters is the idea of a registry of healthy servers plus a placement policy, not the product.",
+        "Real systems often keep a 'which gateway is user X on' map (a session or route table) so any service can find a user's chat server. The book leaves this implicit in step 5a of the 1-on-1 flow (12.4)."
+      ],
+      "sources": [
+        { "label": "ByteByteGo: Design a Chat System (book chapter)", "url": "https://bytebytego.com/courses/system-design-interview/design-a-chat-system" },
+        { "label": "Apache ZooKeeper", "url": "https://zookeeper.apache.org/" },
+        { "label": "WhatsApp blog: 1 million is so 2011", "url": "https://blog.whatsapp.com/1-million-is-so-2011" }
+      ]
+    },
+    {
+      "n": "12.3",
+      "slug": "chat-storage-and-ids",
+      "t": "The Message Vault",
+      "d": "Where chat history lives, the message tables, and how to mint message IDs",
+      "boss": false,
+      "badge": "🗄️ Badge: Vault Keeper",
+      "winTitle": "Every message filed in order",
+      "goal": "Your win today: you can say why chat history goes in a key-value store, draw the 1-on-1 and group message tables with their keys, and explain why created_at can't order messages and which message ID scheme the book picks.",
+      "bookSections": "Step 2 Storage (generic data vs chat history; read/write pattern: 60 billion messages/day, recent chats, random access, ~1:1 read:write; key-value store rationale: HBase at Facebook, Cassandra at Discord); Data models (message table for 1-on-1 chat, message table for group chat; figures 12-9, 12-10); Message ID (auto_increment, global Snowflake-style generator, local sequence number generator)",
+      "stages": [
+        {
+          "title": "Two kinds of data",
+          "sub": "Know the read/write pattern first",
+          "teaches": "A chat system stores two kinds of data. Generic data (user profiles, settings, friend lists) goes in robust, reliable relational databases, with replication and sharding for availability and scale. Chat history is the special part, so look at its read/write pattern: (1) the data is huge; Facebook Messenger and WhatsApp handle 60 billion messages a day (2016 figure); (2) only recent chats are read often, and users rarely look up old ones; (3) users still sometimes need random access: search, viewing their mentions, jumping to a specific message; (4) read:write is about 1:1 for 1-on-1 chat.",
+          "interaction": "Sort-into-bins: 8 cards: User profile, Notification settings, Friend list, Messages in a 1-on-1 chat, Messages in a group, Group member list, Last-seen timestamp, Profile photo URL. Bins: Relational DB / Key-value store (chat history + presence status). (Last-seen goes to the KV store because the book stores status and last_active_at there in the presence section.) Then 'pattern bingo': four statements, the learner marks each true or false for chat history: 'Writes are rare compared to reads' (false, ~1:1), 'Old messages are read as often as new ones' (false), 'Users sometimes jump to a random old message' (true), 'Volume is in the tens of billions per day' (true).",
+          "check": "Bins correct and bingo all correct. Quiz Q: 'What read:write ratio does the book give for 1-on-1 chat?' (about 1:1)."
+        },
+        {
+          "title": "Why a key-value store?",
+          "sub": "The long tail problem",
+          "teaches": "The book recommends key-value stores for chat history for four reasons: (1) easy horizontal scaling; (2) very low latency access; (3) relational databases don't handle the long tail of data well: when indexes grow large, random access gets expensive; (4) proven chat apps use them: Facebook Messenger used HBase and Discord used Cassandra. 'Long tail' here means the huge mass of old, rarely read messages that still has to stay reachable.",
+          "interaction": "Predict-then-watch. A chart: x-axis = message age (today -> 5 years), bars = how often messages of that age are read (a steep head and a long flat tail). A 'Years of history' slider (1 -> 10) grows the data. A side panel shows a single-node relational index with a RAM box: as data grows, the index bar outgrows RAM and a 'random lookup latency' gauge jumps from green to red. Before sliding past the RAM line, the learner predicts what happens to the cost of jumping to an old message (stays flat / rises sharply). Answer: rises sharply. Then a toggle 'Partition by channel in a KV store' splits the bar into many small shards spread across nodes, and the gauge returns to green because each lookup hits one small partition by key.",
+          "check": "Prediction correct; quiz Q: 'Name two reasons the book gives for KV stores' (any two of the four). Second Q: 'Which store did Discord use (per the book)?' (Cassandra)."
+        },
+        {
+          "title": "Design the tables",
+          "sub": "1-on-1 and group message tables",
+          "teaches": "1-on-1 message table (figure 12-9): message_id bigint (primary key), message_from bigint, message_to bigint, content text, created_at timestamp. The primary key is message_id, and it alone decides message order. Why not created_at? Two messages can be created at the same moment, so the timestamp can't break ties. Group message table (figure 12-10): channel_id bigint, message_id bigint, user_id bigint, content text, created_at timestamp. The primary key is the composite (channel_id, message_id). channel_id is the partition key, because every query in a group chat works inside one channel, so the whole channel's history sits in one partition, sorted by message_id. Jargon: partition key = the column that decides which node stores the row; channel = a group chat.",
+          "interaction": "Two parts. (1) Schema builder: column chips (message_id, message_from, message_to, channel_id, user_id, content, created_at, plus distractors read_receipt_list and avatar_url). The learner fills two empty table cards (1-on-1 and Group), then clicks a key icon to pick the primary key / partition key for each. Feedback explains each choice. (2) Spot-the-bug: a mini feed sorted 'ORDER BY created_at' shows two messages stamped 12:00:00.000, 'Are you free?' and 'Yes!', rendered in the wrong order. The learner taps the bug (the ORDER BY line). The fix button swaps to ORDER BY message_id and the feed reorders.",
+          "check": "Both tables correct with the right keys; bug spotted. Quiz Q: 'Why is channel_id the partition key for group messages?' (all queries for a group run within one channel)."
+        },
+        {
+          "title": "Mint the IDs",
+          "sub": "Unique and sortable by time",
+          "teaches": "message_id must be (1) unique and (2) sortable by time: newer rows get higher IDs than older ones. Options: (a) auto_increment, as in MySQL, but NoSQL databases usually don't offer it; (b) a global 64-bit sequence number generator like Snowflake (Chapter 7); (c) a local sequence number generator: IDs only unique within a group or 1-on-1 channel. The book picks (c) because keeping order within a channel is all chat needs, and it's easier to implement than a global generator.",
+          "interaction": "ID-minting sim. Two channels side by side, 'Alice-Bob' and 'Book club', each with a counter badge. The learner taps 'send' in either channel; messages get IDs 1, 2, 3... per channel. A toggle switches to 'Global Snowflake' mode: one shared 64-bit-looking counter (timestamp | machine | sequence) hands IDs to both. A 'Merge both channels into one list' button shows that local IDs collide across channels (two messages with ID 3) while global ones don't. Then the question: 'Does a collision across channels matter for chat?' (No: you only ever order messages within one channel, and channel_id + message_id is unique.) Final 3-way pick: which option would you choose with Cassandra and why.",
+          "check": "Quiz (3 Qs): two requirements for message_id (unique, time-sortable); why not auto_increment (NoSQL usually lacks it); why the book's local generator is enough (order only matters inside a channel)."
+        },
+        {
+          "title": "Boss: The Shuffle Imp",
+          "sub": "Keep the vault in order",
+          "teaches": "Apply storage and ID choices to new situations.",
+          "interaction": "Q.boss with one fixed choice set: Key-value store / Relational DB / Local per-channel sequence ID / Global Snowflake ID. Scenarios: (1) 'Store each user's display name, email and friend list' -> Relational DB. (2) 'Store 60 billion new messages a day and let users jump to one from 3 years ago' -> Key-value store. (3) 'Two messages in one chat land in the same millisecond and show up swapped' -> Local per-channel sequence ID (order by ID, not timestamp). (4) 'Product wants one ID that's unique and roughly time-ordered across all channels, for a global audit log' -> Global Snowflake ID. (5) 'Order messages within a group chat on Cassandra, the simplest way' -> Local per-channel sequence ID. (6) 'Join users to groups and query \"which groups is Bob in?\" with transactions' -> Relational DB.",
+          "check": "Boss defeated."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "Defend your storage",
+          "teaches": "Pull it together.",
+          "interaction": "Q.drill. Prompt: 'Where do you store messages, and how do you keep them in order?' Model answer: 'User profiles and friend lists go in a relational DB with replication and sharding. Chat history is different: tens of billions of writes a day, read:write about 1:1, mostly recent reads with some random access for search and jump-to-message. So I'd use a key-value store like HBase or Cassandra: it scales horizontally, has low latency, and handles the long tail better than one huge relational index. For groups the key is (channel_id, message_id), with channel_id as the partition key. I'd order by message_id, not created_at, because timestamps collide. IDs must be unique and time-sortable, and a per-channel sequence is enough because order only matters within a channel. A Snowflake-style global ID also works.'",
+          "check": "Self-grade checks: 'I justified the KV store from the read/write pattern', 'I gave the group table key (channel_id partition, message_id order)', 'I explained why not created_at and which ID scheme'."
+        }
+      ],
+      "caveats": [
+        "Plenty of chat systems run on sharded relational storage. Facebook moved Messenger off HBase onto MyRocks (a MySQL engine built on RocksDB) around 2018, and Discord moved from Cassandra to ScyllaDB in 2022. 'KV store' is a sensible default, not a law.",
+        "A local per-channel sequence still needs someone to hand out the next number safely, e.g. one owner per channel, or an atomic counter in Redis or the database. If two chat servers both mint the 'next' ID for the same channel, you get duplicates. The book calls this 'easier' but skips the details.",
+        "Per-channel IDs and the single cur_max_message_id cursor used for multi-device sync (12.4) don't mix cleanly: if IDs only rise within a channel, a device needs one cursor per channel, or each user's inbox needs its own sequence. Point this out if an interviewer pushes.",
+        "Discord's partition key is actually (channel_id, bucket), where a bucket is a time window, so one busy channel doesn't become a giant partition. The book's plain channel_id key would create very hot, very large partitions for huge channels."
+      ],
+      "sources": [
+        { "label": "ByteByteGo: Design a Chat System (book chapter)", "url": "https://bytebytego.com/courses/system-design-interview/design-a-chat-system" },
+        { "label": "Discord: How Discord Stores Billions of Messages (Cassandra)", "url": "https://discord.com/blog/how-discord-stores-billions-of-messages" },
+        { "label": "Discord: How Discord Stores Trillions of Messages (move to ScyllaDB)", "url": "https://discord.com/blog/how-discord-stores-trillions-of-messages" },
+        { "label": "Meta Engineering: The Underlying Technology of Messages (HBase)", "url": "https://engineering.fb.com/2010/11/15/core-infra/the-underlying-technology-of-messages/" },
+        { "label": "The Verge: Messenger and WhatsApp process 60 billion messages a day", "url": "https://www.theverge.com/2016/4/12/11415198/facebook-messenger-whatsapp-number-messages-vs-sms-f8-2016" },
+        { "label": "Twitter Snowflake (archived repo)", "url": "https://github.com/twitter-archive/snowflake" }
+      ]
+    },
+    {
+      "n": "12.4",
+      "slug": "chat-message-flows",
+      "t": "Special Delivery",
+      "d": "The 1-on-1 message flow, syncing many devices, and small-group fan-out",
+      "boss": false,
+      "badge": "📬 Badge: Courier",
+      "winTitle": "Delivered, every time",
+      "goal": "Your win today: you can trace a message from sender to receiver in the book's six steps (online and offline), explain cur_max_message_id for multi-device sync, and explain per-recipient inboxes for small groups and why they don't work for huge ones.",
+      "bookSections": "Step 3 Message flows: 1-on-1 chat flow (figure 12-12), Message synchronization across multiple devices (figure 12-13, cur_max_message_id), Small group chat flow (figures 12-14, 12-15; WeChat 500-member cap); Wrap-up: message resend mechanism (retry and queueing)",
+      "stages": [
+        {
+          "title": "Six hops to Bob",
+          "sub": "The 1-on-1 chat flow",
+          "teaches": "Figure 12-12, user A messages user B: (1) A sends the message to chat server 1. (2) Chat server 1 gets a message ID from the ID generator. (3) Chat server 1 sends the message to the message sync queue. (4) The message is stored in the key-value store. (5a) If B is online, the message goes to chat server 2, where B is connected. (5b) If B is offline, the push notification (PN) servers send a push notification. (6) Chat server 2 forwards the message to B over the persistent WebSocket. Jargon: message sync queue = a queue that hands messages to storage and to the recipient's side, so the chat server isn't stuck waiting.",
+          "interaction": "Two parts. (1) Tap-in-order: seven shuffled step cards (1, 2, 3, 4, 5a, 5b, 6). The learner taps them in order; 5a and 5b sit side by side as a fork, and either can be placed first at the fork. (2) Predict-then-watch: a diagram with A, chat server 1, ID generator, message sync queue, KV store, chat server 2, PN servers and B. A toggle sets B online or offline. Before pressing Send, the learner taps the boxes they think will light up. Then the message animates hop by hop. Online lights CS2 and B; offline lights PN servers and B's lock screen instead. Both runs store the message in the KV store.",
+          "check": "Order correct; both predictions scored. Quiz Q: 'B is offline. Is the message lost?' (no: it's already in the KV store; a push notification goes out, and B syncs when it reconnects)."
+        },
+        {
+          "title": "Many devices, one account",
+          "sub": "cur_max_message_id",
+          "teaches": "Figure 12-13: user A has a phone and a laptop, each with its own WebSocket to a chat server. Each device keeps a variable cur_max_message_id, the latest message ID it has. New messages for a device are those where (1) the recipient is the logged-in user, and (2) the message ID in the KV store is greater than that device's cur_max_message_id. Because each device keeps its own cursor, syncing is easy: on reconnect, a device asks for everything above its cursor.",
+          "interaction": "Sync sim. Left: a KV-store column of messages to user A with IDs 101-110 (some arrive live). Right: Phone (cursor 105) and Laptop (cursor 105). The learner closes the laptop (toggle). Five new messages arrive (106-110); the phone's cursor ticks up to 110 live, the laptop's stays at 105. Before reopening the laptop, the learner taps which IDs it will fetch (multi-select). Right: 106, 107, 108, 109, 110. On reopen, the query 'message_to = A AND message_id > 105' animates and the cursor jumps to 110. Bonus round: the laptop reopens with a corrupted cursor of 0; the learner predicts 'refetches everything' (correct), which shows why the cursor matters.",
+          "check": "Fetched set picked correctly; quiz Q: 'Why does each device keep its own cursor instead of one per account?' (devices go offline at different times, so each needs to know what it has)."
+        },
+        {
+          "title": "Small-group fan-out",
+          "sub": "One inbox per recipient",
+          "teaches": "Small group chat (figure 12-14): user A sends in a group with B and C. The message is copied into each member's message sync queue: one for B, one for C. Think of the sync queue as each recipient's inbox. It works well for small groups because (1) each client only checks its own inbox, which simplifies sync, and (2) storing one copy per member is cheap when the group is small. WeChat uses a similar approach and caps groups at 500. On the recipient side (figure 12-15), one inbox holds messages from many senders and groups. For large groups, a copy per member is unacceptable, so you'd store the message once and have members read it from the channel (fan-out on read). Jargon: fan-out = copying one event to many destinations.",
+          "interaction": "Fan-out slider sim. A sender avatar and a row of inbox icons. A slider sets group size: 3, 10, 100, 500, 10,000, 100,000. Pressing 'Send 1 message' animates copies flying into every inbox (above 100 it switches to a counter with a progress bar). Counters: 'copies written per message' (= members - 1) and 'storage for 1,000 messages/day at 1KB each' (computed live). Predict before sliding to 100,000: 'copies per message?' (99,999). A toggle 'Store once, read from channel' shows writes drop to 1 while each reader now queries the channel. Second mini view: B's inbox showing interleaved messages from A (1-on-1), the 'Book club' group and C, which illustrates the recipient-side picture.",
+          "check": "Prediction correct; quiz Q: 'Why per-recipient inboxes for small groups?' (simple sync, each client reads one inbox; copies are cheap at <=100 members). Q2: 'What breaks at 100,000 members?' (write amplification: 99,999 copies per message)."
+        },
+        {
+          "title": "When delivery fails",
+          "sub": "Retry, queue, and don't double-post",
+          "teaches": "The book's wrap-up: retry and queueing are the common ways to resend messages. Retries create a new risk: the same message can arrive twice (at-least-once delivery). Fix: the client attaches its own unique ID to each outgoing message, the server stores by that ID and ignores repeats (idempotency), and the receiver shows a message only once. Acknowledge only after the message is safely stored, so a crash between 'ack' and 'store' can't lose it. This goes past the book; flag it in an interview as 'beyond the basic design'. Jargon: idempotent = doing it twice has the same effect as doing it once.",
+          "interaction": "Spot-the-bug with three short flows, each a 4-line sequence diagram. Flow A: server sends 'ack' to the client, then writes to the KV store, then crashes before the write (bug: ack before persist, so the message is lost). Flow B: client times out and retries; server stores both copies, Bob sees 'Pay you back $50' twice (bug: no dedupe key). Flow C: the correct flow (client_msg_id, store, ack, dedupe on retry). The learner taps the buggy line in A and B and marks C as 'no bug'. Each fix animates.",
+          "check": "Both bugs found, C cleared. Quiz Q: 'What makes retries safe?' (a client-generated message ID plus server-side dedupe)."
+        },
+        {
+          "title": "Boss: The Lost-Mail Hydra",
+          "sub": "Every message, exactly where it belongs",
+          "teaches": "Apply the flows to tricky cases.",
+          "interaction": "Q.boss with one fixed choice set: Forward via recipient's chat server / Push notification + sync later / Fetch IDs above cur_max_message_id / Copy into each member's inbox / Store once, read from channel. Scenarios: (1) 'Bob is online on chat server 7; Alice messages him' -> Forward via recipient's chat server. (2) 'Bob's phone is off' -> Push notification + sync later. (3) 'Alice's laptop was asleep overnight and opens in the morning' -> Fetch IDs above cur_max_message_id. (4) 'A 6-person family group gets a new photo caption' -> Copy into each member's inbox. (5) 'A 200,000-member announcement channel gets a post' -> Store once, read from channel. (6) 'Bob's tablet just logged in for the first time today' -> Fetch IDs above cur_max_message_id. (7) 'A 50-person team chat on WeChat-style design' -> Copy into each member's inbox.",
+          "check": "Boss defeated."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "Trace the message out loud",
+          "teaches": "Pull it together.",
+          "interaction": "Q.drill. Prompt: 'Walk me through what happens when Alice sends Bob a message, and how Bob's phone and laptop both stay in sync.' Model answer: 'Alice's client sends over its WebSocket to chat server 1. The server gets a message ID, puts the message on the message sync queue and it's stored in the key-value store. If Bob is online, the message goes to the chat server he's connected to and down his WebSocket. If he's offline, the notification servers send a push. Each of Bob's devices keeps its own cur_max_message_id; on reconnect a device fetches messages to Bob with a higher ID. For small groups I'd copy each message into every member's inbox, which keeps sync simple, like WeChat's 500 cap. For huge groups I'd store it once and have members read from the channel. Retries use a client message ID so duplicates are dropped.'",
+          "check": "Self-grade checks: 'I covered both the online and offline branch', 'I explained cur_max_message_id per device', 'I explained inbox fan-out for small groups and its limit'."
+        }
+      ],
+      "caveats": [
+        "The book's figure doesn't say whether step 3 (sync queue) or step 4 (KV store) must finish before the sender sees 'sent'. Real systems ack the sender only after the message is durably stored, or durably queued, and then deliver.",
+        "The book doesn't spell out how chat server 1 finds the server Bob is on (step 5a). Real systems keep a user -> gateway route table (often in Redis) or publish to a per-user topic that Bob's server subscribes to.",
+        "cur_max_message_id only works if message IDs rise in a single sequence per user. With the book's per-channel local IDs, a device needs one cursor per conversation, or the server keeps a per-user inbox sequence. The book glosses over this mismatch.",
+        "'Exactly once' delivery isn't really achievable over a network. Real chat apps aim for at-least-once delivery plus deduplication, which looks like exactly-once to the user.",
+        "WeChat's 500-member cap is the book's example. Group limits change over time and by product (WhatsApp now allows much larger groups). The principle is what matters: fan-out on write only stays cheap while groups are small."
+      ],
+      "sources": [
+        { "label": "ByteByteGo: Design a Chat System (book chapter)", "url": "https://bytebytego.com/courses/system-design-interview/design-a-chat-system" },
+        { "label": "Discord: How Discord Stores Billions of Messages", "url": "https://discord.com/blog/how-discord-stores-billions-of-messages" },
+        { "label": "Meta Engineering: The Underlying Technology of Messages", "url": "https://engineering.fb.com/2010/11/15/core-infra/the-underlying-technology-of-messages/" }
+      ]
+    },
+    {
+      "n": "12.5",
+      "slug": "chat-online-presence",
+      "t": "The Green Dot",
+      "d": "Online presence: login/logout, heartbeats, and fanning out status changes",
+      "boss": false,
+      "badge": "🟢 Badge: Presence Sentinel",
+      "winTitle": "The dot never lies (much)",
+      "goal": "Your win today: you can explain how presence servers track online status, why marking a user offline on every disconnect is bad, how a heartbeat with a timeout fixes it, and how status changes fan out to friends, plus why that breaks for huge groups.",
+      "bookSections": "Step 3 Online presence: user login (status + last_active_at in KV store), user logout, user disconnection, heartbeat mechanism (5s heartbeat, x = 30s), online status fanout via publish-subscribe channels per friend pair (figure 12-19), large groups (100,000 members), fetching status on group entry",
+      "stages": [
+        {
+          "title": "Login and logout",
+          "sub": "Who flips the dot",
+          "teaches": "Presence servers manage online status and talk to clients over WebSocket. User login: once the WebSocket between client and real-time service is up, A's online status and last_active_at timestamp are saved in the key-value store, and the indicator shows online. User logout: the logout goes through the API servers to the presence servers, and the status in the KV store changes to offline.",
+          "interaction": "A small diagram: A's phone, API servers, presence servers, KV store row {user: A, status, last_active_at}. Buttons: 'Log in' and 'Log out'. Pressing each animates the path and updates the KV row (status flips, last_active_at shows the current time). The learner first predicts which server writes the KV row (presence servers) by tapping it.",
+          "check": "Prediction correct; quiz Q: 'What two fields does the book store at login?' (online status, last_active_at)."
+        },
+        {
+          "title": "The tunnel problem",
+          "sub": "Why 'disconnected = offline' flickers",
+          "teaches": "Naive approach: mark the user offline the moment the connection drops. But mobile connections drop and come back all the time, e.g. driving through a tunnel. The dot flickers green-grey-green, friends get spammed with status changes, and the user experience is poor.",
+          "interaction": "A 2-minute train-ride timeline with three tunnels (4s, 12s and 50s of signal loss). A 'Naive mode' run animates the train; the green dot on a friend's screen flips at every tunnel. A counter shows 'status changes sent to friends: 6'. The learner predicts the count before running (choices 0 / 3 / 6). Right: 6 (offline + online per tunnel).",
+          "check": "Prediction correct (6). Quiz Q: 'What's wrong with flipping status on every disconnect?' (flapping: noisy, wasteful, bad UX for short drops)."
+        },
+        {
+          "title": "Heartbeat",
+          "sub": "Every 5 seconds: still here",
+          "teaches": "The book's fix: an online client periodically sends a heartbeat event to the presence servers. If the server gets a heartbeat within x seconds, the user stays online; otherwise they're marked offline. Book example: the client sends a heartbeat every 5 seconds; after 3 heartbeats it disconnects and doesn't reconnect within x = 30 seconds, so it's marked offline. Trade-off: a shorter timeout notices real departures faster but flickers more; a longer one is calmer but shows ghosts (people who left still look online). Load check: 1M online users / 5s = 200,000 heartbeats per second for the presence tier.",
+          "interaction": "Same train ride, 'Heartbeat mode'. Heartbeat ticks every 5s on a timeline; a countdown ring on the presence server resets to 30 at each tick. In tunnels, ticks stop and the ring drains. The learner predicts for each tunnel (4s, 12s, 50s) whether the friend sees 'offline' (only the 50s tunnel; it crosses 30s with no heartbeat). Then sliders for heartbeat interval (1-30s) and timeout x (5-120s), with live readouts: status flips during the ride, 'ghost seconds' (time shown online after really leaving), heartbeats/s at 1M users. Finally, calculate-and-check: '1,000,000 users, one heartbeat every 5s: heartbeats per second?' Answer 200,000.",
+          "check": "Per-tunnel predictions correct; calculation correct; quiz Q: 'In the book's example, when exactly is the user marked offline?' (after no heartbeat for 30 seconds)."
+        },
+        {
+          "title": "Fan out the dot",
+          "sub": "Pub/sub per friend pair, and the big-group trap",
+          "teaches": "How do friends learn A's status changed? Presence servers use publish-subscribe: each friend pair has a channel. When A's status changes, the event is published to the channels A-B, A-C and A-D, which B, C and D subscribe to, and they receive it over their WebSockets. This works for small groups (WeChat does something similar with its 500 cap). For large groups it's expensive: in a 100,000-member group, every status change creates 100,000 events. The book's fix: only fetch online status when a user enters a group or manually refreshes the friend list. Jargon: publish-subscribe = senders post to a named channel, and everyone subscribed to it receives the post.",
+          "interaction": "Pub/sub sim. Center: user A with friends B, C, D around it, each linked by a labelled channel (A-B, A-C, A-D). Tapping A's status toggle fires three pulses down the channels and the dots flip on B, C and D. A 'group size' slider (4, 100, 500, 100,000) redraws the graph as a dense cloud with a counter 'events per status change'. Predict before sliding to 100,000: events per change? (100,000, the book's number). Then a toggle 'Fetch on group entry / manual refresh': events per change drop to 0 for the big group, and a 'User opens group' button triggers one batch fetch instead. The trade-off is shown in a small label: status can be stale until the next refresh.",
+          "check": "Prediction correct; quiz Q: 'What does the book do for big groups?' (fetch status when entering the group or refreshing, instead of pushing every change)."
+        },
+        {
+          "title": "Boss: The Flicker Phantom",
+          "sub": "Keep the dot honest",
+          "teaches": "Apply presence techniques to scenarios.",
+          "interaction": "Q.boss with one fixed choice set: Heartbeat timeout / Push via pub/sub to friends / Fetch on entry or refresh / Write status to KV store. Scenarios: (1) 'A user's dot flickers every time their train goes under a bridge' -> Heartbeat timeout. (2) 'Bob just opened the app and his 12 friends should see him online' -> Push via pub/sub to friends. (3) 'A 100,000-member fan group wants to show who's online' -> Fetch on entry or refresh. (4) 'The WebSocket for a new login was just established' -> Write status to KV store. (5) 'A phone's battery died mid-chat with no logout' -> Heartbeat timeout (no heartbeat for 30s, so offline). (6) 'Alice taps \"refresh\" on her 2,000-person conference attendee list' -> Fetch on entry or refresh.",
+          "check": "Boss defeated."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "Explain the green dot",
+          "teaches": "Pull it together.",
+          "interaction": "Q.drill. Prompt: 'How do you show whether a friend is online?' Model answer: 'Presence servers hold a WebSocket to each client. On login they write status online and last_active_at to the key-value store; on logout, offline. I wouldn't mark someone offline the moment the connection drops, because mobile connections flap (tunnels, elevators). Instead the client sends a heartbeat every few seconds, say 5, and if none arrives for about 30 seconds they're offline. For fan-out, each friend pair gets a pub/sub channel and status changes go out over WebSocket. That's fine for small groups, but a 100,000-member group would get 100,000 events per change, so there I'd fetch status only when someone opens the group or refreshes.'",
+          "check": "Self-grade checks: 'I explained why not offline-on-disconnect', 'I gave the heartbeat interval and timeout idea', 'I covered pub/sub fan-out and the big-group fix'."
+        }
+      ],
+      "caveats": [
+        "One pub/sub channel per friend pair means millions of tiny channels. Many real systems use one channel per user ('A's presence') that A's friends subscribe to, or batch presence updates. The idea is the same; the bookkeeping is cheaper.",
+        "Heartbeats every 5s cost mobile battery and radio wake-ups. Real apps often stretch the interval in the background, piggyback on other traffic, or rely on OS push and 'last seen' instead of a live dot.",
+        "Presence is eventually consistent by design: a dot can be 30 seconds stale. That's an acceptable trade for a status hint, not something to fix with strong consistency.",
+        "The 200,000 heartbeats/s figure is our worked example (book's 1M concurrent users / 5s), not a number from the book."
+      ],
+      "sources": [
+        { "label": "ByteByteGo: Design a Chat System (book chapter)", "url": "https://bytebytego.com/courses/system-design-interview/design-a-chat-system" },
+        { "label": "Slack Engineering: Flannel, an application-level edge cache (incl. presence and channel data)", "url": "https://slack.engineering/flannel-an-application-level-edge-cache-to-make-slack-scale/" },
+        { "label": "Redis Pub/Sub documentation", "url": "https://redis.io/docs/latest/develop/interact/pubsub/" }
+      ]
+    },
+    {
+      "n": "BOSS",
+      "slug": "chat-boss-design-it-live",
+      "t": "Design It Live: Chat",
+      "d": "Full mock interview: design a chat system for 50 million daily users",
+      "boss": true,
+      "badge": "👑 Badge: Chat Architect",
+      "winTitle": "You designed a chat system live",
+      "goal": "Your win today: given 'design a chat system', you can scope it in 5 minutes, sketch the high-level design, deep-dive into service discovery, message flows and presence, handle 'what happens when X fails?' follow-ups, and wrap up with sensible extensions.",
+      "bookSections": "Whole chapter via the 4-step framework: Step 1 scope, Step 2 high-level design (protocols, stateless/stateful/third-party, storage, data model, message IDs), Step 3 deep dive (service discovery, message flows, online presence), Step 4 wrap-up (media files, end-to-end encryption, client-side caching, load time / Slack's edge cache, error handling: chat server failure, message resend)",
+      "stages": [
+        {
+          "title": "Scope it",
+          "sub": "Step 1 · understand the problem (3–10 min)",
+          "teaches": "Ask before you draw. The book's Q&A: 1-on-1 or group? Both. Mobile or web? Both. Scale? 50 million DAU. Group size limit? 100 people. Features? 1-on-1 chat, group chat, online indicator; text only. Message size? Text under 100,000 characters. End-to-end encryption? Not required for now (discuss later). How long to keep history? Forever. Resulting requirements: low-latency 1-on-1 chat, small group chat (max 100), online presence, multiple devices per account, push notifications.",
+          "interaction": "Like 0008: a sticky interview clock bar with the 4-step framework strip, and a chat with the interviewer. A question deck of 10 cards: 6 good ones (1-on-1 or group?, mobile/web?, scale/DAU?, group size limit?, which features: text/media/presence?, history retention and message size?) and 4 time-wasters ('Which programming language?', 'What colour are the chat bubbles?', 'Should we use Kubernetes?', 'Do you want emoji reactions in v1?' (a scope creep, not a scoping question)). Each good question gets the interviewer's book answer in the chat, and a requirement tile lights up on the requirements board (50M DAU, Groups <=100, Mobile + web, Text < 100K chars, Online indicator, Multi-device, Push notifications, History forever, No E2E yet). Each waste costs clock time (+2 min). Then a lock-in quiz: 'Which requirement forces server-initiated push?' (low-latency delivery to the receiver).",
+          "check": "All requirement tiles lit within the clock budget; lock-in quiz correct."
+        },
+        {
+          "title": "Sketch it",
+          "sub": "Step 2 · high-level design and buy-in (10–15 min)",
+          "teaches": "Protocol choice (WebSocket for both directions; polling and long polling drawbacks), the three service groups, the adjusted design (LB + API servers over HTTP; chat servers and presence servers over WebSocket; notification servers; KV store; service discovery), storage split (relational for generic data, KV for chat history), tables keyed by message_id and (channel_id, message_id), message IDs that are unique and time-sortable (local per-channel sequence).",
+          "interaction": "Architecture builder (as in 12.2, faster, with no hints): place 7 components into the diagram, label each client link HTTP or WebSocket. Then three rapid buy-in questions from the interviewer in chat, each with 3 answer options: 'Why not long polling?' (wrong-server problem with a stateless LB, can't detect disconnects, idle reconnects); 'Why a key-value store for messages?' (horizontal scale, low latency, long-tail random access, proven at HBase/Cassandra); 'How do you order messages?' (message_id, unique and time-sortable, per-channel sequence; not created_at).",
+          "check": "Diagram complete and correctly labelled; all three buy-in answers correct (each miss costs a heart)."
+        },
+        {
+          "title": "The technique map",
+          "sub": "Step 3 · every requirement needs a mechanism",
+          "teaches": "Map each requirement to the mechanism that delivers it: low-latency delivery -> WebSocket + persistent connection to a chat server; pick a chat server -> service discovery (ZooKeeper) by location and capacity; offline recipient -> push notification servers + KV store history; multiple devices -> per-device cur_max_message_id; small groups -> copy into each member's message sync queue (inbox); online indicator -> presence servers + heartbeat (5s, 30s timeout); status fan-out -> pub/sub channel per friend pair; huge groups' presence -> fetch on entry/refresh; message order -> per-channel message_id.",
+          "interaction": "Matching board: 9 requirement cards on the left, 9 mechanism cards on the right (shuffled). The learner taps one from each side to pair them; correct pairs lock together with a line and a one-line 'why'. Wrong pairs cost a heart. When it's complete, the 1-on-1 flow plays once as a recap animation across the finished diagram from stage 2 (A -> CS1 -> ID gen -> sync queue -> KV -> CS2 -> B, with the offline branch to PN servers).",
+          "check": "All 9 pairs correct."
+        },
+        {
+          "title": "Boss: the curveball barrage",
+          "sub": "Step 3 · 'what happens when…?'",
+          "teaches": "Failure and edge-case follow-ups, each with the expected answer.",
+          "interaction": "Like 0008: Q.boss needs one fixed choice set, so build a custom curveball deck where each card has its own 3 options (one right, two plausible wrong). Curveballs: (1) 'A chat server holding 200,000 connections crashes.' Right: clients detect the drop, ask service discovery for a new server, reconnect with jittered backoff, then sync from their cur_max_message_id. Wrong: 'the messages on it are lost'; 'the load balancer silently moves the TCP connections'. (2) 'Bob drives through a 10-second tunnel.' Right: heartbeat timeout of 30s, so he stays online. Wrong: offline immediately; offline after 5s. (3) 'Bob's phone is off when Alice messages.' Right: the message is stored in the KV store, a push notification goes out, and the phone syncs on reconnect. (4) 'Product wants 100,000-member groups.' Right: stop fanning out per-member inbox copies and store once/read from the channel; fetch presence on entry instead of pushing. (5) 'The client times out and resends; Bob sees a message twice.' Right: client-generated message ID plus server dedupe (idempotent writes). (6) 'Two messages in a group share a timestamp and appear swapped.' Right: order by per-channel message_id, not created_at. (7) 'Alice's laptop was closed for a week.' Right: it fetches messages with ID above its cur_max_message_id, paginated.",
+          "check": "Curveball HP to zero; each answer reveals the reasoning."
+        },
+        {
+          "title": "Wrap it up",
+          "sub": "Step 4 · the last 3–5 minutes",
+          "teaches": "The book's wrap-up extensions: (1) media files (photos, videos): much bigger than text, so compression, cloud storage and thumbnails; (2) end-to-end encryption (WhatsApp): only sender and recipient can read messages; (3) caching messages on the client to cut data transfer; (4) improving load time: Slack built a geographically distributed network (Flannel) to cache users' data, channels and so on; (5) error handling: chat server failure (service discovery hands clients a new server) and message resending (retry and queueing). Also good: recap the design, name bottlenecks (hot channels, reconnect storms, presence fan-out) and say what you'd monitor.",
+          "interaction": "Pick-5-of-9: nine wrap-up cards, five from the book (Media files: compression + object storage + thumbnails; End-to-end encryption; Client-side message cache; Edge caching for faster load (Slack Flannel); Error handling: chat server failure + message resend) and four weak ones ('Rewrite it in Rust', 'Switch every service to GraphQL', 'Add a blockchain for message integrity', 'Remove the group size limit for free'). Picking a book card adds a speech bubble in the chat with a one-liner the learner could say. Then a one-question follow-up: 'If you add end-to-end encryption, what server feature gets harder?' (server-side search and moderation, because the server can't read content).",
+          "check": "Five strong picks with no weak picks (each weak pick costs a heart); follow-up correct."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "The 60-second version + your scorecard",
+          "teaches": "Deliver the whole design in about 60 seconds.",
+          "interaction": "Q.drill. Prompt: 'You have one minute. Summarise your chat system design.' Model answer: 'Scope: 1-on-1 and groups up to 100, mobile and web, 50 million DAU, text only, presence, multi-device, push, history forever. Clients keep a WebSocket to a chat server picked by service discovery (ZooKeeper) based on location and load. Login and profiles are stateless API servers behind a load balancer. On send, the chat server gets a per-channel, time-sortable message ID, queues the message and stores it in a key-value store like Cassandra, keyed by channel_id and message_id. Then it's forwarded to the recipient's chat server, or a push notification goes out if they're offline. Each device syncs with its own cur_max_message_id. Small groups fan out into per-member inboxes; huge ones would read from the channel. Presence uses heartbeats with a 30-second timeout and pub/sub to friends. Next I'd add media, end-to-end encryption, client caching, and failure handling for chat-server crashes and resends.' Then show a scorecard (hearts left, clock overrun, curveballs right), stored under its own key like 0008 does (sdq:v1:<id>-interview).",
+          "check": "Self-grade checks: 'I scoped with numbers (50M DAU, 100-member groups)', 'I covered WebSocket + service discovery + KV store + message IDs', 'I traced online/offline delivery and multi-device sync', 'I covered presence (heartbeat + fan-out)', 'I named at least two wrap-up extensions'."
+        }
+      ],
+      "caveats": [
+        "The book's design is a sketch for a 45-minute interview. Real chat stacks (WhatsApp on Erlang, Discord on Elixir + ScyllaDB, Slack with Flannel edge caches) add routing tables, per-user sequences, rate limits, and lots of operational machinery the book leaves out.",
+        "End-to-end encryption changes more than the book says. With the Signal protocol (used by WhatsApp), the server stores only ciphertext, so server-side search, moderation and spam filtering get much harder, and multi-device sync means encrypting a copy for each device.",
+        "Storage choices have moved on: Facebook Messenger left HBase for MyRocks around 2018, and Discord left Cassandra for ScyllaDB in 2022. Name the access pattern first and the product second.",
+        "The book's 'local sequence number' and its single cur_max_message_id cursor don't fit together cleanly (see 12.3/12.4). A strong candidate mentions per-conversation cursors or a per-user inbox sequence."
+      ],
+      "sources": [
+        { "label": "ByteByteGo: Design a Chat System (book chapter)", "url": "https://bytebytego.com/courses/system-design-interview/design-a-chat-system" },
+        { "label": "Slack Engineering: Flannel, an application-level edge cache to make Slack scale", "url": "https://slack.engineering/flannel-an-application-level-edge-cache-to-make-slack-scale/" },
+        { "label": "WhatsApp Encryption Overview (technical white paper)", "url": "https://www.whatsapp.com/security/WhatsApp-Security-Whitepaper.pdf" },
+        { "label": "Signal Protocol documentation", "url": "https://signal.org/docs/" },
+        { "label": "Discord: How Discord Stores Trillions of Messages", "url": "https://discord.com/blog/how-discord-stores-trillions-of-messages" },
+        { "label": "Apache ZooKeeper", "url": "https://zookeeper.apache.org/" }
+      ]
+    }
+  ],
+  "cheatsheetOutline": "One page, 'Chat System at a glance'. Header strip: the book's scope (1-on-1 + groups <=100, mobile + web, 50M DAU, text < 100,000 chars, presence, multi-device, push, history forever, no E2E yet). Section 12.1 Open the Pipe: the chat service's 3 jobs; table polling / long polling / WebSocket with each one's weakness (long polling: wrong server behind a stateless LB, can't detect disconnect, idle reconnects); WebSocket handshake (Upgrade -> 101), ports 80/443, used for both directions. Section 12.2 The Switchboard: stateless (API: login/signup/profile) vs stateful (chat, presence) vs third-party (push); 1M connections x 10KB = 10GB on one box but a SPOF; mini diagram of the adjusted design (LB, API, chat, presence, notification servers, KV store, service discovery) with HTTP vs WebSocket links; 4-step login -> ZooKeeper -> connect flow; chat-server death = reconnect via service discovery. Section 12.3 The Message Vault: relational for generic data, KV store for history (60B msgs/day, recent-heavy, random access, read:write ~1:1; HBase at Facebook, Cassandra at Discord); the two tables with keys (message_id PK; (channel_id, message_id), channel_id = partition key); why not created_at; ID options auto_increment / Snowflake / local per-channel sequence (book's pick). Section 12.4 Special Delivery: the six-step 1-on-1 flow with the 5a/5b fork; cur_max_message_id rule (recipient = me AND id > cursor); small-group fan-out into per-member sync queues (WeChat 500 cap) vs store-once for big groups; retry + client message ID for dedupe. Section 12.5 The Green Dot: login writes status + last_active_at; heartbeat every 5s, offline after 30s silence; pub/sub channel per friend pair; 100,000-member group = 100,000 events, so fetch on entry/refresh. Key numbers box: 50M DAU, 100 members, 100,000 chars, 1M concurrent x 10KB = 10GB, 60B messages/day, read:write 1:1, WeChat 500, heartbeat 5s / timeout 30s, 100,000 presence events. Final design: the full annotated diagram with the 1-on-1 path numbered 1-6. Wrap-up list: media, E2E, client cache, edge cache (Slack Flannel), error handling. Honest-caveats footer: HBase->MyRocks and Cassandra->ScyllaDB migrations, per-channel IDs vs single cursor, at-least-once + dedupe, reconnect storms, per-user presence channels."
+}

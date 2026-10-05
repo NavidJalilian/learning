@@ -1,0 +1,114 @@
+{
+ "n": "7.1",
+ "slug": "unique-id-scope-and-multi-master",
+ "t": "Numbers Nobody Repeats",
+ "d": "Why auto_increment breaks across servers, the 5 requirements, and multi-master 'count by k'",
+ "boss": false,
+ "badge": "🔢 Badge: Counter Breaker",
+ "winTitle": "Scope locked, first idea tested",
+ "goal": "Your win today: you can list the five requirements for this problem in 30 seconds, say why one database's auto_increment stops working once data is spread across many servers, and explain the 'step by k' trick plus its three weaknesses.",
+ "bookSections": "Ch. 7 intro (auto_increment doesn't work in a distributed environment); Step 1 - Understand the problem and establish design scope; Step 2 - Multi-master replication",
+ "stages": [
+  {
+   "title": "One counter, many servers",
+   "sub": "Why the easy answer stops working",
+   "teaches": "A unique ID is the primary key that names a row (a user, a tweet, an order). On ONE database, auto_increment hands out 1, 2, 3… and is guaranteed unique because one machine owns the counter. The book's opening point: in a distributed system one database isn't big enough, and generating IDs across several databases with minimal delay is hard. Once a table is split (sharded) across databases, each database has its own counter, and they all start at 1. Two shards will happily both issue ID 1. Defined inline: shard = one slice of a table living on its own database server.",
+   "interaction": "Predict-then-watch. On screen: two database boxes, 'Shard A' and 'Shard B', each with its own auto_increment counter showing 0 and an empty row list, plus a merged 'All users' list underneath. Before playing, the learner answers: 'How many inserts (total, any mix) until two users share an ID?' (options: 2, 10, 1,000, never). Then they click 'Insert user' buttons under either shard. Each click adds a row (e.g. 'id 1 · ana') to that shard and to the merged list. As soon as both shards have inserted once, the merged list shows two 'id 1' rows glowing red with a 'COLLISION' label. Correct prediction: 2 (one insert per shard). A follow-up line: 'Your ID is only unique inside one box. The whole system needs it unique everywhere.'",
+   "check": "Q.quiz: (1) Why is auto_increment safe on one database? → one machine owns the counter. (2) What breaks when the table is split across 2 databases? → each has its own counter, so both issue 1, 2, 3… (3) Which is NOT a reason the book gives? distractor: 'auto_increment is slow on SSDs'."
+  },
+  {
+   "title": "Ask before you build",
+   "sub": "Step 1 · scope it like the book's candidate",
+   "teaches": "The book's Step 1 dialogue, word for word in spirit: Q: What are the characteristics of the IDs? A: Unique and sortable. Q: Does the ID go up by 1 for every new record? A: It goes up with time, but not necessarily by 1; IDs created in the evening are larger than IDs created in the morning of the same day. Q: Numbers only? A: Yes. Q: Length? A: Must fit in 64 bits. Q: Scale? A: Over 10,000 IDs per second. Resulting requirements: (1) unique, (2) numerical values only, (3) fit in 64 bits, (4) ordered by date, (5) more than 10,000 unique IDs per second. Why each matters: 64-bit = fits a standard BIGINT/long column, cheap to index; ordered by date = newest-first sorting without an extra created_at index.",
+   "interaction": "Question deck + requirement board (same idea as the 0008 boss, smaller). On screen: 8 question cards: the 5 real questions above plus 3 low-value ones ('Which programming language?', 'Should IDs be pretty?', 'What colour is the admin panel?'). Tapping a card shows the interviewer's answer in a chat bubble; the 5 real ones each light up a slot on a 'Requirements' board. Low-value cards get a polite 'not important for this design' reply and cost no heart, but the board shows 'Signal: 5/5 good questions, 1 wasted' as feedback. Stage clears when all 5 requirement slots are filled.",
+   "check": "Sort mechanic: 6 statements, learner taps 'Requirement' or 'Not required' for each: 'IDs go up by exactly 1' (not required), 'An ID made at 9pm is bigger than one made at 9am the same day' (requirement), 'IDs may contain letters' (not: numbers only), 'IDs fit in 64 bits' (requirement), 'Handle 10,000+ IDs per second' (requirement), 'IDs must be impossible to guess' (not stated)."
+  },
+  {
+   "title": "Count by k",
+   "sub": "Multi-master replication, hands-on",
+   "teaches": "Multi-master replication: keep auto_increment, but each database steps by k instead of 1, where k = number of database servers, and each starts at a different offset. With k = 2: server 1 issues 1, 3, 5, 7…; server 2 issues 2, 4, 6, 8…. No two servers ever produce the same number. MySQL exposes exactly these two knobs: auto_increment_increment (the step) and auto_increment_offset (the start). It's unique, numeric and fits in 64 bits. The book's three drawbacks: (1) hard to scale with multiple data centers, (2) IDs do not go up with time across multiple servers, (3) it does not scale well when a server is added or removed.",
+   "interaction": "Driven simulation. On screen: k servers (start k = 2) drawn as boxes with their sequences, a wall clock, and a 'Timeline' strip. The learner clicks servers to generate IDs; each click stamps the ID onto the timeline in click order. Scripted moment 1 ('time order'): the sim auto-plays server 1 generating three IDs (1, 3, 5) then server 2 generating one (2) a second later; the learner is asked 'Is the newest ID the biggest?' → No: 2 was made after 5. Scripted moment 2 ('add a server'): button 'Add server C' sets k = 3 with offset 3. Before revealing, the learner predicts whether C's first IDs are safe. C emits 3, 6, 9; the sim highlights 3 and 9 (already issued by server 1: 1,3,5,7,9) and 6 (already issued by server 2) in red. Lesson: changing k means re-planning every server's step and offset at once, carefully, which is why adding/removing servers hurts.",
+   "check": "Q.quiz: (1) With k = 4 servers, server 3 (offset 3) issues: 3, 7, 11, 15. (2) Which requirement does multi-master break? → ordered by date (across servers). (3) Why is a new server painful? → every server's step must change together or IDs collide."
+  },
+  {
+   "title": "Check the scorecard",
+   "sub": "Does count-by-k pass the five requirements?",
+   "teaches": "Habit for the whole chapter: test every candidate design against the requirement list out loud. Multi-master: unique ✓, numeric ✓, 64-bit ✓, ordered by date ✗ (only within one server), 10k/s ✓ but scaling the fleet ✗ (adding servers and multiple data centers are hard). This scorecard is reused and extended in 7.2.",
+   "interaction": "A 5-row scorecard for 'Multi-master'. Each row has a ✓ / ✗ toggle the learner sets, then hits 'Check'. Wrong cells shake and show a one-line reason. A greyed-out preview of the full 4-approach table (UUID, Ticket server, Snowflake columns locked as '?' teasers, but not actually gated) hints at what comes next.",
+   "check": "All 5 cells correct to clear (hearts lost per wrong check)."
+  },
+  {
+   "title": "Boss: The Duplicate Hydra",
+   "sub": "Keep the counter, or not?",
+   "teaches": "Applying the trade-off: single-database auto_increment is fine when one database really is enough; multi-master works when the server count is small and stable and time-ordering across servers doesn't matter; neither fits a growing multi-data-center system that needs time order.",
+   "interaction": "Q.boss with choices: { k: 'single', label: 'One DB auto_increment', sub: 'keep it simple' }, { k: 'multi', label: 'Multi-master, step k', sub: 'offsets per server' }, { k: 'other', label: 'Neither fits', sub: 'need a new idea' }. Scenarios (6): an internal tool with 50 writes/day on one Postgres → single; two MySQL primaries in one data center, fixed forever, IDs never sorted → multi; IDs must sort by creation time across 8 shards → other; you will add shards every quarter → other (re-stepping all servers is painful); two primaries, need simple numeric IDs, small fixed fleet, ordering doesn't matter → multi; one DB but it's out of disk and must split → other/multi debate, answer 'other' with why: the split needs a design that tolerates growth.",
+   "check": "Boss HP bar, hearts on wrong picks, 'why' line after each card."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "Scope + first idea in 45 seconds",
+   "teaches": "Model answer: 'Before designing, I'd confirm: IDs must be unique, numeric, fit in 64 bits, roughly ordered by creation time, and we need over 10,000 per second. A single database's auto_increment can't scale past one box. One option is multi-master: each of k databases steps by k with its own offset, so they never collide. But IDs aren't time-ordered across servers, and changing k or spanning data centers is painful, so I'd keep looking.'",
+   "interaction": "Q.drill: free-recall textarea with prompt 'The interviewer says: design a unique ID generator. Give your first 45 seconds.' Then reveal the model answer and a self-grade checklist: named all 5 requirements; said why auto_increment fails; explained step-by-k; named at least 2 multi-master drawbacks.",
+   "check": "Self-grade checklist (4 items)."
+  }
+ ],
+ "caveats": [
+  "The book treats 'sortable' as 'ordered by date'. In practice nobody can promise exact time order across machines; 'roughly time-ordered' is what real systems deliver (covered in 7.4).",
+  "Multi-master here is really a configuration trick (auto_increment_increment / auto_increment_offset in MySQL), not about replicating data. It's named after the setup where it's commonly used: several writable primaries replicating to each other.",
+  "Changing auto_increment_increment on a live MySQL server doesn't renumber existing rows; the next value is computed from the current maximum, so live reconfiguration needs care. The sim simplifies this to 'new server starts at its offset'."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo: Design a Unique ID Generator in Distributed Systems (book chapter 7)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems"
+  },
+  {
+   "label": "MySQL docs: auto_increment_increment and auto_increment_offset",
+   "url": "https://dev.mysql.com/doc/refman/8.0/en/replication-options-source.html"
+  },
+  {
+   "label": "Flickr: Ticket Servers, Distributed Unique Primary Keys on the Cheap",
+   "url": "https://code.flickr.net/2010/02/08/ticket-servers-distributed-unique-primary-keys-on-the-cheap/"
+  }
+ ],
+ "id": "0701",
+ "file": "0701-unique-id-scope-and-multi-master.html",
+ "world": 7,
+ "chapterTitle": "Design a Unique ID Generator",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems",
+ "cheatsheet": "../reference/ch07-unique-id-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "0701",
+   "n": "7.1",
+   "t": "Numbers Nobody Repeats",
+   "d": "Why auto_increment breaks across servers, the 5 requirements, and multi-master 'count by k'"
+  },
+  {
+   "id": "0702",
+   "n": "7.2",
+   "t": "Dice or the Ticket Booth",
+   "d": "UUIDs (random, no coordination) vs a central ticket server (numeric, single point of failure)"
+  },
+  {
+   "id": "0703",
+   "n": "7.3",
+   "t": "Anatomy of a Snowflake",
+   "d": "Twitter Snowflake's 64-bit layout: mint an ID, decode one, and do the 69-year math"
+  },
+  {
+   "id": "0704",
+   "n": "7.4",
+   "t": "When Clocks Lie",
+   "d": "Sequence overflow, clocks running backwards, rough ordering, re-tuning the bits, keeping it available"
+  },
+  {
+   "id": "0705",
+   "n": "BOSS",
+   "t": "Mint It Live",
+   "d": "Full mock interview: design a unique ID generator in distributed systems"
+  }
+ ]
+}

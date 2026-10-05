@@ -1,0 +1,126 @@
+{
+ "n": "1.4",
+ "slug": "scale-stateless-and-data-centers",
+ "t": "Forget Me, Find Me Anywhere",
+ "d": "Make the web tier stateless, autoscale it, then spread the system across data centers with GeoDNS",
+ "boss": false,
+ "badge": "🌍 Badge: Globe Spanner",
+ "winTitle": "Stateless and worldwide!",
+ "goal": "Your win today: you can explain why stateful servers fight horizontal scaling, why sticky sessions are a workaround, how moving sessions to a shared store enables autoscaling, and how GeoDNS, failover and data sync work across data centers.",
+ "bookSections": "Stateless web tier (stateful architecture, stateless architecture, design with session store + autoscaling); Data centers (GeoDNS routing, failover, technical challenges)",
+ "stages": [
+  {
+   "title": "The sticky problem",
+   "sub": "Stateful servers",
+   "teaches": "A stateful server remembers client data (state) from one request to the next; a stateless server keeps none. In a stateful setup, User A's session data and profile image live on Server 1, so every one of User A's requests must reach Server 1. If one lands on Server 2, authentication fails because Server 2 has no record of A. Load balancers can solve this with sticky sessions (always send a user to the same server), but that adds overhead, makes adding or removing servers harder, and makes handling server failures difficult.",
+   "interaction": "Simulation. Three users (A, B, C) each with a coloured session token living on one of three servers. The LB defaults to round-robin. The learner presses 'Send request' for a user; when it lands on the wrong server, the request turns red ('who are you? log in again'). Toggle 'Sticky sessions': now every request goes to the owning server (green). Then three stress buttons with predict-first prompts: 'Kill Server 1' (predict: what happens to User A? → logged out, session lost); 'Add Server 4' (predict: how much existing traffic will it take? → none of the existing logged-in users, they're stuck to their servers); 'User B becomes very active' (one server overloaded while others idle).",
+   "check": "All three predictions entered. Q.quiz, 2 questions: why A's request to server 2 fails (session lives only on server 1); two costs of sticky sessions (harder to add/remove servers, harder failure handling)."
+  },
+  {
+   "title": "Move the memory out",
+   "sub": "Stateless web tier + autoscaling",
+   "teaches": "Fix: move state (e.g., session data) out of the web tier into persistent shared storage: a relational DB, Memcached/Redis, or NoSQL. Now any web server can handle any request, because it fetches state from the shared store. The book picks a NoSQL store for sessions because it's easy to scale. A stateless system is simpler, more robust and more scalable. With state out of the web tier, autoscaling becomes easy: web servers are added or removed automatically based on traffic load.",
+   "interaction": "Continue the same sim. A new toggle 'Shared session store' adds a store box below the servers; sticky sessions turn off. The learner re-runs the three stress buttons: killing a server no longer logs anyone out, a new server takes traffic immediately. Then an autoscaling panel: a 24-hour traffic curve plays in fast-forward (quiet night, morning peak, evening spike). The learner sets two thresholds (add a server above X% average CPU, remove one below Y%) and min/max server counts. Win condition: get through the day with no red 'overloaded' minutes and fewer than a set number of server-hours. Too-tight thresholds cause visible thrashing (servers flapping on and off), with a note about cooldowns.",
+   "check": "Day survived within the budget. Q.quiz, 2 questions: where session data lives now (a shared store outside the web tier); what autoscaling means (adding/removing web servers automatically with load)."
+  },
+  {
+   "title": "Two continents",
+   "sub": "Data centers and GeoDNS",
+   "teaches": "As the business grows internationally, you add data centers (DCs). In normal operation users are geoDNS-routed (geo-routed) to the closest DC, with traffic split, e.g., x% to US-East and (100 − x)% to US-West. GeoDNS is a DNS service that resolves a domain name to different IP addresses based on where the user is. If a whole data center goes down (the book's example is a significant outage in US-West), all traffic is sent to the healthy one (100% to US-East). Each DC has its own load balancer, web servers, caches and databases.",
+   "interaction": "Map sim. Two DC icons (US-East, US-West) each with mini LB/web/cache/DB stacks; user dots spread across North America with their DNS answer shown as a coloured line to a DC. A slider shows the split x%/(100−x)% as users near the middle move. Predict-then-watch: 'US-West has a major outage. Where do West Coast users go?' (nowhere: errors / US-East / they wait). Correct: US-East; lines re-route with a short blip, and US-East's load bar jumps to 100% of traffic. A follow-up note asks: 'Is US-East sized to take everyone?' and the learner taps 'Add capacity' to clear its red bar.",
+   "check": "Prediction made and outage handled. Q.quiz, 2 questions: what GeoDNS does (returns a different IP based on user location); what happens in a DC outage (all traffic routed to a healthy DC)."
+  },
+  {
+   "title": "The hard parts",
+   "sub": "Redirection, data sync, test and deploy",
+   "teaches": "Multi-DC challenges the book lists: (1) Traffic redirection: you need tools to send traffic to the right DC; GeoDNS sends users to the nearest one. (2) Data synchronization: users in different regions may use different local databases or caches; on failover, traffic may land in a DC whose data doesn't have that user's records. The common fix is replicating data across DCs; the book cites Netflix's asynchronous multi-data-center replication as an example. (3) Test and deployment: test the site/app from different locations, and use automated deployment tools to keep services consistent across all DCs.",
+   "interaction": "Spot-the-failure replay. Three short animated incidents play; after each, the learner picks the challenge it shows from three cards (Traffic redirection / Data synchronization / Test & deployment) and then the fix from two options. (a) After US-East fails over to US-West, a user's last-hour orders are missing → Data sync → replicate data across DCs. (b) A new release went to US-West only, and East users hit an API error the West doesn't have → Test & deployment → automated deployments to all DCs. (c) Users in Seattle are routed to Virginia even though US-West is healthy → Traffic redirection → GeoDNS rules. Bonus: a 'replication lag' meter on the cross-DC link: failing over while it reads 2 s shows the last 2 s of writes missing, tying back to quest 1.2.",
+   "check": "All three incidents classified and fixed."
+  },
+  {
+   "title": "Boss: The Wandering Session",
+   "sub": "Keep users logged in, wherever they land",
+   "teaches": "Applying stateless design and multi-DC routing.",
+   "interaction": "Q.boss with choices [{k:'stateless', label:'Shared session store', sub:'make the web tier stateless'}, {k:'sticky', label:'Sticky sessions', sub:'pin users to a server'}, {k:'geodns', label:'GeoDNS routing', sub:'send users to a DC'}, {k:'replicate', label:'Replicate across DCs', sub:'keep data in sync'}]. Scenarios (7): (1) users get randomly logged out right after a second web server is added → stateless. (2) autoscaling removes servers at night and the users on them lose their carts → stateless. (3) a legacy app keeps carts in process memory, the rewrite is next quarter, and you need a fix tonight → sticky (honest stopgap; plan the move to a shared store). (4) European users see an extra 150 ms because everything is in the US, and you've opened an EU data center → geodns. (5) US-East goes dark: how do its users reach US-West? → geodns (route 100% to the healthy DC). (6) after failover, East users land in West and their recent orders are missing → replicate. (7) web servers must be killable at any time for spot-instance savings → stateless.",
+   "check": "Boss cleared."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "The interview answer, in your words",
+   "teaches": "Explaining statelessness and multi-region design.",
+   "interaction": "Q.drill. Prompt: 'We're going global, and our web servers keep sessions in memory. What changes?' Model answer (paraphrased): 'First, make the web tier stateless. In-memory sessions force every request back to the same server, and sticky sessions only paper over it: adding, removing or losing servers gets painful. I'd move sessions into a shared store, say a NoSQL or Redis cluster, so any server can handle any request, and then autoscale the web tier on load. Then add a second data center. GeoDNS sends each user to the nearest one, and if a DC goes down, all traffic shifts to the healthy one, so each DC needs headroom. The hard parts are keeping data in sync across DCs, usually with asynchronous replication (which means a failover can lose a little recent data), and testing and deploying the same version everywhere with automated tooling.' Checks: ['Stateful problem + why sticky sessions are a workaround', 'Shared session store → any server, autoscaling', 'GeoDNS nearest-DC routing + full failover', 'Data sync across DCs (async replication, lag)', 'Test/deploy consistency via automation'].",
+   "check": "Self-grade at least 4 of 5 checks."
+  }
+ ],
+ "caveats": [
+  "Another stateless option the book doesn't cover: signed tokens such as JWTs carry the session in the client, so no lookup is needed, but they're hard to revoke before they expire.",
+  "Sticky sessions aren't always wrong: long-lived connections (WebSockets) are naturally pinned, and the World 12 chat design uses stateful servers on purpose.",
+  "DNS answers are cached by resolvers and clients for their TTL, so GeoDNS failover isn't instant; some users keep hitting the dead DC until their cached answer expires. Anycast and global load balancers fail over faster.",
+  "Active-active multi-region with writes in both regions brings write conflicts; many teams run active-passive for the database or partition users by home region.",
+  "The book's percentages (x% / 100−x%) and DC names are illustrative."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo: Scale From Zero To Millions Of Users",
+   "url": "https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users"
+  },
+  {
+   "label": "AWS docs: Configure sticky sessions for your Classic Load Balancer",
+   "url": "https://docs.aws.amazon.com/elasticloadbalancing/latest/classic/elb-sticky-sessions.html"
+  },
+  {
+   "label": "Netflix Tech Blog: Active-Active for Multi-Regional Resiliency",
+   "url": "https://netflixtechblog.com/active-active-for-multi-regional-resiliency-c47719f6685b"
+  },
+  {
+   "label": "The Twelve-Factor App: Processes (stateless processes)",
+   "url": "https://12factor.net/processes"
+  }
+ ],
+ "id": "0104",
+ "file": "0104-scale-stateless-and-data-centers.html",
+ "world": 1,
+ "chapterTitle": "Scale From Zero to Millions of Users",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users",
+ "cheatsheet": "../reference/ch01-scaling-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "0101",
+   "n": "1.1",
+   "t": "One Box Wonder",
+   "d": "A single server, splitting off the database, SQL vs NoSQL, scaling up vs out, and the load balancer"
+  },
+  {
+   "id": "0102",
+   "n": "1.2",
+   "t": "Copy the Ledger",
+   "d": "Master/slave database replication: who takes writes, who takes reads, and what happens when one dies"
+  },
+  {
+   "id": "0103",
+   "n": "1.3",
+   "t": "Hot Memory, Near Edge",
+   "d": "A cache tier for hot data and a CDN for static files: how they work and what can go wrong"
+  },
+  {
+   "id": "0104",
+   "n": "1.4",
+   "t": "Forget Me, Find Me Anywhere",
+   "d": "Make the web tier stateless, autoscale it, then spread the system across data centers with GeoDNS"
+  },
+  {
+   "id": "0105",
+   "n": "1.5",
+   "t": "Queues, Gauges & Shards",
+   "d": "Message queues to decouple work, logging/metrics/automation, and sharding the database"
+  },
+  {
+   "id": "0106",
+   "n": "BOSS",
+   "t": "Zero to Millions, Live",
+   "d": "Mock interview: scale a startup's app from one server to millions of users as the traffic climbs"
+  }
+ ]
+}

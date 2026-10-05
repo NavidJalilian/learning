@@ -1,0 +1,123 @@
+{
+ "n": "11.4",
+ "slug": "news-feed-retrieval-and-caches",
+ "t": "Hydrate the Feed",
+ "d": "Inside reading: turn post IDs into a full feed, serve media from a CDN, and the five cache layers",
+ "boss": false,
+ "badge": "💧 Badge: Hydration Master",
+ "winTitle": "The feed is fully hydrated",
+ "goal": "Your win today: you can walk the six steps from GET /v1/me/feed to a rendered feed, explain hydration (IDs -> full user and post objects), say why media goes through a CDN, and name the five cache layers and what each holds.",
+ "bookSections": "Step 3, Newsfeed retrieval deep dive (figure 11-7, steps 1-6; CDN for media); Cache architecture (figure 11-8: News Feed, Content, Social Graph, Action, Counters)",
+ "stages": [
+  {
+   "title": "Six steps to your screen",
+   "sub": "The retrieval path",
+   "teaches": "Book's retrieval flow (figure 11-7, our wording): (1) the client sends GET /v1/me/feed; (2) the load balancer spreads requests across web servers; (3) web servers call the news feed service; (4) the news feed service gets the user's list of post IDs from the news feed cache; (5) since a feed is more than IDs (it needs the author's name and profile picture, the post text, images...), the service fetches full user and post objects from the user cache and post cache, falling back to the user DB and post DB on misses; (6) the fully hydrated feed goes back to the client as JSON for rendering. Media (images, videos) is stored in a CDN and the client loads it from there directly.",
+   "interaction": "Tap-in-order with the figure. Diagram with arrows hidden: client, CDN, load balancer, web servers, news feed service, news feed cache, user cache + user DB, post cache + post DB. Six step cards shuffled; tapping them in the right order reveals each arrow with an animated request. At the end, a 'which arrow is not a step from 1-6?' question: the learner taps the client -> CDN arrow (media is fetched separately, straight from the CDN).",
+   "check": "Order correct (wrong taps cost hearts); CDN arrow identified. Quiz (1 Q): 'Which step turns IDs into something you can render?' (step 5, fetching user and post objects: hydration)."
+  },
+  {
+   "title": "Just add water",
+   "sub": "Hydration, live",
+   "teaches": "Hydrate = take bare IDs and fill in the full objects. The feed cache returns e.g. [(p981, u7), (p977, u3), (p960, u7), (p955, u12), (p950, u3)]. The service batch-fetches the distinct users (u3, u7, u12) from the user cache and the posts from the post cache (one multi-get each, not one call per item), fills misses from the DBs, and builds JSON like {author: {name, avatar_url}, text, media_urls, created_at}. Because posts are stored once and referenced by ID, an edit or a deletion shows up everywhere immediately: a deleted post just fails to hydrate and is dropped. This is also the natural place to re-check permissions that changed after fanout.",
+   "interaction": "Hands-on sim. Left: the 5-ID list as dry grey cards. Middle: a 'user cache' box with u3 and u7 present and u12 missing; a 'post cache' box with 4 of the 5 posts present (p955 missing); p977 is marked 'deleted'. Buttons: 'Fetch users' and 'Fetch posts'. Before pressing, the learner predicts 'how many cache round trips if you batch?' (2 / 5 / 10). Correct: 2 (one multi-get per cache) plus DB fallbacks for misses. Pressing animates: u12 and p955 miss -> amber arrows to user DB / post DB, then they're written back into the cache. p977 comes back 'deleted' and its card dissolves. Right: the cards fill with avatar, name, text and a thumbnail placeholder; a JSON panel shows the output for the 4 surviving posts. A toggle 'No batching' replays it with 10 separate calls and a longer latency bar.",
+   "check": "Prediction made; learner answers 'How many posts reach the client?' (4). Quiz (2 Qs): 'What's hydration?' (filling IDs with full user and post objects); 'Why does storing IDs make deletes easy?' (the post is stored once; a deleted ID simply doesn't hydrate)."
+  },
+  {
+   "title": "Media by express",
+   "sub": "Why images and videos go to a CDN",
+   "teaches": "Images and videos are big and read far more often than written. The book stores media in a CDN (content delivery network: servers spread around the world that cache static files close to users) for fast retrieval. The JSON feed carries only media URLs; the client downloads the bytes from the nearest CDN edge, not from our web servers. This keeps the feed API small and fast and moves the heaviest bandwidth off our servers.",
+   "interaction": "Sort-and-race. 8 data items appear: 'post text', 'author display name', 'profile picture image', '30-second video', 'like count', 'photo in a post', 'post ID list', 'thumbnail'. The learner drags each into 'CDN' or 'Caches/DB behind the API'. Correct CDN: profile picture image, video, photo, thumbnail. Then a race: a user in Sydney loads a feed with 3 photos; lane A fetches photos from the origin in Virginia (illustrative ~200 ms round trip each), lane B from a Sydney CDN edge (~10-20 ms). Before running, the learner predicts which lane's feed finishes first and by roughly how much (choices x2 / x5 / x10+).",
+   "check": "Items sorted correctly (wrong drops cost hearts); race predicted. Quiz (1 Q): 'What does the feed JSON contain for a photo?' (its CDN URL, not the bytes)."
+  },
+  {
+   "title": "Five layers of cache",
+   "sub": "The cache architecture",
+   "teaches": "The book splits the cache into five layers (figure 11-8): News Feed: the IDs of each user's feed. Content: every post's data, with popular posts kept in a hot cache. Social Graph: who follows whom (follower and following lists). Action: whether a user liked, replied to or otherwise acted on a post. Counters: counts of likes, replies, followers, following and so on. Why split: each layer has a different shape and access pattern (lists vs objects vs sets vs numbers), different sizes and different eviction needs, so each can be sized, scaled and evicted independently. Counters are updated constantly, so keep them separate from rarely-changing post content.",
+   "interaction": "Sort-into-layers. Five stacked trays labelled with the layer names. 12 cards to drop in: 'u7's list of post IDs' (News Feed), 'text and media URLs of post p981' (Content), 'a viral post read 1M times an hour' (Content: hot cache), 'the accounts Bo follows' (Social Graph), 'the accounts that follow Bo' (Social Graph), 'did Bo like p981?' (Action), 'did Bo reply to p955?' (Action), 'number of likes on p981' (Counters), 'number of replies on p955' (Counters), 'Bo's follower count' (Counters), 'Cleo's new post, 2 minutes old, going viral' (Content: hot), 'the last 500 post IDs for Ana' (News Feed). Then a hydration replay: a single feed card is built while each layer it touches lights up (News Feed -> Content -> Social Graph for author -> Action for 'you liked this' heart -> Counters for '1.2K likes').",
+   "check": "All 12 cards placed (wrong drops cost hearts). Quiz (2 Qs): 'Which layer answers \"show a filled heart on this post\"?' (Action); 'Why keep counters in their own layer?' (they change constantly and have a different shape; update them without rewriting post content)."
+  },
+  {
+   "title": "Boss: The Slow-Feed Sleuth",
+   "sub": "Symptom -> layer",
+   "teaches": "Diagnosing retrieval problems by naming the component to fix.",
+   "interaction": "Q.boss; each scenario carries its own 3 choices (one right, two plausible). (1) 'Feeds load slowly in Australia, mostly waiting on images' -> CDN (vs 'more web servers', 'bigger news feed cache'). (2) 'A viral post's cache node melts at 1M reads/min' -> Hot cache in the Content layer, replicate the hot item (vs 'shard the counters', 'fan out again'). (3) 'Each feed load makes 50 separate calls to the user cache' -> Batch (multi-get) during hydration (vs 'store full users in the feed cache', 'add a CDN'). (4) 'A deleted post still shows up in feeds' -> Drop posts that fail to hydrate / are marked deleted (vs 'refan out every feed', 'clear the CDN'). (5) 'The like count write storm slows down reading post text' -> Separate Counters layer (vs 'store likes inside the post object', 'move counters to the CDN'). (6) 'The heart icon shows wrong for which posts you liked' -> Action layer (vs Social Graph, Counters).",
+   "check": "Boss HP to zero."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "From GET to glass",
+   "teaches": "A tight walkthrough of the retrieval deep dive.",
+   "interaction": "Q.drill. Prompt: 'Interviewer: what happens when Bo opens the app?' Model answer (paraphrase): 'The client calls GET /v1/me/feed; the load balancer sends it to a web server, which calls the news feed service. That service reads Bo's precomputed list of post IDs and author IDs from the news feed cache, then hydrates: it batch-fetches the authors from the user cache and the posts from the post cache, falling back to the DBs on a miss and dropping anything deleted or no longer visible. It adds per-user bits like whether Bo liked each post and the like counts, and returns JSON. Images and video aren't in the JSON; it carries CDN URLs and the client loads media from the nearest edge. The cache is split into five layers: news feed, content with a hot tier, social graph, actions and counters, so each can scale separately.' Checks: 'Read IDs from the news feed cache', 'Hydrated from user + post caches with DB fallback', 'Mentioned batching or deleted/permission filtering', 'Media via CDN URLs', 'Named the five cache layers'.",
+   "check": "Drill completed and self-graded."
+  }
+ ],
+ "caveats": [
+  "The book's GET returns 'the feed'; real systems page through it with a cursor, hydrating only one page (e.g. 20 posts) per request.",
+  "Hydration from several caches is a fan-out on its own; real systems batch (multi-get) and run lookups in parallel to keep tail latency down.",
+  "Facebook's real feed doesn't store a precomputed list per user the way the book draws it: its Multifeed system gathered recent actions from friends at read time from sharded in-memory 'leaf' servers, then ranked them. The book's design is closer to Twitter's timeline cache.",
+  "Like counters at huge scale are often approximate or updated asynchronously, because millions of increments on one key create the same hotkey problem as celebrity fanout."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo: Design a News Feed System (book chapter 11, online version)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-news-feed-system"
+  },
+  {
+   "label": "Cloudflare Learning: What is a CDN?",
+   "url": "https://www.cloudflare.com/learning/cdn/what-is-a-cdn/"
+  },
+  {
+   "label": "Engineering at Meta: Serving Facebook Multifeed: efficiency, performance gains through redesign (2015)",
+   "url": "https://engineering.fb.com/2015/03/10/production-engineering/serving-facebook-multifeed-efficiency-performance-gains-through-redesign/"
+  },
+  {
+   "label": "Bronson et al., TAO: Facebook's Distributed Data Store for the Social Graph (USENIX ATC 2013)",
+   "url": "https://www.usenix.org/conference/atc13/technical-sessions/presentation/bronson"
+  },
+  {
+   "label": "Redis docs: Sorted sets",
+   "url": "https://redis.io/docs/latest/develop/data-types/sorted-sets/"
+  }
+ ],
+ "id": "1104",
+ "file": "1104-news-feed-retrieval-and-caches.html",
+ "world": 11,
+ "chapterTitle": "Design a News Feed System",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-news-feed-system",
+ "cheatsheet": "../reference/ch11-news-feed-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "1101",
+   "n": "11.1",
+   "t": "Two Rivers",
+   "d": "Scope a news feed, design its two APIs, and sketch the publish and read flows"
+  },
+  {
+   "id": "1102",
+   "n": "11.2",
+   "t": "Push, Pull, or Both",
+   "d": "Fanout on write vs fanout on read, the celebrity problem, and the hybrid fix"
+  },
+  {
+   "id": "1103",
+   "n": "11.3",
+   "t": "The Fanout Factory",
+   "d": "Inside publishing: auth and rate limits, the five-step fanout workflow, and an ID-only feed cache"
+  },
+  {
+   "id": "1104",
+   "n": "11.4",
+   "t": "Hydrate the Feed",
+   "d": "Inside reading: turn post IDs into a full feed, serve media from a CDN, and the five cache layers"
+  },
+  {
+   "id": "1105",
+   "n": "BOSS",
+   "t": "Design It Live: News Feed",
+   "d": "Full mock interview: design a news feed for 10 million daily users"
+  }
+ ]
+}

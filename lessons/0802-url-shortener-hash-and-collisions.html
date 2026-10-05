@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Seven Characters or Bust</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: s1 schema builder, s2 length ladder, s3 hash lab, s4 collision grid + flowchart, s5 Bloom bits */
+:root { --keep: #fff1b8; --keep-ink: #5a4300; --on-fill: #ffffff; --need: #d4423f; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --keep: #4a3d0c; --keep-ink: #ffe58a; --on-fill: #0e0f1d; --need: #ff6d6a; }
+}
+:root[data-theme="dark"] { --keep: #4a3d0c; --keep-ink: #ffe58a; --on-fill: #0e0f1d; --need: #ff6d6a; }
+
+.stage-h { flex-wrap: wrap; }
+.stage-h > div:nth-child(2) { flex: 1; min-width: 170px; }
+.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.inp { font: 15px var(--mono); padding: 9px 11px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); min-width: 0; min-height: 42px; }
+.inp.wide { width: 100%; }
+.bignum { font-family: var(--mono); font-weight: 700; }
+.bignum.good { color: var(--good); }
+.bignum.bad { color: var(--bad); }
+.status { margin-top: 10px; font-size: 14px; font-weight: 600; min-height: 22px; }
+.status.good { color: var(--good); }
+.status.warn { color: var(--warn); }
+.status.bad { color: var(--bad); }
+
+/* stage 1: schema builder */
+.schema { display: grid; grid-template-columns: 1fr 1.3fr; gap: 14px; padding: 14px; }
+@media (max-width: 640px) { .schema { grid-template-columns: 1fr; } }
+.tray, .tbl { border-radius: 14px; min-height: 120px; }
+.tray { border: 2px dashed var(--line); padding: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; }
+.tray-h, .tbl-h { width: 100%; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.col-chip { font: 600 14px var(--mono); padding: 8px 12px; min-height: 40px; border-radius: 10px; border: 2px solid var(--line); background: var(--panel); color: var(--ink); touch-action: manipulation; }
+.col-chip:hover { border-color: var(--accent); }
+.col-chip.nope { border-color: var(--bad); background: var(--bad-soft); animation: shake .4s; }
+.tbl { border: 2px solid var(--accent); background: var(--panel); overflow: hidden; transition: box-shadow .2s; }
+.tbl.over { box-shadow: 0 0 0 4px var(--accent-soft); }
+.tbl-h { padding: 8px 12px; background: var(--accent-soft); color: var(--accent); display: flex; justify-content: space-between; gap: 8px; }
+.tbl-h code { background: none; padding: 0; font-weight: 700; text-transform: none; letter-spacing: 0; font-size: 14px; }
+.tcol { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; width: 100%; text-align: left; border: 0; border-top: 1px solid var(--line); background: none; padding: 9px 12px; min-height: 42px; animation: rise .3s; }
+.tcol:hover { background: var(--bg-2); }
+.tcol .nm { font: 700 14px var(--mono); }
+.tcol .ty { font: 12px var(--mono); color: var(--muted); }
+.tag2 { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
+.tag2.core { background: var(--good-soft); color: var(--good); }
+.tag2.extra { background: var(--warn-soft); color: var(--warn); }
+.tbl .empty { padding: 18px 12px; font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); }
+.preview { display: none; margin-top: 14px; }
+.preview.on { display: block; animation: rise .4s; }
+.tscroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+table.rows { border-collapse: collapse; width: 100%; font: 12.5px var(--mono); }
+table.rows th, table.rows td { padding: 7px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+table.rows th { background: var(--bg-2); font-size: 12px; }
+table.rows td.url { word-break: break-all; min-width: 150px; }
+table.rows tr.book td { background: var(--accent-soft); }
+
+/* stage 2: length ladder */
+.guess { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.guess .opt { min-width: 52px; text-align: center; font: 700 18px var(--mono); padding: 8px 12px; }
+.ladder svg { max-width: 560px; margin: 0 auto; }
+.ladder .axis { stroke: var(--line); stroke-width: 1; }
+.ladder .tickt { fill: var(--muted); font: 600 11px var(--mono); text-anchor: end; }
+.ladder .bar { transition: y .5s, height .5s, fill .3s; }
+.ladder .bar.ghost { fill: none; stroke: var(--line); stroke-dasharray: 3 4; }
+.ladder .bar.short { fill: var(--muted); opacity: .55; }
+.ladder .bar.ok { fill: var(--good); }
+.ladder .bar.cur { opacity: 1; stroke: var(--ink); stroke-width: 2; }
+.ladder .bar.cur.short { fill: var(--accent); }
+.ladder .bar.glow { filter: drop-shadow(0 0 8px var(--good)); }
+.ladder .need { stroke: var(--need); stroke-width: 2.5; stroke-dasharray: 7 4; }
+.ladder .needt { fill: var(--need); font: 700 12px var(--font); }
+.ladder .nlab { fill: var(--muted); font: 600 12px var(--mono); text-anchor: middle; }
+.ladder .nlab.cur { fill: var(--ink); font-weight: 700; }
+.ladder .vlab { fill: var(--ink); font: 700 11.5px var(--mono); text-anchor: middle; }
+.slider { padding: 12px 14px 4px; display: grid; gap: 4px; border-top: 1px solid var(--line); background: var(--panel); }
+.slider label { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-weight: 600; font-size: 14px; }
+.slider input { width: 100%; accent-color: var(--accent); height: 30px; }
+.readout { font: 600 14px var(--mono); word-break: break-word; }
+.readout sup { font-size: .7em; }
+
+/* stage 3: hash lab */
+.hrows { display: grid; gap: 8px; padding: 14px; }
+.hrow { display: grid; grid-template-columns: 62px 1fr auto; gap: 10px; align-items: center; border: 1px solid var(--line); border-radius: 12px; padding: 9px 12px; background: var(--panel); }
+.hrow .fn { font-weight: 700; font-size: 14px; }
+.hrow .hv { font: 600 14px var(--mono); word-break: break-all; line-height: 1.5; }
+.hrow .ln { font: 700 12px var(--mono); color: var(--muted); white-space: nowrap; }
+.hv .keep { transition: background .3s, color .3s; border-radius: 4px; }
+.hv .rest { transition: opacity .3s; }
+.hv .snip { display: none; color: var(--bad); padding: 0 2px; }
+.chopped .hv .keep { background: var(--keep); color: var(--keep-ink); padding: 0 2px; }
+.chopped .hv .rest { opacity: .3; text-decoration: line-through; }
+.chopped .hv .snip { display: inline; }
+.pair { margin-top: 14px; display: grid; gap: 8px; }
+.pair .hrow { grid-template-columns: 1fr; gap: 2px; }
+.pair .u { font: 13px var(--mono); color: var(--muted); word-break: break-all; }
+.calc { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+.calc .inp { width: 190px; }
+
+/* stage 4: collision lab */
+.lab4 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 14px; align-items: start; }
+@media (max-width: 680px) { .lab4 { grid-template-columns: 1fr; } }
+.grid4 svg, .flow svg { display: block; width: 100%; height: auto; }
+.grid4 svg { max-width: 320px; margin: 0 auto; }
+.cell rect { fill: var(--bg-2); stroke: var(--line); stroke-width: 1.5; transition: fill .3s, stroke .2s; }
+.cell text { fill: var(--muted); font: 600 14px var(--mono); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.cell.full rect { fill: var(--accent); stroke: var(--accent); }
+.cell.full text { fill: var(--on-fill); }
+.cell.seed rect { fill: color-mix(in srgb, var(--accent) 55%, var(--bg-2)); stroke: transparent; }
+.cell.seed text { fill: var(--on-fill); }
+.cell.try rect { stroke: var(--warn); stroke-width: 4; }
+.cell.hit rect { stroke: var(--bad); stroke-width: 4; fill: var(--bad-soft); }
+.cell.hit text { fill: var(--bad); }
+.cell.ok rect { stroke: var(--good); stroke-width: 4; fill: var(--good); }
+.cell.ok text { fill: var(--on-fill); }
+.hop { stroke: var(--ink); stroke-width: 2.5; fill: none; stroke-dasharray: 5 4; }
+.hophead { fill: var(--ink); }
+.fnode rect { fill: var(--panel); stroke: var(--line); stroke-width: 2; rx: 10; transition: fill .2s, stroke .2s; }
+.fnode text { fill: var(--ink); font: 600 13px var(--font); text-anchor: middle; dominant-baseline: central; }
+.fnode.on rect { fill: var(--accent-soft); stroke: var(--accent); }
+.fnode.on.bad rect { fill: var(--bad-soft); stroke: var(--bad); }
+.fnode.on.good rect { fill: var(--good-soft); stroke: var(--good); }
+.fedge { stroke: var(--muted); stroke-width: 2; fill: none; }
+.fedgeh { fill: var(--muted); }
+.flab { fill: var(--muted); font: 700 11px var(--font); text-anchor: middle; }
+.cur-in { font: 12px var(--mono); color: var(--muted); padding: 6px 2px 0; word-break: break-all; min-height: 24px; }
+.cur-in b { color: var(--warn); }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+@media (max-width: 520px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+.stats div { text-align: center; }
+.stats b { display: block; font: 700 18px var(--mono); }
+.stats span { font-size: 12px; color: var(--muted); }
+.spark { padding: 6px 14px 10px; border-top: 1px solid var(--line); background: var(--panel); }
+.spark .cap { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.spark svg { display: block; width: 100%; height: 70px; }
+.spark .b { fill: var(--accent); }
+.spark .b.hi { fill: var(--warn); }
+.spark .b.vhi { fill: var(--bad); }
+.ctl4 { display: grid; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+.ctl4 .row .btn { font-size: 14px; padding: 8px 12px; }
+.ctl4 .inp { flex: 1; min-width: 160px; font-size: 13px; }
+
+/* stage 5: Bloom bits */
+.bloom svg { max-width: 560px; margin: 0 auto; }
+.bit rect { fill: var(--bg-2); stroke: var(--line); stroke-width: 1.5; transition: fill .3s, stroke .2s; }
+.bit text { fill: var(--muted); font: 700 13px var(--mono); text-anchor: middle; dominant-baseline: central; }
+.bit .ix { font: 600 8.5px var(--mono); fill: var(--muted); }
+.bit.on rect { fill: var(--accent); stroke: var(--accent); }
+.bit.on text.v { fill: var(--on-fill); }
+.bit.lit rect { stroke: var(--ink); stroke-width: 3.5; }
+.bit.lit0 rect { stroke: var(--bad); stroke-width: 3.5; fill: var(--bad-soft); }
+.bit.lit0 text.v { fill: var(--bad); }
+.barrow { stroke: var(--ink); stroke-width: 1.8; opacity: .75; }
+.bcode { fill: var(--ink); font: 700 17px var(--mono); text-anchor: middle; }
+.bpos { fill: var(--muted); font: 600 12px var(--mono); text-anchor: middle; }
+.verdict { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 14px; padding: 6px 12px; border-radius: 99px; }
+.verdict.no { background: var(--good-soft); color: var(--good); }
+.verdict.maybe { background: var(--warn-soft); color: var(--warn); }
+.cands { display: grid; gap: 10px; margin-top: 10px; }
+.cand { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--bg); }
+.cand .top { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; margin-bottom: 8px; }
+.cand .top b { font: 700 17px var(--mono); }
+.cand .top span { font: 13px var(--mono); color: var(--muted); }
+.cand .row .opt { padding: 8px 12px; font-size: 14px; }
+.cand.fp { border-color: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft); }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 8.2 · Design a URL Shortener</div>
+    <h1>Seven Characters or Bust</h1>
+    <p class="lede">You have a napkin full of numbers: 100 million new links a day, 365 billion over ten years. Now give each one a home in a table, decide how long the short code must be, and build a hash-based way to make codes that never clash.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can explain why the short code needs <b>7 base-62 characters</b> (62<sup>7</sup> ≈ 3.5 trillion &gt; 365 billion), how <b>hash + collision resolution</b> works, and why a <b>Bloom filter</b> saves database lookups.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Out of RAM, into a table</h2><div class="sub">Data model</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>In the high-level design, every <code>shortURL → longURL</code> pair sat in one big <b>hash table</b> in memory (a hash table is a lookup structure: give it a key, get the value back fast). That's fine on a whiteboard. In real life it breaks: memory is limited and expensive, and ten years of links is about <b>36.5 TB</b> (365 billion rows × ~100 bytes).<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-url-shortener" target="_blank" rel="noopener">[1]</a></p>
+      <p>The book's fix is plain: store the pairs in a <b>relational database</b> (rows and columns, like a spreadsheet with rules). Build the table. Tap a column to add it (or drag it in on desktop). Tap a column in the table to take it out again.</p>
+      <div class="sim">
+        <div class="schema">
+          <div class="tray" id="tray" aria-label="Available columns"><div class="tray-h">Columns you could add</div></div>
+          <div class="tbl" id="tbl" aria-label="The url table"><div class="tbl-h"><span>table</span><code>url</code></div><div id="tcols"></div></div>
+        </div>
+        <div class="sim-bar"><span class="status" id="s1status" style="margin:0">Pick the columns a redirect really needs.</span></div>
+      </div>
+      <ul class="checklist" id="s1goals">
+        <li data-g="core"><span class="box">✓</span><span>Get the book's three columns into the <code>url</code> table</span></li>
+      </ul>
+      <div class="preview" id="s1prev">
+        <p class="small muted" style="margin:14px 0 8px">Here's what three rows of your table look like. The highlighted one is the book's own example.</p>
+        <div class="tscroll"><table class="rows" id="s1rows"></table></div>
+        <div class="callout tip"><b>Look closely at the first row.</b> The id <code>2009215674938</code> and the code <code>zn9edcu</code> are not random partners: one turns into the other. That's Quest 8.3, <i>Count in Base 62</i>. Today we make codes the other way, by hashing the long URL.</div>
+      </div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>How many characters?</h2><div class="sub">Find the smallest n with 62<sup>n</sup> ≥ 365 billion</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The short code (the book calls it the <b>hashValue</b>) uses three groups of characters: digits <code>0-9</code>, lower case <code>a-z</code> and upper case <code>A-Z</code>. That's 10 + 26 + 26 = <b>62</b> possible characters per position.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-url-shortener" target="_blank" rel="noopener">[1]</a></p>
+      <p>Each extra character multiplies the number of possible codes by 62. So n characters give 62<sup>n</sup> codes. We need room for <b>365 billion</b> URLs (100 million a day for ten years). The question is the smallest n where 62<sup>n</sup> ≥ 365 billion.</p>
+      <div class="challenge boxed" id="s2guessBox">
+        <div class="step">Predict first</div>
+        <h3>How many characters does the short code need?</h3>
+        <div class="guess" id="s2guess"></div>
+        <div class="status" id="s2guessMsg"></div>
+      </div>
+      <div class="sim ladder">
+        <svg id="ladder" viewBox="0 0 400 236" role="img" aria-label="Bar chart on a log scale: number of codes for each length n against the 365 billion we need"></svg>
+        <div class="slider">
+          <label for="nSlider"><span>Code length: <span class="bignum" id="nVal">n = 1</span></span>
+            <span class="seg" id="alphaSeg" role="group" aria-label="Alphabet"><button data-a="62" class="on">62 chars</button><button data-a="36">36 chars</button></span></label>
+          <input type="range" id="nSlider" min="1" max="8" step="1" value="1" aria-label="Code length n" disabled>
+        </div>
+        <div class="sim-bar"><span class="readout" id="readout">Lock in a guess above to start climbing.</span><span class="bignum" id="verdict"></span></div>
+      </div>
+      <ul class="checklist" id="s2goals">
+        <li data-g="cross"><span class="box">✓</span><span>Climb the ladder to the first n that clears 365 billion</span></li>
+        <li data-g="alpha"><span class="box">✓</span><span>Switch to <b>36 chars</b> (no upper case) and check n = 7 and n = 8</span></li>
+      </ul>
+      <div class="callout" id="s2note" style="display:none"><b>The book's answer: n = 7.</b> 62<sup>6</sup> is about 56.8 billion, which is short. 62<sup>7</sup> is about 3.5 trillion, so 7 characters cover 365 billion with roughly 9.6× to spare. Drop the upper-case letters and you're down to 36 characters, and 36<sup>7</sup> ≈ 78 billion isn't enough. You'd need 8 characters. A bigger alphabet buys a shorter code.</div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Hash it and chop it</h2><div class="sub">CRC32, MD5, SHA-1, then the first 7 characters</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Now we need a way to turn a long URL into a 7-character code. The book's first idea: run it through a well-known <b>hash function</b>. A hash function turns any input into a fixed-length fingerprint, and the same input always gives the same output. The book tries three: <b>CRC32</b>, <b>MD5</b> and <b>SHA-1</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-url-shortener" target="_blank" rel="noopener">[1]</a></p>
+      <p>The hashes below are computed live in your browser. Change the URL and watch them change.</p>
+      <div class="sim" id="hashLab">
+        <div style="padding:14px 14px 0"><label class="small muted" for="hIn">Long URL</label><input class="inp wide" id="hIn" value="https://en.wikipedia.org/wiki/Systems_design" spellcheck="false" autocomplete="off"></div>
+        <div class="hrows" id="hrows"></div>
+        <div class="sim-bar"><button class="btn" id="chopBtn">✂ Chop each hash at 7</button><span class="small muted" id="chopMsg">Even the shortest hash is longer than 7.</span></div>
+      </div>
+      <ul class="checklist" id="s3goals">
+        <li data-g="chop"><span class="box">✓</span><span>Chop the hashes down to their first 7 characters</span></li>
+        <li data-g="other"><span class="box">✓</span><span>Hash a different URL of your own</span></li>
+        <li data-g="hex"><span class="box">✓</span><span>Solve the spot-the-bug below</span></li>
+      </ul>
+      <div class="callout warn" id="pairBox" style="display:none"><b>Chopping throws information away.</b> A full MD5 hash has 32 characters. Keep 7 and many different URLs end up sharing the same 7. Here are two real ones, hashed live:
+        <div class="pair" id="pair"></div>
+        Two different pages, one short code. That's a <b>collision</b>, and a short link that could open either page is useless.</div>
+      <div class="challenge boxed" id="hexBox">
+        <div class="step">Spot the bug</div>
+        <h3>These hashes are written in <b>hexadecimal</b>: only <code>0-9</code> and <code>a-f</code>, so 16 symbols. How many different 7-character codes can "first 7 hex characters" produce?</h3>
+        <div class="calc"><input class="inp" id="hexIn" inputmode="numeric" placeholder="e.g. 1,234,567" aria-label="Number of 7-character hex codes" autocomplete="off"><button class="btn primary" id="hexBtn">Check</button></div>
+        <div class="explain" id="hexEx"></div>
+      </div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Collision lab</h2><div class="sub">Append a predefined string and try again</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Collisions will happen, so the book adds a loop around the hash:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-url-shortener" target="_blank" rel="noopener">[1]</a></p>
+      <ol class="small">
+        <li>Hash the long URL and keep the first 7 characters.</li>
+        <li>Look that code up in the database.</li>
+        <li>Taken? Append a <b>predefined string</b> (a fixed piece of text the system always uses) to the input and hash again.</li>
+        <li>Repeat until the code is free, then save the row.</li>
+      </ol>
+      <p>To make collisions easy to see, this lab shrinks the problem: codes are just <b>2 characters</b> from a 6-letter alphabet (a to f), so there are only 6 × 6 = <b>36 slots</b>. Eight links are already stored. Add more and watch the loop work. Every "is it taken?" check is one <b>database query</b>.</p>
+      <div class="sim">
+        <div class="lab4">
+          <div class="grid4"><svg id="grid4" viewBox="0 0 300 300" role="img" aria-label="36 possible short codes; filled squares are already taken"></svg><div class="small muted" style="text-align:center;margin-top:4px">Faded squares: the 8 links stored before you arrived.</div></div>
+          <div class="flow">
+            <svg id="flow4" viewBox="0 0 300 200" role="img" aria-label="Flowchart: hash, check the database, append the predefined string on a clash, save when free"></svg>
+            <div class="cur-in" id="curIn">input: —</div>
+          </div>
+        </div>
+        <div class="stats">
+          <div><b id="stStored">8/36</b><span>codes taken</span></div>
+          <div><b id="stQ">0</b><span>DB lookups</span></div>
+          <div><b id="stAvg">—</b><span>avg lookups / insert</span></div>
+          <div><b id="stLast">—</b><span>last insert</span></div>
+        </div>
+        <div class="spark"><div class="cap">Lookups per insert, in order</div><svg id="spark4" viewBox="0 0 400 70" preserveAspectRatio="none" aria-hidden="true"></svg></div>
+        <div class="ctl4">
+          <div class="row"><button class="btn primary" id="addNext">➕ Add next URL</button><span class="small muted mono" id="nextUrl" style="word-break:break-all"></span></div>
+          <form class="row" id="ownForm" autocomplete="off"><input class="inp" id="ownIn" placeholder="or type any long URL" aria-label="Your own long URL" spellcheck="false"><button class="btn" type="submit">Add mine</button></form>
+          <div class="row"><button class="btn" id="bulkBtn" disabled>⚡ Bulk add 20</button><button class="btn" id="lab4Reset">↻ Reset lab</button></div>
+        </div>
+        <div class="simlog" id="log4"><div>8 links already stored. The salt string is <b>#x</b>.</div></div>
+      </div>
+      <div class="challenge boxed" id="s4predict"></div>
+      <ul class="checklist" id="s4goals">
+        <li data-g="clash"><span class="box">✓</span><span>Add a URL that collides and watch the retry find a free slot</span></li>
+        <li data-g="bulk"><span class="box">✓</span><span>Make your prediction, then bulk-add 20 URLs</span></li>
+      </ul>
+      <div class="callout" id="s4note" style="display:none"><b>Why it climbs.</b> If a fraction f of the slots is taken, each try lands on a free slot with chance (1 − f). On average that takes <b>1 / (1 − f)</b> tries. At 50% full that's 2 lookups. At 80% full it's 1 / 0.2 = <b>5</b>. At 90% it's 10. The salted input is only fed to the hash. The row still stores the original long URL.</div>
+      <div class="callout warn"><b>Honest caveat: it's not rare at real scale either.</b> The real space is 62<sup>7</sup> ≈ 3.5 trillion. By year ten, 365 billion of those are used, about 10%. So roughly <b>1 new URL in 10</b> collides on its first try. This is the <a href="https://en.wikipedia.org/wiki/Birthday_problem" target="_blank" rel="noopener">birthday effect</a>:<a class="cite" href="https://en.wikipedia.org/wiki/Birthday_problem" target="_blank" rel="noopener">[3]</a> clashes show up far sooner than intuition says. Retries are routine, so every extra lookup matters.</div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>The Bloom bouncer</h2><div class="sub">Skip the DB when the answer is "definitely not"</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Every collision check costs a database query. The book's fix is a <b>Bloom filter</b>: a small, space-saving structure that tests whether something is in a set.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-url-shortener" target="_blank" rel="noopener">[1]</a><a class="cite" href="https://en.wikipedia.org/wiki/Bloom_filter" target="_blank" rel="noopener">[2]</a> You met one in Quest 6.7. It's a row of bits (0 or 1) plus a few hash functions:</p>
+      <ul class="small">
+        <li><b>Add</b> a code: each of 3 hash functions picks a bit, and all 3 bits are set to 1.</li>
+        <li><b>Check</b> a code: look at its 3 bits. Any bit is 0? Then it was <b>definitely never added</b>. All are 1? It's <b>probably</b> there, but other codes might have set those bits.</li>
+      </ul>
+      <p>Think of it as a bouncer in front of the database. "Definitely new" means skip the query and use the code. "Maybe taken" means ask the database. This filter has 32 bits and 3 hash functions.</p>
+      <div class="sim bloom">
+        <svg id="bloom" viewBox="0 0 400 160" role="img" aria-label="Bloom filter: 32 bits in two rows of 16"></svg>
+        <div class="sim-bar"><span id="bVerdict" class="small muted">Add the 8 codes that are already in use.</span><span class="small">DB queries saved: <span class="bignum good" id="bSaved">0</span></span></div>
+        <div class="ctl4">
+          <div class="row"><button class="btn primary" id="bAdd">➕ Add next code</button><span class="small muted" id="bAddInfo"></span></div>
+          <form class="row" id="bForm" autocomplete="off"><input class="inp" id="bIn" placeholder="any 7-char code" maxlength="10" aria-label="Code to check" spellcheck="false"><button class="btn" type="submit">🔍 Check it</button></form>
+        </div>
+        <div class="simlog" id="log5"><div>32 bits, all 0. Nothing added yet.</div></div>
+      </div>
+      <div class="challenge boxed" id="fpBox" style="display:none">
+        <div class="step">Hunt the false positive</div>
+        <h3>None of these 4 codes has ever been added. For each one, read its 3 bit positions on the row above and predict what the filter will say.</h3>
+        <div class="cands" id="cands"></div>
+      </div>
+      <ul class="checklist" id="s5goals">
+        <li data-g="fill"><span class="box">✓</span><span>Add all 8 codes that are in use</span></li>
+        <li data-g="fp"><span class="box">✓</span><span>Find the false positive: a new code the filter calls "maybe taken"</span></li>
+      </ul>
+      <div class="callout tip"><b>Why it fits this design.</b> A basic Bloom filter can add items but can't remove them (clearing a bit could erase other codes too). That's fine here: our short URLs are never deleted. And the filter never gives a <b>false negative</b>: if a code was added, its bits are 1 forever, so the filter can never wrongly say "definitely not".</div>
+      <div class="callout warn"><b>Honest caveat: small, but not a toy.</b> At a 1% false-positive rate a Bloom filter needs about 9.6 bits per item.<a class="cite" href="https://en.wikipedia.org/wiki/Bloom_filter" target="_blank" rel="noopener">[2]</a> For 365 billion codes that's around <b>440 GB</b>. Far smaller than the 36.5 TB of data, but it still has to be split across machines (or kept per database partition) and rebuilt when a server restarts.</div>
+      <div id="s5quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Boss: The Collision Hydra</h2><div class="sub">Every head you cut grows two more</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Six problems from a team running a hash-based shortener. For each one, pick the fix that goes at the root: <b>change the code length</b>, <b>append &amp; rehash</b>, or put a <b>Bloom filter</b> in front of the database.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 7 ================= -->
+  <section class="stage" data-stage="7" id="s7">
+    <div class="stage-h"><div class="num">7</div><div><h2>Say it like a senior</h2><div class="sub">Length plus collisions in 45 seconds</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> Hashing needs a collision loop because two URLs can land on one code. The book's other approach gives every URL a unique number first and writes that number in base 62, so collisions can't happen at all. That's Quest 8.3, <i>Count in Base 62</i>.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-url-shortener" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 8: "Design a URL Shortener"</a>, Step 3, the sections "Data model" and "Hash function" (hash value length, and hash + collision resolution). Then skim the <a href="https://en.wikipedia.org/wiki/Bloom_filter" target="_blank" rel="noopener">Bloom filter</a> article the book points to, especially "Probability of false positives". If you like origins, Burton Bloom's 1970 paper is short.<a class="cite" href="https://dl.acm.org/doi/10.1145/362686.362692" target="_blank" rel="noopener">[4]</a>
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <ul style="margin:0;padding-left:20px">
+        <li><b>The hex shortcut quietly shrinks the space.</b> "First 7 characters" of a hex hash gives only 16<sup>7</sup> ≈ 268 million codes, under 3 days of traffic. A real design takes enough hash <i>bits</i> (about 42 for 7 base-62 characters) and writes them in base 62.</li>
+        <li><b>Same URL, same code.</b> Hashing is deterministic, so two users who shorten the same URL get the same short link and share its click stats. Handy for de-duplication, but salt with the user ID if links must be private to each user.</li>
+        <li><b>Close the race in the database.</b> Two servers can both ask "is <code>abc1234</code> free?", both hear "yes", and both insert. A <b>unique index</b> on <code>shortURL</code> makes the database reject the second insert, and that writer simply retries.</li>
+        <li><b>Birthday math.</b> With 10% of a space used, about 1 in 10 new inserts clashes on the first try.<a class="cite" href="https://en.wikipedia.org/wiki/Birthday_problem" target="_blank" rel="noopener">[3]</a> Plan for retries as normal traffic.</li>
+      </ul>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"why not just use 8 characters and skip the collision check?"</i> or <i>"how would you shard a 440 GB Bloom filter?"</i>
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 8 "Design a URL Shortener", Step 3: data model, hash value length, hash + collision resolution (ByteByteGo).</li>
+        <li>"Bloom filter", Wikipedia (the reference the book cites).</li>
+        <li>"Birthday problem", Wikipedia.</li>
+        <li>Burton H. Bloom, "Space/Time Trade-offs in Hash Coding with Allowable Errors", <i>Communications of the ACM</i>, 1970.</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0802',
+  winTitle: 'Seven characters, zero clashes!',
+  badge: '🧬 Badge: Collision Wrangler',
+  cheatsheet: '../reference/ch08-url-shortener-cheatsheet.html',
+});
+const { sleep, shuffle, esc } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+const BOOK_URL = 'https://en.wikipedia.org/wiki/Systems_design';
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done');
+  if (xp) Q.addXP(xp, li);
+  return true;
+}
+// Two quizzes in a row, then clear the stage.
+function quizChain(mount, qs, n) {
+  let i = 0;
+  const next = () => {
+    if (i >= qs.length) return setTimeout(() => Q.clearStage(n), 900);
+    const q = qs[i++];
+    Q.quiz(mount, { ...q, onDone: () => setTimeout(next, 500) });
+  };
+  next();
+}
+const wait = ms => Q.reduced ? sleep(0) : sleep(ms);
+const commas = n => Math.round(n).toLocaleString('en-US');
+function human(v) {
+  if (v >= 1e12) return (v / 1e12).toFixed(v >= 1e14 ? 0 : 2) + 'T';
+  if (v >= 1e9) return (v / 1e9).toFixed(v >= 1e11 ? 0 : 1) + 'B';
+  if (v >= 1e6) return (v / 1e6).toFixed(v >= 1e8 ? 0 : 1) + 'M';
+  if (v >= 1e3) return (v / 1e3).toFixed(v >= 1e5 ? 0 : 1) + 'K';
+  return String(v);
+}
+function humanWords(v) {
+  if (v >= 1e12) return (v / 1e12).toFixed(2) + ' trillion';
+  if (v >= 1e9) return (v / 1e9).toFixed(1) + ' billion';
+  if (v >= 1e6) return (v / 1e6).toFixed(1) + ' million';
+  if (v >= 1e3) return (v / 1e3).toFixed(1) + ' thousand';
+  return String(v);
+}
+// FNV-1a + murmur finaliser: small, well-mixed 32-bit hash (for the Bloom filter's 3 hash functions)
+function hash32(str) {
+  let h = 0x811c9dc5;
+  for (const c of str) { h ^= c.codePointAt(0); h = Math.imul(h, 0x01000193); }
+  h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16;
+  return h >>> 0;
+}
+
+/* ---------- real CRC32, MD5 and SHA-1 (no crypto.subtle: it's missing on plain-http pages) ---------- */
+const utf8 = s => Array.from(new TextEncoder().encode(s));
+const hex8 = n => (n >>> 0).toString(16).padStart(8, '0');
+const CRC_T = (() => { const t = []; for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(s) { let c = ~0; for (const b of utf8(s)) c = CRC_T[(c ^ b) & 255] ^ (c >>> 8); return hex8(~c); }
+function mdPad(bytes, bigEndian) {
+  const len = bytes.length, m = bytes.slice(); m.push(0x80);
+  while (m.length % 64 !== 56) m.push(0);
+  const bits = len * 8, lo = bits >>> 0, hi = Math.floor(bits / 4294967296);
+  const L = [lo & 255, lo >>> 8 & 255, lo >>> 16 & 255, lo >>> 24 & 255, hi & 255, hi >>> 8 & 255, hi >>> 16 & 255, hi >>> 24 & 255];
+  return m.concat(bigEndian ? L.reverse() : L);
+}
+const MD5_S = [7, 12, 17, 22, 5, 9, 14, 20, 4, 11, 16, 23, 6, 10, 15, 21];
+const MD5_K = Array.from({ length: 64 }, (_, i) => Math.floor(Math.abs(Math.sin(i + 1)) * 4294967296) >>> 0);
+function md5(s) {
+  const m = mdPad(utf8(s), false);
+  let a0 = 0x67452301, b0 = 0xefcdab89, c0 = 0x98badcfe, d0 = 0x10325476;
+  for (let o = 0; o < m.length; o += 64) {
+    const M = []; for (let i = 0; i < 16; i++) M[i] = m[o + i * 4] | m[o + i * 4 + 1] << 8 | m[o + i * 4 + 2] << 16 | m[o + i * 4 + 3] << 24;
+    let A = a0, B = b0, C = c0, D = d0;
+    for (let i = 0; i < 64; i++) {
+      let F, g; const r = i >> 4;
+      if (r === 0) { F = (B & C) | (~B & D); g = i; } else if (r === 1) { F = (D & B) | (~D & C); g = (5 * i + 1) % 16; }
+      else if (r === 2) { F = B ^ C ^ D; g = (3 * i + 5) % 16; } else { F = C ^ (B | ~D); g = (7 * i) % 16; }
+      const sh = MD5_S[r * 4 + (i & 3)], x = (A + F + MD5_K[i] + M[g]) | 0;
+      A = D; D = C; C = B; B = (B + ((x << sh) | (x >>> (32 - sh)))) | 0;
+    }
+    a0 = (a0 + A) | 0; b0 = (b0 + B) | 0; c0 = (c0 + C) | 0; d0 = (d0 + D) | 0;
+  }
+  return [a0, b0, c0, d0].map(w => hex8(((w & 255) << 24) | ((w >>> 8 & 255) << 16) | ((w >>> 16 & 255) << 8) | (w >>> 24 & 255))).join('');
+}
+function sha1(s) {
+  const m = mdPad(utf8(s), true);
+  let h = [0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476, 0xC3D2E1F0];
+  const rol = (x, n) => (x << n) | (x >>> (32 - n));
+  for (let o = 0; o < m.length; o += 64) {
+    const w = []; for (let i = 0; i < 16; i++) w[i] = m[o + i * 4] << 24 | m[o + i * 4 + 1] << 16 | m[o + i * 4 + 2] << 8 | m[o + i * 4 + 3];
+    for (let i = 16; i < 80; i++) w[i] = rol(w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16], 1);
+    let [a, b, c, d, e] = h;
+    for (let i = 0; i < 80; i++) {
+      const f = i < 20 ? (b & c) | (~b & d) : i < 40 ? b ^ c ^ d : i < 60 ? (b & c) | (b & d) | (c & d) : b ^ c ^ d;
+      const k = i < 20 ? 0x5A827999 : i < 40 ? 0x6ED9EBA1 : i < 60 ? 0x8F1BBCDC : 0xCA62C1D6;
+      const t = (rol(a, 5) + f + e + k + w[i]) | 0; e = d; d = c; c = rol(b, 30); b = a; a = t;
+    }
+    h = h.map((x, i) => (x + [a, b, c, d, e][i]) | 0);
+  }
+  return h.map(hex8).join('');
+}
+
+/* ================= STAGE 1: data model ================= */
+Q.onStage(1, () => {
+  const COLS = {
+    id: { k: 'core', ty: 'bigint PK', msg: '✓ id: the primary key, a unique number per row.' },
+    shortURL: { k: 'core', ty: 'varchar(7)', msg: '✓ shortURL: the 7-character code. Every redirect looks rows up by it.' },
+    longURL: { k: 'core', ty: 'varchar', msg: '✓ longURL: where the short link sends people.' },
+    createdAt: { k: 'extra', ty: 'timestamp', msg: '🟡 createdAt: nice to have (expiry, analytics). Mention it in the wrap-up, not now.' },
+    userId: { k: 'extra', ty: 'bigint', msg: '🟡 userId: only matters if users log in, which is out of scope. Wrap-up material.' },
+    clickCount: { k: 'extra', ty: 'int', msg: '🟡 clickCount: nice for analytics, but it means a write on every redirect. Mention it later.' },
+    password: { k: 'no', msg: '✗ password doesn’t belong here. This service has no logins, and real passwords live hashed in a users table, never next to a URL.' },
+  };
+  const ORDER = ['longURL', 'createdAt', 'password', 'id', 'clickCount', 'shortURL', 'userId'];
+  const SAMPLE = {
+    id: ['2009215674938', '2009215674939', '2009215674940'],
+    shortURL: ['zn9edcu', 'zn9edcv', 'zn9edcw'],
+    longURL: [BOOK_URL, 'https://example.com/article/17777', 'https://example.com/docs/getting-started'],
+    createdAt: ['2026-10-05 09:14', '2026-10-05 09:14', '2026-10-05 09:15'],
+    userId: ['NULL', 'NULL', 'NULL'],
+    clickCount: ['42', '0', '7'],
+  };
+  const placed = [], goals = new Set();
+  let penalised = false, quizzed = false;
+  const tray = $('#tray'), tcols = $('#tcols'), tbl = $('#tbl'), st = $('#s1status');
+  function say(msg, cls) { st.textContent = msg; st.className = 'status ' + (cls || ''); st.style.margin = '0'; }
+  function render() {
+    $$('.col-chip', tray).forEach(c => c.remove());
+    ORDER.filter(n => !placed.includes(n)).forEach(n => {
+      const b = document.createElement('button');
+      b.className = 'col-chip'; b.textContent = n; b.draggable = true; b.dataset.n = n;
+      b.setAttribute('aria-label', `Add column ${n} to the url table`);
+      b.onclick = () => place(n, b);
+      b.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', n); e.dataTransfer.effectAllowed = 'move'; });
+      tray.appendChild(b);
+    });
+    tcols.innerHTML = placed.length ? '' : '<div class="empty">Empty table. Add the columns a redirect needs.</div>';
+    placed.forEach(n => {
+      const c = COLS[n], b = document.createElement('button');
+      b.className = 'tcol'; b.setAttribute('aria-label', `Remove column ${n}`);
+      b.innerHTML = `<span class="nm">${n}</span><span class="ty">${c.ty}</span><span class="tag2 ${c.k}">${c.k === 'core' ? 'core' : 'nice to have'}</span>`;
+      b.onclick = () => { placed.splice(placed.indexOf(n), 1); say(`Took ${n} back out.`); render(); };
+      tcols.appendChild(b);
+    });
+    renderPreview();
+  }
+  function renderPreview() {
+    const core = ['id', 'shortURL', 'longURL'].every(n => placed.includes(n));
+    $('#s1prev').classList.toggle('on', core);
+    if (!core) return;
+    const cols = ['id', 'shortURL', 'longURL', ...placed.filter(n => COLS[n].k === 'extra')];
+    $('#s1rows').innerHTML = `<tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr>` +
+      [0, 1, 2].map(r => `<tr class="${r === 0 ? 'book' : ''}">${cols.map(c => `<td class="${c === 'longURL' ? 'url' : ''}">${esc(SAMPLE[c][r])}</td>`).join('')}</tr>`).join('');
+  }
+  function place(n, el) {
+    if (placed.includes(n)) return;
+    const c = COLS[n];
+    if (c.k === 'no') {
+      say(c.msg, 'bad');
+      if (el) { el.classList.remove('nope'); void el.offsetWidth; el.classList.add('nope'); }
+      if (!penalised) { penalised = true; Q.loseHeart(el || tray); }
+      return;
+    }
+    placed.push(n); render();
+    say(c.msg, c.k === 'core' ? 'good' : 'warn');
+    if (['id', 'shortURL', 'longURL'].every(x => placed.includes(x)) && checkGoal('#s1goals', 'core', goals, 15)) {
+      say('✓ That’s the book’s table: id, shortURL, longURL. Anything extra is a wrap-up topic.', 'good');
+      startQuiz();
+    }
+  }
+  tbl.addEventListener('dragover', e => { e.preventDefault(); tbl.classList.add('over'); });
+  tbl.addEventListener('dragleave', () => tbl.classList.remove('over'));
+  tbl.addEventListener('drop', e => { e.preventDefault(); tbl.classList.remove('over'); const n = e.dataTransfer.getData('text/plain'); if (COLS[n]) place(n, $(`.col-chip[data-n="${n}"]`, tray)); });
+  function startQuiz() {
+    if (quizzed) return; quizzed = true;
+    setTimeout(() => quizChain($('#s1quiz'), [
+      { q: 'Why move the mapping out of an in-memory hash table and into a database?',
+        options: ['Memory is limited and costly, and we need ~36.5 TB', 'Hash tables can’t hold strings longer than 7 chars', 'Databases answer reads faster than RAM ever can'],
+        correct: 0,
+        good: 'Ten years of links is about 36.5 TB. Holding that in RAM is very expensive, and a single machine doesn’t have it. A database keeps it on disk and still answers lookups fast with an index.',
+        bad: 'RAM is faster than a database, and hash tables hold strings of any length. The problem is size and cost: about 36.5 TB over ten years is too much to keep in memory.' },
+      { q: 'A user opens <code>tinyurl.com/zn9edcu</code>. The redirect looks up the row by which column?',
+        options: ['shortURL, so it needs an index', 'longURL, the column users care about', 'id, because it’s the primary key'],
+        correct: 0,
+        good: 'The request only carries the short code, so that’s the lookup key. An <b>index</b> (a sorted lookup structure the database keeps on a column) turns that lookup from a full scan into a quick jump.',
+        bad: 'The request only carries the short code <code>zn9edcu</code>, so the redirect searches by <code>shortURL</code>. Without an <b>index</b> on it, the database would scan billions of rows.' },
+    ], 1), 500);
+  }
+  render();
+});
+
+/* ================= STAGE 2: how many characters ================= */
+Q.onStage(2, () => {
+  const NEED = 365e9, goals = new Set(), seen36 = new Set();
+  let guess = null, base = 62, n = 1, resolved = false, quizzed = false;
+  const svg = $('#ladder'), slider = $('#nSlider');
+  const X0 = 52, X1 = 392, Y0 = 204, YT = 18, MAXLOG = 15, slot = (X1 - X0) / 8, bw = 30;
+  const yOf = v => Y0 - (Math.log10(Math.max(1, v)) / MAXLOG) * (Y0 - YT);
+  // static axes
+  S('line', { class: 'axis', x1: X0, y1: Y0, x2: X1, y2: Y0 }, svg);
+  [[3, '1K'], [6, '1M'], [9, '1B'], [12, '1T']].forEach(([p, t]) => {
+    const y = Y0 - (p / MAXLOG) * (Y0 - YT);
+    S('line', { class: 'axis', x1: X0, y1: y, x2: X1, y2: y, 'stroke-dasharray': '2 4' }, svg);
+    S('text', { class: 'tickt', x: X0 - 6, y: y + 4 }, svg).textContent = t;
+  });
+  const barsG = S('g', {}, svg), labG = S('g', {}, svg);
+  const yNeed = yOf(NEED);
+  S('line', { class: 'need', x1: X0, y1: yNeed, x2: X1, y2: yNeed }, svg);
+  S('text', { class: 'needt', x: X0 + 4, y: yNeed - 6 }, svg).textContent = '365 billion needed';
+  const bars = [], nlabs = [], vlabs = [];
+  for (let i = 1; i <= 8; i++) {
+    const x = X0 + slot * (i - 1) + (slot - bw) / 2;
+    bars[i] = S('rect', { class: 'bar ghost', x, y: Y0 - 4, width: bw, height: 4, rx: 4 }, barsG);
+    nlabs[i] = S('text', { class: 'nlab', x: x + bw / 2, y: 224 }, labG); nlabs[i].textContent = 'n=' + i;
+    vlabs[i] = S('text', { class: 'vlab', x: x + bw / 2, y: Y0 - 8 }, labG);
+  }
+  function draw() {
+    for (let i = 1; i <= 8; i++) {
+      const v = Math.pow(base, i), shown = guess !== null && i <= n, y = yOf(v);
+      const b = bars[i];
+      if (shown) { b.setAttribute('y', y); b.setAttribute('height', Y0 - y); }
+      else { b.setAttribute('y', Y0 - 4); b.setAttribute('height', 4); }
+      b.setAttribute('class', 'bar ' + (!shown ? 'ghost' : v >= NEED ? 'ok' : 'short') + (shown && i === n ? ' cur' : '') + (shown && i === n && v >= NEED && Math.pow(base, i - 1) < NEED ? ' glow' : ''));
+      nlabs[i].setAttribute('class', 'nlab' + (i === n && guess !== null ? ' cur' : ''));
+      vlabs[i].textContent = shown && i === n ? human(v) : '';
+      vlabs[i].setAttribute('y', Math.max(14, y - 8));
+    }
+    $('#nVal').textContent = `n = ${n}`;
+    if (guess === null) return;
+    const v = Math.pow(base, n), ok = v >= NEED;
+    $('#readout').innerHTML = `${base}<sup>${n}</sup> = ${commas(v)} <span class="muted">(≈ ${humanWords(v)})</span>`;
+    const vd = $('#verdict');
+    if (ok) { vd.textContent = `✓ enough · ${(v / NEED).toFixed(1)}× headroom`; vd.className = 'bignum good'; }
+    else { vd.textContent = `✗ short · ${(v / NEED * 100).toPrecision(2)}% of 365B`; vd.className = 'bignum bad'; }
+  }
+  function onMove() {
+    draw();
+    if (base === 62 && n === 8 && !resolved) $('#verdict').textContent = '✓ enough, but is it the smallest? Step down.';
+    if (base === 62 && n === 7 && !resolved) resolveGuess();
+    if (base === 36 && (n === 7 || n === 8)) {
+      seen36.add(n);
+      if (seen36.size === 2 && checkGoal('#s2goals', 'alpha', goals, 10)) {
+        logAlpha();
+        maybeQuiz();
+      }
+    }
+  }
+  function logAlpha() { const m = $('#s2guessMsg'); m.innerHTML = 'Without upper case: 36<sup>7</sup> ≈ 78.4 billion (short), 36<sup>8</sup> ≈ 2.82 trillion. Same job, one more character.'; m.className = 'status warn'; }
+  function resolveGuess() {
+    resolved = true;
+    checkGoal('#s2goals', 'cross', goals);
+    const m = $('#s2guessMsg'), ok = guess === 7;
+    if (ok) { m.innerHTML = '✓ Called it. 62<sup>6</sup> ≈ 56.8 billion falls short. 62<sup>7</sup> ≈ 3.52 trillion is the first to clear the line.'; m.className = 'status good'; Q.addXP(15, $('#s2guess')); }
+    else { m.innerHTML = `✗ You said ${guess}. The first length to clear 365 billion is <b>7</b>: 62<sup>6</sup> ≈ 56.8 billion is short, 62<sup>7</sup> ≈ 3.52 trillion is enough.`; m.className = 'status bad'; Q.loseHeart($('#s2guess')); }
+    $('#s2note').style.display = 'block';
+    maybeQuiz();
+  }
+  $('#s2guess').innerHTML = [5, 6, 7, 8, 9].map(g => `<button class="opt" data-g="${g}" aria-label="Guess ${g} characters">${g}</button>`).join('');
+  $$('#s2guess .opt').forEach(b => b.onclick = () => {
+    if (guess !== null) return;
+    guess = +b.dataset.g;
+    $$('#s2guess .opt').forEach(x => { x.disabled = true; x.classList.toggle('picked', x === b); });
+    const m = $('#s2guessMsg'); m.textContent = `Locked in: ${guess}. Now drag the slider up and find out.`; m.className = 'status';
+    slider.disabled = false; slider.focus({ preventScroll: true }); draw();
+  });
+  slider.addEventListener('input', () => { n = +slider.value; onMove(); });
+  $$('#alphaSeg button').forEach(b => b.onclick = () => {
+    base = +b.dataset.a;
+    $$('#alphaSeg button').forEach(x => x.classList.toggle('on', x === b));
+    if (guess === null) { draw(); return; }
+    onMove();
+  });
+  function maybeQuiz() {
+    if (quizzed || goals.size < 2) return;
+    quizzed = true;
+    setTimeout(() => quizChain($('#s2quiz'), [
+      { q: 'Roughly how many codes do <b>6</b> base-62 characters give?',
+        options: ['About 56.8 billion: not enough', 'About 3.5 trillion: plenty', 'About 365 billion: just enough'],
+        correct: 0,
+        good: '62<sup>6</sup> = 56,800,235,584. That’s under a sixth of the 365 billion we need, so 6 characters fail and 7 is the answer.',
+        bad: '62<sup>6</sup> = 56,800,235,584, about 56.8 billion. 3.5 trillion is 62<sup>7</sup>. Six characters cover less than a sixth of what we need.' },
+      { q: 'Where does the number 62 come from?',
+        options: ['10 digits + 26 lower + 26 upper', '62 bits in the hash we chop down', 'The URL length limit in browsers'],
+        correct: 0,
+        good: '<code>0-9</code>, <code>a-z</code>, <code>A-Z</code>: 10 + 26 + 26 = 62 characters that are all safe to put in a URL.',
+        bad: 'It’s the alphabet: <code>0-9</code>, <code>a-z</code>, <code>A-Z</code>, so 10 + 26 + 26 = 62 characters per position.' },
+    ], 2), 500);
+  }
+  draw();
+});
+
+/* ================= STAGE 3: hash it and chop it ================= */
+Q.onStage(3, () => {
+  const goals = new Set(), FNS = [['CRC32', crc32], ['MD5', md5], ['SHA-1', sha1]];
+  let chopped = false, hexDone = false, hexMiss = false, quizzed = false;
+  const inp = $('#hIn');
+  function render() {
+    const u = inp.value;
+    $('#hrows').innerHTML = FNS.map(([nm, f]) => {
+      const h = f(u);
+      return `<div class="hrow"><span class="fn">${nm}</span><span class="hv"><span class="keep">${h.slice(0, 7)}</span><span class="snip">✂</span><span class="rest">${h.slice(7)}</span></span><span class="ln">${h.length} chars</span></div>`;
+    }).join('');
+    const t = u.trim();
+    if (t && t !== BOOK_URL && checkGoal('#s3goals', 'other', goals, 10)) maybeQuiz();
+  }
+  inp.addEventListener('input', render);
+  $('#chopBtn').onclick = () => {
+    chopped = !chopped;
+    $('#hashLab').classList.toggle('chopped', chopped);
+    $('#chopBtn').textContent = chopped ? '↩ Show full hashes' : '✂ Chop each hash at 7';
+    if (chopped) {
+      $('#chopMsg').innerHTML = 'Keep the highlighted 7, throw the rest away.';
+      if (checkGoal('#s3goals', 'chop', goals)) {
+        const A = 'https://example.com/article/17777', B = 'https://example.com/article/30491';
+        $('#pair').innerHTML = [A, B].map(u => { const h = md5(u); return `<div class="hrow chopped"><span class="u">${u}</span><span class="hv"><span class="keep">${h.slice(0, 7)}</span><span class="snip">✂</span><span class="rest">${h.slice(7)}</span></span></div>`; }).join('');
+        $('#pairBox').style.display = 'block';
+        maybeQuiz();
+      }
+    } else $('#chopMsg').textContent = 'Even the shortest hash is longer than 7.';
+  };
+  function parseNum(s) {
+    s = String(s).toLowerCase().replace(/[,\s_']/g, '');
+    let m = s.match(/^(\d+(?:\.\d+)?)(?:\^|\*\*)(\d+)$/);
+    if (m) return Math.pow(+m[1], +m[2]);
+    m = s.match(/^(\d+(?:\.\d+)?)(k|thousand|m|mn|million|b|bn|billion)?$/);
+    if (m) { const mult = { k: 1e3, thousand: 1e3, m: 1e6, mn: 1e6, million: 1e6, b: 1e9, bn: 1e9, billion: 1e9 }[m[2]] || 1; return +m[1] * mult; }
+    const x = Number(s); return isFinite(x) ? x : NaN;
+  }
+  function checkHex() {
+    if (hexDone) return;
+    const v = parseNum($('#hexIn').value), ex = $('#hexEx'), T = Math.pow(16, 7);
+    if (!isFinite(v) || v <= 0) { ex.className = 'explain show bad'; ex.innerHTML = 'Type a number, like <code>1234567</code> or <code>16^7</code>.'; return; }
+    if (Math.abs(v - T) / T <= 0.05) {
+      hexDone = true; $('#hexBtn').disabled = true; $('#hexIn').readOnly = true;
+      ex.className = 'explain show good';
+      ex.innerHTML = `<b>Bug found.</b> 16<sup>7</sup> = <b>268,435,456</b>, only about 268 million codes. At 100 million new URLs a day, the whole space is used up in <b>${(T / 1e8).toFixed(1)} days</b>, and collisions pile up long before that. Chopping hex wastes most of each character. The fix: take enough of the hash’s <i>bits</i> (about 42) and write them in base 62, which gives the full 62<sup>7</sup> ≈ 3.5 trillion.`;
+      if (!hexMiss) Q.addXP(15, $('#hexBtn'));
+      checkGoal('#s3goals', 'hex', goals); maybeQuiz();
+    } else {
+      ex.className = 'explain show bad';
+      ex.innerHTML = 'Not quite. Each of the 7 positions has 16 choices, so multiply 16 by itself 7 times (16<sup>7</sup>). Try again.';
+      if (!hexMiss) { hexMiss = true; Q.loseHeart($('#hexBtn')); }
+    }
+  }
+  $('#hexBtn').onclick = checkHex;
+  $('#hexIn').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); checkHex(); } });
+  function maybeQuiz() {
+    if (quizzed || goals.size < 3) return;
+    quizzed = true;
+    setTimeout(() => quizChain($('#s3quiz'), [
+      { q: 'Why does keeping only the first 7 characters of a hash cause collisions?',
+        options: ['Many different hashes share one 7-char prefix', 'Hash functions give random output on each call', 'CRC32 output is shorter than 7 characters'],
+        correct: 0,
+        good: 'There are far more possible URLs than 7-character prefixes, so different inputs must end up on the same prefix. The full hash rarely clashes. The chopped one clashes often.',
+        bad: 'Hashes are deterministic (same input, same output), and CRC32 is 8 characters. The problem is the chop: endless URLs squeezed into a fixed set of 7-character prefixes means some must share.' },
+      { q: 'Your "first 7 hex characters" codes only give 268 million options. What fixes it?',
+        options: ['Write the hash’s bits in base 62 instead', 'Switch from MD5 to SHA-1 for a longer hash', 'Lower-case every URL before hashing it'],
+        correct: 0,
+        good: 'The problem is the 16-symbol alphabet, not the hash. Writing about 42 bits of the hash in base 62 fills all 7 positions with 62 choices each: 3.5 trillion codes. (Using more characters would work too.)',
+        bad: 'SHA-1 is longer, but its first 7 characters are still hex, so still 268 million. The fix is the alphabet: write about 42 bits of the hash in base 62 to reach 62<sup>7</sup> ≈ 3.5 trillion.' },
+    ], 3), 500);
+  }
+  render();
+});
+
+/* ================= STAGE 4: collision lab ================= */
+Q.onStage(4, () => {
+  const AL = 'abcdef', SALT = '#x', CELL = 50;
+  const codeOf = input => { const v = parseInt(md5(input).slice(0, 8), 16) % 36; return AL[v / 6 | 0] + AL[v % 6]; };
+  const idxOf = c => AL.indexOf(c[0]) * 6 + AL.indexOf(c[1]);
+  const SEEDS = ['https://en.wikipedia.org/wiki/Systems_design', 'https://example.com/docs/getting-started', 'https://news.example.org/2026/10/launch', 'https://shop.example.com/cart?id=991', 'https://blog.example.net/post/hello-world', 'https://maps.example.com/?q=lisbon', 'https://example.com/article/17777'];
+  const QUEUE = ['https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'https://github.com/example/repo/issues/42', 'https://example.com/recipes/pancakes', 'https://docs.example.io/api/v2/auth', 'https://example.com/careers/backend', 'https://forum.example.org/t/12345'];
+  const goals = new Set();
+  let db, seedSet, queries, inserts, qi, busy = false, prediction = null, quizzed = false, bulkDone = false, bulkN = 0;
+  const grid = $('#grid4'), flow = $('#flow4');
+  // grid
+  const defs = S('defs', {}, grid);
+  const mk = S('marker', { id: 'ah4', viewBox: '0 0 10 10', refX: 8, refY: 5, markerWidth: 6, markerHeight: 6, orient: 'auto-start-reverse' }, defs);
+  S('path', { d: 'M0 0L10 5L0 10z', class: 'hophead' }, mk);
+  const cells = [];
+  for (let i = 0; i < 36; i++) {
+    const r = i / 6 | 0, c = i % 6, g = S('g', { class: 'cell' }, grid);
+    S('rect', { x: c * CELL + 3, y: r * CELL + 3, width: CELL - 6, height: CELL - 6, rx: 8 }, g);
+    S('text', { x: c * CELL + CELL / 2, y: r * CELL + CELL / 2 }, g).textContent = AL[r] + AL[c];
+    cells.push(g);
+  }
+  const hopG = S('g', {}, grid);
+  const center = i => [(i % 6) * CELL + CELL / 2, (i / 6 | 0) * CELL + CELL / 2];
+  // flowchart
+  const fdefs = S('defs', {}, flow);
+  const fm = S('marker', { id: 'fh4', viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 6, markerHeight: 6, orient: 'auto-start-reverse' }, fdefs);
+  S('path', { d: 'M0 0L10 5L0 10z', class: 'fedgeh' }, fm);
+  const NODES = { hash: [8, 14, 120, 40, '① hash, keep 2'], check: [172, 14, 120, 40, '② taken in DB?'], save: [172, 140, 120, 40, '④ save row'], salt: [8, 140, 120, 40, '③ append "#x"'] };
+  const edge = (d, lab, lx, ly) => { S('path', { class: 'fedge', d, 'marker-end': 'url(#fh4)' }, flow); if (lab) S('text', { class: 'flab', x: lx, y: ly }, flow).textContent = lab; };
+  edge('M128 34H168');
+  edge('M232 54V136', 'no: free', 262, 100);
+  edge('M200 54L104 136', 'yes', 178, 102);
+  edge('M48 140V58', 'retry', 26, 100);
+  const fEl = {};
+  for (const [k, [x, y, w, h, t]] of Object.entries(NODES)) {
+    const g = S('g', { class: 'fnode' }, flow);
+    S('rect', { x, y, width: w, height: h, rx: 10 }, g);
+    S('text', { x: x + w / 2, y: y + h / 2 }, g).textContent = t;
+    fEl[k] = g;
+  }
+  const lit = (k, tone) => { Object.values(fEl).forEach(g => g.setAttribute('class', 'fnode')); if (k) fEl[k].setAttribute('class', 'fnode on' + (tone ? ' ' + tone : '')); };
+
+  function paintCells() {
+    cells.forEach((g, i) => {
+      const c = AL[i / 6 | 0] + AL[i % 6];
+      g.setAttribute('class', 'cell' + (db.has(c) ? (seedSet.has(c) ? ' seed' : ' full') : ''));
+    });
+  }
+  function flashCell(c, cls) { const g = cells[idxOf(c)]; g.classList.remove('try', 'hit', 'ok'); if (cls) g.classList.add(cls); }
+  function hop(a, b) {
+    if (a === b) return;
+    const [x1, y1] = center(idxOf(a)), [x2, y2] = center(idxOf(b));
+    const dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy), k = 16 / L;
+    const p = S('path', { class: 'hop', d: `M${x1 + dx * k} ${y1 + dy * k}L${x2 - dx * k} ${y2 - dy * k}`, 'marker-end': 'url(#ah4)' }, hopG);
+    setTimeout(() => p.remove(), Q.reduced ? 1500 : 2200);
+  }
+  function stats() {
+    $('#stStored').textContent = `${db.size}/36`;
+    $('#stQ').textContent = queries;
+    const tot = inserts.reduce((s, x) => s + x.q, 0);
+    $('#stAvg').textContent = inserts.length ? (tot / inserts.length).toFixed(1) : '—';
+    $('#stLast').textContent = inserts.length ? inserts[inserts.length - 1].q : '—';
+    const sp = $('#spark4'); sp.innerHTML = '';
+    const w = 400 / 30;
+    inserts.slice(-30).forEach((x, i) => {
+      const h = Math.min(66, x.q * 6);
+      S('rect', { class: 'b' + (x.q >= 8 ? ' vhi' : x.q >= 4 ? ' hi' : ''), x: i * w + 1, y: 70 - h, width: w - 2, height: h }, sp);
+    });
+    $('#nextUrl').textContent = QUEUE[qi] ? QUEUE[qi] : 'queue empty: type your own or bulk-add';
+    $('#addNext').disabled = busy || !QUEUE[qi] || db.size >= 34;
+    $('#bulkBtn').disabled = busy || prediction === null || db.size >= 33;
+  }
+  function silentInsert(url) { let s = url, c = codeOf(s); while (db.has(c)) { s += SALT; c = codeOf(s); } db.set(c, url); return c; }
+  function reset() {
+    db = new Map(); queries = 0; inserts = []; qi = 0; bulkN = 0;
+    SEEDS.forEach(silentInsert);
+    // make sure the first queued URL clashes on its first try, so the loop is visible
+    const c0 = codeOf(QUEUE[0]);
+    if (!db.has(c0)) { for (let i = 0; i < 5000; i++) { const u = 'https://example.com/p/' + i; if (codeOf(u) === c0) { db.set(c0, u); break; } } }
+    while (db.size < 8) silentInsert('https://example.com/seed/' + db.size);
+    seedSet = new Set(db.keys());
+    hopG.innerHTML = ''; lit(null); paintCells(); stats();
+    $('#curIn').innerHTML = 'input: —';
+  }
+  async function insert(url, ms) {
+    let input = url, tries = 0, prev = null;
+    const fillBefore = db.size / 36;
+    while (true) {
+      tries++;
+      if (tries > 80) { logTo('log4', `gave up on ${esc(url)} after 80 tries`, 'e'); break; }
+      const c = codeOf(input);
+      $('#curIn').innerHTML = `input: ${esc(url)}${tries > 1 ? `<b>${SALT.repeat(tries - 1)}</b>` : ''} → <b>${c}</b>`;
+      lit('hash'); if (prev) hop(prev, c); flashCell(c, 'try'); await wait(ms);
+      lit('check'); queries++; stats(); await wait(ms);
+      if (db.has(c)) {
+        flashCell(c, 'hit'); lit('check', 'bad');
+        if (ms >= 200) logTo('log4', `${c} is taken → append "${SALT}" and hash again`, 'w');
+        await wait(ms);
+        lit('salt'); await wait(ms * .7);
+        flashCell(c, null); input += SALT; prev = c;
+      } else {
+        db.set(c, url); flashCell(c, 'ok'); lit('save', 'good');
+        await wait(ms);
+        flashCell(c, null); paintCells();
+        break;
+      }
+    }
+    inserts.push({ q: tries, f: fillBefore });
+    if (ms >= 200 || tries > 1) logTo('log4', `${esc(url.replace(/^https?:\/\//, '').slice(0, 34))} → saved after <b>${tries}</b> lookup${tries > 1 ? 's' : ''}`, tries > 1 ? 'g' : '');
+    stats();
+    return tries;
+  }
+  async function addOne(url) {
+    if (busy || db.size >= 34) { if (db.size >= 34) Q.toast('table nearly full: reset', $('#addNext'), 'practice'); return; }
+    busy = true; stats();
+    const t = await insert(url, 450);
+    busy = false; lit(null); stats();
+    if (t > 1 && checkGoal('#s4goals', 'clash', goals, 10)) maybeQuiz();
+  }
+  $('#addNext').onclick = () => { if (QUEUE[qi]) addOne(QUEUE[qi++]); };
+  $('#ownForm').onsubmit = e => { e.preventDefault(); const v = $('#ownIn').value.trim(); if (v) { $('#ownIn').value = ''; addOne(v.slice(0, 300)); } };
+  $('#bulkBtn').onclick = async () => {
+    if (busy || prediction === null) return;
+    busy = true; stats();
+    logTo('log4', '⚡ bulk add: 20 URLs, fast');
+    for (let i = 0; i < 20 && db.size < 33; i++) await insert(`https://example.com/item/${bulkN++}`, 70);
+    busy = false; lit(null); stats();
+    revealPrediction();
+  };
+  $('#lab4Reset').onclick = () => { if (!busy) { reset(); logTo('log4', '↻ back to 8 stored links'); } };
+
+  // prediction (predict, then watch)
+  const PRED = ['About 1 lookup', 'About 2 lookups', 'About 5 lookups'];
+  function renderPredict() {
+    const box = $('#s4predict');
+    box.innerHTML = `<div class="step">Predict, then watch</div><h3>Before you bulk-add: once the grid is about <b>80% full</b>, how many lookups will an insert take on average?</h3><div class="opts"></div><div class="explain"></div>`;
+    const opts = $('.opts', box);
+    shuffle(PRED.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = () => {
+        if (prediction !== null) return;
+        prediction = i; $$('.opt', opts).forEach(x => { x.disabled = true; }); b.classList.add('picked');
+        const ex = $('.explain', box); ex.className = 'explain show'; ex.innerHTML = 'Locked in. Now press <b>⚡ Bulk add 20</b> and watch the bars.';
+        stats();
+      };
+      opts.appendChild(b);
+    });
+  }
+  function revealPrediction() {
+    const box = $('#s4predict'), ex = $('.explain', box);
+    const band = inserts.filter(x => x.f >= 0.7 && x.f <= 0.92), use = band.length ? band : inserts.slice(-5);
+    const avg = use.reduce((s, x) => s + x.q, 0) / Math.max(1, use.length);
+    const fill = Math.round(db.size / 36 * 100);
+    $('#s4note').style.display = 'block';
+    if (bulkDone) { ex.className = 'explain show'; ex.innerHTML = `This run: inserts made while the grid was 70–90% full averaged <b>${avg.toFixed(1)}</b> lookups. The grid is now ${fill}% full.`; return; }
+    bulkDone = true;
+    const ok = prediction === 2;
+    $(`.opt[data-i="2"]`, box).classList.add('right');
+    if (!ok) $(`.opt[data-i="${prediction}"]`, box).classList.add('wrong');
+    ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+    ex.innerHTML = `${ok ? '<b>Called it.</b>' : '<b>Surprise!</b>'} This run: inserts made while the grid was 70–90% full averaged <b>${avg.toFixed(1)}</b> lookups (small samples are noisy). The math says <b>1 / (1 − 0.8) = 5</b>. The emptier the table, the cheaper the insert. Every one of those lookups is a real database query.`;
+    ok ? Q.addXP(15, box) : Q.loseHeart(box);
+    checkGoal('#s4goals', 'bulk', goals);
+    maybeQuiz();
+  }
+  function maybeQuiz() {
+    if (quizzed || goals.size < 2) return;
+    quizzed = true;
+    setTimeout(() => quizChain($('#s4quiz'), [
+      { q: 'In the book’s loop, what does appending the predefined string do?',
+        options: ['Changes the input, so the hash comes out different', 'Marks the old row as deleted so it can be reused', 'Makes the stored long URL unique in the table'],
+        correct: 0,
+        good: 'Same input, same hash, so retrying the same input would hit the same taken code forever. Adding the fixed string gives the hash a new input and a new code. The row still stores the original long URL.',
+        bad: 'Nothing is deleted and the stored URL doesn’t change. The point is the hash: same input means same output, so the system tweaks the input to get a different code.' },
+      { q: 'What is the hidden cost of hash + collision resolution?',
+        options: ['A DB lookup per try, more as the table fills', 'The hash must be recomputed on every redirect', 'Collisions corrupt rows that are already stored'],
+        correct: 0,
+        good: 'Every "is this code taken?" check is a database query. When the table is fuller, more tries clash and inserts get slower. That cost is what the Bloom filter in the next stage attacks.',
+        bad: 'Redirects just look up the stored code, and stored rows are never touched. The cost is on the write path: each try is a database query, and fuller tables mean more tries.' },
+    ], 4), 500);
+  }
+  reset(); renderPredict(); stats();
+});
+
+/* ================= STAGE 5: the Bloom bouncer ================= */
+Q.onStage(5, () => {
+  const M = 32, K = 3;
+  const ADD = ['zn9edcu', 'a7Kq2Lm', 'Xp03rTe', '9bWc4Hs', 'Lm8nQ2z', 'r5TgY7a', 'Qe1uJ6k', 'w2DfV8p'];
+  const pos = code => [1, 2, 3].map(i => hash32(`h${i}:${code}`) % M);
+  const goals = new Set();
+  let bits = Array(M).fill(0), added = [], saved = 0, busy = false, quizzed = false, checkedN = 0;
+  const svg = $('#bloom');
+  const CW = 22, GAP = 2, X0 = (400 - 16 * (CW + GAP) + GAP) / 2, ROWY = [62, 112];
+  const cellXY = i => [X0 + (i % 16) * (CW + GAP), ROWY[i / 16 | 0]];
+  const codeT = S('text', { class: 'bcode', x: 200, y: 22 }, svg), posT = S('text', { class: 'bpos', x: 200, y: 40 }, svg);
+  const arrG = S('g', {}, svg);
+  const bEls = [];
+  for (let i = 0; i < M; i++) {
+    const [x, y] = cellXY(i), g = S('g', { class: 'bit' }, svg);
+    S('rect', { x, y, width: CW, height: 28, rx: 5 }, g);
+    S('text', { class: 'v', x: x + CW / 2, y: y + 14 }, g).textContent = '0';
+    S('text', { class: 'ix', x: x + CW / 2, y: y + 38 }, g).textContent = i;
+    bEls.push(g);
+  }
+  function paint(lit, lit0) {
+    bEls.forEach((g, i) => {
+      g.setAttribute('class', 'bit' + (bits[i] ? ' on' : '') + (lit && lit.includes(i) ? (bits[i] ? ' lit' : ' lit0') : ''));
+      $('.v', g).textContent = bits[i];
+    });
+  }
+  function arrows(ps) {
+    arrG.innerHTML = '';
+    ps.forEach(i => { const [x, y] = cellXY(i); S('line', { class: 'barrow', x1: 200, y1: 46, x2: x + CW / 2, y2: y }, arrG); });
+  }
+  const fmtPos = ps => `bits ${ps.join(' · ')}`;
+  async function doAdd(code) {
+    const ps = pos(code);
+    codeT.textContent = `add ${code}`; posT.textContent = fmtPos(ps);
+    arrows(ps); paint(ps); await wait(500);
+    ps.forEach(i => bits[i] = 1); added.push(code); paint(ps); await wait(500);
+    logTo('log5', `+ ${code} → set bits ${ps.join(', ')}`);
+  }
+  // returns 'no' or 'maybe'
+  async function doCheck(code) {
+    const ps = pos(code);
+    codeT.textContent = `check ${code}`; posT.textContent = fmtPos(ps);
+    arrows(ps); paint(ps); await wait(600);
+    const r = ps.every(i => bits[i]) ? 'maybe' : 'no';
+    const v = $('#bVerdict');
+    v.className = 'verdict ' + r;
+    v.textContent = r === 'no' ? '✓ Definitely new: skip the DB' : '⚠ Maybe taken: ask the DB';
+    if (r === 'no') { saved++; $('#bSaved').textContent = saved; }
+    return r;
+  }
+  function addInfo() {
+    $('#bAddInfo').textContent = added.length < ADD.length ? `next: ${ADD[added.length]} (${added.length}/${ADD.length} added)` : `all ${ADD.length} added · ${bits.filter(Boolean).length} of 32 bits set`;
+    $('#bAdd').disabled = busy || added.length >= ADD.length;
+  }
+  $('#bAdd').onclick = async () => {
+    if (busy || added.length >= ADD.length) return;
+    busy = true; addInfo();
+    await doAdd(ADD[added.length]);
+    busy = false; addInfo();
+    if (added.length === ADD.length && checkGoal('#s5goals', 'fill', goals)) startHunt();
+  };
+  $('#bForm').onsubmit = async e => {
+    e.preventDefault();
+    const c = $('#bIn').value.trim().slice(0, 10); if (!c || busy) return;
+    busy = true; addInfo();
+    const r = await doCheck(c), inSet = added.includes(c);
+    logTo('log5', `? ${esc(c)} → ${r === 'no' ? 'definitely new' : 'maybe taken'}${r === 'maybe' ? (inSet ? ' (it really was added)' : ' (false positive: never added!)') : ''}`, r === 'no' ? 'g' : 'w');
+    busy = false; addInfo();
+  };
+  // candidates: 4 never-added codes, exactly one of which is a false positive once all 8 are in
+  function makeCands() {
+    const final = Array(M).fill(0); ADD.forEach(c => pos(c).forEach(i => final[i] = 1));
+    const A62 = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    let seed = 20261005, fp = null; const neg = [];
+    const rnd = () => (seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 4294967296;
+    for (let t = 0; t < 20000 && (fp === null || neg.length < 3); t++) {
+      let c = ''; for (let j = 0; j < 7; j++) c += A62[rnd() * 62 | 0];
+      if (ADD.includes(c)) continue;
+      const isFp = pos(c).every(i => final[i]);
+      if (isFp && fp === null) fp = c; else if (!isFp && neg.length < 3) neg.push(c);
+    }
+    return [neg[0], neg[1], fp, neg[2]].map(c => ({ c, fp: c === fp }));
+  }
+  const CANDS = makeCands();
+  function startHunt() {
+    $('#fpBox').style.display = 'block';
+    checkedN = 0;
+    $('#cands').innerHTML = CANDS.map((x, k) => `<div class="cand" data-k="${k}"><div class="top"><b>${x.c}</b><span>${fmtPos(pos(x.c))}</span></div><div class="row"><button class="opt" data-p="no">Definitely new</button><button class="opt" data-p="maybe">Maybe taken</button></div><div class="explain"></div></div>`).join('');
+    $$('#cands .cand').forEach(el => {
+      const x = CANDS[+el.dataset.k];
+      $$('.opt', el).forEach(b => b.onclick = async () => {
+        if (busy) return; busy = true;
+        $$('.opt', el).forEach(o => o.disabled = true); b.classList.add('picked');
+        const r = await doCheck(x.c);
+        const ok = b.dataset.p === r;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-p="${r}"]`, el).classList.add('right');
+        const ex = $('.explain', el); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        const zeros = pos(x.c).filter(i => !bits[i]);
+        if (x.fp) {
+          el.classList.add('fp');
+          ex.innerHTML = `<b>False positive!</b> Nobody ever added <code>${x.c}</code>, but other codes happened to set all 3 of its bits. The filter says "maybe", so we ask the database, which says "free". One wasted query, never a wrong answer.`;
+          logTo('log5', `? ${x.c} → maybe taken, but it was never added: a false positive`, 'w');
+          checkGoal('#s5goals', 'fp', goals);
+        } else {
+          ex.innerHTML = `Bit ${zeros.join(' and ')} ${zeros.length > 1 ? 'are' : 'is'} 0, so <code>${x.c}</code> was definitely never added. No database query needed.`;
+          logTo('log5', `? ${x.c} → definitely new, DB skipped`, 'g');
+        }
+        ok ? Q.addXP(5, b) : Q.loseHeart(b);
+        busy = false;
+        if (++checkedN === CANDS.length) maybeQuiz();
+      });
+    });
+  }
+  function maybeQuiz() {
+    if (quizzed || goals.size < 2) return;
+    quizzed = true;
+    setTimeout(() => quizChain($('#s5quiz'), [
+      { q: 'Can a Bloom filter wrongly say a code is "definitely not" in the set?',
+        options: ['No: an added code’s bits stay 1 forever', 'Yes: about as often as it says "maybe"', 'Only once more than half the bits are set'],
+        correct: 0,
+        good: 'Adding a code sets its bits to 1, and nothing ever sets them back. So a code that was added always finds all its bits at 1. No false negatives, ever. Only false positives.',
+        bad: 'Bits only go from 0 to 1. A code that was added always finds all its bits at 1, so "definitely not" is always true. The only mistake a Bloom filter makes is a false positive.' },
+      { q: 'The filter says <b>"maybe taken"</b> for a new code. What does the write path do?',
+        options: ['Ask the database to be sure', 'Treat it as taken and rehash', 'Use it: maybe means probably free'],
+        correct: 0,
+        good: '"Maybe" can be a false positive, so the database has the final say. If it says the code is free, use it. "Definitely not" is the only answer that skips the query.',
+        bad: '"Maybe" can be a false positive, like the one you just found. Rehashing would waste a good code, and using it blindly could clash. The database gets the final say.' },
+    ], 5), 500);
+  }
+  paint(); addInfo();
+});
+
+/* ================= STAGE 6: boss ================= */
+Q.onStage(6, () => Q.boss($('#boss'), {
+  name: '🐍 Collision Hydra',
+  xp: 15,
+  choices: [
+    { k: 'len', label: 'Change code length', sub: 'size the space' },
+    { k: 'retry', label: 'Append & rehash', sub: 'resolve the clash' },
+    { k: 'bloom', label: 'Bloom filter', sub: 'skip the DB check' },
+  ],
+  scenarios: [
+    { e: '📏', t: 'Six characters at launch', d: 'The team shipped 6-character base-62 codes. Ten-year projections say 365 billion URLs.', a: 'len', why: '62<sup>6</sup> ≈ 56.8 billion, under a sixth of what’s needed. No amount of retrying helps once the space runs out. Go to 7: 62<sup>7</sup> ≈ 3.5 trillion.' },
+    { e: '👯', t: 'Same 7, different pages', d: 'Two different long URLs produced the same first 7 characters. The second one is being written right now.', a: 'retry', why: 'A normal collision. The write path appends the predefined string to the second URL, hashes again, and repeats until the code is free.' },
+    { e: '📊', t: 'The DB is busy saying "free"', d: 'At insert time, 60% of database reads are "is this code taken?" checks, and nearly all of them answer "no".', a: 'bloom', why: 'A Bloom filter answers "definitely not taken" from memory, so those queries never reach the database. Only "maybe" goes to the DB.' },
+    { e: '🔥', t: 'Clashing after two days', d: 'The team keeps the first 7 hex characters of MD5. After two days, almost every new URL collides.', a: 'len', why: 'Hex gives only 16<sup>7</sup> ≈ 268 million codes, about 2.7 days of traffic. Retrying can’t fix an exhausted space. Change the code space: write the hash bits in base 62, or use more characters.' },
+    { e: '🐢', t: 'Inserts slow down over time', d: 'As the table fills, insert latency climbs: more retries, and every retry is a database query.', a: 'bloom', why: 'The retries are correct, but each check costs a query. A Bloom filter in front of the DB answers most checks in memory, so the latency stops tracking the retry count.' },
+    { e: '✍️', t: 'The write path’s next move', d: 'A new long URL hashes to a code that already exists in the table. What happens next?', a: 'retry', why: 'Append the predefined string to the long URL, hash again, check again. Repeat until the code is free, then save the original long URL with it.' },
+  ],
+  outro: 'The pattern: if the space is too small, change the length or alphabet. If two URLs clash, append and rehash. If checks are too expensive, put a Bloom filter in front.',
+  onDone: () => Q.clearStage(6),
+}));
+
+/* ================= STAGE 7: interview drill ================= */
+Q.onStage(7, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"How long is your short code, and how do you generate it from the long URL?"</i>',
+  placeholder: 'With 62 characters…',
+  model: '"I\'d store the mapping in a relational table: id, shortURL, longURL. The code uses 62 characters, 0-9, a-z, A-Z. 62 to the 6th is about 56.8 billion, which is short of 365 billion, and 62 to the 7th is about 3.5 trillion, so 7 characters. One way is to hash the long URL with something like MD5 and keep 7 characters. That collides, so on a clash I\'d append a predefined string and rehash until it\'s unique. Each check is a DB query, so I\'d put a Bloom filter in front: if it says the code definitely isn\'t used, I skip the DB."',
+  checks: ['I did 62^n vs 365 billion and landed on 7', 'I explained collisions and append-and-rehash', 'I used a Bloom filter to avoid DB lookups and said it only has false positives'],
+  onDone: () => Q.clearStage(7),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

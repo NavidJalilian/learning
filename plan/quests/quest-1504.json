@@ -1,0 +1,118 @@
+{
+ "n": "15.4",
+ "slug": "drive-upload-download-notify",
+ "t": "Ping When It Changes",
+ "d": "The upload flow, the download flow, long-polling notifications and the offline backup queue",
+ "boss": false,
+ "badge": "🔔 Badge: Sync Herald",
+ "winTitle": "Every device in sync!",
+ "goal": "Your win today: you can walk through the upload flow (two parallel requests, pending -> uploaded), the download flow, and defend long polling over WebSocket for Drive's notifications.",
+ "bookSections": "Step 3 (Upload flow, Download flow, Notification service)",
+ "stages": [
+  {
+   "title": "Two lanes at once",
+   "sub": "The upload flow, tap-in-order",
+   "teaches": "Book: two requests are sent in parallel. Lane A — add file metadata: 1. Client 1 sends a request to add the metadata of the new file. 2. Store the new file metadata in the metadata DB and change the file upload status to 'pending'. 3. Notify the notification service that a new file is being added. 4. The notification service notifies relevant clients (client 2) that a file is being uploaded. Lane B — upload files to cloud storage: 2.1 Client 1 uploads the file's content to block servers. 2.2 Block servers chunk the files into blocks, compress, encrypt and upload them to cloud storage. 2.3 Once the file is uploaded, cloud storage triggers an upload completion callback; the request is sent to API servers. 2.4 File status changes to 'uploaded' in the metadata DB. 2.5 Notify the notification service that a file status changed to 'uploaded'. 2.6 The notification service notifies relevant clients (client 2) that the file is fully uploaded. Editing a file follows the same flow.",
+   "interaction": "Two-lane sequence builder over the 15.2 mini-map. Ten shuffled step chips; learner taps them into Lane A (metadata) or Lane B (content), in order. A status pill on the file ('—' -> 'pending' -> 'uploaded') updates live as steps land, and client 2's screen shows 'uploading…' then 'ready'. Then predict-then-watch: 'Client 2 tries to open the file while the status is still pending — what should it see?' (a placeholder / 'still uploading', not a broken file). Finally press Play to animate both lanes running in parallel with packets moving along arrows.",
+   "check": "Q.quiz: 'What flips the file's status from pending to uploaded?' -> cloud storage's upload-completion callback reaching the API servers. Distractors: client 1 polling; the notification service; a nightly job."
+  },
+  {
+   "title": "Catch up",
+   "sub": "The download flow, trace it",
+   "teaches": "Book: download is triggered when a file is added or edited elsewhere. How does a client know? If client A is online while the file is changed by another client, the notification service informs client A that changes were made somewhere and it needs to pull the latest data. If client A is offline, data is saved to the cache (the offline backup queue); when the client comes back online, it pulls the latest changes. Steps: 1. Notification service informs client 2 of a change. 2. Client 2 sends a request to fetch metadata. 3. API servers call the metadata DB. 4. Metadata is returned to the API servers. 5. Client 2 receives the metadata. 6. Client 2 sends requests to block servers to download blocks. 7. Block servers download blocks from cloud storage. 8. Cloud storage returns blocks to block servers. 9. Client 2 receives all the new blocks to reconstruct the file. Key insight: the notification carries 'something changed', not the file; the client pulls metadata, then only the blocks it needs.",
+   "interaction": "Trace mode: the learner drives a glowing packet by clicking the next hop on the diagram (Notification -> Client 2 -> API -> Metadata DB -> API -> Client 2 -> Block servers -> Cloud storage -> Block servers -> Client 2). A wrong hop flashes red with a hint. Then a second run with a 'Client 2 offline' switch: the notification goes into the Offline backup queue icon (a counter ticks up as 3 more edits happen); flipping the client online drains the queue and triggers one catch-up pull. Last: predict how many blocks client 2 downloads if only blocks 2 and 5 changed and it already holds the rest (2 — delta sync works on download too).",
+   "check": "Q.quiz: 'What's inside the notification client 2 receives?' -> a signal that something changed (it then fetches metadata and blocks itself); not the file content."
+  },
+  {
+   "title": "Hold the line",
+   "sub": "Long polling vs WebSocket, predict-then-watch",
+   "teaches": "Book: the notification service lets clients know about file changes. Options: long polling (Dropbox uses it) and WebSocket (persistent, bi-directional). Book picks long polling because (1) communication is not bi-directional — the server sends info about file changes to the client, not vice versa; (2) WebSocket suits real-time bi-directional communication like chat; for Drive, notifications are sent infrequently with no burst of data. How long polling works here: each client opens a long-poll connection to the notification service; the server holds it open until a change is detected or it times out; if changes are detected the client closes the connection and must connect to the metadata server to download the latest changes; after a response or a timeout, the client immediately sends a new request to keep the connection open.",
+   "interaction": "Timeline sim: a horizontal time axis with a client lane and a server lane. Learner presses 'Open long poll': a bar stretches across (request held open). Random events: 'Bob edits plan.docx' -> the server responds, bar ends, client fetches metadata (a side-trip arrow), then immediately reopens a new poll — learner must click 'Reopen' within a few seconds or a red 'missed change' marker appears on the next event. A 'timeout' event (no changes for 60 s) shows the same reopen. Then a chooser: three product cards (Drive file-change alerts / a chat app / a multiplayer drawing board) — learner assigns Long polling or WebSocket to each (Drive -> long polling; chat and drawing -> WebSocket), with the book's two reasons revealed.",
+   "check": "Q.quiz: 'Give the book's reason for long polling over WebSocket in Drive.' -> traffic is one-way (server -> client) and infrequent with no bursts. Distractors: WebSocket isn't supported on mobile; long polling has lower latency; WebSocket can't use HTTPS."
+  },
+  {
+   "title": "Boss: The Silent Device",
+   "sub": "Interview scenarios",
+   "teaches": "Applying the upload/download flows and notification design.",
+   "interaction": "Q.boss '👾 The Silent Device', 5 scenarios. (1) 'A user's phone never learns about edits made on the laptop.' -> check its long-poll connection; it must reopen after every response or timeout / increase S3 replication / add block servers. (2) 'Client 2 opens a file that client 1 is still uploading.' -> status is pending, show 'uploading', notify again on 'uploaded' / serve half the blocks / block client 2's account. (3) 'Interviewer: why not WebSocket?' -> one-way, infrequent notifications don't need a bi-directional channel; WebSocket fits chat / WebSocket is deprecated / long polling uses zero connections. (4) 'A tablet was off for a week.' -> its pending changes wait in the offline backup queue; on reconnect it pulls metadata then the changed blocks / it re-downloads the whole drive / it's out of luck. (5) 'Who tells the API server the upload finished?' -> cloud storage's completion callback / client 2 / the load balancer.",
+   "check": "Boss cleared when all 5 are answered."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "Walk the flows in 60 seconds",
+   "teaches": "The end-to-end story of one upload reaching another device.",
+   "interaction": "Q.drill. Prompt: 'Interviewer: I save a new file on my laptop. Walk me through how it shows up on my phone.' Model: 'The laptop fires two requests in parallel. One adds the file's metadata through the API servers — it's stored with status pending, and the notification service tells my other devices a file is coming. The other sends content to block servers, which split it into blocks, compress, encrypt and store them in S3. When S3 calls back that the upload is complete, the API server flips the status to uploaded and the notification service tells the phone. The phone holds a long-poll connection; when it gets the ping it fetches the metadata, then downloads only the blocks it lacks from block servers and rebuilds the file. If the phone was offline, the change waits in the offline backup queue. I'd use long polling over WebSocket because the traffic is one-way and infrequent.' Checks: two parallel requests; pending -> uploaded; completion callback; notification is a signal then pull; long polling + why; offline backup queue.",
+   "check": "Self-graded checklist."
+  }
+ ],
+ "caveats": [
+  "The book's 'offline backup queue' is a fuzzy concept. Real sync clients usually just store a cursor (the last change they saw) and ask the server for everything since that cursor when they reconnect — no per-device queue needed.",
+  "S3 can emit event notifications on object creation, but with multi-block uploads 'the file is complete' really means 'all blocks of this version are stored', which the server has to track itself.",
+  "Long polling vs WebSocket is a close call today; many products use WebSocket or server-sent events for server-to-client push. Either answer is fine in an interview if you give the reason.",
+  "Notifications only carry 'something changed'; correctness comes from re-reading metadata, so a lost notification delays sync but doesn't corrupt data."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo — Design Google Drive (book chapter)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-google-drive"
+  },
+  {
+   "label": "How We've Scaled Dropbox (Kevin Modzelewski, 2012 talk)",
+   "url": "https://www.youtube.com/watch?v=PE4gwstWhmc"
+  },
+  {
+   "label": "MDN — The WebSocket API",
+   "url": "https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API"
+  },
+  {
+   "label": "Amazon S3 — Event notifications",
+   "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/EventNotifications.html"
+  }
+ ],
+ "id": "1504",
+ "file": "1504-drive-upload-download-notify.html",
+ "world": 15,
+ "chapterTitle": "Design Google Drive",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-google-drive",
+ "cheatsheet": "../reference/ch15-google-drive-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "1501",
+   "n": "15.1",
+   "t": "Claim Your Locker",
+   "d": "Scope Google Drive, run the numbers, design the upload/download/revision APIs, outgrow one server"
+  },
+  {
+   "id": "1502",
+   "n": "15.2",
+   "t": "Chop It Into Blocks",
+   "d": "The high-level design, block servers, 4 MB blocks, delta sync, compress-then-encrypt"
+  },
+  {
+   "id": "1503",
+   "n": "15.3",
+   "t": "The Metadata Ledger",
+   "d": "Strong consistency, cache invalidation, the metadata schema, and sync conflicts"
+  },
+  {
+   "id": "1504",
+   "n": "15.4",
+   "t": "Ping When It Changes",
+   "d": "The upload flow, the download flow, long-polling notifications and the offline backup queue"
+  },
+  {
+   "id": "1505",
+   "n": "15.5",
+   "t": "Thrift & Chaos",
+   "d": "Save storage space with dedup, version limits and cold storage, then survive every component failing"
+  },
+  {
+   "id": "1506",
+   "n": "BOSS",
+   "t": "Design Drive Live",
+   "d": "Full mock interview: design Google Drive with the 4-step framework"
+  }
+ ]
+}

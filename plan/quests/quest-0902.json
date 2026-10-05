@@ -1,0 +1,137 @@
+{
+ "n": "9.2",
+ "slug": "web-crawler-components-and-workflow",
+ "t": "Assemble the Spider",
+ "d": "The eleven boxes of the high-level design, the two 'seen?' checks, and the step-by-step crawl workflow",
+ "boss": false,
+ "badge": "⚙️ Badge: Pipeline Builder",
+ "winTitle": "Every box wired, every URL accounted for!",
+ "goal": "Your win today: you can draw the crawler pipeline from seed URLs to URL storage, explain what each box does, say why 'Content Seen?' compares hashes and 'URL Seen?' uses a Bloom filter or hash table, and walk the 11-step workflow without notes.",
+ "bookSections": "Step 2: Propose high-level design and get buy-in (Seed URLs, URL Frontier, HTML Downloader, DNS Resolver, Content Parser, Content Seen?, Content Storage, URL Extractor, URL Filter, URL Seen?, URL Storage; web crawler workflow)",
+ "stages": [
+  {
+   "title": "Pick your seeds",
+   "sub": "Where does the crawl start?",
+   "teaches": "Seed URLs are the starting points. For one university's site, the seed is simply that university's domain. For the whole web you have to be creative: a good seed set reaches as many links as possible. The book's idea is to split the URL space into smaller pieces, either by locality (each country has its own popular sites) or by topic (shopping, sports, healthcare, …). There's no perfect answer, and the interviewer doesn't expect one; they want to see you reason about coverage.",
+   "interaction": "Coverage mini-game. A stylised web map of ~60 dots clustered into 6 colour regions (3 countries × 2 topics, faintly labelled). The learner has 4 seed pins to place. Pressing 'Crawl' runs a fast animated BFS from the pins for a fixed number of hops over a pre-generated link graph (links are mostly within a cluster, a few cross-cluster). A coverage meter shows % of dots reached. Placing all 4 seeds in one cluster yields ~25–35%; spreading one seed per region (and choosing 'hub' dots, drawn slightly larger) yields 80%+. Target: reach 75% coverage. Retry is free.",
+   "check": "Coverage ≥ 75%. Q.quiz 1 question: 'Two ways the book suggests to split the URL space for seeds?' → by locality (country) and by topic."
+  },
+  {
+   "title": "Meet the eleven boxes",
+   "sub": "Who does what in the pipeline",
+   "teaches": "The components: URL Frontier: holds URLs still to download; think of it as a FIFO queue for now (most crawlers split state into 'to be downloaded' and 'already downloaded'). HTML Downloader: fetches pages for URLs handed out by the frontier. DNS Resolver: turns a host name into an IP address before download (the book's example resolves www.wikipedia.org to an IP as of 2019). Content Parser: parses and validates pages so malformed ones don't waste storage; it's a separate component so parsing doesn't slow down downloading. Content Seen?: drops pages whose content we already have. Content Storage: keeps the HTML, mostly on disk because the data is huge, with popular content cached in memory for low latency. URL Extractor: pulls links out of HTML and turns relative paths into absolute URLs (e.g. '/wiki/Cat' found on Wikipedia becomes 'https://en.wikipedia.org/wiki/Cat'). URL Filter: removes unwanted content types, file extensions, error links and URLs on blocklisted sites. URL Seen?: tracks URLs already visited or already waiting in the frontier. URL Storage: stores visited URLs.",
+   "interaction": "Matching board: 11 component tiles on the left, 11 one-line job descriptions (in plain words) on the right, shuffled. Tap a tile then a job to connect them with a line. Each correct pair reveals a tiny icon animation for that box (e.g. the DNS box shows 'www.wikipedia.org → 198.x.x.x'). Then a mini 'URL Extractor' exercise: given base page https://en.wikipedia.org/wiki/Spider and 4 hrefs ('/wiki/Web', 'Arachnid', '#History', 'https://commons.wikimedia.org/x'), the learner types or picks the absolute URL each becomes (https://en.wikipedia.org/wiki/Web; https://en.wikipedia.org/wiki/Arachnid; same page, fragment dropped; unchanged).",
+   "check": "All 11 pairs matched and 4 URLs resolved. Q.quiz with 2 questions: 'Why is the parser a separate component?' → so slow parsing doesn't hold up downloading; 'Where does most content live, and what lives in memory?' → disk; popular content."
+  },
+  {
+   "title": "Have I seen this page?",
+   "sub": "Content Seen? · compare fingerprints, not characters",
+   "teaches": "Duplicate content is common: the book cites research that about 29% of pages are duplicates. Comparing a new page to every stored page character by character would be hopelessly slow with billions of pages. Instead, compute a hash (fingerprint) of each page and compare hashes: a short fixed-size value per page, looked up in a set. Same hash → same content → discard the page (it's a duplicate under another URL). Different hash → new content → keep it and pass it on to link extraction.",
+   "interaction": "Race simulation. Two lanes, 'Char-by-char' and 'Hash lookup'. A stack of 8 incoming pages (some exact copies, e.g. a page reachable via http and https, or via '/index.html' and '/') arrives; a store already holds N pages, with an N slider (10 → 1,000,000 → 1 billion, logarithmic). Pressing 'Check' runs both lanes: the char-by-char lane's comparison counter balloons with N (pages × average length) while the hash lane does one hash plus one set lookup per page regardless of N. Each incoming page shows its short hex fingerprint; duplicates light up red and drop into a 'discarded' bin. Then a twist card: a page that differs only by a timestamp in the footer gets a totally different hash and is NOT caught. Prompt: 'Duplicate or not, according to our hash?' → not; caption: exact hashes only catch byte-identical pages; near-duplicates need a fancier fingerprint (see caveats).",
+   "check": "Q.quiz with 3 questions: 'Roughly what share of pages are duplicates per the book?' → ~29% (nearly 30%); 'Why hash instead of comparing pages directly?' → fixed-size, fast lookup, doesn't grow with page length or count; 'A page differing only by a date stamp: does an exact hash catch it?' → no."
+  },
+  {
+   "title": "Have I seen this URL?",
+   "sub": "URL Seen? · hash table or Bloom filter",
+   "teaches": "URL Seen? checks whether a URL was already visited or is already waiting in the frontier. Without it the same URL is added again and again, which raises server load and can trap the crawler in infinite loops (A links to B links to A). The book names two common tools: a hash table (exact, but memory-hungry) and a Bloom filter (a compact bit array plus several hash functions; it answers 'definitely not seen' or 'probably seen', with no false negatives but some false positives). Beyond the book, size it: 1 billion URLs at ~100 bytes each is ~100 GB as raw strings; 8-byte fingerprints in a hash set is ~8 GB plus overhead; a Bloom filter at a 1% false-positive rate needs ~9.6 bits per URL, about 1.2 GB.",
+   "interaction": "Hands-on Bloom filter: a 32-cell bit array and 3 toy hash functions shown as arrows. The learner types (or picks from chips) URLs to 'add'; each lights 3 cells. Then 'check' mode: for a new URL, the 3 cells are probed; all lit → 'probably seen'; any dark → 'definitely new'. A scripted moment: after 8 URLs are added, the learner checks a never-added URL whose 3 cells happen to be lit; predict first: 'Seen or new?' The filter says 'seen' (false positive). Question that follows: 'What happens to this URL in our crawler?' → it's skipped and never crawled (a small loss we accept). Then a sizing panel: three bars (raw strings ~100 GB, fingerprint set ~8 GB, Bloom 1% ~1.2 GB) for 1 billion URLs with a slider for URL count (100M–50B).",
+   "check": "Q.quiz with 3 questions: 'A Bloom filter says definitely not seen. Can it be wrong?' → no, no false negatives; 'What does a false positive cost a crawler?' → a new URL is wrongly skipped; 'Why do we need URL Seen? at all?' → avoid re-adding URLs: wasted load and infinite loops."
+  },
+  {
+   "title": "Walk the workflow",
+   "sub": "The 11 numbered steps",
+   "teaches": "The crawl workflow from the book's figure: (1) seed URLs go into the URL Frontier; (2) the HTML Downloader pulls a batch of URLs from the frontier; (3) it gets their IPs from the DNS resolver and downloads; (4) the Content Parser parses the HTML and checks it isn't malformed; (5) the parsed page goes to Content Seen?; (6) if the same content is already in storage the page is dropped, otherwise it goes on to the link extractor (and is stored); (7) the link extractor pulls out the links; (8) links pass through the URL Filter; (9) surviving links go to URL Seen?; (10) if the URL is already known, nothing to do; (11) if not, it's added to the URL Frontier (and recorded in URL Storage). Then the loop repeats.",
+   "interaction": "Tap-in-order: the 11 steps appear as shuffled cards next to an empty pipeline diagram. Each correct tap places the card and animates one page token moving through that box. Wrong order gives a shake and a hint. After ordering, a 'packet replay' button runs three pages through the finished pipeline: page 1 is new (goes all the way, 2 new links added to frontier); page 2 has duplicate content (stops at Content Seen?, discarded); page 3 contains a link to a .exe file and a link already in the frontier (one removed by URL Filter, one dropped at URL Seen?). The learner predicts where each token stops before it runs (choose the box from a dropdown).",
+   "check": "All 11 cards ordered; 3 stop-point predictions made (wrong predictions cost no hearts, show reason). Q.quiz 1 question: 'Which check comes first for a downloaded page: Content Seen? or URL Seen?' → Content Seen? (URL Seen? runs on the extracted links)."
+  },
+  {
+   "title": "Boss: The Leaky Pipeline",
+   "sub": "Which box fixes it?",
+   "teaches": "Diagnosing pipeline problems by component.",
+   "interaction": "Q.boss with choices [{k:'cseen', label:'Content Seen?', sub:'duplicate pages'}, {k:'useen', label:'URL Seen?', sub:'duplicate URLs'}, {k:'filter', label:'URL Filter', sub:'unwanted links'}, {k:'parser', label:'Content Parser', sub:'bad HTML'}]. Scenarios (7): 'The same article is stored 40 times under mirror domains' → cseen; 'The crawler keeps fetching /home → /about → /home forever' → useen; 'Storage fills with .zip and .mp4 downloads though we only want HTML' → filter; 'Half-written, broken HTML pages are being saved' → parser; 'A link to a site on our blocklist gets crawled' → filter; 'The frontier holds 12 copies of the same URL' → useen; 'http:// and https:// versions of every page are both stored with identical bytes' → cseen (and mention URL normalisation would catch it earlier). Each 'why' names the box's job.",
+   "check": "Boss cleared."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "Draw the pipeline out loud",
+   "teaches": "The high-level design in one pass.",
+   "interaction": "Q.drill. Prompt: 'Walk me through your crawler's high-level design.' Placeholder: 'We start from seed URLs…'. Model: 'Seed URLs go into the URL Frontier, a queue of URLs still to fetch. HTML Downloaders pull URLs from it, resolve the host through DNS, and fetch the page. A Content Parser validates it, then Content Seen? hashes the page and drops it if we already have that content, which is common, around 30% of pages. New pages go to Content Storage, mostly on disk, and to the URL Extractor, which turns relative links into absolute URLs. The URL Filter drops unwanted types and blocklisted sites, and URL Seen?, a Bloom filter or hash table, drops URLs we've already visited or queued. Whatever survives goes back into the frontier, and visited URLs go to URL Storage.' Checks: ['I named frontier, downloader, DNS, parser, both seen-checks, extractor, filter and both storages', 'I explained hashing for duplicate content', 'I named Bloom filter or hash table for URL Seen? and the trade-off', 'I closed the loop back to the frontier'].",
+   "check": "Self-grade via Q.drill."
+  }
+ ],
+ "caveats": [
+  "The '29% duplicates' figure comes from an SEO-industry survey of sites with duplicate-content issues, not a precise count of duplicate pages on the web. Treat it as 'a lot, roughly a third'.",
+  "A plain hash (or checksum) only catches byte-identical copies. Real search engines detect near-duplicates with fingerprints such as shingling or SimHash, so pages that differ only by an ad, a date or a session ID still match.",
+  "Before URL Seen? a real crawler normalises (canonicalises) URLs: lower-case the host, drop the default port and the #fragment, resolve '..' segments, sometimes sort query parameters. Otherwise the same page sneaks in under many spellings. The book only mentions turning relative links into absolute ones.",
+  "A Bloom filter cannot delete entries and its false-positive rate climbs as it fills, so at web scale it's sized for the expected count, sharded across machines and rebuilt periodically. A false positive means a brand-new URL is silently never crawled.",
+  "The workflow says the downloader 'gets the IP from DNS' as if DNS were free. It isn't, and quest 9.4 shows why caching DNS matters."
+ ],
+ "sources": [
+  {
+   "label": "System Design Interview Ch. 9: Design a Web Crawler (ByteByteGo)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-web-crawler"
+  },
+  {
+   "label": "Heydon & Najork, 'Mercator: A Scalable, Extensible Web Crawler' (book reference)",
+   "url": "https://courses.cs.washington.edu/courses/cse454/15wi/papers/mercator.pdf"
+  },
+  {
+   "label": "Bloom filter, Wikipedia",
+   "url": "https://en.wikipedia.org/wiki/Bloom_filter"
+  },
+  {
+   "label": "Manning, Raghavan & Schütze, Introduction to IR: Near-duplicates and shingling",
+   "url": "https://nlp.stanford.edu/IR-book/html/htmledition/near-duplicates-and-shingling-1.html"
+  },
+  {
+   "label": "URI normalization, Wikipedia",
+   "url": "https://en.wikipedia.org/wiki/URI_normalization"
+  }
+ ],
+ "id": "0902",
+ "file": "0902-web-crawler-components-and-workflow.html",
+ "world": 9,
+ "chapterTitle": "Design a Web Crawler",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-web-crawler",
+ "cheatsheet": "../reference/ch09-web-crawler-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "0901",
+   "n": "9.1",
+   "t": "Release the Spider",
+   "d": "What a crawler is for, the three-step loop, scoping questions, the four traits of a good crawler, and the napkin math"
+  },
+  {
+   "id": "0902",
+   "n": "9.2",
+   "t": "Assemble the Spider",
+   "d": "The eleven boxes of the high-level design, the two 'seen?' checks, and the step-by-step crawl workflow"
+  },
+  {
+   "id": "0903",
+   "n": "9.3",
+   "t": "Taming the Frontier",
+   "d": "Why BFS beats DFS but still isn't enough, and how front queues (priority) and back queues (politeness) fix it, plus freshness and storage"
+  },
+  {
+   "id": "0904",
+   "n": "9.4",
+   "t": "Fast Fangs, Thick Skin",
+   "d": "robots.txt, four speed-ups for the downloader (distribute, cache DNS, go local, time out), and four ways to survive failures"
+  },
+  {
+   "id": "0905",
+   "n": "9.5",
+   "t": "Beware the Spider Traps",
+   "d": "Plug-in modules for new content, dodging duplicates, spider traps and noise, and the wrap-up extras like rendering JavaScript"
+  },
+  {
+   "id": "0906",
+   "n": "BOSS",
+   "t": "Crawl the Web, Live",
+   "d": "Full mock interview: design a web crawler in 45 minutes"
+  }
+ ]
+}

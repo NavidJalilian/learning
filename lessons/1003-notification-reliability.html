@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Never Lose a Ping</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: crash sim (1), delivery timeline (2), dedupe gate + race (3), triage + backoff chart (4), queue chart (5) */
+:root { --tok: #5a48f0; --tok-copy: #0d9a96; --on-tok: #ffffff; --lost: #8a8798; --w1: #5a48f0; --w2: #0d9a96; --bar-ok: #1d9a52; --bar-rej: #d4423f; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --tok: #8f82ff; --tok-copy: #31d3c8; --on-tok: #0e0f1d; --lost: #6f6c8c; --w1: #8f82ff; --w2: #31d3c8; --bar-ok: #43d98a; --bar-rej: #ff6d6a; }
+}
+:root[data-theme="dark"] { --tok: #8f82ff; --tok-copy: #31d3c8; --on-tok: #0e0f1d; --lost: #6f6c8c; --w1: #8f82ff; --w2: #31d3c8; --bar-ok: #43d98a; --bar-rej: #ff6d6a; }
+
+.sim svg { max-width: 620px; margin: 0 auto; }
+.chart-cap { font-size: 12px; font-weight: 600; color: var(--muted); padding: 10px 14px 0; }
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.bignum { font-family: var(--mono); font-weight: 700; }
+.good-t { color: var(--good); } .bad-t { color: var(--bad); } .warn-t { color: var(--warn); }
+
+/* shared svg bits */
+.dia .bx { fill: var(--panel); stroke: var(--line); stroke-width: 2; transition: fill .3s, stroke .3s; }
+.dia .bx.crashed { fill: var(--bad-soft); stroke: var(--bad); }
+.dia .bx.fresh { stroke: var(--good); }
+.dia .bl { fill: var(--ink); font: 700 14px var(--font); text-anchor: middle; dominant-baseline: central; }
+.dia .bs { fill: var(--muted); font: 600 12px var(--font); text-anchor: middle; dominant-baseline: central; }
+.dia .flow { stroke: var(--muted); stroke-width: 2; fill: none; }
+.dia .flow.dash { stroke-dasharray: 4 4; }
+.dia .arrhead { fill: var(--muted); }
+.dia .slot { fill: none; stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.dia .slot.fly { stroke: var(--warn); }
+.dia .tok rect { fill: var(--tok); }
+.dia .tok.copy rect { fill: var(--tok-copy); }
+.dia .tok.dim rect { opacity: .45; }
+.dia .tok text { fill: var(--on-tok); font: 700 13px var(--mono); text-anchor: middle; dominant-baseline: central; }
+.dia .phone { fill: var(--bg-2); stroke: var(--ink); stroke-width: 2; }
+.dia .pban rect { fill: var(--good); }
+.dia .pban text { fill: var(--on-tok); font: 700 11px var(--mono); text-anchor: middle; dominant-baseline: central; }
+.dia .cyl { fill: var(--panel); stroke: var(--line); stroke-width: 2; }
+.dia .cyl.on { stroke: var(--teal); }
+.dia .logtxt { fill: var(--ink); font: 600 12px var(--mono); text-anchor: middle; dominant-baseline: central; }
+.dia .ghost { font-size: 30px; text-anchor: middle; dominant-baseline: central; }
+.dia .ghostt { fill: var(--bad); font: 700 12px var(--font); text-anchor: middle; }
+.dia .badge { fill: var(--warn); font: 700 11px var(--font); text-anchor: middle; }
+.dia .off { opacity: .28; }
+
+/* stage 1 toggles + combo tiles */
+.tog { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tog .seg button { min-height: 40px; padding: 6px 12px; }
+.tog .seg button.on { background: var(--accent); color: #fff; }
+.tog .seg button[disabled] { opacity: .5; cursor: not-allowed; }
+.combos { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 14px; }
+@media (max-width: 640px) { .combos { grid-template-columns: 1fr 1fr; } }
+.combo { border: 1px solid var(--line); border-radius: 12px; padding: 10px; font-size: 13px; background: var(--bg); }
+.combo b { display: block; font-size: 13px; }
+.combo .res { font-weight: 700; margin-top: 4px; }
+.combo.ok { border-color: var(--good); background: var(--good-soft); }
+.combo.lost { border-color: var(--bad); background: var(--bad-soft); }
+
+/* stage 2 timeline */
+.tl .lane { stroke: var(--line); stroke-width: 2; }
+.tl .ll { fill: var(--ink); font: 700 12px var(--font); dominant-baseline: central; }
+.tl .ar { stroke-width: 2.5; fill: none; }
+.tl .ar.msg { stroke: var(--tok); }
+.tl .ar.ok { stroke: var(--teal); }
+.tl .ar.lost { stroke: var(--bad); stroke-dasharray: 4 3; }
+.tl .ico { font-size: 17px; text-anchor: middle; dominant-baseline: central; }
+.tl .x { fill: var(--bad); font: 700 16px var(--font); text-anchor: middle; dominant-baseline: central; }
+.modeseg span { min-height: 32px; display: inline-flex; align-items: center; }
+.bells { font-size: 18px; letter-spacing: 2px; min-width: 2em; display: inline-block; }
+table.score { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 14px; }
+table.score th, table.score td { border-bottom: 1px solid var(--line); padding: 8px 6px; text-align: left; vertical-align: top; }
+table.score th { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+table.score td.v { font-family: var(--mono); font-weight: 700; white-space: nowrap; }
+
+/* stage 3 gate */
+.gate { border: 1px solid var(--line); border-radius: 18px; background: var(--bg); padding: 14px; margin-top: 14px; }
+.belt { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--muted); min-height: 30px; }
+.belt .chip { opacity: .75; }
+.evcard { margin: 12px 0; border-radius: 16px; padding: 16px; background: linear-gradient(160deg, var(--accent-soft), var(--teal-soft)); display: flex; gap: 14px; align-items: center; animation: rise .3s; }
+.evcard .eid { font: 700 26px var(--mono); color: var(--accent); min-width: 2.6em; text-align: center; }
+.evcard .etx { font-weight: 600; }
+.evcard .efrom { font-size: 13px; color: var(--muted); }
+.gate .row .btn { min-width: 120px; min-height: 44px; }
+.seenrow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; font-size: 14px; }
+.seenrow .chips { margin-top: 0; }
+.chip.new { border-color: var(--good); background: var(--good-soft); animation: rise .3s; }
+.gmsg { min-height: 24px; font-size: 14px; font-weight: 600; margin-top: 10px; }
+.gstats { font-size: 14px; margin-top: 6px; }
+
+/* stage 3 race */
+.code { background: var(--code-bg); color: var(--code-ink); border-radius: 14px; padding: 8px; font-family: var(--mono); font-size: 13.5px; overflow-x: auto; margin-top: 12px; }
+.cl { display: flex; width: 100%; min-width: max-content; text-align: left; background: none; border: 0; color: inherit; padding: 8px 10px; min-height: 40px; border-radius: 8px; gap: 10px; align-items: center; white-space: pre; font: inherit; }
+.cl[disabled] { cursor: default; }
+.cl:not([disabled]):hover { background: rgba(255,255,255,.08); }
+.cl .ln { opacity: .45; width: 1.2em; text-align: right; flex: none; }
+.cl .cm { color: #8b93c9; }
+.cl.sel { outline: 2px solid #ffd23f; outline-offset: -2px; }
+.cl.right { background: rgba(67,217,138,.22); }
+.cl.wrong { background: rgba(255,109,106,.25); }
+.cl.hl { background: rgba(143,130,255,.18); }
+.cl .mks { width: 30px; flex: none; display: flex; }
+@media (max-width: 560px) { .code { font-size: 12.5px; } .cl { padding: 8px 6px; gap: 6px; } }
+.mk { font: 700 11px var(--font); padding: 2px 7px; border-radius: 6px; color: #0e0f1d; }
+.mk.w1 { background: #8f82ff; } .mk.w2 { background: #31d3c8; }
+.wks { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 10px; }
+@media (max-width: 560px) { .wks { grid-template-columns: 1fr 1fr; } .wks .wk.ph { grid-column: 1 / -1; } }
+.wk { border: 1px solid var(--line); border-radius: 12px; padding: 10px; font-size: 13px; background: var(--bg); min-height: 64px; }
+.wk b { display: block; font-size: 13px; }
+.wk.w1 b { color: var(--w1); } .wk.w2 b { color: var(--w2); }
+.wk .st { font-family: var(--mono); font-size: 12px; margin-top: 4px; }
+.buzz { font-size: 20px; }
+
+/* stage 4 triage + backoff */
+.tri { margin-top: 14px; border: 1px solid var(--line); border-radius: 18px; background: var(--bg); padding: 14px; }
+.provhead { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
+.fcard { margin: 12px 0; border-radius: 14px; padding: 14px 16px; background: var(--panel); border: 2px solid var(--bad); animation: drop .45s cubic-bezier(.3,1.4,.5,1); }
+.fcard .fp { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--bad); }
+.fcard .fe { font: 600 15px var(--mono); margin-top: 4px; word-break: break-word; }
+@keyframes drop { from { opacity: 0; transform: translateY(-24px); } }
+.bins { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+@media (max-width: 560px) { .bins { grid-template-columns: 1fr; } }
+.bin { text-align: left; border: 2px solid var(--line); background: var(--panel); border-radius: 14px; padding: 10px 12px; min-height: 56px; }
+.bin:hover:not([disabled]) { border-color: var(--accent); }
+.bin b { display: block; font-size: 15px; }
+.bin span { font-size: 12.5px; color: var(--muted); }
+.bin .cnt { float: right; font-family: var(--mono); font-weight: 700; color: var(--ink); }
+.bin.right { border-color: var(--good); background: var(--good-soft); }
+.bin.wrong { border-color: var(--bad); background: var(--bad-soft); }
+.bo .bar-ok { fill: var(--bar-ok); }
+.bo .bar-rej { fill: var(--bar-rej); }
+.bo .capl { stroke: var(--ink); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.bo .capt { fill: var(--ink); font: 700 11px var(--font); }
+.bo .ax { stroke: var(--line); stroke-width: 1.5; }
+.bo .axt { fill: var(--muted); font: 600 10.5px var(--mono); }
+.bo .spk { fill: var(--bad); font: 700 10px var(--mono); text-anchor: middle; }
+.bostats { font-size: 14px; }
+.bostats b { font-family: var(--mono); }
+
+/* stage 5 queue chart */
+.qc .ax { stroke: var(--line); stroke-width: 1.5; }
+.qc .axt { fill: var(--muted); font: 600 10.5px var(--mono); }
+.qc .sep { stroke: var(--line); stroke-width: 1; stroke-dasharray: 3 3; }
+.qc .pl { fill: var(--muted); font: 700 11px var(--font); text-anchor: middle; }
+.qc .pl.cur { fill: var(--accent); }
+.qc .area { fill: color-mix(in srgb, var(--accent) 22%, transparent); }
+.qc .line { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; }
+.qc .line.bad { stroke: var(--bad); }
+.qc .area.bad { fill: color-mix(in srgb, var(--bad) 18%, transparent); }
+.reads { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+@media (max-width: 640px) { .reads { grid-template-columns: 1fr 1fr; } }
+.rd { font-size: 12px; color: var(--muted); font-weight: 600; }
+.rd b { display: block; font: 700 16px var(--mono); color: var(--ink); }
+.stepper { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; }
+.stepper .btn { padding: 4px 14px; font-size: 18px; line-height: 1.2; min-height: 40px; min-width: 44px; }
+.qmsg { margin-top: 10px; font-size: 15px; font-weight: 600; min-height: 22px; }
+.qmsg.good { color: var(--good); } .qmsg.bad { color: var(--bad); } .qmsg.warn { color: var(--warn); }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 10.3 · Design a Notification System</div>
+    <h1>Never Lose a Ping</h1>
+    <p class="lede">A notification can arrive late. It can even arrive out of order. What it must never do is vanish. Crash workers, lose network replies, race two workers on the same event, and sort failures until you can promise exactly that.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can explain why notifications may be <b>delayed or reordered but never lost</b>, why <b>exactly-once delivery is impossible</b>, how <b>dedupe by event ID</b> and <b>retries</b> work (and where they still leak), and which metric tells you to <b>add workers</b>.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Delayed, reordered — never lost</h2><div class="sub">The notification log</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>In <a href="1002-notification-high-level-design.html">Quest 10.2</a> you split the system into notification servers, one <b>message queue</b> per channel, and <b>workers</b> that pull messages off a queue and hand them to a provider like Apple's <b>APNs</b> (Apple Push Notification service). Now the hard part: what happens when a worker dies halfway through?</p>
+      <p>The book sets one firm rule. A notification may be <b>delayed</b> or arrive <b>out of order</b>, but it must <b>never be lost</b>. To keep that promise, the system saves notification data in a database, the <b>notification log</b>, and adds a <b>retry mechanism</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-notification-system" target="_blank" rel="noopener">[1]</a> The reason is simple. If the only copy of a notification sits in one worker's memory, a crash deletes it for good.</p>
+      <p>There's a second lever. When a worker takes a message, it must at some point <b>acknowledge</b> ("ack") it, which tells the queue "done, delete it". It can ack <i>before</i> it sends, or only <i>after</i> the send has worked. Set the two toggles, predict, and crash the worker.</p>
+
+      <div class="sim">
+        <svg id="crashSvg" class="dia" viewBox="0 0 420 272" role="img" aria-label="A queue, a worker, APNs, a phone, and a notification log database. Message 42 is about to be processed."></svg>
+        <div class="sim-bar">
+          <div class="tog"><span class="small"><b>Notification log</b></span><span class="seg" id="logSeg"><button data-v="0" class="on" aria-pressed="true">OFF</button><button data-v="1" aria-pressed="false">ON</button></span></div>
+          <div class="tog"><span class="small"><b>Ack the queue</b></span><span class="seg" id="ackSeg"><button data-v="before" class="on" aria-pressed="true">before send</button><button data-v="after" aria-pressed="false">after send</button></span></div>
+        </div>
+        <div class="simlog" id="s1log"><div>Message #42 waits at the front of the iOS push queue. Set the toggles, then predict.</div></div>
+      </div>
+      <div class="challenge boxed" id="s1box"></div>
+      <div class="combos" id="combos"></div>
+      <ul class="checklist" id="s1goals">
+        <li data-g="three"><span class="box">✓</span><span>Crash the worker under <b>3 different</b> toggle combinations (<span id="s1count">0</span>/3)</span></li>
+      </ul>
+      <div class="callout warn" id="s1note" style="display:none"><b>The order of the steps matters.</b> The log only saves you if the write reaches disk <i>before</i> the queue is acked, and if some job re-scans entries still marked pending. The book's design has the log. Most real systems also do the simpler thing: <b>ack only after the provider accepts</b>, so the queue itself hands the message out again after a crash. Delivering until you're sure it got through, even if that sometimes means twice, is called <b>at-least-once delivery</b>. Stage 2 shows its catch.</div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>The exactly-once myth</h2><div class="sub">Why duplicates happen</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Will a user get each notification <b>exactly once</b>? The book's answer is no. Usually it arrives once. But because the work is spread over several machines and a network, a duplicate can slip through.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-notification-system" target="_blank" rel="noopener">[1]</a></p>
+      <p>Below is a <b>timeline</b>. Each row is one actor, time runs left to right, and each arrow is one message between them. The worker retries until it hears "200 OK" back from APNs. Three runs, three different failures. For each one, <b>predict how many banners</b> pop up on the phone.</p>
+      <div class="sim">
+        <svg id="tlSvg" class="dia tl" viewBox="0 0 420 246" role="img" aria-label="Timeline with lanes for the queue, the worker, APNs and the phone"></svg>
+        <div class="sim-bar">
+          <span class="seg modeseg" id="modeSeg"><span class="on" data-m="L">At-least-once</span><span data-m="M">At-most-once</span></span>
+          <span class="small">Phone: <span class="bells" id="bells">—</span></span>
+        </div>
+        <div class="simlog" id="s2log"><div>Pick a prediction to play run A.</div></div>
+      </div>
+      <div class="challenge boxed" id="s2box"></div>
+      <table class="score" aria-label="Banners per run">
+        <thead><tr><th>Run</th><th>At-least-once</th><th>At-most-once</th></tr></thead>
+        <tbody>
+          <tr><td>A · crash before the send</td><td class="v" id="scAL">?</td><td class="v" id="scAM">?</td></tr>
+          <tr><td>B · the reply gets lost</td><td class="v" id="scBL">?</td><td class="v" id="scBM">?</td></tr>
+          <tr><td>C · crash after delivery</td><td class="v" id="scCL">?</td><td class="v" id="scCM">?</td></tr>
+        </tbody>
+      </table>
+      <div class="callout tip" id="s2note" style="display:none"><b>The Two Generals problem.</b> Look at runs B and C from the worker's side. "APNs never got it" and "APNs delivered it, but I never heard back" look <i>exactly the same</i>: silence. No number of extra messages can fix that over a network that can drop any message. This is a classic result called the Two Generals problem.<a class="cite" href="https://en.wikipedia.org/wiki/Two_Generals%27_Problem" target="_blank" rel="noopener">[3]</a> So you must choose. Retry when unsure and risk a <b>duplicate</b> (at-least-once). Or never retry and risk a <b>loss</b> (at-most-once). For notifications, the book's rule picks "never lost", so you take at-least-once and work to make duplicates rare. Tyler Treat's essay, which the book cites, puts it bluntly: you cannot have exactly-once <i>delivery</i>.<a class="cite" href="https://bravenewgeek.com/you-cannot-have-exactly-once-delivery/" target="_blank" rel="noopener">[2]</a></div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>The dedupe gate</h2><div class="sub">Seen this event ID before?</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book's way to cut duplicates is <b>dedupe</b> (short for de-duplication). Every notification event carries an <b>event ID</b>. When an event arrives, the worker checks whether it has seen that ID before. If it has, it throws the event away. If not, it sends it.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-notification-system" target="_blank" rel="noopener">[1]</a></p>
+      <p><b>Part 1: be the gate.</b> Events roll in on the belt, and some are retries. Tap <b>SEND</b> or <b>DROP</b> for each one. Every ID you send goes into the "seen" set.</p>
+      <div class="gate" id="gate">
+        <div class="belt" id="belt"></div>
+        <div id="evWrap"></div>
+        <div class="row" id="gateBtns"><button class="btn primary" id="gSend">📤 SEND</button><button class="btn" id="gDrop">🗑️ DROP</button></div>
+        <div class="seenrow"><span class="small muted"><b>Seen IDs:</b></span><div class="chips" id="seenIds"><span class="small muted">(empty)</span></div></div>
+        <div class="gmsg" id="gmsg"></div>
+        <div class="gstats" id="gstats">📱 Phone: <b id="gPhone">0</b> notifications · duplicates: <b id="gDup">0</b></div>
+      </div>
+
+      <p style="margin-top:20px"><b>Part 2: spot the race.</b> Here's that rule written as code. Two workers both receive event <code>e5</code> at the same moment (a retry got redelivered while the first copy was still being handled). Press play and watch the phone.</p>
+      <div class="code" id="code"></div>
+      <div class="wks">
+        <div class="wk w1"><b>Worker 1</b><div class="st" id="w1st">idle</div></div>
+        <div class="wk w2"><b>Worker 2</b><div class="st" id="w2st">idle</div></div>
+        <div class="wk ph"><b>📱 Phone · seen set</b><div class="st"><span class="buzz" id="rBuzz">—</span> <span id="rSeen">seen = { }</span></div></div>
+      </div>
+      <div class="row" style="margin-top:10px"><button class="btn primary" id="raceBtn">▶ Play the race on e5</button><button class="btn" id="bugBtn" style="display:none" disabled>That's the bug</button></div>
+      <div class="gmsg" id="rmsg"></div>
+      <div id="fixQuiz"></div>
+      <ul class="checklist" id="s3goals">
+        <li data-g="gate"><span class="box">✓</span><span>Gate all 7 events</span></li>
+        <li data-g="race"><span class="box">✓</span><span>Find the race, fix it, and re-run it</span></li>
+      </ul>
+      <div class="callout warn" id="s3note" style="display:none"><b>Dedupe makes duplicates rare, not impossible.</b> Three leaks, none of them spelled out in the book:
+        <ol style="margin:6px 0 0;padding-left:20px">
+          <li><b>Check-then-add races</b>, as you just saw. Use one atomic step. In Redis that's <code>SET notif:e5 sending NX EX 60</code>: NX means "only if it doesn't exist yet" and EX sets an expiry in seconds.<a class="cite" href="https://redis.io/docs/latest/commands/set/" target="_blank" rel="noopener">[7]</a></li>
+          <li><b>A crash between send and "mark sent"</b>. The 60-second claim expires, so a retry can still go out (good, nothing is lost). But the phone already had it, so that retry is a duplicate. The gap from stage 2 never fully closes.</li>
+          <li><b>The seen-set grows forever</b> unless entries expire. Keep IDs only as long as retries can still arrive, say a day.</li>
+        </ol>
+        One more: the ID must be minted by the <b>caller</b>, once per real-world event. Otherwise a retry arrives with a fresh ID, sails through the gate, and the dedupe check is useless.</div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Retry, then raise the alarm</h2><div class="sub">What to retry and what to drop</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book's retry rule: when a third-party service fails to send, the notification goes back on the message queue to try again. If the problem keeps happening, an <b>alert</b> goes out to developers. In the final design, workers retry a set number of times.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-notification-system" target="_blank" rel="noopener">[1]</a></p>
+      <p>Real systems add one more question: <b>is this failure worth retrying?</b> A <i>transient</i> failure (a timeout, a <code>5xx</code> server error, a <code>429 Too Many Requests</code>) might succeed a moment later. A <i>permanent</i> one (a dead device token, a phone number that doesn't exist) will fail the same way forever, so the fix is to clean up the bad data. And once a message runs out of retries, it goes to a <b>dead-letter queue</b> (DLQ): a side queue where failed messages wait for a human, instead of looping forever.<a class="cite" href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html" target="_blank" rel="noopener">[6]</a></p>
+      <p>Failures are dropping out of the providers. Sort each one. Our retry limit is <b>3 attempts</b>.</p>
+      <div class="tri" id="tri">
+        <div class="provhead"><span>☁️ Providers: APNs · FCM · Twilio · SendGrid</span><span class="mono" id="triCount">1 / 7</span></div>
+        <div id="fWrap"></div>
+        <div class="bins" id="bins">
+          <button class="bin" data-b="retry"><b>🔁 Retry <span class="cnt" id="cRetry">0</span></b><span>back on the queue, with backoff</span></button>
+          <button class="bin" data-b="drop"><b>🧹 Drop + clean up <span class="cnt" id="cDrop">0</span></b><span>fix or delete the bad data</span></button>
+          <button class="bin" data-b="dlq"><b>🪦 Dead-letter + alert <span class="cnt" id="cDlq">0</span></b><span>park it, page a human</span></button>
+        </div>
+        <div class="gmsg" id="tmsg"></div>
+      </div>
+
+      <h3 style="margin:22px 0 6px;font-size:18px">The retry storm</h3>
+      <p>"Retry" hides a trap. A provider has an outage, and <b>1,000 sends</b> fail at the same moment. It comes back up, but it can only take <b>60 calls per quarter-second</b>. With <b>exponential backoff</b>, each retry waits twice as long as the one before (1 s, 2 s, 4 s…). With <b>jitter</b>, each message picks a <i>random</i> wait between zero and that number.<a class="cite" href="https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/" target="_blank" rel="noopener">[5]</a> Run the storm both ways. Green bars got through, red bars were rejected, and the dashed line is the provider's limit.</p>
+      <div class="sim bo">
+        <div class="chart-cap">Provider calls per ¼ second · green = accepted, red = rejected</div>
+        <svg id="boSvg" viewBox="0 0 400 196" role="img" aria-label="Bar chart of retry calls per quarter second over 24 seconds"></svg>
+        <div class="sim-bar">
+          <div class="tog"><span class="small"><b>Base delay</b></span><span class="seg" id="baseSeg"><button data-v="0.5" aria-pressed="false">0.5 s</button><button data-v="1" class="on" aria-pressed="true">1 s</button><button data-v="2" aria-pressed="false">2 s</button></span></div>
+          <div class="tog"><span class="small"><b>Jitter</b></span><span class="seg" id="jitSeg"><button data-v="0" class="on" aria-pressed="true">Off</button><button data-v="1" aria-pressed="false">On</button></span></div>
+          <button class="btn primary" id="boRun" style="padding:8px 14px;font-size:14px">▶ Run the storm</button>
+        </div>
+        <div class="simlog bostats" id="boStats"><div>1,000 failed sends, a retry limit of 5 tries, waits capped at 8 s. Press run.</div></div>
+      </div>
+      <ul class="checklist" id="s4goals">
+        <li data-g="tri"><span class="box">✓</span><span>Sort all 7 failures</span></li>
+        <li data-g="nojit"><span class="box">✓</span><span>Run the storm with jitter <b>off</b></span></li>
+        <li data-g="jit"><span class="box">✓</span><span>Run it with jitter <b>on</b> and compare</span></li>
+      </ul>
+      <div class="callout tip" id="s4note" style="display:none"><b>Why jitter wins.</b> Without it, every failed message waits exactly the same time, so they all come back at once. The provider gets hit by a wall of 1,000 calls, rejects most of them, and the survivors all come back together <i>again</i>. Backoff alone just spaces the walls out. Jitter turns each wall into a gentle slope, so the provider can clear the backlog. AWS uses this pattern across its services and SDKs.<a class="cite" href="https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/" target="_blank" rel="noopener">[4]</a></div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Watch the queue</h2><div class="sub">The one graph that says "add workers"</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book names one key metric to watch: the <b>total number of notifications waiting in the queue</b> (the queue <i>depth</i>). If it's large, the workers aren't keeping up, so you add more workers to stop the delay growing.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-notification-system" target="_blank" rel="noopener">[1]</a> The rule underneath is plain arithmetic. If messages arrive faster than workers can send them, the queue grows, and it keeps growing for as long as that lasts.</p>
+      <p>You run the <b>email queue</b> for one day. Each worker sends <b>20 emails per second</b>. Your target: the <b>oldest waiting email</b> should be under <b>60 seconds</b> old at the end of each phase. Set the workers, then run the phase.</p>
+      <div class="sim qc">
+        <svg id="qcSvg" viewBox="0 0 420 210" role="img" aria-label="Line chart of email queue depth across four phases of a day"></svg>
+        <div class="reads">
+          <div class="rd">Arriving<b id="rdIn">—</b></div>
+          <div class="rd">Workers can send<b id="rdCap">—</b></div>
+          <div class="rd">Queue depth<b id="rdDepth">0</b></div>
+          <div class="rd">Oldest email waits<b id="rdAge">—</b></div>
+        </div>
+        <div class="sim-bar">
+          <span class="stepper"><button class="btn" id="wMinus" aria-label="Remove a worker">−</button><span id="wLabel">1 worker</span><button class="btn" id="wPlus" aria-label="Add a worker">+</button></span>
+          <span class="small">Provider: <b id="rdProv">healthy</b></span>
+        </div>
+      </div>
+      <div class="challenge boxed" id="qbox"></div>
+      <div class="callout warn" id="s5note" style="display:none"><b>Two refinements the book doesn't spell out.</b> First, the <b>age of the oldest message</b> (often called <i>consumer lag</i>) tells you how late users' notifications actually are. A raw count can't: 10,000 waiting emails is fine if you send 5,000 a second, and terrible if you send 20. Second, a growing queue doesn't always mean "too few workers". If the provider is slow or throttling you, more workers just make more failed calls. Check the error rate before you scale. RabbitMQ monitoring guides track exactly these: messages ready, messages unacknowledged, and consumer throughput.<a class="cite" href="https://www.datadoghq.com/blog/rabbitmq-monitoring/" target="_blank" rel="noopener">[8]</a></div>
+      <div id="s5quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Boss: The Duplicate Doppelgänger</h2><div class="sub">Lost, duplicated, or fine?</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Six incidents from the on-call log. Assume the book's design, as you built it today: a notification log, ack only after the send succeeds, retries with backoff, and dedupe by event ID. The exception is when a scenario says the team changed something. Call the outcome for the user.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 7 ================= -->
+  <section class="stage" data-stage="7" id="s7">
+    <div class="stage-h"><div class="num">7</div><div><h2>Say it like a senior</h2><div class="sub">"Will users ever get it twice?"</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> Never losing a ping is half the job. The other half is not being annoying: templates, opt-out settings, rate limits per user, and tracking whether anyone opened the thing. That's Quest 10.4, <a href="1004-notification-guardrails.html"><i>Respect the Inbox</i></a>.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-notification-system" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 10: Design a Notification System</a>. Read Step 3's "Reliability" section and the "retry mechanism" and "monitor queued notifications" parts of "Additional components and considerations" (about two pages). Then read Tyler Treat's <a href="https://bravenewgeek.com/you-cannot-have-exactly-once-delivery/" target="_blank" rel="noopener">"You Cannot Have Exactly-Once Delivery"</a>, which the book cites, and the AWS Builders' Library article on <a href="https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/" target="_blank" rel="noopener">timeouts, retries and backoff with jitter</a>.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <b>"Exactly-once" in product docs is narrower than it sounds.</b> Amazon SQS FIFO queues drop a repeated message ID only inside a 5-minute window. Kafka's exactly-once covers reading and writing <i>Kafka</i> topics, not a call out to APNs. Neither can stop a duplicate push once a request has left your system. That's the stage 2 gap again. <b>"Never lost" also stops at the provider.</b> Once APNs or FCM accepts a push, delivery to the phone is out of your hands: if the device is offline for a long time, the provider may keep only the latest notification or let it expire. And a permanent error like APNs's <code>410</code> (the device token is no longer active) means "stop sending to this token", not "try again".<a class="cite" href="https://developer.apple.com/documentation/usernotifications/handling-notification-responses-from-apns" target="_blank" rel="noopener">[9]</a>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"if the notification log and the queue both hold the message, which one is the source of truth?"</i> or <i>"how long should dedupe IDs live?"</i> Follow-up questions are part of the quest.
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 10 "Design a Notification System": Reliability; Additional components (ByteByteGo).</li>
+        <li>Tyler Treat, <a href="https://bravenewgeek.com/you-cannot-have-exactly-once-delivery/" target="_blank" rel="noopener">"You Cannot Have Exactly-Once Delivery"</a>, Brave New Geek, 2015 (cited by the book).</li>
+        <li><a href="https://en.wikipedia.org/wiki/Two_Generals%27_Problem" target="_blank" rel="noopener">Two Generals' Problem</a>, Wikipedia.</li>
+        <li>Marc Brooker, <a href="https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/" target="_blank" rel="noopener">"Timeouts, retries, and backoff with jitter"</a>, Amazon Builders' Library.</li>
+        <li>Marc Brooker, <a href="https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/" target="_blank" rel="noopener">"Exponential Backoff and Jitter"</a>, AWS Architecture Blog.</li>
+        <li><a href="https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html" target="_blank" rel="noopener">Amazon SQS dead-letter queues</a>, AWS documentation.</li>
+        <li><a href="https://redis.io/docs/latest/commands/set/" target="_blank" rel="noopener">Redis SET command (NX and EX options)</a>, Redis documentation.</li>
+        <li><a href="https://www.datadoghq.com/blog/rabbitmq-monitoring/" target="_blank" rel="noopener">"Key metrics for RabbitMQ monitoring"</a>, Datadog (cited by the book).</li>
+        <li><a href="https://developer.apple.com/documentation/usernotifications/handling-notification-responses-from-apns" target="_blank" rel="noopener">Handling notification responses from APNs</a>, Apple Developer documentation.</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '1003',
+  badge: '🛟 Badge: Lifeguard',
+  winTitle: 'Not one ping lost!',
+  cheatsheet: '../reference/ch10-notification-cheatsheet.html',
+});
+const { sleep, shuffle } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+const T = ms => Q.reduced ? 0 : ms;
+function anim(dur, f) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 1) { f(1); return res(); }
+    const t0 = performance.now();
+    const fr = now => { const p = Math.min(1, (now - t0) / dur); f(p); p < 1 ? requestAnimationFrame(fr) : res(); };
+    requestAnimationFrame(fr);
+  });
+}
+const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); if (xp) Q.addXP(xp, li);
+  return true;
+}
+function arrowDefs(svg, id) {
+  const defs = S('defs', {}, svg);
+  const m = S('marker', { id, viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' }, defs);
+  S('path', { d: 'M0 0L10 5L0 10z', class: 'arrhead' }, m);
+}
+// Predict-then-watch round. scored:false makes it free practice (no XP, no hearts).
+function predict(box, { step, title, options, correct, act, explain, xp = 10, scored = true }) {
+  box.innerHTML = `${step ? `<div class="step">${step}</div>` : ''}<h3>${title}</h3><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+  const opts = $('.opts', box);
+  let busy = false;
+  return new Promise(resolve => {
+    shuffle(options.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = async () => {
+        if (busy) return; busy = true;
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        b.classList.add('picked');
+        await act();
+        const ok = i === correct;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-i="${correct}"]`, opts).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + explain;
+        if (scored) { ok ? Q.addXP(xp, b) : Q.loseHeart(b); } else Q.toast(ok ? '✓ practice' : '✗ practice', b, 'practice');
+        resolve({ ok, row: $('.row', box) });
+      };
+      opts.appendChild(b);
+    });
+  });
+}
+function nextBtn(row, label, fn, primary = true) {
+  const b = document.createElement('button'); b.className = 'btn' + (primary ? ' primary' : ''); b.textContent = label; b.onclick = fn; row.appendChild(b); return b;
+}
+function segInit(sel, onPick) {
+  $$(sel + ' button').forEach(b => b.onclick = () => {
+    if (b.disabled) return;
+    $$(sel + ' button').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+    onPick(b.dataset.v);
+  });
+}
+function segLock(sel, lock) { $$(sel + ' button').forEach(b => b.disabled = lock); }
+
+/* ================= STAGE 1: crash the worker ================= */
+Q.onStage(1, () => {
+  const svg = $('#crashSvg');
+  const st = { log: 0, ack: 'before', busy: false };
+  const played = new Map();
+  const goals = new Set();
+  let quizShown = false;
+  const P = { slot: [[28, 52], [28, 90], [28, 128]], hand: [166, 84], mid: [222, 84], apns: [289, 84], log: [166, 205] };
+  const COMBOS = [['0', 'before'], ['1', 'before'], ['0', 'after'], ['1', 'after']];
+  const key = (l, a) => l + '|' + a;
+  const willArrive = (l, a) => l === '1' || a === 'after';
+  const name = (l, a) => `Log ${l === '1' ? 'ON' : 'OFF'} · ack ${a} send`;
+
+  // static scene
+  arrowDefs(svg, 'arr1');
+  S('text', { x: 60, y: 22, class: 'bl' }, svg).textContent = 'iOS push queue';
+  S('rect', { x: 8, y: 38, width: 104, height: 130, rx: 12, class: 'bx' }, svg);
+  P.slot.forEach(([x, y]) => S('rect', { x: x - 8, y: y - 2, width: 80, height: 30, rx: 8, class: 'slot' }, svg));
+  S('path', { d: 'M112 97H143', class: 'flow', 'marker-end': 'url(#arr1)' }, svg);
+  const wRect = S('rect', { x: 146, y: 50, width: 104, height: 86, rx: 12, class: 'bx' }, svg);
+  const wLab = S('text', { x: 198, y: 66, class: 'bl' }, svg); wLab.textContent = 'Worker 1';
+  const wSub = S('text', { x: 198, y: 124, class: 'bs' }, svg); wSub.textContent = 'idle';
+  S('path', { d: 'M250 97H281', class: 'flow', 'marker-end': 'url(#arr1)' }, svg);
+  S('rect', { x: 284, y: 50, width: 74, height: 86, rx: 12, class: 'bx' }, svg);
+  S('text', { x: 321, y: 66, class: 'bl' }, svg).textContent = 'APNs';
+  S('path', { d: 'M358 97H367', class: 'flow' }, svg);
+  S('rect', { x: 370, y: 34, width: 44, height: 128, rx: 9, class: 'phone' }, svg);
+  S('rect', { x: 384, y: 40, width: 16, height: 3, rx: 1.5, fill: 'currentColor', class: 'bs' }, svg);
+  const logG = S('g', {}, svg);
+  const logFlow = S('path', { d: 'M198 136V180', class: 'flow dash', 'marker-end': 'url(#arr1)' }, logG);
+  const cylBody = S('path', { d: 'M146 192V246A52 10 0 0 0 250 246V192', class: 'cyl' }, logG);
+  const cylTop = S('ellipse', { cx: 198, cy: 192, rx: 52, ry: 10, class: 'cyl' }, logG);
+  S('text', { x: 198, y: 266, class: 'bs' }, logG).textContent = 'Notification log';
+  const logTxt = S('text', { x: 198, y: 226, class: 'logtxt' }, logG);
+  const dyn = S('g', {}, svg);
+
+  function token(label, [x, y], cls) {
+    const g = S('g', { class: 'tok' + (cls ? ' ' + cls : ''), transform: `translate(${x} ${y})` }, dyn);
+    S('rect', { width: 64, height: 26, rx: 7 }, g);
+    S('text', { x: 32, y: 13 }, g).textContent = label;
+    g._p = [x, y];
+    return g;
+  }
+  async function move(g, to, dur = 600) {
+    const [x0, y0] = g._p;
+    await anim(T(dur), p => { const e = ease(p); g.setAttribute('transform', `translate(${(x0 + (to[0] - x0) * e).toFixed(1)} ${(y0 + (to[1] - y0) * e).toFixed(1)})`); });
+    g._p = to;
+  }
+  function scene() {
+    dyn.innerHTML = ''; logTxt.textContent = '';
+    wRect.setAttribute('class', 'bx'); wLab.textContent = 'Worker 1'; wSub.textContent = 'idle';
+    const on = st.log === '1' || st.log === 1;
+    logG.classList.toggle('off', !on); cylBody.classList.toggle('on', on); cylTop.classList.toggle('on', on);
+    token('#42', P.slot[0]); token('#43', P.slot[1]); token('#44', P.slot[2]);
+  }
+  function phoneBanner() {
+    const g = S('g', { class: 'pban' }, dyn);
+    S('rect', { x: 374, y: 52, width: 36, height: 24, rx: 5 }, g);
+    S('text', { x: 392, y: 64 }, g).textContent = '#42';
+    if (!Q.reduced) anim(400, p => g.setAttribute('opacity', p));
+  }
+  async function run() {
+    const l = String(st.log), a = st.ack;
+    scene();
+    const first = $$('.tok', dyn)[0];
+    $('#s1log').innerHTML = '';
+    logTo('s1log', `▶ ${name(l, a)}`);
+    wSub.textContent = 'pulling #42';
+    await move(first, P.hand);
+    let flyBadge = null;
+    if (a === 'before') {
+      logTo('s1log', 'Worker 1 pulls #42 and acks at once. The queue deletes it.', 'w');
+      S('text', { x: 60, y: 186, class: 'badge' }, dyn).textContent = 'ack ✓ #42 deleted';
+    } else {
+      logTo('s1log', 'Worker 1 pulls #42. No ack yet, so the queue keeps it, hidden until a timeout.');
+      flyBadge = S('text', { x: 60, y: 186, class: 'badge' }, dyn); flyBadge.textContent = '#42 in flight';
+    }
+    await sleep(T(500));
+    if (l === '1') {
+      wSub.textContent = 'writing log';
+      const c = token('#42', P.hand, 'copy');
+      await move(c, P.log, 600);
+      c.remove(); logTxt.textContent = '#42 · pending';
+      logTo('s1log', 'Worker 1 writes #42 to the notification log, marked pending.');
+      await sleep(T(300));
+    }
+    wSub.textContent = 'sending…';
+    await move(first, P.mid, 450);
+    first.remove();
+    wRect.setAttribute('class', 'bx crashed'); wSub.textContent = '💥 crashed';
+    logTo('s1log', '💥 Worker 1 crashes mid-send. Everything in its memory is gone.', 'e');
+    await sleep(T(900));
+    const ok = willArrive(l, a);
+    if (!ok) {
+      S('text', { x: 198, y: 100, class: 'ghost' }, dyn).textContent = '👻';
+      S('text', { x: 321, y: 155, class: 'ghostt' }, dyn).textContent = 'never sent';
+      logTo('s1log', 'No copy of #42 exists anywhere: not in the queue, not on disk. The user never hears about it. <b>Lost.</b>', 'e');
+      return false;
+    }
+    wRect.setAttribute('class', 'bx fresh'); wLab.textContent = 'Worker 2'; wSub.textContent = 'recovering';
+    let t2;
+    if (a === 'after') {
+      logTo('s1log', '⏳ No ack came back, so after a timeout the queue makes #42 visible again. Worker 2 takes it.');
+      t2 = token('#42', P.slot[0]);
+      await move(t2, P.hand);
+    } else {
+      logTo('s1log', 'A recovery job scans the log, finds #42 still pending, and hands it to Worker 2.');
+      t2 = token('#42', P.log, 'copy');
+      await move(t2, P.hand);
+    }
+    wSub.textContent = 'sending…';
+    await move(t2, P.apns, 600);
+    t2.remove(); phoneBanner();
+    logTo('s1log', 'APNs delivers #42. A banner pops up on the phone, a little late but there.', 'g');
+    if (l === '1') logTxt.textContent = '#42 · sent';
+    if (a === 'after') {
+      if (flyBadge) flyBadge.textContent = 'ack ✓ #42 deleted';
+      logTo('s1log', 'Only now does Worker 2 ack, and the queue deletes #42.');
+    }
+    wSub.textContent = 'done';
+    return true;
+  }
+  const EXPLAIN = {
+    '0|before': 'The ack went out at pull time and nothing was written to disk, so the worker’s memory held the only copy. This is exactly what the book’s rule forbids.',
+    '1|before': 'The log kept a copy on disk marked pending, so a recovery job could find it and retry. That only works because the log write finished <i>before</i> the crash.',
+    '0|after': 'The queue never got an ack, so after a timeout it handed #42 to another worker. No log needed for this one: the queue was the safety net.',
+    '1|after': 'Both safety nets. The queue redelivers, and the log records what was sent, which also helps with retries and auditing.',
+  };
+  function renderTiles() {
+    $('#combos').innerHTML = COMBOS.map(([l, a]) => {
+      const k = key(l, a), r = played.get(k);
+      return `<div class="combo ${r === undefined ? '' : r ? 'ok' : 'lost'}"><b>${name(l, a)}</b><div class="res">${r === undefined ? '? not tried' : r ? '✓ delivered' : '👻 lost'}</div></div>`;
+    }).join('');
+    $('#s1count').textContent = Math.min(3, played.size);
+  }
+  function ask() {
+    const l = String(st.log), a = st.ack, k = key(l, a);
+    const fresh = !played.has(k);
+    predict($('#s1box'), {
+      step: fresh ? 'Predict, then crash' : 'Already tried · practice round',
+      title: `Setup: <b>${name(l, a)}</b>. The worker will crash mid-send. Does the user still get #42?`,
+      options: ['Yes, it still arrives (maybe late)', 'No, it is lost for good'],
+      correct: willArrive(l, a) ? 0 : 1,
+      scored: fresh,
+      act: async () => { st.busy = true; segLock('#logSeg', true); segLock('#ackSeg', true); await run(); st.busy = false; segLock('#logSeg', false); segLock('#ackSeg', false); },
+      explain: EXPLAIN[k],
+    }).then(({ row }) => {
+      if (!played.has(k)) played.set(k, willArrive(l, a));
+      renderTiles();
+      if (played.size >= 3 && checkGoal('#s1goals', 'three', goals)) { $('#s1note').style.display = 'block'; maybeQuiz(); }
+      nextBtn(row, played.size >= 4 ? '↻ Run again' : 'Flip a toggle above, or run this again', () => { scene(); ask(); }, false);
+    });
+  }
+  segInit('#logSeg', v => { st.log = v; if (!st.busy) { scene(); ask(); } });
+  segInit('#ackSeg', v => { st.ack = v; if (!st.busy) { scene(); ask(); } });
+  st.log = '0';
+  scene(); renderTiles(); ask();
+  function maybeQuiz() {
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => Q.quiz($('#s1quiz'), {
+      q: 'Which of these does the book say a notification system must <b>never</b> do?',
+      options: ['Lose a notification entirely', 'Deliver one a few seconds late', 'Deliver two of them out of order', 'Hold one in a queue during a spike'],
+      correct: 0,
+      good: 'Late is fine and out of order is fine, but lost is not. That one rule is why there’s a notification log and a retry mechanism.',
+      bad: 'The book allows notifications to be delayed or reordered. What it forbids is losing one. Being late or holding one in a queue during a spike is the system working as designed.',
+      onDone: () => setTimeout(() => Q.clearStage(1), 900),
+    }), 500);
+  }
+});
+
+/* ================= STAGE 2: exactly-once timeline ================= */
+Q.onStage(2, () => {
+  const svg = $('#tlSvg');
+  const LY = { Q: 40, W: 94, A: 148, P: 202 };
+  arrowDefs(svg, 'arr2');
+  [['Q', 'Queue'], ['W', 'Worker'], ['A', 'APNs'], ['P', 'Phone']].forEach(([k, t]) => {
+    S('line', { x1: 64, x2: 414, y1: LY[k], y2: LY[k], class: 'lane' }, svg);
+    S('text', { x: 4, y: LY[k], class: 'll' }, svg).textContent = t;
+  });
+  const layer = S('g', {}, svg);
+  const E = (k, a, b, t) => ({ k, a, b, t });
+  const pull = E('msg', 'Q', 'W', 'Worker pulls the message. No ack yet.');
+  const pullAck = [E('msg', 'Q', 'W', 'Worker pulls the message…'), E('ok', 'W', 'Q', '…and acks it right away. The queue deletes it.')];
+  const send = E('msg', 'W', 'A', 'Worker sends it to APNs.');
+  const bell = E('bell', 'A', 'P', 'APNs delivers. 🔔 A banner appears on the phone.');
+  const okR = E('ok', 'A', 'W', 'APNs replies 200 OK.');
+  const ack = E('ok', 'W', 'Q', 'Worker acks. The queue deletes the message.');
+  const RUNS = {
+    A: { d: 'the worker crashes <b>before</b> it calls APNs',
+      L: [pull, E('crash', 'W', 0, '💥 Worker crashes before calling APNs.'), E('wait', 'Q', 0, '⏳ No ack arrives. After a timeout the queue redelivers.'), E('msg', 'Q', 'W', 'A fresh worker pulls the same message.'), send, bell, okR, ack],
+      M: [...pullAck, E('crash', 'W', 0, '💥 Worker crashes before calling APNs.'), E('end', 0, 0, 'Nobody will retry: the message was already deleted. <b>Lost.</b>')] },
+    B: { d: 'APNs delivers, but its <b>reply is lost</b> on the network',
+      L: [pull, send, bell, E('lost', 'A', 'W', 'APNs replies 200 OK… and the reply is lost on the network. ✗'), E('wait', 'W', 0, '⏳ The worker hears nothing, times out, and retries.'), E('msg', 'W', 'A', 'Worker sends it to APNs again.'), E('bell', 'A', 'P', 'APNs delivers again. 🔔 A second banner appears.'), okR, ack],
+      M: [...pullAck, send, bell, E('lost', 'A', 'W', 'The reply is lost on the network. ✗'), E('end', 0, 0, 'At-most-once never retries. One banner, and the worker can’t even be sure of that.')] },
+    C: { d: 'APNs delivers, then the worker crashes <b>before it acks</b>',
+      L: [pull, send, bell, okR, E('crash', 'W', 0, '💥 Worker crashes before it acks or records success.'), E('wait', 'Q', 0, '⏳ No ack arrives. After a timeout the queue redelivers.'), E('msg', 'Q', 'W', 'A fresh worker pulls the same message.'), send, E('bell', 'A', 'P', 'APNs delivers again. 🔔 A second banner appears.'), okR, ack],
+      M: [...pullAck, send, bell, okR, E('crash', 'W', 0, '💥 Worker crashes. Nothing to retry: the message is gone from the queue.'), E('end', 0, 0, 'One banner.')] },
+  };
+  function setBells(n) { $('#bells').textContent = n ? '🔔'.repeat(n) : '0'; }
+  async function play(run, mode) {
+    layer.innerHTML = ''; setBells(0);
+    $$('#modeSeg span').forEach(s => s.classList.toggle('on', s.dataset.m === mode));
+    logTo('s2log', `▶ Run ${run} (${mode === 'L' ? 'at-least-once' : 'at-most-once'}): ${RUNS[run].d}.`);
+    let bells = 0;
+    const evs = RUNS[run][mode];
+    for (let i = 0; i < evs.length; i++) {
+      const e = evs[i], x = 74 + i * 30;
+      const cls = e.k === 'crash' || e.k === 'lost' ? 'e' : e.k === 'bell' ? 'g' : e.k === 'end' ? (bells ? 'w' : 'e') : '';
+      logTo('s2log', e.t, cls);
+      if (e.k === 'crash') S('text', { x: x + 9, y: LY.W, class: 'ico' }, layer).textContent = '💥';
+      else if (e.k === 'wait') S('text', { x: x + 9, y: LY[e.a] + (e.a === 'Q' ? 16 : -16), class: 'ico' }, layer).textContent = '⏳';
+      else if (e.k !== 'end') {
+        const ya = LY[e.a], yb = LY[e.b], dn = yb > ya;
+        const y1 = ya + (dn ? 5 : -5), y2 = yb + (dn ? -7 : 7);
+        const lost = e.k === 'lost';
+        const xe = lost ? x + 10 : x + 20, ye = lost ? (y1 + y2) / 2 : y2;
+        const ln = S('line', { x1: x, y1, x2: x, y2: y1, class: 'ar ' + (e.k === 'bell' ? 'msg' : e.k) }, layer);
+        if (!lost) ln.setAttribute('marker-end', 'url(#arr2)');
+        await anim(T(320), p => { ln.setAttribute('x2', (x + (xe - x) * p).toFixed(1)); ln.setAttribute('y2', (y1 + (ye - y1) * p).toFixed(1)); });
+        if (lost) S('text', { x: xe + 6, y: ye, class: 'x' }, layer).textContent = '✗';
+        if (e.k === 'bell') { bells++; setBells(bells); S('text', { x: x + 20, y: LY.P + 24, class: 'ico' }, layer).textContent = '🔔'; }
+      }
+      await sleep(T(320));
+    }
+    return bells;
+  }
+  const fmt = n => n === 0 ? '<span class="bad-t">0 · lost</span>' : n === 1 ? '<span class="good-t">1 · once</span>' : `<span class="warn-t">${n} · duplicate</span>`;
+  const ANS = { A: 1, B: 2, C: 2 };
+  const WHY = {
+    A: 'The crash happened before anything reached APNs, and the message was never acked. So the queue redelivered it and it went out exactly once, just a bit late. Retries are what make this case safe.',
+    B: 'APNs did its job, but the worker never heard back. From the worker’s seat "never arrived" and "arrived but the reply was lost" look identical, so it retried. Two banners.',
+    C: 'The phone already had it, but the worker died before it could ack. The queue only knows "no ack", so it redelivers, and the user gets it twice.',
+  };
+  const box = $('#s2box');
+  let ri = 0, replay = false;
+  const ORDER = ['A', 'B', 'C'];
+  async function round() {
+    const r = ORDER[ri];
+    const { row } = await predict(box, {
+      step: `Run ${r} · at-least-once`,
+      title: `In run ${r}, ${RUNS[r].d}. The worker retries until it hears 200 OK. How many banners does the user see?`,
+      options: ['0 banners', '1 banner', '2 banners'],
+      correct: ANS[r],
+      scored: !replay,
+      act: async () => { const n = await play(r, 'L'); $('#sc' + r + 'L').innerHTML = fmt(n); },
+      explain: WHY[r],
+    });
+    ri++;
+    if (ri < ORDER.length) nextBtn(row, `Next: run ${ORDER[ri]} →`, round);
+    else nextBtn(row, 'Switch to at-most-once mode →', flip);
+  }
+  async function flip() {
+    $$('#modeSeg span').forEach(s => s.classList.toggle('on', s.dataset.m === 'M'));
+    logTo('s2log', 'Mode: <b>at-most-once</b>. The worker acks as soon as it pulls, and never retries.', 'w');
+    const { row } = await predict(box, {
+      step: 'Flip the trade-off',
+      title: 'At-most-once: ack on pull, never retry. Replay all three runs. Which one now <b>loses</b> the notification?',
+      options: ['Run A: crash before the send', 'Run B: the reply gets lost', 'Run C: crash after delivery'],
+      correct: 0,
+      scored: !replay,
+      act: async () => { for (const r of ORDER) { const n = await play(r, 'M'); $('#sc' + r + 'M').innerHTML = fmt(n); await sleep(T(500)); } },
+      explain: 'Run A is lost: the message was deleted on pull, then the worker died before sending. B and C now show one banner each, so the duplicates are gone, but at the cost of a loss. Look at the table: at-least-once gives you <b>duplicates</b>, at-most-once gives you <b>losses</b>. No mode gives "exactly once".',
+    });
+    $('#s2note').style.display = 'block';
+    nextBtn(row, '↻ Replay the runs', () => { ri = 0; replay = true; $('#s2log').innerHTML = ''; ['A', 'B', 'C'].forEach(r => { $('#sc' + r + 'L').textContent = '?'; $('#sc' + r + 'M').textContent = '?'; }); round(); }, false);
+    if (!quizShown) {
+      quizShown = true;
+      setTimeout(() => Q.quiz($('#s2quiz'), {
+        q: 'Why can’t the worker simply guarantee exactly-once delivery?',
+        options: [
+          'It can’t tell a lost reply from a failed send, so it must risk a duplicate or a loss',
+          'APNs doesn’t offer it, but FCM does, so only Android pushes are exactly-once',
+          'Exactly-once only needs a faster queue and fewer network hops between services',
+          'Workers are stateless, so they can’t remember anything between two requests',
+        ],
+        correct: 0,
+        good: 'Silence after a send could mean "never arrived" or "arrived, reply lost". Retrying risks a duplicate and not retrying risks a loss. Notifications choose retry, so they’re at-least-once.',
+        bad: 'It’s not about speed, a vendor, or statelessness. After a send, silence could mean "never arrived" or "arrived, reply lost", and the worker can’t tell which. So it must choose between risking a duplicate and risking a loss.',
+        onDone: () => setTimeout(() => Q.clearStage(2), 900),
+      }), 500);
+    }
+  }
+  let quizShown = false;
+  round();
+});
+
+/* ================= STAGE 3: dedupe gate + race ================= */
+Q.onStage(3, () => {
+  const goals = new Set();
+  let quizShown = false;
+  /* part 1: the gate */
+  const EV = [
+    { id: 'e1', t: 'Order #881 has shipped', f: 'shipping service' },
+    { id: 'e2', t: 'Ana liked your photo', f: 'social service' },
+    { id: 'e1', t: 'Order #881 has shipped', f: 'shipping service · retry' },
+    { id: 'e3', t: 'Payment of $42 received', f: 'billing service' },
+    { id: 'e2', t: 'Ana liked your photo', f: 'social service · redelivered' },
+    { id: 'e4', t: 'Your login code is 4821', f: 'auth service' },
+    { id: 'e3', t: 'Payment of $42 received', f: 'billing service · retry' },
+  ];
+  let gi = 0, phone = 0, dup = 0, gBusy = false;
+  const seen = new Set(), sent = new Set();
+  function gRender() {
+    const e = EV[gi];
+    $('#belt').innerHTML = gi < EV.length ? `<span>Next on the belt:</span>${EV.slice(gi + 1, gi + 4).map(x => `<span class="chip">${x.id}</span>`).join('') || '<span>(last one)</span>'}` : '<span>Belt empty.</span>';
+    $('#evWrap').innerHTML = e ? `<div class="evcard"><div class="eid">${e.id}</div><div><div class="etx">${e.t}</div><div class="efrom">from ${e.f}</div></div></div>` : '';
+    $('#seenIds').innerHTML = seen.size ? [...seen].map(id => `<span class="chip">${id}</span>`).join('') : '<span class="small muted">(empty)</span>';
+    $('#gPhone').textContent = phone; $('#gDup').textContent = dup;
+    $('#gSend').disabled = $('#gDrop').disabled = !e;
+  }
+  function gPick(send, btn) {
+    if (gBusy || gi >= EV.length) return;
+    gBusy = true;
+    const e = EV[gi], isNew = !seen.has(e.id), right = send === isNew, m = $('#gmsg');
+    if (send) { phone++; if (!isNew) dup++; seen.add(e.id); sent.add(e.id); }
+    if (right) { Q.addXP(5, btn); m.className = 'gmsg good-t'; m.textContent = send ? `✓ ${e.id} is new: sent, and ${e.id} joins the seen set.` : `✓ ${e.id} is already in the seen set: dropped. No duplicate.`; }
+    else { Q.loseHeart(btn); m.className = 'gmsg bad-t'; m.textContent = send ? `✗ ${e.id} was already sent. The user just got it twice.` : `✗ ${e.id} was new! Dropping it means nobody sends it: that’s a lost notification.`; }
+    gi++;
+    gRender();
+    if (send) { const c = $$('#seenIds .chip').find(x => x.textContent === e.id); if (c && isNew) c.classList.add('new'); }
+    setTimeout(() => {
+      gBusy = false;
+      if (gi === EV.length) {
+        const lost = [...new Set(EV.map(x => x.id))].filter(id => !sent.has(id));
+        $('#gmsg').className = 'gmsg ' + (dup || lost.length ? 'warn-t' : 'good-t');
+        $('#gmsg').textContent = `Belt cleared. ${phone} sent, ${dup} duplicate${dup === 1 ? '' : 's'}${lost.length ? `, lost: ${lost.join(', ')}` : ', nothing lost'}. ${dup || lost.length ? 'The gate is only as good as its decisions.' : 'A perfect gate: every event once.'}`;
+        checkGoal('#s3goals', 'gate', goals); maybeQuiz();
+      }
+    }, Q.reduced ? 0 : 350);
+  }
+  $('#gSend').onclick = e => gPick(true, e.currentTarget);
+  $('#gDrop').onclick = e => gPick(false, e.currentTarget);
+  gRender();
+
+  /* part 2: the race */
+  const BUGGY = [
+    'def handle(event):',
+    '  if event.id not in seen:',
+    '    send(event)',
+    '    seen.add(event.id)',
+  ];
+  const FIXED = [
+    'def handle(event):',
+    '  if seen.claim(event.id):  <span class="cm"># atomic</span>',
+    '    send(event)',
+    '    seen.mark_sent(event.id)',
+  ];
+  let fixed = false, raceBusy = false, phase = 'idle';
+  const picked = new Set();
+  function renderCode() {
+    const L = fixed ? FIXED : BUGGY;
+    $('#code').innerHTML = L.map((t, i) => `<button class="cl" data-l="${i + 1}" disabled aria-label="Line ${i + 1}"><span class="ln">${i + 1}</span><span class="mks"></span><span>${t}</span></button>`).join('');
+    $$('#code .cl').forEach(b => b.onclick = () => {
+      if (phase !== 'pick') return;
+      const n = +b.dataset.l;
+      picked.has(n) ? picked.delete(n) : picked.add(n);
+      b.classList.toggle('sel', picked.has(n));
+      b.setAttribute('aria-pressed', picked.has(n) ? 'true' : 'false');
+      $('#bugBtn').disabled = picked.size !== 2;
+    });
+  }
+  function mark(w, line) {
+    $$(`#code .mk.w${w}`).forEach(m => m.remove());
+    $$('#code .cl').forEach(c => c.classList.remove('hl'));
+    if (!line) return;
+    const cl = $(`#code .cl[data-l="${line}"]`); cl.classList.add('hl');
+    $('.mks', cl).insertAdjacentHTML('beforeend', `<span class="mk w${w}">W${w}</span>`);
+  }
+  async function race() {
+    if (raceBusy) return; raceBusy = true; $('#raceBtn').disabled = true;
+    renderCode();
+    let buzz = 0; const rs = new Set();
+    const setBuzz = () => { $('#rBuzz').textContent = buzz ? '📳'.repeat(buzz) : '—'; };
+    const setSeen = () => { $('#rSeen').textContent = `seen = { ${[...rs].join(', ')} }`; };
+    $('#w1st').textContent = 'got e5'; $('#w2st').textContent = 'got e5'; setBuzz(); setSeen();
+    $('#rmsg').className = 'gmsg'; $('#rmsg').textContent = '';
+    const steps = fixed ? [
+      [1, 2, 'claim(e5) → OK, it’s mine', () => rs.add('e5:sending')],
+      [2, 2, 'claim(e5) → taken. Drop.', null],
+      [1, 3, 'send(e5) → 📳', () => buzz++],
+      [1, 4, 'mark_sent(e5)', () => { rs.delete('e5:sending'); rs.add('e5:sent'); }],
+    ] : [
+      [1, 2, 'e5 not in seen → go on', null],
+      [2, 2, 'e5 not in seen → go on', null],
+      [1, 3, 'send(e5) → 📳', () => buzz++],
+      [2, 3, 'send(e5) → 📳', () => buzz++],
+      [1, 4, 'seen.add(e5)', () => rs.add('e5')],
+      [2, 4, 'seen.add(e5) (already there)', null],
+    ];
+    for (const [w, line, txt, fx] of steps) {
+      mark(1, null); mark(2, null);
+      mark(w, line);
+      $(`#w${w}st`).textContent = `line ${line}: ${txt}`;
+      if (fx) fx();
+      setBuzz(); setSeen();
+      await sleep(T(1000));
+    }
+    mark(1, null); mark(2, null);
+    raceBusy = false; $('#raceBtn').disabled = false;
+    if (!fixed) {
+      $('#rmsg').className = 'gmsg bad-t';
+      $('#rmsg').textContent = `📳📳 The phone buzzed twice for one event. Tap the two lines that together let both workers through, then press "That's the bug".`;
+      phase = 'pick'; picked.clear();
+      $$('#code .cl').forEach(b => b.disabled = false);
+      $('#bugBtn').style.display = ''; $('#bugBtn').disabled = true;
+      $('#raceBtn').textContent = '↻ Replay the race';
+    } else {
+      $('#rmsg').className = 'gmsg good-t';
+      $('#rmsg').textContent = '📳 One buzz. Worker 2’s claim failed because the check and the claim are now a single step, so it can’t slip in between them.';
+      $('#s3note').style.display = 'block';
+      checkGoal('#s3goals', 'race', goals); maybeQuiz();
+    }
+  }
+  $('#raceBtn').onclick = race;
+  $('#bugBtn').onclick = e => {
+    if (phase !== 'pick' || picked.size !== 2) return;
+    phase = 'judged';
+    const ok = picked.has(2) && picked.has(4);
+    $$('#code .cl').forEach(b => { b.disabled = true; const n = +b.dataset.l; if (n === 2 || n === 4) b.classList.add('right'); else if (picked.has(n)) b.classList.add('wrong'); b.classList.remove('sel'); });
+    $('#bugBtn').style.display = 'none';
+    ok ? Q.addXP(10, e.currentTarget) : Q.loseHeart(e.currentTarget);
+    $('#rmsg').className = 'gmsg ' + (ok ? 'good-t' : 'bad-t');
+    $('#rmsg').innerHTML = (ok ? '✓ Lines 2 and 4. ' : '✗ It’s lines 2 and 4. ') + 'The <b>check</b> (line 2) and the <b>record</b> (line 4) are separate steps with a send in between. Both workers passed the check before either one recorded anything. This is a classic <i>check-then-act</i> race.';
+    $('#raceBtn').disabled = true;
+    Q.quiz($('#fixQuiz'), {
+      tag: 'Fix it',
+      q: 'How do you close the gap between line 2 and line 4?',
+      options: ['Make check-and-claim one atomic step, before the send', 'Add a short sleep between the check and the add', 'Use a bigger, faster cache to store the seen IDs'],
+      correct: 0,
+      xp: 10,
+      good: 'One atomic "claim this ID if nobody has" step means only one worker can ever win. Sleeps just move the race window, and a faster cache shrinks it but never closes it.',
+      bad: 'Sleeps only move the race window, and a faster cache makes it smaller but never closes it. You need the check and the claim to be <b>one atomic step</b>, so exactly one worker wins.',
+      onDone: () => {
+        fixed = true; phase = 'fixed'; renderCode();
+        $('#raceBtn').disabled = false; $('#raceBtn').textContent = '▶ Re-run the race with the fix';
+        $('#rmsg').className = 'gmsg'; $('#rmsg').innerHTML = 'Code patched. Line 2 now <i>claims</i> the ID in one atomic step. In Redis: <code>SET notif:e5 sending NX EX 60</code>, a 60-second lease in case the worker dies. Line 4 then stores it as sent for a day. Re-run the race.';
+      },
+    });
+  };
+  renderCode();
+  function maybeQuiz() {
+    if (quizShown || goals.size < 2) return; quizShown = true;
+    setTimeout(() => Q.quiz($('#s3quiz'), {
+      q: 'Where should the event ID used for dedupe come from?',
+      options: ['The calling service, once per real event, so retries reuse it', 'A fresh UUID that each worker makes on every delivery attempt', 'The response APNs sends back after it accepts the push', 'The queue’s message offset, assigned again on redelivery'],
+      correct: 0,
+      good: 'The ID has to stay the same for every retry of the same real event, so the caller creates it once. This is the same idea as an <b>idempotency key</b>.',
+      bad: 'Anything created per attempt (a worker’s UUID, a new offset, a provider response) is different on every retry, so the gate never sees a match. The calling service has to mint the ID once per real event.',
+      onDone: () => setTimeout(() => Q.clearStage(3), 900),
+    }), 500);
+  }
+});
+
+/* ================= STAGE 4: triage + backoff storm ================= */
+Q.onStage(4, () => {
+  const goals = new Set();
+  let quizShown = false;
+  const CARDS = [
+    { p: 'APNs', e: 'Request timed out after 10 s', a: 'retry', why: 'A timeout is transient: the provider may be fine a moment later. Back on the queue, with backoff.' },
+    { p: 'FCM', e: '503 Service Unavailable', a: 'retry', why: 'A 5xx error means the provider had a problem, not your message. Retry with backoff.' },
+    { p: 'Twilio (SMS)', e: '429 Too Many Requests', a: 'retry', why: 'You’re being rate-limited. Slow down and retry later, and respect a Retry-After header if there is one.' },
+    { p: 'APNs', e: '410 Unregistered: device token is no longer active', a: 'drop', why: 'The app was deleted or the token changed. Retrying will fail forever, so remove or mark the token.' },
+    { p: 'Twilio (SMS)', e: 'Invalid phone number', a: 'drop', why: 'Bad data never fixes itself. Drop the message and flag the contact info for cleanup.' },
+    { p: 'SendGrid', e: '500 Internal Server Error · attempt 3 of 3', a: 'dlq', why: 'It looked transient, but the retry limit is used up. Move it to the dead-letter queue and alert developers, as the book says.' },
+    { p: 'SendGrid', e: 'Hard bounce: mailbox does not exist', a: 'drop', why: 'A hard bounce is permanent. Mark the address invalid and stop sending to it. Repeated bounces also hurt your sender reputation.' },
+  ];
+  const cnt = { retry: 0, drop: 0, dlq: 0 };
+  let ci = 0, tBusy = false;
+  function tRender() {
+    const c = CARDS[ci];
+    $('#triCount').textContent = `${Math.min(ci + 1, CARDS.length)} / ${CARDS.length}`;
+    $('#fWrap').innerHTML = c ? `<div class="fcard"><div class="fp">✗ ${c.p} failed</div><div class="fe">${c.e}</div></div>` : '<div class="fcard" style="border-color:var(--good)"><div class="fp" style="color:var(--good)">✓ queue clear</div><div class="fe">All 7 failures sorted.</div></div>';
+    $$('#bins .bin').forEach(b => { b.classList.remove('right', 'wrong'); b.disabled = !c; });
+    $('#cRetry').textContent = cnt.retry; $('#cDrop').textContent = cnt.drop; $('#cDlq').textContent = cnt.dlq;
+  }
+  $$('#bins .bin').forEach(b => b.onclick = () => {
+    if (tBusy || ci >= CARDS.length) return; tBusy = true;
+    const c = CARDS[ci], ok = b.dataset.b === c.a;
+    b.classList.add(ok ? 'right' : 'wrong');
+    if (!ok) $(`#bins .bin[data-b="${c.a}"]`).classList.add('right');
+    ok ? Q.addXP(5, b) : Q.loseHeart(b);
+    const m = $('#tmsg'); m.className = 'gmsg ' + (ok ? 'good-t' : 'bad-t'); m.textContent = (ok ? '✓ ' : '✗ ') + c.why;
+    cnt[c.a]++;
+    $$('#bins .bin').forEach(x => x.disabled = true);
+    setTimeout(() => { ci++; tBusy = false; tRender(); if (ci === CARDS.length && checkGoal('#s4goals', 'tri', goals)) maybeQuiz(); }, Q.reduced ? 300 : 1500);
+  });
+  tRender();
+
+  /* backoff storm */
+  function rng(seed) { let s = seed >>> 0; return () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  const N = 1000, C = 60, B = 0.25, TT = 24, CAP = 8, MAXA = 5, NB = Math.round(TT / B);
+  function storm(base, jitter) {
+    const r = rng(7), ok = Array(NB).fill(0), rej = Array(NB).fill(0);
+    let pend = Array.from({ length: N }, () => ({ t: jitter ? r() * base : base, a: 1 }));
+    let delivered = 0, dlq = 0, last = 0;
+    for (let b = 0; b < NB; b++) {
+      const lo = b * B, hi = lo + B;
+      const here = pend.filter(m => m.t >= lo && m.t < hi).sort((x, y) => x.t - y.t);
+      pend = pend.filter(m => !(m.t >= lo && m.t < hi));
+      here.forEach((m, i) => {
+        if (i < C) { ok[b]++; delivered++; last = hi; }
+        else { rej[b]++; if (m.a >= MAXA) dlq++; else { const d = Math.min(CAP, base * 2 ** m.a); pend.push({ t: Math.max(hi, m.t + (jitter ? r() * d : d)), a: m.a + 1 }); } }
+      });
+    }
+    return { ok, rej, delivered, dlq, left: pend.length, last, peak: Math.max(...ok.map((o, i) => o + rej[i])) };
+  }
+  const svg = $('#boSvg');
+  const X0 = 34, X1 = 394, Y0 = 166, Y1 = 28, YMAX = 400, bw = (X1 - X0) / NB;
+  const yOf = v => Y0 - Math.min(v, YMAX) / YMAX * (Y0 - Y1);
+  function axes() {
+    svg.innerHTML = '';
+    S('line', { x1: X0, x2: X1, y1: Y0, y2: Y0, class: 'ax' }, svg);
+    S('line', { x1: X0, x2: X0, y1: Y1 - 6, y2: Y0, class: 'ax' }, svg);
+    [0, 200, 400].forEach(v => { const t = S('text', { x: X0 - 4, y: yOf(v) + 4, class: 'axt', 'text-anchor': 'end' }, svg); t.textContent = v; });
+    [0, 4, 8, 12, 16, 20, 24].forEach(s => { const t = S('text', { x: X0 + s / B * bw, y: Y0 + 14, class: 'axt', 'text-anchor': 'middle' }, svg); t.textContent = s + 's'; });
+    const bars = S('g', {}, svg);
+    S('line', { x1: X0, x2: X1, y1: yOf(C), y2: yOf(C), class: 'capl' }, svg);
+    S('text', { x: X1, y: yOf(C) - 5, class: 'capt', 'text-anchor': 'end' }, svg).textContent = 'provider limit: 60 per ¼ s';
+    return bars;
+  }
+  let bars = axes();
+  let base = 1, jit = false, boBusy = false;
+  segInit('#baseSeg', v => { base = +v; });
+  segInit('#jitSeg', v => { jit = v === '1'; });
+  $('#boRun').onclick = async () => {
+    if (boBusy) return; boBusy = true; $('#boRun').disabled = true; segLock('#baseSeg', true); segLock('#jitSeg', true);
+    bars = axes();
+    const res = storm(base, jit);
+    const per = Q.reduced ? 0 : 18;
+    for (let b = 0; b < NB; b++) {
+      const o = res.ok[b], r = res.rej[b];
+      if (o + r) {
+        const x = (X0 + b * bw + .3).toFixed(1), w = Math.max(1, bw - .6).toFixed(1);
+        S('rect', { x, width: w, y: yOf(o), height: (Y0 - yOf(o)).toFixed(1), class: 'bar-ok' }, bars);
+        if (r) S('rect', { x, width: w, y: yOf(o + r), height: (yOf(o) - yOf(o + r)).toFixed(1), class: 'bar-rej' }, bars);
+        if (o + r > YMAX) S('text', { x: X0 + b * bw + bw / 2, y: Y1 - 8, class: 'spk' }, bars).textContent = '▲' + (o + r);
+      }
+      if (per && b % 2) await sleep(per);
+    }
+    const label = `base ${base} s, jitter ${jit ? 'on' : 'off'}`;
+    $('#boStats').innerHTML = `<div><b>${label}</b> → delivered <b class="good-t">${res.delivered}</b> · dead-lettered <b class="${res.dlq ? 'bad-t' : 'good-t'}">${res.dlq}</b>${res.left ? ` · still waiting <b class="warn-t">${res.left}</b>` : ''} · busiest ¼ s: <b>${res.peak}</b> calls${res.left ? '' : ` · last send at <b>${res.last.toFixed(1)} s</b>`}</div>`;
+    boBusy = false; $('#boRun').disabled = false; segLock('#baseSeg', false); segLock('#jitSeg', false);
+    const g = jit ? 'jit' : 'nojit';
+    if (checkGoal('#s4goals', g, goals, 5)) {
+      if (goals.has('jit') && goals.has('nojit')) $('#s4note').style.display = 'block';
+      maybeQuiz();
+    }
+  };
+  function maybeQuiz() {
+    if (quizShown || goals.size < 3) return; quizShown = true;
+    setTimeout(() => Q.quiz($('#s4quiz'), {
+      q: 'APNs answers <code>410 Unregistered</code> for a device token. What should the worker do?',
+      options: ['Don’t retry; remove or mark the stale token', 'Retry later with exponential backoff and jitter', 'Send the same message as an SMS instead', 'Page the on-call developer straight away'],
+      correct: 0,
+      good: 'A 410 is permanent: the token is no longer valid for this app. Retrying wastes calls forever. Clean up the data instead.',
+      bad: 'A 410 is a permanent failure, so backoff won’t help and a human doesn’t need waking up. Switching to SMS ignores the user’s channel choice. Remove or mark the stale token so you stop sending to it.',
+      onDone: () => setTimeout(() => Q.clearStage(4), 900),
+    }), 500);
+  }
+});
+
+/* ================= STAGE 5: watch the queue ================= */
+Q.onStage(5, () => {
+  const PER = 20, DUR = 1800, DT = 10, STEPS = DUR / DT;
+  const PH = [
+    { name: 'Night', rate: 40, intro: '🌙 <b>Phase 1 · Quiet night.</b> About <b>40 emails/s</b> arrive. Set the fewest workers you think will keep up, then run the night.' },
+    { name: '9 am', rate: 380, intro: '📣 <b>Phase 2 · 9 am campaign.</b> Marketing sends a big email blast: <b>380 emails/s</b> for half an hour. Re-size the workers and run it.' },
+    { name: 'Afternoon', rate: 300, intro: '☀️ <b>Phase 3 · Afternoon plateau.</b> Traffic settles at <b>300 emails/s</b>. Predict first.' },
+    { name: 'Evening', rate: 300, prov: 200, intro: '🌆 <b>Phase 4 · Evening.</b> Still <b>300 emails/s</b>. Keep your afternoon workers and run it.' },
+  ];
+  const svg = $('#qcSvg');
+  const X0 = 40, X1 = 412, Y0 = 186, Y1 = 30, pw = (X1 - X0) / 4;
+  const runs = [null, null, null, null];
+  let p = 0, workers = 1, busy = false, prov = null, twist = 'pre';
+  const fmtN = n => n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(n >= 1e4 ? 0 : 1) + 'k' : String(Math.round(n));
+  const fmtAge = s => s < 1 ? '< 1 s' : s < 120 ? Math.round(s) + ' s' : Math.round(s / 60) + ' min';
+  function simulate(rate, w, start, limit) {
+    const pts = []; let depth = start;
+    for (let i = 1; i <= STEPS; i++) {
+      const tries = Math.min(w * PER, depth / DT + rate);
+      const thr = limit ? Math.min(tries, limit) : tries;
+      depth = Math.max(0, depth + (rate - thr) * DT);
+      const age = depth / Math.max(thr, 1);
+      pts.push({ depth, age, thr, rej: tries - thr });
+    }
+    return pts;
+  }
+  function draw(upto) {
+    svg.innerHTML = '';
+    const all = runs.flatMap(r => r ? r.pts : []);
+    const ymax = Math.max(5000, ...all.map(x => x.depth)) * 1.1;
+    const yOf = v => Y0 - v / ymax * (Y0 - Y1);
+    S('line', { x1: X0, x2: X1, y1: Y0, y2: Y0, class: 'ax' }, svg);
+    S('line', { x1: X0, x2: X0, y1: Y1, y2: Y0, class: 'ax' }, svg);
+    S('text', { x: X0 - 4, y: Y0 + 4, class: 'axt', 'text-anchor': 'end' }, svg).textContent = '0';
+    S('text', { x: X0 - 4, y: Y1 + 4, class: 'axt', 'text-anchor': 'end' }, svg).textContent = fmtN(ymax);
+    S('text', { x: X0, y: 12, class: 'axt' }, svg).textContent = 'emails waiting in the queue';
+    PH.forEach((ph, i) => {
+      if (i) S('line', { x1: X0 + i * pw, x2: X0 + i * pw, y1: Y1 - 8, y2: Y0, class: 'sep' }, svg);
+      S('text', { x: X0 + i * pw + pw / 2, y: Y0 + 16, class: 'pl' + (i === p ? ' cur' : '') }, svg).textContent = ph.name;
+    });
+    runs.forEach((r, i) => {
+      if (!r) return;
+      const n = i === upto.p ? upto.n : r.pts.length;
+      if (!n) return;
+      const xs = k => X0 + i * pw + (k / STEPS) * pw;
+      const startY = yOf(r.start);
+      let d = `M${xs(0).toFixed(1)} ${startY.toFixed(1)}`;
+      for (let k = 0; k < n; k++) d += `L${xs(k + 1).toFixed(1)} ${yOf(r.pts[k].depth).toFixed(1)}`;
+      const bad = !r.pass;
+      S('path', { d: d + `L${xs(n).toFixed(1)} ${Y0}L${xs(0).toFixed(1)} ${Y0}Z`, class: 'area' + (bad ? ' bad' : '') }, svg);
+      S('path', { d, class: 'line' + (bad ? ' bad' : '') }, svg);
+    });
+  }
+  function readouts(rate, w, pt, limit) {
+    $('#rdIn').textContent = rate + '/s';
+    $('#rdCap').textContent = (w * PER) + '/s';
+    $('#rdDepth').textContent = pt ? fmtN(pt.depth) : '0';
+    $('#rdAge').textContent = pt ? fmtAge(pt.age) : '—';
+    $('#rdAge').style.color = pt ? (pt.age < 60 ? 'var(--good)' : 'var(--bad)') : '';
+    const pv = $('#rdProv');
+    if (pt && pt.rej > 0.5) { pv.textContent = `⚠ ${Math.round(pt.rej)} × 429/s`; pv.style.color = 'var(--bad)'; }
+    else { pv.textContent = limit ? `limit ${limit}/s` : 'healthy'; pv.style.color = ''; }
+  }
+  function setW(n) { workers = Math.max(1, Math.min(20, n)); $('#wLabel').textContent = `${workers} worker${workers === 1 ? '' : 's'}`; if (!busy) readouts(PH[p].rate, workers, null, prov); }
+  $('#wMinus').onclick = () => !busy && setW(workers - 1);
+  $('#wPlus').onclick = () => !busy && setW(workers + 1);
+  async function runPhase(w, limit) {
+    busy = true; $('#wMinus').disabled = $('#wPlus').disabled = true;
+    const start = p ? (runs[p - 1] ? runs[p - 1].pts[STEPS - 1].depth : 0) : 0;
+    const pts = simulate(PH[p].rate, w, start, limit);
+    const end = pts[STEPS - 1];
+    runs[p] = { pts, start, pass: end.age < 60 };
+    for (let i = p + 1; i < 4; i++) runs[i] = null;
+    const frames = Q.reduced ? 1 : 45;
+    for (let f = 1; f <= frames; f++) {
+      const n = Math.round(f / frames * STEPS);
+      draw({ p, n }); readouts(PH[p].rate, w, pts[n - 1], limit);
+      if (frames > 1) await sleep(40);
+    }
+    busy = false; $('#wMinus').disabled = $('#wPlus').disabled = false;
+    return end;
+  }
+  const box = $('#qbox');
+  function phaseUI() {
+    const ph = PH[p];
+    draw({ p: -1, n: 0 }); readouts(ph.rate, workers, null, prov);
+    if (p === 2) return predictAfternoon();
+    if (p === 3) return eveningUI();
+    box.innerHTML = `<div class="step">Phase ${p + 1} of 4</div><p style="margin:4px 0 10px">${ph.intro}</p><div class="row"><button class="btn primary" id="qRun">▶ Run this phase</button></div><div class="qmsg" id="qmsg"></div><div class="row" id="qNext" style="margin-top:10px"></div>`;
+    $('#qRun').onclick = async () => {
+      if (busy) return;
+      const end = await runPhase(workers, null);
+      const m = $('#qmsg');
+      if (end.age < 60) {
+        const need = Math.ceil(ph.rate / PER);
+        m.className = 'qmsg good'; m.textContent = `✓ Oldest email waits ${fmtAge(end.age)}. ${workers} × 20 = ${workers * PER}/s ≥ ${ph.rate}/s.${workers > need + 2 ? ` (You could save money: ${need} workers is enough.)` : ''}`;
+        $('#qRun').disabled = true;
+        if (!passed.has(p)) { passed.add(p); Q.addXP(10, $('#qRun')); }
+        nextBtn($('#qNext'), 'Next phase →', () => { p++; phaseUI(); });
+      } else {
+        m.className = 'qmsg bad'; m.textContent = `✗ ${fmtN(end.depth)} emails piled up; the oldest has waited ${fmtAge(end.age)}. ${workers * PER}/s out < ${ph.rate}/s in. Add workers and run it again.`;
+      }
+    };
+  }
+  const passed = new Set();
+  function predictAfternoon() {
+    box.innerHTML = '';
+    predict(box, {
+      step: 'Phase 3 of 4 · predict first',
+      title: '☀️ Traffic settles at <b>300 emails/s</b>. Each worker sends 20/s. What’s the fewest workers that keeps up?',
+      options: ['10 workers', '15 workers', '30 workers'],
+      correct: 1,
+      act: async () => {},
+      explain: '300 ÷ 20 = 15. Fewer than that and the queue grows every second, without limit. Exactly 15 keeps up with nothing to spare. In real life you’d add some headroom.',
+    }).then(({ row }) => {
+      row.insertAdjacentHTML('beforebegin', '<p class="small" style="margin:12px 0 0">Now set the workers and run the afternoon.</p>');
+      const b = nextBtn(row, '▶ Run the afternoon', async () => {
+        if (busy) return;
+        const end = await runPhase(workers, null);
+        const m = $('#qmsg3');
+        if (end.age < 60) {
+          m.className = 'qmsg good'; m.textContent = `✓ ${workers} workers, ${workers * PER}/s out. The queue stays near empty.`;
+          b.disabled = true; nextBtn(row, 'Next phase →', () => { p++; phaseUI(); });
+        } else { m.className = 'qmsg bad'; m.textContent = `✗ ${workers * PER}/s out < 300/s in. The oldest email waits ${fmtAge(end.age)}. Add workers.`; }
+      });
+      row.insertAdjacentHTML('afterend', '<div class="qmsg" id="qmsg3"></div>');
+    });
+  }
+  function eveningUI() {
+    twist = 'pre'; prov = null;
+    box.innerHTML = `<div class="step">Phase 4 of 4 · the twist</div><p style="margin:4px 0 10px">${PH[3].intro}</p><div class="row"><button class="btn primary" id="qRun">▶ Run the evening</button></div><div class="qmsg" id="qmsg"></div><div id="qDecide"></div>`;
+    $('#qRun').onclick = async () => {
+      if (busy) return;
+      if (workers < 15) { const m = $('#qmsg'); m.className = 'qmsg warn'; m.textContent = 'Set at least 15 workers first, enough for 300/s, then run the evening.'; return; }
+      $('#qRun').disabled = true;
+      const end = await runPhase(workers, PH[3].prov);
+      const m = $('#qmsg'); m.className = 'qmsg bad';
+      m.innerHTML = `✗ The queue is climbing again: ${fmtN(end.depth)} waiting, the oldest for ${fmtAge(end.age)}. Your ${workers} workers <i>try</i> ${workers * PER}/s, but look at the provider: SendGrid is answering <b>429 Too Many Requests</b> and only accepts 200/s from you.`;
+      decide();
+    };
+  }
+  let firstPick = true;
+  function decide() {
+    const d = $('#qDecide');
+    d.innerHTML = `<div class="challenge" style="margin-top:12px"><h3>The graph says "add workers". Do you?</h3><div class="opts"><button class="opt" data-c="add">➕ Add 5 more workers and rerun the evening</button><button class="opt" data-c="quota">🐢 Back off on 429s and get the quota raised</button></div><div class="explain"></div><div class="row" style="margin-top:10px"></div></div>`;
+    $$('.opt', d).forEach(b => b.onclick = async () => {
+      if (busy) return;
+      $$('.opt', d).forEach(x => x.disabled = true);
+      const ex = $('.explain', d);
+      if (b.dataset.c === 'add') {
+        b.classList.add('wrong'); if (firstPick) Q.loseHeart(b); firstPick = false;
+        const end = await runPhase(workers + 5, PH[3].prov);
+        ex.className = 'explain show bad';
+        ex.innerHTML = `<b>Worse.</b> ${workers + 5} workers now fire ${(workers + 5) * PER}/s at a provider that accepts 200/s. Not one extra email goes out (the queue still reaches ${fmtN(end.depth)}), and the 429s go up. The bottleneck is the provider, not your workers.`;
+        $$('.opt', d).forEach(x => { if (x.dataset.c === 'quota') x.disabled = false; });
+      } else {
+        b.classList.add('right'); if (firstPick) Q.addXP(10, b); firstPick = false;
+        prov = 400;
+        const end = await runPhase(workers, prov);
+        ex.className = 'explain show good';
+        ex.innerHTML = `<b>Right call.</b> Workers back off when they see 429s (and wait as long as any Retry-After header says), and you ask SendGrid for a higher limit, now 400/s. With ${workers * PER}/s out, the evening ends with the oldest email waiting ${fmtAge(end.age)}. Rule: <b>read the error rate before you scale</b>.`;
+        $('#s5note').style.display = 'block';
+        maybeQuiz();
+      }
+    });
+  }
+  let quizShown = false;
+  function maybeQuiz() {
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => Q.quiz($('#s5quiz'), {
+      q: 'Queue depth keeps rising and the provider is healthy, with no errors. What’s the book’s response?',
+      options: ['Add more workers, because they aren’t keeping up', 'Delete the oldest messages to shrink the queue', 'Add more notification servers in front of the queue', 'Merge every channel into a single shared queue'],
+      correct: 0,
+      good: 'A healthy provider plus a growing queue means the consumers are the bottleneck. Add workers until they send at least as fast as messages arrive.',
+      bad: 'Deleting messages breaks "never lost", and more servers in front only add messages faster. A healthy provider plus a growing queue means too few workers, so add workers.',
+      onDone: () => setTimeout(() => Q.clearStage(5), 900),
+    }), 500);
+  }
+  setW(1);
+  phaseUI();
+});
+
+/* ================= STAGE 6: boss ================= */
+Q.onStage(6, () => Q.boss($('#boss'), {
+  name: '👯 Duplicate Doppelgänger',
+  xp: 15,
+  choices: [
+    { k: 'lost', label: 'Lost', sub: 'gone for good' },
+    { k: 'dup', label: 'Duplicate', sub: 'arrives twice' },
+    { k: 'once', label: 'Delivered once', sub: 'maybe late' },
+  ],
+  scenarios: [
+    { e: '💥', t: 'Crash before the call', d: 'A worker pulls an Android push event, then crashes before it ever calls FCM.', a: 'once', why: 'No ack reached the queue, and the log still says pending, so the event comes back after a timeout and another worker sends it. The user just waits a little longer.' },
+    { e: '🪦', t: 'Crash after delivery', d: 'FCM delivers the push to the phone. Then the worker crashes before it records the event ID as sent.', a: 'dup', why: 'The phone has it, but nothing recorded that. The retry passes the dedupe check and the user gets it twice. This is the gap dedupe can never fully close.' },
+    { e: '🏎️', t: '"Let\'s go faster"', d: 'The team switched off the notification log and now acks messages the moment they’re pulled. A worker crashes mid-send.', a: 'lost', why: 'Acked on pull means the queue has deleted it, and with no log there’s no copy on disk either. The only copy was in the dead worker’s memory.' },
+    { e: '🔁', t: 'Caller retries, same ID', d: 'The billing service’s API call times out, so it retries with the <b>same</b> event ID it used the first time.', a: 'once', why: 'If the first request got through, the dedupe gate has already seen that ID and drops the second. If it didn’t, the retry is the first one. Either way, one notification. This is why the caller owns the ID.' },
+    { e: '🆕', t: 'Caller retries, new ID', d: 'The billing service times out and retries, but its code generates a <b>new</b> event ID for every attempt.', a: 'dup', why: 'The second request looks like a brand-new event, so it passes the gate. An ID minted per attempt makes dedupe useless.' },
+    { e: '🌩️', t: 'SendGrid outage', d: 'SendGrid is down for 10 minutes. Failed emails go back on the queue and retry with backoff and jitter.', a: 'once', why: 'The queue holds them and retries ride out the outage, so the emails arrive late but once. If it lasted past the retry limit, they’d go to the dead-letter queue and alert developers, still not lost.' },
+  ],
+  outro: 'The pattern: no ack and no log means lost; a send nobody recorded means duplicate; everything else is "once, maybe late".',
+  onDone: () => Q.clearStage(6),
+}));
+
+/* ================= STAGE 7: interview drill ================= */
+Q.onStage(7, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"How do you make sure notifications aren\'t lost? And will a user ever get the same one twice?"</i>',
+  placeholder: 'Late or out of order is fine, lost is not…',
+  model: '"The rule is: delayed or reordered is fine, lost is not. Workers save each notification to a notification log and only ack the queue after the provider accepts it, so a crash means a retry, not a loss. Failed sends go back on the queue with exponential backoff and jitter, up to a limit. After that they go to a dead-letter queue and we alert developers. Permanent errors, like an unregistered device token, we drop and clean up. Exactly-once isn\'t possible, because we can\'t tell a lost reply from a failed send. So we\'re at-least-once, and we dedupe. Every event carries an ID from the calling service, and the worker claims that ID atomically, a set-if-absent with a short expiry, before sending. That makes duplicates rare, not impossible. Finally, I\'d alert on queue depth and the age of the oldest message, so we know when to add workers, and I\'d check the provider\'s error rate first, because if it\'s throttling us, more workers won\'t help."',
+  checks: ['I said "never lost" (log + ack after send + retry) and accepted delay and reordering', 'I said exactly-once is impossible and explained dedupe by an event ID from the caller', 'I mentioned retry limits with backoff (and a DLQ) plus monitoring queue depth'],
+  onDone: () => Q.clearStage(7),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

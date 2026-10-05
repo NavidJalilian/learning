@@ -1,0 +1,133 @@
+{
+ "n": "BOSS",
+ "slug": "chat-boss-design-it-live",
+ "t": "Design It Live: Chat",
+ "d": "Full mock interview: design a chat system for 50 million daily users",
+ "boss": true,
+ "badge": "👑 Badge: Chat Architect",
+ "winTitle": "You designed a chat system live",
+ "goal": "Your win today: given 'design a chat system', you can scope it in 5 minutes, sketch the high-level design, deep-dive into service discovery, message flows and presence, handle 'what happens when X fails?' follow-ups, and wrap up with sensible extensions.",
+ "bookSections": "Whole chapter via the 4-step framework: Step 1 scope, Step 2 high-level design (protocols, stateless/stateful/third-party, storage, data model, message IDs), Step 3 deep dive (service discovery, message flows, online presence), Step 4 wrap-up (media files, end-to-end encryption, client-side caching, load time / Slack's edge cache, error handling: chat server failure, message resend)",
+ "stages": [
+  {
+   "title": "Scope it",
+   "sub": "Step 1 · understand the problem (3–10 min)",
+   "teaches": "Ask before you draw. The book's Q&A: 1-on-1 or group? Both. Mobile or web? Both. Scale? 50 million DAU. Group size limit? 100 people. Features? 1-on-1 chat, group chat, online indicator; text only. Message size? Text under 100,000 characters. End-to-end encryption? Not required for now (discuss later). How long to keep history? Forever. Resulting requirements: low-latency 1-on-1 chat, small group chat (max 100), online presence, multiple devices per account, push notifications.",
+   "interaction": "Like 0008: a sticky interview clock bar with the 4-step framework strip, and a chat with the interviewer. A question deck of 10 cards: 6 good ones (1-on-1 or group?, mobile/web?, scale/DAU?, group size limit?, which features: text/media/presence?, history retention and message size?) and 4 time-wasters ('Which programming language?', 'What colour are the chat bubbles?', 'Should we use Kubernetes?', 'Do you want emoji reactions in v1?' (a scope creep, not a scoping question)). Each good question gets the interviewer's book answer in the chat, and a requirement tile lights up on the requirements board (50M DAU, Groups <=100, Mobile + web, Text < 100K chars, Online indicator, Multi-device, Push notifications, History forever, No E2E yet). Each waste costs clock time (+2 min). Then a lock-in quiz: 'Which requirement forces server-initiated push?' (low-latency delivery to the receiver).",
+   "check": "All requirement tiles lit within the clock budget; lock-in quiz correct."
+  },
+  {
+   "title": "Sketch it",
+   "sub": "Step 2 · high-level design and buy-in (10–15 min)",
+   "teaches": "Protocol choice (WebSocket for both directions; polling and long polling drawbacks), the three service groups, the adjusted design (LB + API servers over HTTP; chat servers and presence servers over WebSocket; notification servers; KV store; service discovery), storage split (relational for generic data, KV for chat history), tables keyed by message_id and (channel_id, message_id), message IDs that are unique and time-sortable (local per-channel sequence).",
+   "interaction": "Architecture builder (as in 12.2, faster, with no hints): place 7 components into the diagram, label each client link HTTP or WebSocket. Then three rapid buy-in questions from the interviewer in chat, each with 3 answer options: 'Why not long polling?' (wrong-server problem with a stateless LB, can't detect disconnects, idle reconnects); 'Why a key-value store for messages?' (horizontal scale, low latency, long-tail random access, proven at HBase/Cassandra); 'How do you order messages?' (message_id, unique and time-sortable, per-channel sequence; not created_at).",
+   "check": "Diagram complete and correctly labelled; all three buy-in answers correct (each miss costs a heart)."
+  },
+  {
+   "title": "The technique map",
+   "sub": "Step 3 · every requirement needs a mechanism",
+   "teaches": "Map each requirement to the mechanism that delivers it: low-latency delivery -> WebSocket + persistent connection to a chat server; pick a chat server -> service discovery (ZooKeeper) by location and capacity; offline recipient -> push notification servers + KV store history; multiple devices -> per-device cur_max_message_id; small groups -> copy into each member's message sync queue (inbox); online indicator -> presence servers + heartbeat (5s, 30s timeout); status fan-out -> pub/sub channel per friend pair; huge groups' presence -> fetch on entry/refresh; message order -> per-channel message_id.",
+   "interaction": "Matching board: 9 requirement cards on the left, 9 mechanism cards on the right (shuffled). The learner taps one from each side to pair them; correct pairs lock together with a line and a one-line 'why'. Wrong pairs cost a heart. When it's complete, the 1-on-1 flow plays once as a recap animation across the finished diagram from stage 2 (A -> CS1 -> ID gen -> sync queue -> KV -> CS2 -> B, with the offline branch to PN servers).",
+   "check": "All 9 pairs correct."
+  },
+  {
+   "title": "Boss: the curveball barrage",
+   "sub": "Step 3 · 'what happens when…?'",
+   "teaches": "Failure and edge-case follow-ups, each with the expected answer.",
+   "interaction": "Like 0008: Q.boss needs one fixed choice set, so build a custom curveball deck where each card has its own 3 options (one right, two plausible wrong). Curveballs: (1) 'A chat server holding 200,000 connections crashes.' Right: clients detect the drop, ask service discovery for a new server, reconnect with jittered backoff, then sync from their cur_max_message_id. Wrong: 'the messages on it are lost'; 'the load balancer silently moves the TCP connections'. (2) 'Bob drives through a 10-second tunnel.' Right: heartbeat timeout of 30s, so he stays online. Wrong: offline immediately; offline after 5s. (3) 'Bob's phone is off when Alice messages.' Right: the message is stored in the KV store, a push notification goes out, and the phone syncs on reconnect. (4) 'Product wants 100,000-member groups.' Right: stop fanning out per-member inbox copies and store once/read from the channel; fetch presence on entry instead of pushing. (5) 'The client times out and resends; Bob sees a message twice.' Right: client-generated message ID plus server dedupe (idempotent writes). (6) 'Two messages in a group share a timestamp and appear swapped.' Right: order by per-channel message_id, not created_at. (7) 'Alice's laptop was closed for a week.' Right: it fetches messages with ID above its cur_max_message_id, paginated.",
+   "check": "Curveball HP to zero; each answer reveals the reasoning."
+  },
+  {
+   "title": "Wrap it up",
+   "sub": "Step 4 · the last 3–5 minutes",
+   "teaches": "The book's wrap-up extensions: (1) media files (photos, videos): much bigger than text, so compression, cloud storage and thumbnails; (2) end-to-end encryption (WhatsApp): only sender and recipient can read messages; (3) caching messages on the client to cut data transfer; (4) improving load time: Slack built a geographically distributed network (Flannel) to cache users' data, channels and so on; (5) error handling: chat server failure (service discovery hands clients a new server) and message resending (retry and queueing). Also good: recap the design, name bottlenecks (hot channels, reconnect storms, presence fan-out) and say what you'd monitor.",
+   "interaction": "Pick-5-of-9: nine wrap-up cards, five from the book (Media files: compression + object storage + thumbnails; End-to-end encryption; Client-side message cache; Edge caching for faster load (Slack Flannel); Error handling: chat server failure + message resend) and four weak ones ('Rewrite it in Rust', 'Switch every service to GraphQL', 'Add a blockchain for message integrity', 'Remove the group size limit for free'). Picking a book card adds a speech bubble in the chat with a one-liner the learner could say. Then a one-question follow-up: 'If you add end-to-end encryption, what server feature gets harder?' (server-side search and moderation, because the server can't read content).",
+   "check": "Five strong picks with no weak picks (each weak pick costs a heart); follow-up correct."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "The 60-second version + your scorecard",
+   "teaches": "Deliver the whole design in about 60 seconds.",
+   "interaction": "Q.drill. Prompt: 'You have one minute. Summarise your chat system design.' Model answer: 'Scope: 1-on-1 and groups up to 100, mobile and web, 50 million DAU, text only, presence, multi-device, push, history forever. Clients keep a WebSocket to a chat server picked by service discovery (ZooKeeper) based on location and load. Login and profiles are stateless API servers behind a load balancer. On send, the chat server gets a per-channel, time-sortable message ID, queues the message and stores it in a key-value store like Cassandra, keyed by channel_id and message_id. Then it's forwarded to the recipient's chat server, or a push notification goes out if they're offline. Each device syncs with its own cur_max_message_id. Small groups fan out into per-member inboxes; huge ones would read from the channel. Presence uses heartbeats with a 30-second timeout and pub/sub to friends. Next I'd add media, end-to-end encryption, client caching, and failure handling for chat-server crashes and resends.' Then show a scorecard (hearts left, clock overrun, curveballs right), stored under its own key like 0008 does (sdq:v1:<id>-interview).",
+   "check": "Self-grade checks: 'I scoped with numbers (50M DAU, 100-member groups)', 'I covered WebSocket + service discovery + KV store + message IDs', 'I traced online/offline delivery and multi-device sync', 'I covered presence (heartbeat + fan-out)', 'I named at least two wrap-up extensions'."
+  }
+ ],
+ "caveats": [
+  "The book's design is a sketch for a 45-minute interview. Real chat stacks (WhatsApp on Erlang, Discord on Elixir + ScyllaDB, Slack with Flannel edge caches) add routing tables, per-user sequences, rate limits, and lots of operational machinery the book leaves out.",
+  "End-to-end encryption changes more than the book says. With the Signal protocol (used by WhatsApp), the server stores only ciphertext, so server-side search, moderation and spam filtering get much harder, and multi-device sync means encrypting a copy for each device.",
+  "Storage choices have moved on: Facebook Messenger left HBase for MyRocks around 2018, and Discord left Cassandra for ScyllaDB in 2022. Name the access pattern first and the product second.",
+  "The book's 'local sequence number' and its single cur_max_message_id cursor don't fit together cleanly (see 12.3/12.4). A strong candidate mentions per-conversation cursors or a per-user inbox sequence."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo: Design a Chat System (book chapter)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-chat-system"
+  },
+  {
+   "label": "Slack Engineering: Flannel, an application-level edge cache to make Slack scale",
+   "url": "https://slack.engineering/flannel-an-application-level-edge-cache-to-make-slack-scale/"
+  },
+  {
+   "label": "WhatsApp Encryption Overview (technical white paper)",
+   "url": "https://www.whatsapp.com/security/WhatsApp-Security-Whitepaper.pdf"
+  },
+  {
+   "label": "Signal Protocol documentation",
+   "url": "https://signal.org/docs/"
+  },
+  {
+   "label": "Discord: How Discord Stores Trillions of Messages",
+   "url": "https://discord.com/blog/how-discord-stores-trillions-of-messages"
+  },
+  {
+   "label": "Apache ZooKeeper",
+   "url": "https://zookeeper.apache.org/"
+  }
+ ],
+ "id": "1206",
+ "file": "1206-chat-boss-design-it-live.html",
+ "world": 12,
+ "chapterTitle": "Design a Chat System",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-chat-system",
+ "cheatsheet": "../reference/ch12-chat-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "1201",
+   "n": "12.1",
+   "t": "Open the Pipe",
+   "d": "What a chat service does, and polling vs long polling vs WebSocket"
+  },
+  {
+   "id": "1202",
+   "n": "12.2",
+   "t": "The Switchboard",
+   "d": "Stateless vs stateful services, the scaled design, and service discovery"
+  },
+  {
+   "id": "1203",
+   "n": "12.3",
+   "t": "The Message Vault",
+   "d": "Where chat history lives, the message tables, and how to mint message IDs"
+  },
+  {
+   "id": "1204",
+   "n": "12.4",
+   "t": "Special Delivery",
+   "d": "The 1-on-1 message flow, syncing many devices, and small-group fan-out"
+  },
+  {
+   "id": "1205",
+   "n": "12.5",
+   "t": "The Green Dot",
+   "d": "Online presence: login/logout, heartbeats, and fanning out status changes"
+  },
+  {
+   "id": "1206",
+   "n": "BOSS",
+   "t": "Design It Live: Chat",
+   "d": "Full mock interview: design a chat system for 50 million daily users"
+  }
+ ]
+}

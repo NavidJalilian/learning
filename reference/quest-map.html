@@ -63,13 +63,35 @@ a.q:hover { transform: translateX(4px); border-color: var(--accent); }
 .links a { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; font-weight: 600; font-size: 14px; text-decoration: none; }
 .links a:hover { border-color: var(--accent); }
 @media (max-width: 520px) { .q .st { display: none; } }
+.jump { display: flex; flex-wrap: wrap; gap: 6px; margin: 22px 0 0; }
+.jump a { font: 600 12.5px var(--mono); text-decoration: none; border: 1px solid var(--line); background: var(--panel); border-radius: 99px; padding: 5px 10px; min-height: 30px; display: inline-flex; align-items: center; gap: 5px; }
+.jump a.done { border-color: var(--good); color: var(--good); }
+.jump a.soon { opacity: .5; }
+.world { margin-top: 26px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 22px; padding: 4px 16px 4px; scroll-margin-top: 16px; }
+.world > summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: 1fr auto; gap: 4px 14px; align-items: center; padding: 14px 2px; }
+.world > summary::-webkit-details-marker { display: none; }
+.world .wk { font: 700 12px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.world .wt { font-size: 20px; font-weight: 700; line-height: 1.2; grid-column: 1; }
+.world .wn { font-size: 14px; color: var(--muted); grid-column: 1; }
+.world .wp { grid-column: 2; grid-row: 1 / span 3; text-align: right; font-weight: 700; font-size: 14px; white-space: nowrap; }
+.world .wp small { display: block; color: var(--muted); font-weight: 600; font-size: 12px; }
+.world .wbar { grid-column: 1 / -1; height: 6px; border-radius: 99px; background: var(--panel); overflow: hidden; }
+.world .wbar div { height: 100%; background: var(--good); }
+.world .chev { display: inline-block; transition: transform .2s; color: var(--muted); }
+.world[open] .chev { transform: rotate(90deg); }
+.world .path { margin: 4px 0 14px; }
+.world .wlinks { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+.world .wlinks a { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-weight: 600; font-size: 13.5px; text-decoration: none; }
+.world .wlinks a:hover { border-color: var(--accent); }
+.world .empty { color: var(--muted); font-size: 14px; padding: 0 0 16px; }
+@media (prefers-reduced-motion: reduce) { .world .chev, a.q, .xpbar div { transition: none; } }
 </style>
 </head>
 <body>
 <main>
   <div class="kicker">Alex Xu · System Design Interview, Vol. 1</div>
   <h1>System Design Quest</h1>
-  <p class="lede">One chapter at a time, as playable quests. Progress is saved in this browser.</p>
+  <p class="lede">Every chapter of the book as a world of playable quests. Everything is open — suggested order is top to bottom. Progress is saved in this browser.</p>
 
   <div class="player">
     <div class="avatar">🧑‍💻</div>
@@ -80,43 +102,64 @@ a.q:hover { transform: translateX(4px); border-color: var(--accent); }
     </div>
   </div>
 
-  <h2>World 6 · Design a Key-Value Store</h2>
-  <p class="sub">Suggested order is top to bottom — but everything is open. Jump anywhere.</p>
-  <div class="path" id="path"></div>
-
-  <h2>The rest of the book</h2>
-  <p class="sub">Worlds unlock as you paste in the next chapter.</p>
-  <div class="chapters" id="chapters"></div>
+  <nav class="jump" id="jump" aria-label="Jump to a world"></nav>
+  <div id="worlds"></div>
 
   <div class="links">
-    <a href="kv-store-cap-cheatsheet.html">📄 KV store &amp; CAP cheat sheet</a>
-    <a href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noopener">📖 Chapter 6 (ByteByteGo)</a>
+    <a href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">📖 The book on ByteByteGo</a>
   </div>
 </main>
 <script src="../lessons/quest-engine.js"></script>
 <script>
 (() => {
-  const QUESTS = Quest.CATALOG;
-  const CHAPTERS = ['Scale from zero to millions of users', 'Back-of-the-envelope estimation', 'A framework for system design interviews', 'Design a rate limiter', 'Design consistent hashing', 'Design a key-value store', 'Design a unique ID generator', 'Design a URL shortener', 'Design a web crawler', 'Design a notification system', 'Design a news feed system', 'Design a chat system', 'Design a search autocomplete system', 'Design YouTube', 'Design Google Drive'];
+  const QUESTS = Quest.CATALOG, WORLDS = Quest.WORLDS.slice().sort((a, b) => a.w - b.w);
   const d = Quest.load(), data = d.lessons;
   const xp = Quest.totalXP(d), stars = Object.values(data).reduce((s, l) => s + (l.stars || 0), 0);
   const r = Quest.rankOf(xp);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   document.getElementById('rank').textContent = `Lv ${r.i + 1} · ${r.name}`;
-  document.getElementById('xpTotal').textContent = `${xp} XP · next rank at ${r.hi}`;
+  const ready = QUESTS.filter(q => q.ready), cleared = ready.filter(q => data[q.id]).length;
+  document.getElementById('xpTotal').textContent = `${xp} XP · next rank at ${r.hi} · ${cleared}/${ready.length} quests`;
   document.getElementById('starTotal').textContent = `★ ${stars}`;
   requestAnimationFrame(() => document.getElementById('xpBar').style.width = Math.min(100, (xp - r.lo) / (r.hi - r.lo) * 100) + '%');
 
-  document.getElementById('path').innerHTML = QUESTS.map(q => {
+  // Which worlds are expanded is a per-browser convenience; default = the first world with an unfinished ready quest.
+  let openSet = null;
+  try { openSet = JSON.parse(localStorage.getItem('sdq:v1:map-open') || 'null'); } catch (_) {}
+  const firstTodo = (WORLDS.find(w => QUESTS.some(q => q.w === w.w && q.ready && !data[q.id])) || WORLDS[0] || {}).w;
+  if (!Array.isArray(openSet)) openSet = [firstTodo];
+  if (location.hash && /^#w\d+$/.test(location.hash)) openSet.push(+location.hash.slice(2));
+
+  const questRow = q => {
     const done = !!data[q.id], inRun = !!d.runs[q.id];
     const open = !done && q.ready && Quest.isUnlocked(d, q.id);
     const cls = done ? 'done' : open ? 'open' : 'lockd';
     const st = done ? '★'.repeat(data[q.id].stars || 1) + ' cleared · replay' : open ? (inRun ? '▶ continue' : '▶ play') : 'coming soon';
     const tag = q.ready && (done || open) ? 'a' : 'div';
-    return `<${tag} class="q ${cls}${q.boss ? ' boss' : ''}"${tag === 'a' ? ` href="../lessons/${q.file}"` : ''}><span class="id">${q.n}</span><span class="body"><b>${q.t}</b><span class="d">${q.d}</span></span><span class="st">${st}</span></${tag}>`;
+    return `<${tag} class="q ${cls}${q.boss ? ' boss' : ''}"${tag === 'a' ? ` href="../lessons/${q.file}"` : ''}><span class="id">${esc(q.n)}</span><span class="body"><b>${esc(q.t)}</b><span class="d">${esc(q.d)}</span></span><span class="st">${st}</span></${tag}>`;
+  };
+
+  document.getElementById('worlds').innerHTML = WORLDS.map(w => {
+    const qs = QUESTS.filter(q => q.w === w.w), rq = qs.filter(q => q.ready), dn = rq.filter(q => data[q.id]).length;
+    const pct = rq.length ? Math.round(dn / rq.length * 100) : 0;
+    const prog = rq.length ? `${dn}/${rq.length}<small>${dn === rq.length ? '🏆 world cleared' : 'quests cleared'}</small>` : `<small>coming soon</small>`;
+    return `<details class="world" id="w${w.w}" data-w="${w.w}"${openSet.includes(w.w) ? ' open' : ''}>
+      <summary><span class="wk"><span class="chev">▸</span> World ${w.w} · Chapter ${w.w}</span><span class="wt">${esc(w.t)}</span><span class="wn">${esc(w.name || '')}</span><span class="wp">${prog}</span><span class="wbar"><div style="width:${pct}%"></div></span></summary>
+      ${qs.length ? `<div class="path">${qs.map(questRow).join('')}</div>` : '<p class="empty">Quests for this chapter are being built.</p>'}
+      <div class="wlinks">${w.cheatsheet && rq.length ? `<a href="${esc(w.cheatsheet)}">📄 Chapter ${w.w} cheat sheet</a>` : ''}${w.slug ? `<a href="https://bytebytego.com/courses/system-design-interview/${esc(w.slug)}" target="_blank" rel="noopener">📖 Chapter ${w.w} (ByteByteGo)</a>` : ''}</div>
+    </details>`;
   }).join('');
 
-  document.getElementById('chapters').innerHTML = CHAPTERS.map((c, i) =>
-    `<div class="ch ${i === 5 ? 'here' : 'lockd'}"><div class="n">CH ${i + 1}${i === 5 ? ' · you are here' : ''}</div>${c}</div>`).join('');
+  document.getElementById('jump').innerHTML = WORLDS.map(w => {
+    const rq = QUESTS.filter(q => q.w === w.w && q.ready), all = rq.length && rq.every(q => data[q.id]);
+    return `<a href="#w${w.w}" class="${all ? 'done' : rq.length ? '' : 'soon'}" title="${esc(w.t)}">${all ? '✓' : ''}W${w.w}</a>`;
+  }).join('');
+  document.querySelectorAll('#jump a').forEach(a => a.addEventListener('click', () => { const el = document.querySelector(a.getAttribute('href')); if (el) el.open = true; }));
+  document.querySelectorAll('.world').forEach(el => el.addEventListener('toggle', () => {
+    const now = [...document.querySelectorAll('.world[open]')].map(x => +x.dataset.w);
+    try { localStorage.setItem('sdq:v1:map-open', JSON.stringify(now)); } catch (_) {}
+  }));
+  if (location.hash) { const el = document.querySelector(location.hash); if (el) el.scrollIntoView(); }
 })();
 </script>
 </body>

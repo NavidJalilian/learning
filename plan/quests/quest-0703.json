@@ -1,0 +1,127 @@
+{
+ "n": "7.3",
+ "slug": "snowflake-bit-layout",
+ "t": "Anatomy of a Snowflake",
+ "d": "Twitter Snowflake's 64-bit layout: mint an ID, decode one, and do the 69-year math",
+ "boss": false,
+ "badge": "❄️ Badge: Snowflake Smith",
+ "winTitle": "64 bits, fully understood",
+ "goal": "Your win today: you can draw 1 | 41 | 5 | 5 | 12 from memory, say what each section is for, decode an ID back to its timestamp, and justify '69 years' and '4,096 per millisecond' with arithmetic.",
+ "bookSections": "Step 2 - Twitter snowflake approach; Step 3 - Design deep dive (Timestamp, Sequence number), incl. Figure 7-7 decode example",
+ "stages": [
+  {
+   "title": "Divide the 64 bits",
+   "sub": "Divide and conquer, one field at a time",
+   "teaches": "Snowflake's idea is divide and conquer: instead of one counter, split the 64-bit ID into sections, each solving one requirement. Layout (most significant bit first): sign bit 1 bit (always 0, reserved for future use; keeps the number positive in signed 64-bit integers like Java's long) | timestamp 41 bits (milliseconds since a chosen epoch) | datacenter ID 5 bits (2^5 = 32 datacenters) | machine ID 5 bits (32 machines per datacenter) | sequence number 12 bits (counter for IDs made on that machine in the same millisecond; resets to 0 every millisecond). Mapping to requirements: timestamp first → sorts by time; datacenter + machine → no two generators ever produce the same bits, so no coordination; sequence → many IDs per millisecond; total 64 → fits.",
+   "interaction": "Build-the-layout puzzle. On screen: a 64-cell bit bar (cells small, grouped visually every 8) and 5 field tiles (Sign, Timestamp, Datacenter ID, Machine ID, Sequence). The learner taps tiles in the order they appear left to right (left = most significant), then chooses each field's size from a dropdown (1, 5, 10, 12, 41, 42). A running 'bits used: n / 64' counter turns green at exactly 64. 'Check' compares to 1 | 41 | 5 | 5 | 12. Wrong order (e.g. sequence first) gets a hint: 'What should decide sort order: the time or the counter?'",
+   "check": "Q.quiz: (1) Why is the timestamp the leftmost real field? → leftmost bits dominate numeric comparison, so IDs sort by time. (2) Why can two machines generate without talking? → datacenter+machine bits differ. (3) What's the sign bit set to? → always 0."
+  },
+  {
+   "title": "Mint an ID",
+   "sub": "Watch the bits fill in",
+   "teaches": "Generating an ID = gluing numbers with bit shifts: id = (timestamp << 22) | (datacenterId << 17) | (machineId << 12) | sequence. 22 = 5 + 5 + 12 bits to the right of the timestamp. Datacenter and machine IDs are chosen at startup and normally fixed; timestamp and sequence change while running. Within the same millisecond the sequence goes 0, 1, 2…; when the millisecond ticks, sequence resets to 0 and the timestamp grows, so the new ID is bigger than every ID from earlier milliseconds on any machine.",
+   "interaction": "Predict-then-watch with a slowed-down clock. On screen: the 64-bit bar coloured by section, datacenter and machine number pickers (0–31), a 'slow clock' that ticks one 'millisecond' every 2 seconds, a 'Generate' button, and a log of minted IDs (decimal + coloured binary). Round 1: 'You'll click Generate 3 times within one tick. Which section changes?' (timestamp / machine / sequence) → sequence: 0, 1, 2. Round 2: 'The clock ticks, then you click once. Sequence becomes?' → 0. Round 3: two side-by-side machines (machine 1 and machine 30) generate in the same tick vs the next tick; predict which ID is larger → the later tick wins regardless of machine number; in the same tick, the higher machine number wins (not by real time).",
+   "check": "All 3 predictions answered; wrong ones cost a heart and replay the animation."
+  },
+  {
+   "title": "Decode the past",
+   "sub": "Figure 7-7: from bits back to a date",
+   "teaches": "Reverse it: timestamp = id >> 22; datacenterId = (id >> 17) & 31; machineId = (id >> 12) & 31; sequence = id & 4095. The timestamp is relative to Twitter's default epoch 1288834974657 ms (Nov 04, 2010, 01:42:54 UTC). Book Figure 7-7 example: timestamp bits = 297616116568; add the epoch → 1586451091225 ms → 2020-04-09 16:51:31.225 UTC. Takeaway: anyone holding a Snowflake ID can tell when it was created.",
+   "interaction": "Calculate-and-check, step by step. Given the ID 1248292468186091525 (built from timestamp 297616116568, datacenter 3, machine 17, sequence 5), the learner fills four boxes: (a) timestamp = id >> 22 (a 'shift' button animates the right 22 bits falling off) → 297616116568; (b) add epoch → 1586451091225; (c) pick the date from 4 options (2020-04-09 16:51 UTC correct; distractors 2010-11-04, 1979-06-…, 2080-07-10); (d) datacenter 3, machine 17, sequence 5 read off the coloured segments. Afterwards, a free 'decoder toy' input accepts any 64-bit ID (BigInt) and shows its fields and date.",
+   "check": "All four boxes correct (exact integers; the builder must use BigInt because these exceed 2^53)."
+  },
+  {
+   "title": "How long, how many?",
+   "sub": "The 69-year math and the throughput math",
+   "teaches": "Lifetime: max timestamp = 2^41 − 1 = 2,199,023,255,551 ms ≈ 69.7 years (the book says ~69 years). From Twitter's 2010 epoch that runs out around July 2080. Picking a custom epoch close to today maximises the time before overflow; after ~69 years you need a new epoch or another way to migrate IDs. Capacity: 32 datacenters × 32 machines = 1,024 generators. Sequence: 2^12 = 4,096 IDs per millisecond per machine, about 4.1 million per second per machine; the whole fleet tops out near 4.19 billion per second. Our requirement (10,000/s) fits on one machine with ~400× headroom. The sequence is 0 for most IDs unless a machine makes more than one ID in a millisecond.",
+   "interaction": "Calculate-and-check cards, one at a time, each with a 'show working' hint. (1) 2^41 ms in years? typed, accept 69–70. (2) Overflow year with Twitter's 2010 epoch? accept 2079–2081. (3) Generators possible? → 1024. (4) Max IDs per second per machine? accept 4,000,000–4,200,000. (5) Machines needed for 10,000/s? → 1. A 'custom epoch' slider (2010 → 2030) then shows the overflow date moving later as the epoch moves later, to make the point visually.",
+   "check": "5 numeric answers within tolerance."
+  },
+  {
+   "title": "Boss: The Bit Wraith",
+   "sub": "Which section is responsible?",
+   "teaches": "Reasoning about IDs by section: what differs between two IDs tells you how they were made.",
+   "interaction": "Q.boss with choices: { k: 'ts', label: 'Timestamp', sub: '41 bits' }, { k: 'node', label: 'Datacenter + machine', sub: '10 bits' }, { k: 'seq', label: 'Sequence', sub: '12 bits' }, { k: 'sign', label: 'Sign bit', sub: '1 bit' }. Scenarios (7): two IDs made by the same machine in the same ms differ only in → seq; two IDs made at the same ms on different machines differ in → node; the newest tweet always has the biggest ID because of → ts; the ID stays positive in a Java long thanks to → sign; the system will stop working in ~69 years because of → ts; you can only run 32 machines per datacenter because of → node; one machine can't exceed 4,096 IDs per ms because of → seq.",
+   "check": "Boss HP bar, 'why' line per card."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "Draw it, then defend it",
+   "teaches": "Model answer: 'I'd use a Snowflake-style 64-bit ID: 1 sign bit, 41 bits of milliseconds since a custom epoch, 5 bits datacenter, 5 bits machine, 12 bits sequence. Timestamp first means IDs sort by time. Datacenter and machine bits make every generator's output disjoint, so there's no coordination. 12 bits gives 4,096 IDs per millisecond per machine, far above 10,000 a second, and 41 bits of milliseconds lasts about 69 years from the epoch.'",
+   "interaction": "Q.drill: prompt 'Walk the interviewer through your 64 bits and the numbers behind them.' Self-grade checklist: correct layout 1|41|5|5|12; why timestamp is first; why no coordination is needed; 4,096/ms; ~69 years; custom epoch.",
+   "check": "Self-grade checklist (6 items)."
+  }
+ ],
+ "caveats": [
+  "Snowflake IDs exceed JavaScript's safe integer limit (2^53 − 1), so a JS client parsing them as numbers silently corrupts them. Twitter's API added string versions (id_str) for this reason; Discord's API sends its snowflakes as strings too. The builder must use BigInt in the lesson for the same reason.",
+  "Twitter's original code calls the 10 middle bits datacenterId (5) + workerId (5), matching the book. Other 'snowflakes' differ: Instagram used 41-bit time + 13-bit shard ID + 10-bit sequence generated inside PostgreSQL; Discord uses a 42-bit timestamp from a 2015 epoch; Sony's Sonyflake uses 39 bits of 10 ms units (~174 years) + 8-bit sequence + 16-bit machine ID.",
+  "Snowflake IDs leak information: creation time (as decoded here) and roughly how many IDs a machine produces. Don't use them as secret or unguessable tokens.",
+  "'Sortable' is only rough across machines. Inside one millisecond, IDs order by datacenter/machine number, not real time, and clock differences between machines blur order further (7.4)."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo: Design a Unique ID Generator in Distributed Systems (book chapter 7)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems"
+  },
+  {
+   "label": "Twitter Engineering: Announcing Snowflake (book reference [3])",
+   "url": "https://blog.twitter.com/engineering/en_us/a/2010/announcing-snowflake.html"
+  },
+  {
+   "label": "twitter-archive/snowflake (original Scala implementation)",
+   "url": "https://github.com/twitter-archive/snowflake"
+  },
+  {
+   "label": "Instagram Engineering: Sharding & IDs at Instagram",
+   "url": "https://instagram-engineering.com/sharding-ids-at-instagram-1cf5a71e5a5c"
+  },
+  {
+   "label": "Discord developer docs: Snowflakes",
+   "url": "https://discord.com/developers/docs/reference#snowflakes"
+  },
+  {
+   "label": "sony/sonyflake",
+   "url": "https://github.com/sony/sonyflake"
+  }
+ ],
+ "id": "0703",
+ "file": "0703-snowflake-bit-layout.html",
+ "world": 7,
+ "chapterTitle": "Design a Unique ID Generator",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems",
+ "cheatsheet": "../reference/ch07-unique-id-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "0701",
+   "n": "7.1",
+   "t": "Numbers Nobody Repeats",
+   "d": "Why auto_increment breaks across servers, the 5 requirements, and multi-master 'count by k'"
+  },
+  {
+   "id": "0702",
+   "n": "7.2",
+   "t": "Dice or the Ticket Booth",
+   "d": "UUIDs (random, no coordination) vs a central ticket server (numeric, single point of failure)"
+  },
+  {
+   "id": "0703",
+   "n": "7.3",
+   "t": "Anatomy of a Snowflake",
+   "d": "Twitter Snowflake's 64-bit layout: mint an ID, decode one, and do the 69-year math"
+  },
+  {
+   "id": "0704",
+   "n": "7.4",
+   "t": "When Clocks Lie",
+   "d": "Sequence overflow, clocks running backwards, rough ordering, re-tuning the bits, keeping it available"
+  },
+  {
+   "id": "0705",
+   "n": "BOSS",
+   "t": "Mint It Live",
+   "d": "Full mock interview: design a unique ID generator in distributed systems"
+  }
+ ]
+}

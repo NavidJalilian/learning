@@ -1,0 +1,134 @@
+{
+ "n": "10.4",
+ "slug": "notification-guardrails",
+ "t": "Respect the Inbox",
+ "d": "Templates, opt-in settings, rate limits, auth, event tracking and the final design",
+ "boss": false,
+ "badge": "🎩 Badge: Good Manners",
+ "winTitle": "Polite, safe and measured!",
+ "goal": "Your win today: you can list the book's 'additional components' — templates, notification settings, rate limiting, security with appKey/appSecret, event tracking — say what each prevents, and draw the final updated design.",
+ "bookSections": "Step 3 — Additional components and considerations: notification template, notification setting, rate limiting, security in push notifications, events tracking; Updated design",
+ "stages": [
+  {
+   "title": "Templates",
+   "sub": "Don't build every message from scratch",
+   "teaches": "A large system sends millions of notifications a day and many follow the same format. A notification template is a preformatted notification you customise with parameters, styling, tracking links, etc. Book example — BODY: 'You dreamed of it. We dared it. [ITEM NAME] is back — only until [DATE].' CTA: 'Order Now.' or 'Save My [ITEM NAME]'. Benefits: consistent format, fewer errors, time saved. Templates are cached (see the cache in 10.2).",
+   "interaction": "Template workshop. On the left the book's template with highlighted [ITEM NAME] and [DATE] placeholders; on the right a phone + email preview. Learner fills params (pre-suggested: 'Pumpkin Spice Latte', 'Oct 31') and sees both channel previews render. Spot-the-bug round: three generated notifications appear in the outbox, one of which reads '…is back — only until [DATE].' (a missing parameter) and one with the item name in the wrong place. Learner taps the broken ones and picks the guard: 'validate that every placeholder has a value before enqueueing'.",
+   "check": "Q.quiz: 'Which is NOT a benefit the book lists for templates?' Correct: 'They guarantee delivery'. Distractors (the real benefits): 'Consistent format', 'Fewer errors', 'Saves time'."
+  },
+  {
+   "title": "The opt-in gate",
+   "sub": "Notification settings",
+   "teaches": "Users get too many notifications and feel overwhelmed, so apps give fine-grained control. Book's notification setting table: user_id bigint, channel varchar (push, email or SMS), opt_in boolean. Before sending ANY notification, check that the user has opted in to that channel (the notification server fetches settings in step 2 of the flow). Beyond the book: real settings are per category × channel (marketing vs security alerts), transactional messages (password reset, login codes) are often sent regardless of marketing opt-outs, and laws apply (e.g. CAN-SPAM requires a working unsubscribe for commercial email; GDPR needs consent).",
+   "interaction": "Settings-panel sim. A phone settings screen for user 'Ana' with three toggles (Push ON, Email OFF, SMS ON). A stream of 6 notifications arrives at a gate: e.g. 'Push: friend request', 'Email: weekly newsletter', 'SMS: delivery update', 'Email: password reset you just requested', 'Push: flash sale', 'Email: invoice'. Learner predicts PASS/BLOCK per item under the book's rule (channel opt-in only), then watches the gate. Then a toggle 'Real-world rules' adds a category column; the password-reset email now passes as transactional — with a note that the book's table can't express this.",
+   "check": "Q.quiz: 'In the book's design, when is the user's notification setting checked?' Correct: 'Before any notification is sent — the server looks it up before enqueueing'. Distractors: 'After the provider delivers it', 'Only for SMS', 'Once a day in a batch job'."
+  },
+  {
+   "title": "Frequency cap",
+   "sub": "Rate limiting per user",
+   "teaches": "To avoid overwhelming users, limit how many notifications one user can receive. It matters because if you send too often, users may turn notifications off completely — and you lose the channel. Implementation can reuse Chapter 4's rate limiter (e.g. token bucket or sliding window keyed by user_id, per channel). In the updated design, rate limiting sits at the notification servers alongside authentication. Beyond the book: exempt critical/transactional messages (security alerts, OTP codes) from marketing caps; providers also rate-limit YOU (e.g. Twilio, APNs throttling), which is separate.",
+   "interaction": "Annoyance meter sim. Four services (Marketing, Social, Shopping, News) each fire pushes at user 'Ana' over a simulated day (a timeline of ~14 pings). A 'Daily cap per user' slider (1–20) and a 'Critical bypass' toggle. Press Play: delivered pings stack on the lock screen; an annoyance meter rises with each one; past a threshold Ana taps 'Turn off all notifications' and every later ping, even the critical 'New login from unknown device', fails. Goal: find a cap where Ana stays engaged and the security alert still gets through (needs bypass ON and cap ≈3–5).",
+   "check": "Q.quiz: 'What's the main risk the book cites for NOT rate-limiting notifications?' Correct: 'Users may turn notifications off completely'. Distractors: 'APNs will ban your app', 'The database fills up', 'Notifications arrive out of order'."
+  },
+  {
+   "title": "Lock the door, count the clicks",
+   "sub": "appKey/appSecret + events tracking",
+   "teaches": "Security: for iOS and Android apps, an appKey and appSecret secure the push notification APIs — only authenticated or verified clients can send pushes. (The internal send API is also restricted to internal or verified callers, to prevent spam.) Events tracking: metrics like open rate, click rate and engagement show how users respond; an analytics service implements event tracking, so the notification system must integrate with it. Book's event states: start → pending → sent → delivered or error → click → unsubscribe. Beyond the book: APNs/FCM do not give reliable per-device 'delivered' receipts (the app must report back); email 'opens' via tracking pixels are unreliable (e.g. Apple Mail Privacy Protection preloads images); APNs authenticates providers with a token (.p8 key, JWT) or certificate, and FCM HTTP v1 with OAuth 2 service-account tokens.",
+   "interaction": "Two parts. (a) Bouncer: requests arrive at the notification server API — 'billing-service with valid appKey/appSecret', 'unknown script with no credentials', 'shopping-service with an expired secret', 'internal cron job, valid key'. Learner taps ALLOW/REJECT; the spam bot gets in only if they mis-tap, flooding a phone mock. (b) Funnel: shuffled state chips (start, pending, sent, delivered, error, click, unsubscribe) — learner arranges them into the lifecycle diagram (error branches off from sent). Then calculate-and-check with numbers: sent 10,000, delivered 9,500, clicked 380, unsubscribed 25 → delivery rate (95%), click rate of delivered (4%), unsubscribe rate (≈0.26%); accept ±0.5 points.",
+   "check": "Q.quiz: 'What does the appKey/appSecret pair protect?' Correct: 'The push APIs — only verified clients can send notifications'. Distractors: 'Users' email addresses at rest', 'The message queue from overflow', 'Device tokens from expiring'."
+  },
+  {
+   "title": "The updated design",
+   "sub": "Bolt the guardrails on",
+   "teaches": "Book's final design adds to the improved design: (1) authentication and rate limiting at the notification servers; (2) a retry mechanism — failed notifications go back on the queues and workers retry a predefined number of times; (3) notification templates for consistent, efficient creation; (4) monitoring and tracking systems (queue monitoring, analytics service) for health checks and future improvements; plus the notification log for reliability and the settings check before sending. Full path: Services → notification servers (auth, rate limit, settings check, templates; cache + DB) → per-channel queues → workers (notification log, retry back to queue) → APNs/FCM/SMS/Email → devices, with workers and servers emitting events to analytics.",
+   "interaction": "Place-the-part puzzle. The improved design from 10.2 is shown with 6 glowing empty sockets. Tray: Auth (appKey/appSecret), Rate limiter, Template store, Notification log DB, Retry loop arrow, Analytics service. Learner drags each into its socket; each correct placement shows a 1-line 'what it prevents' tooltip (spam, annoyance, inconsistent messages, data loss, transient provider failures, flying blind). Wrong socket (e.g. rate limiter after the workers) explains why that's too late — the work's already done. Completed diagram is the one the cheat sheet reproduces.",
+   "check": "Q.quiz: 'Where does the book put authentication and rate limiting?' Correct: 'On the notification servers, before anything is queued'. Distractors: 'Inside the workers', 'At APNs/FCM', 'In the analytics service'."
+  },
+  {
+   "title": "Boss: The Spam Golem",
+   "sub": "Which guardrail catches it?",
+   "teaches": "Matching problems to the book's additional components.",
+   "interaction": "Q.boss named '🗿 Spam Golem', choices: Template, Opt-in setting check, Rate limit, Auth (appKey/appSecret). Scenarios: (1) 'A leaked internal endpoint lets a random script send pushes to every user' → Auth. (2) 'A bug in the social service fires 40 friend-suggestion pushes to one user in an hour' → Rate limit. (3) 'A user turned off email last month and still gets the weekly digest' → Opt-in check. (4) 'Three teams format the order-shipped SMS differently and one keeps forgetting the tracking link' → Template. (5) 'Users report a promo that literally says [ITEM NAME] is back' → Template (validated parameters). (6) 'An attacker without credentials replays send requests to the push API' → Auth.",
+   "check": "Boss clears when all 6 are answered."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "'What else would you add?'",
+   "teaches": "Interview answer for the deep-dive extras.",
+   "interaction": "Q.drill. Prompt: 'Your queues and workers look good. What else does a production notification system need?' Model: 'Five things. Authentication: only verified clients with an appKey and appSecret can call the send APIs, so it can't be used for spam. User settings: before sending, check the user has opted in to that channel, and in practice that category too. Rate limiting per user, so we don't annoy people into turning notifications off, with critical alerts exempt. Templates, so messages are consistent and we validate parameters before sending. And tracking: every notification moves through pending, sent, delivered or error, clicked, unsubscribed, which feeds an analytics service for open and click rates, while we monitor queue depth for operations. Auth and rate limiting sit on the notification servers so bad traffic is rejected before it's queued.' Checks: 'I covered auth (appKey/appSecret) and opt-in settings', 'I covered rate limiting and why (users turning notifications off)', 'I covered templates and event tracking/analytics'.",
+   "check": "Self-grade against 3 checks."
+  }
+ ],
+ "caveats": [
+  "The book's settings table is per channel only; real products also split by category (marketing vs transactional), and transactional messages usually bypass marketing opt-outs.",
+  "appKey/appSecret is the book's (provider-style) framing. APNs itself authenticates your server with a JWT signed by a .p8 key or a TLS certificate; FCM HTTP v1 uses OAuth 2 service-account tokens; internal callers usually use service-to-service auth (mTLS, signed tokens).",
+  "'Delivered' and 'opened' are softer signals than they look: push providers don't guarantee per-device delivery receipts, and email open pixels are distorted by privacy features like Apple Mail Privacy Protection.",
+  "Commercial email and SMS carry legal duties (CAN-SPAM unsubscribe links, consent rules) the book doesn't mention."
+ ],
+ "sources": [
+  {
+   "label": "Alex Xu, System Design Interview Vol. 1, Ch. 10: Design a Notification System (ByteByteGo)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-notification-system"
+  },
+  {
+   "label": "Ch. 4: Design a Rate Limiter (ByteByteGo)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter"
+  },
+  {
+   "label": "Apple: Establishing a token-based connection to APNs",
+   "url": "https://developer.apple.com/documentation/usernotifications/establishing-a-token-based-connection-to-apns"
+  },
+  {
+   "label": "Firebase: Authorize send requests (HTTP v1 API)",
+   "url": "https://firebase.google.com/docs/cloud-messaging/auth-server"
+  },
+  {
+   "label": "FTC: CAN-SPAM Act compliance guide for business",
+   "url": "https://www.ftc.gov/business-guidance/resources/can-spam-act-compliance-guide-business"
+  },
+  {
+   "label": "SendGrid (book ref [3])",
+   "url": "https://sendgrid.com/"
+  }
+ ],
+ "id": "1004",
+ "file": "1004-notification-guardrails.html",
+ "world": 10,
+ "chapterTitle": "Design a Notification System",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-notification-system",
+ "cheatsheet": "../reference/ch10-notification-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "1001",
+   "n": "10.1",
+   "t": "Three Roads to the Lock Screen",
+   "d": "Push (APNs/FCM), SMS and email: who delivers what, and the contact info you need"
+  },
+  {
+   "id": "1002",
+   "n": "10.2",
+   "t": "Shatter the Single Server",
+   "d": "From one notification box to servers, per-channel queues and workers"
+  },
+  {
+   "id": "1003",
+   "n": "10.3",
+   "t": "Never Lose a Ping",
+   "d": "Notification log, at-least-once, dedupe, retries and watching the queue"
+  },
+  {
+   "id": "1004",
+   "n": "10.4",
+   "t": "Respect the Inbox",
+   "d": "Templates, opt-in settings, rate limits, auth, event tracking and the final design"
+  },
+  {
+   "id": "1005",
+   "n": "BOSS",
+   "t": "Ping the Planet — Live",
+   "d": "Full mock interview: design a notification system"
+  }
+ ]
+}

@@ -1,0 +1,119 @@
+{
+ "n": "7.2",
+ "slug": "uuid-and-ticket-server",
+ "t": "Dice or the Ticket Booth",
+ "d": "UUIDs (random, no coordination) vs a central ticket server (numeric, single point of failure)",
+ "boss": false,
+ "badge": "🎟️ Badge: Ticket Taker",
+ "winTitle": "Two ideas weighed and found wanting",
+ "goal": "Your win today: you can explain why UUIDs almost never collide yet still fail this prompt, how Flickr's ticket server works and why it's a single point of failure, and fill in the four-approach scorecard from memory.",
+ "bookSections": "Step 2 - UUID; Step 2 - Ticket Server",
+ "stages": [
+  {
+   "title": "Roll a UUID",
+   "sub": "128 random-ish bits, no coordination",
+   "teaches": "A UUID (universally unique identifier) is a 128-bit number, usually written as 32 hex digits in 8-4-4-4-12 groups, e.g. 09c93e62-50b4-468d-bf8a-c07e1040bfb2 (the book's example). The common version 4 is random: 122 random bits plus 6 bits that mark version and variant (the third group always starts with '4'). Each web server makes its own IDs, no talking to anyone. Book pros: simple; no coordination between servers, so no synchronization issues; easy to scale because each web server generates the IDs it consumes. Book cons: 128 bits but we need 64; IDs don't go up with time; IDs can be non-numeric.",
+   "interaction": "On screen: a 'Generate UUID' button (uses crypto.randomUUID(), with a fallback) and a growing list. A bit-meter shows '128 bits' as a bar overflowing a '64-bit budget' box in red. Mini-game 1: 'Tap the digit that never changes' across 5 generated UUIDs → the first character of the third group ('4'). Mini-game 2 (predict-then-watch): the sim generates 5 UUIDs one second apart, labelled with their creation time, then asks 'Sort these by value: will the order match creation time?' The learner predicts yes/no, then the list sorts lexically and the creation-time labels come out scrambled.",
+   "check": "Q.quiz: (1) Bits in a UUID? → 128. (2) Which requirements does UUID v4 break? → 64-bit, time-ordered, numeric (choose all three). (3) Why is it easy to scale? → no coordination; each server makes its own."
+  },
+  {
+   "title": "The birthday odds",
+   "sub": "How unlikely is 'unlikely'?",
+   "teaches": "Collisions follow the birthday paradox: with n random IDs drawn from 2^122 values, P(any duplicate) ≈ n² / (2 × 2^122). 50% odds need about 2.71 × 10^18 UUIDs. The book quotes Wikipedia: generating 1 billion UUIDs every second for about 100 years would bring the chance of a single duplicate to 50% (the math gives ~86 years). At this prompt's 10,000 IDs/s, reaching 50% takes about 8.6 million years. Takeaway: UUID uniqueness is not the problem; size and ordering are. Real-world catch: 'random' assumes a good random source; bad RNGs (cloned VMs, weak seeding) have caused real duplicates.",
+   "interaction": "Calculate-and-check with a slider toy. On screen: rate selector (10k/s, 1M/s, 1B/s) and a years slider (1 to 10^7, log scale); a probability gauge updates live using the formula. Challenge 1: 'At 1 billion/s, slide to where the odds hit 50%' (accept 75–100 years; reveal 86 and the book's 'about 100'). Challenge 2: 'At our 10,000/s, how many years to 50%?' typed answer, accept 5–12 million; reveal ≈ 8.6 million years.",
+   "check": "Both challenges within tolerance; a one-line quiz: 'So is collision the reason we reject UUID here?' → No, size (128 > 64) and no time order are."
+  },
+  {
+   "title": "The ticket booth",
+   "sub": "Flickr's central counter",
+   "teaches": "Ticket server (Flickr, 2010): one dedicated MySQL database whose only job is auto_increment. A web server asks it for the next number (Flickr's trick: REPLACE INTO Tickets64 (stub) VALUES ('a'); SELECT LAST_INSERT_ID(); so the table stays one row). Book pros: numeric IDs; easy to implement; works for small to medium-scale applications. Book con: single point of failure (SPOF, defined: one component whose failure takes the whole feature down). Adding more ticket servers to fix it brings new problems, like keeping them in sync. Flickr's actual fix: two ticket servers, one issuing odd numbers and one even (auto_increment_increment = 2, offsets 1 and 2), the same count-by-k trick from 7.1, accepting that IDs aren't perfectly ordered across the two. Every ID also costs a network round trip.",
+   "interaction": "Driven sim. On screen: 4 web-server boxes on the left, one ticket-server box on the right, animated request/response dots. 'Run traffic' sends requests; IDs come back neatly as 1, 2, 3… and a 'Time-ordered ✓' badge stays green. Then the learner clicks 'Kill ticket server' after predicting what happens (options: web servers fall back to local IDs / every new signup fails / only one web server is affected). Correct: every request fails (red X on all 4). Then 'Add a second ticket server' asks: 'How do you stop the two from issuing the same number?' choices: random IDs / odd-even (step 2, offsets 1 and 2) / lock a shared row. Correct: odd-even. The sim restarts with two servers (1,3,5… and 2,4,6…) and the 'Time-ordered' badge turns amber, because you've rebuilt multi-master.",
+   "check": "Q.quiz: (1) What's a SPOF? (2) Flickr's fix for the SPOF reuses which idea from 7.1? → step by k. (3) Cost every ID pays with a ticket server? → a network round trip to the central server."
+  },
+  {
+   "title": "The four-way scorecard",
+   "sub": "Fill the table the interviewer is grading you on",
+   "teaches": "The comparison the book builds up to. Rows = requirements, columns = approaches. Multi-master: unique ✓, numeric ✓, 64-bit ✓, time-ordered ✗, easy to scale/no SPOF ✗. UUID: unique ✓ (probabilistic), numeric ✗, 64-bit ✗, time-ordered ✗, scales ✓. Ticket server: unique ✓, numeric ✓, 64-bit ✓, time-ordered ✓ (with one server), no SPOF ✗. Snowflake (next quest): all ✓. Saying this table out loud is how you justify the final pick.",
+   "interaction": "Grid of 3 columns × 5 rows with tap-to-cycle cells (✓ / ✗). The Snowflake column is shown pre-filled with '?' and flips to all-green once the grid is checked, as a teaser. 'Check' marks wrong cells with a reason tooltip; hearts lost on wrong checks.",
+   "check": "All 15 cells correct."
+  },
+  {
+   "title": "Boss: The Coin-Flip Golem",
+   "sub": "UUID, ticket server, or count-by-k?",
+   "teaches": "UUID is a great answer when the prompt allows 128-bit, non-sortable IDs (idempotency keys, file names, client-generated IDs, offline mobile apps). A ticket server is great for small/medium apps on one data center. Multi-master is fine for a fixed small fleet without ordering needs.",
+   "interaction": "Q.boss with choices: { k: 'uuid', label: 'UUID', sub: 'random, no coordination' }, { k: 'ticket', label: 'Ticket server', sub: 'one central counter' }, { k: 'multi', label: 'Multi-master', sub: 'step by k' }. Scenarios (6): offline-first mobile app must create records with no network → uuid; small startup wants short numeric order numbers, one data center, can tolerate brief outages → ticket; two DB primaries, fixed, need numeric IDs, no central box → multi; idempotency keys for payment requests, any format → uuid; the ticket server goes down and signups stop, what were you using? → ticket (spot the SPOF); global system across 5 data centers that must not coordinate on every ID and can store 128-bit keys → uuid.",
+   "check": "Boss HP bar, 'why' line per card."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "Reject two designs in 40 seconds",
+   "teaches": "Model answer: 'UUIDs need no coordination and practically never collide, but they're 128 bits, not 64, and they don't sort by time. A ticket server, a single auto_increment database like Flickr's, gives numeric ordered IDs but is a single point of failure, and fixing that with more servers brings back synchronization or loses ordering. So none of the three simple options meets all five requirements.'",
+   "interaction": "Q.drill: prompt 'Why not just use UUIDs? And why not a ticket server?' Free recall, then model answer and self-grade checklist: 128 vs 64 bits; not time-ordered; ticket server = SPOF; extra ticket servers = sync or lost ordering.",
+   "check": "Self-grade checklist (4 items)."
+  }
+ ],
+ "caveats": [
+  "The book predates RFC 9562 (2024), which standardised UUID version 7: a 48-bit Unix-millisecond timestamp followed by random bits. UUIDv7 IS time-ordered, which fixes one of the book's cons, but it's still 128 bits, so it still fails this prompt's 64-bit rule.",
+  "Random (v4) UUIDs as database primary keys scatter inserts across a B-tree index, causing page splits and poor cache use. That's a practical reason teams avoid them beyond the book's list.",
+  "The book's 'about 100 years at 1 billion/s' figure is rounded; the birthday-paradox math gives about 86 years for 50% odds.",
+  "The book presents the ticket server's SPOF as unsolved; Flickr's own post runs two ticket servers (odd/even), trading strict ordering for availability. Real ticket-style systems also hand out ID ranges in batches to avoid one round trip per ID."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo: Design a Unique ID Generator in Distributed Systems (book chapter 7)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems"
+  },
+  {
+   "label": "Wikipedia: Universally unique identifier (book reference [1])",
+   "url": "https://en.wikipedia.org/wiki/Universally_unique_identifier"
+  },
+  {
+   "label": "Flickr: Ticket Servers, Distributed Unique Primary Keys on the Cheap (book reference [2])",
+   "url": "https://code.flickr.net/2010/02/08/ticket-servers-distributed-unique-primary-keys-on-the-cheap/"
+  },
+  {
+   "label": "RFC 9562: Universally Unique IDentifiers (UUIDv7)",
+   "url": "https://www.rfc-editor.org/rfc/rfc9562"
+  }
+ ],
+ "id": "0702",
+ "file": "0702-uuid-and-ticket-server.html",
+ "world": 7,
+ "chapterTitle": "Design a Unique ID Generator",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems",
+ "cheatsheet": "../reference/ch07-unique-id-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "0701",
+   "n": "7.1",
+   "t": "Numbers Nobody Repeats",
+   "d": "Why auto_increment breaks across servers, the 5 requirements, and multi-master 'count by k'"
+  },
+  {
+   "id": "0702",
+   "n": "7.2",
+   "t": "Dice or the Ticket Booth",
+   "d": "UUIDs (random, no coordination) vs a central ticket server (numeric, single point of failure)"
+  },
+  {
+   "id": "0703",
+   "n": "7.3",
+   "t": "Anatomy of a Snowflake",
+   "d": "Twitter Snowflake's 64-bit layout: mint an ID, decode one, and do the 69-year math"
+  },
+  {
+   "id": "0704",
+   "n": "7.4",
+   "t": "When Clocks Lie",
+   "d": "Sequence overflow, clocks running backwards, rough ordering, re-tuning the bits, keeping it available"
+  },
+  {
+   "id": "0705",
+   "n": "BOSS",
+   "t": "Mint It Live",
+   "d": "Full mock interview: design a unique ID generator in distributed systems"
+  }
+ ]
+}

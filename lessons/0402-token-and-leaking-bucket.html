@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Token Tycoon</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: token coins, request packets, bucket sims (s1, s4), arrival timelines (s2), bucket grid + hard/soft meters (s3) */
+:root { --coin: #e8a800; --coin-edge: #9a6c00; --coin-ink: #4a3300; --vip: #c2338a; --pkt: #5a48f0; --pkt-ink: #ffffff; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --coin: #ffd23f; --coin-edge: #c99a00; --coin-ink: #3a2900; --vip: #f07ad0; --pkt: #8f82ff; --pkt-ink: #0e0f1d; }
+}
+:root[data-theme="dark"] { --coin: #ffd23f; --coin-edge: #c99a00; --coin-ink: #3a2900; --vip: #f07ad0; --pkt: #8f82ff; --pkt-ink: #0e0f1d; }
+
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.bignum { font-family: var(--mono); font-weight: 700; }
+.stat { display: inline-flex; gap: 5px; align-items: baseline; }
+.stat b { font-family: var(--mono); font-size: 16px; }
+.stat.g b { color: var(--good); }
+.stat.r b { color: var(--bad); }
+.stat.y b { color: var(--coin-edge); }
+.sim-bar .btn { padding: 8px 12px; font-size: 14px; min-height: 40px; }
+.seg button { min-height: 36px; }
+.seg button.on { background: var(--accent); color: #fff; }
+
+/* shared svg bits */
+.bk .shell { fill: none; stroke: var(--ink); stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
+.bk .inside { fill: var(--bg-2); }
+.bk .slot { fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 3 3; opacity: .7; }
+.bk .coin circle { fill: var(--coin); stroke: var(--coin-edge); stroke-width: 2; }
+.bk .coin text { fill: var(--coin-ink); font: 700 11px var(--mono); text-anchor: middle; dominant-baseline: central; }
+.bk .lbl { fill: var(--muted); font: 600 13px var(--font); }
+.bk .lbl.c { text-anchor: middle; }
+.bk .lbl.e { text-anchor: end; }
+.bk .box rect { fill: var(--panel); stroke: var(--line); stroke-width: 2; }
+.bk .box text { fill: var(--ink); font: 700 14px var(--font); text-anchor: middle; dominant-baseline: central; }
+.bk .lane { stroke: var(--line); stroke-width: 2; stroke-dasharray: 5 5; }
+.bk .pipe { fill: var(--muted); }
+.bk .drop { fill: var(--bad); font: 700 12px var(--font); }
+.bk .pkt rect { fill: var(--pkt); stroke: var(--bg); stroke-width: 1.5; transition: fill .2s; }
+.bk .pkt text { fill: var(--pkt-ink); font: 700 10px var(--mono); text-anchor: middle; dominant-baseline: central; }
+.bk .pkt.ok rect { fill: var(--good); }
+.bk .pkt.no rect { fill: var(--bad); }
+.bk .pkt.vip rect { fill: var(--vip); }
+.bk .pkt.ok text, .bk .pkt.no text { fill: #fff; }
+.bk .spill { fill: var(--warn); font: 700 12px var(--font); text-anchor: middle; }
+.bk .clock { fill: var(--ink); font: 700 14px var(--mono); text-anchor: end; }
+
+/* stage 1 */
+#tb1 { max-width: 520px; margin: 0 auto; }
+.counters { display: flex; gap: 14px; flex-wrap: wrap; font-size: 14px; }
+.nexttok { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+
+/* stage 2: timeline + token meter */
+.params { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+.params .chip { font-size: 12.5px; }
+.tl svg { max-width: 560px; margin: 0 auto; }
+.tl .axis { stroke: var(--ink); stroke-width: 2; }
+.tl .tick { stroke: var(--muted); stroke-width: 1.5; }
+.tl .tlab { fill: var(--muted); font: 600 11px var(--mono); text-anchor: middle; }
+.tl .mk { fill: var(--pkt); stroke: var(--bg); stroke-width: 1.5; transition: fill .25s; }
+.tl .mk.ok { fill: var(--good); }
+.tl .mk.no { fill: var(--bad); }
+.tl .cur { stroke: var(--warn); stroke-width: 2.5; stroke-dasharray: 4 3; }
+.tl .curlab { fill: var(--warn); font: 700 12px var(--mono); text-anchor: middle; }
+.meter { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+.meter .ml { font-size: 13px; font-weight: 700; color: var(--muted); margin-right: 6px; }
+.meter .cell { position: relative; width: 22px; height: 22px; border-radius: 50%; border: 2px dashed var(--line); overflow: hidden; }
+.meter .cell i { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: var(--coin); transition: height .3s; }
+.meter .val { font-family: var(--mono); font-weight: 700; margin-left: 8px; }
+.answer { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+.answer input { width: 110px; min-height: 44px; border-radius: 12px; border: 2px solid var(--line); background: var(--bg); color: var(--ink); font: 700 18px var(--mono); padding: 6px 10px; }
+.answer input:focus { border-color: var(--accent); }
+.fxt { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; font-weight: 600; cursor: pointer; min-height: 40px; }
+.fxt input { width: 20px; height: 20px; accent-color: var(--accent); }
+.formula { font-family: var(--mono); font-size: 14px; background: var(--code-bg); color: var(--code-ink); padding: 10px 14px; border-radius: 12px; margin: 12px 0; overflow-x: auto; }
+#log2 .fx { display: none; color: var(--accent); }
+#log2.fx-on .fx { display: inline; }
+#log2 { max-height: 170px; }
+
+/* stage 3 */
+.rules { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 12px 0; }
+@media (max-width: 560px) { .rules { grid-template-columns: 1fr; } }
+.rule { display: flex; gap: 10px; align-items: center; border: 1px solid var(--line); border-radius: 12px; padding: 9px 12px; background: var(--bg); font-size: 14.5px; }
+.rule i { width: 14px; height: 14px; border-radius: 4px; flex: none; }
+.rule b { font-family: var(--mono); }
+.rule.glob { border-style: dashed; }
+#bgrid { display: block; width: 100%; height: 190px; }
+.glegend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--muted); padding: 8px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+.glegend span { display: inline-flex; gap: 6px; align-items: center; }
+.glegend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+.glegend .tot { margin-left: auto; color: var(--ink); font-family: var(--mono); font-weight: 700; }
+.hs { display: grid; gap: 12px; padding: 14px; }
+.hsrow .hsname { font-weight: 700; font-size: 14px; margin-bottom: 6px; display: flex; justify-content: space-between; gap: 8px; }
+.hsrow .hsname span { font-family: var(--mono); color: var(--muted); font-weight: 600; }
+.cells { display: grid; grid-template-columns: repeat(14, 1fr); gap: 3px; position: relative; }
+.cells div { height: 26px; border-radius: 5px; background: var(--bg-2); border: 1px solid var(--line); transition: background .2s; }
+.cells div.ok { background: var(--good); border-color: var(--good); }
+.cells div.no { background: var(--bad); border-color: var(--bad); }
+.cells .lim { position: absolute; top: -5px; bottom: -5px; width: 3px; border-radius: 2px; background: var(--ink); left: calc(10 / 14 * 100% - 2px); }
+
+/* stage 4 */
+.pred { display: grid; gap: 12px; margin-top: 8px; }
+.pgroup { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--bg); }
+.pgroup h4 { margin: 0 0 6px; font-size: 15px; }
+.pq { font-size: 14px; margin: 8px 0 6px; color: var(--muted); font-weight: 600; }
+.pcs { display: flex; gap: 6px; flex-wrap: wrap; }
+.pc { min-width: 44px; min-height: 40px; border: 2px solid var(--line); background: var(--panel); border-radius: 10px; font: 700 15px var(--mono); }
+.pc:hover:not([disabled]) { border-color: var(--accent); }
+.pc.on { border-color: var(--accent); background: var(--accent-soft); }
+.pc.right { border-color: var(--good); background: var(--good-soft); }
+.pc.wrong { border-color: var(--bad); background: var(--bad-soft); }
+.duo { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+.duo > div + div { border-left: 1px solid var(--line); }
+@media (max-width: 640px) { .duo { grid-template-columns: 1fr; } .duo > div + div { border-left: 0; border-top: 1px solid var(--line); } }
+.duo h4 { margin: 10px 14px 0; font-size: 14px; }
+.duo h4 span { font-weight: 500; color: var(--muted); font-size: 13px; }
+.duo svg { display: block; width: 100%; height: auto; max-width: 360px; margin: 0 auto; }
+.pstat { display: flex; gap: 12px; flex-wrap: wrap; font-size: 13.5px; padding: 0 14px 10px; }
+.vipnote { font-size: 13.5px; padding: 0 14px 12px; min-height: 22px; font-weight: 600; color: var(--vip); }
+.cmp { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; }
+.cmp th, .cmp td { border-bottom: 1px solid var(--line); padding: 7px 6px; text-align: left; }
+.cmp th { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.cmp td.y { color: var(--good); font-weight: 700; }
+.cmp td.n { color: var(--bad); font-weight: 700; }
+.tablewrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 4.2 · Design a Rate Limiter</div>
+    <h1>Token Tycoon</h1>
+    <p class="lede">The bouncer from Quest 4.1 needs a rule for who gets in. Here are the two bucket rules: one hands out tokens and lets bursts through, the other drips requests out at a steady pace. Run both, break both, and learn when to use each.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can run the <b>token bucket</b> and <b>leaking bucket</b> in your head, name their two parameters each, say who uses them (Amazon, Stripe; Shopify), and pick the right one for "allow bursts" vs "smooth, steady output".</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Fill the bucket</h2><div class="sub">Token bucket, hands-on</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book lists five rate-limiting algorithms. This quest covers the two bucket ones. Quest 4.3 covers the three "window" ones.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener">[1]</a></p>
+      <p>The <b>token bucket</b> is the simplest and the most widely used. A <b>token</b> is a permission slip for one request. Here's how it works:</p>
+      <ul>
+        <li>The bucket holds at most a fixed number of tokens. That number is its <b>capacity</b>, or <b>bucket size</b>.</li>
+        <li>A <b>refiller</b> drops tokens in at a fixed rate. If the bucket is already full, the new token spills over the rim and is lost.</li>
+        <li>Each request has to take one token. If there's a token, the request goes through to the API. If the bucket is empty, the request is <b>dropped</b> (rejected).</li>
+      </ul>
+      <p>One of the book's figures uses a bucket of <b>4</b> tokens with a refill rate of <b>4 per minute</b>. That's what you're driving below. The clock is sped up: each real second is 15 seconds of game time, so a new token arrives every real second.</p>
+
+      <div class="sim">
+        <svg id="tb1" class="bk" viewBox="0 0 400 272" role="img" aria-label="Token bucket: a refiller adds tokens at the top, requests take a token at the bottom or get dropped"></svg>
+        <div class="sim-bar">
+          <span class="row" style="gap:8px"><button class="btn primary" id="tbOne">Send 1 request</button><button class="btn" id="tbFive">Send burst of 5</button></span>
+          <span class="seg" id="tbSpeed" role="group" aria-label="Game speed"><button data-v="1" class="on">▶ 1×</button><button data-v="0">⏸ Pause</button></span>
+        </div>
+        <div class="sim-bar">
+          <span class="counters"><span class="stat g">Allowed <b id="tbAllowed">0</b></span><span class="stat r">Dropped <b id="tbDropped">0</b></span><span class="stat y">Tokens <b id="tbTokens">4</b>/4</span><span class="stat">Overflowed <b id="tbSpilled">0</b></span></span>
+          <span class="nexttok" id="tbClock">game clock 0:00</span>
+        </div>
+        <div class="simlog" id="tbLog"><div>The bucket starts full: 4 tokens. Leave it a moment and watch what the refiller does with a full bucket.</div></div>
+      </div>
+      <ul class="checklist" id="s1goals">
+        <li data-g="burst"><span class="box">✓</span><span>Get <b>4 requests through in one instant</b></span></li>
+        <li data-g="recover"><span class="box">✓</span><span>Get a request <b>dropped</b>, then get one through again <b>without</b> sending a burst</span></li>
+      </ul>
+      <div class="callout" id="s1note" style="display:none"><b>Two knobs, two jobs.</b> The <b>bucket size</b> (4) is the biggest burst you'll ever let through at once. The <b>refill rate</b> (4 per minute) is the average rate you allow over time. A full bucket can be spent in one go, which is why a token bucket <b>allows short bursts</b>.</div>
+      <div class="row" style="margin-top:12px"><button class="btn" id="tbReset">↻ Reset the bucket</button></div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Predict the drops</h2><div class="sub">Calculate, then watch the bucket do it</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>A real limiter doesn't run a timer for every bucket. With millions of users that would be millions of timers. Instead it stores just <b>two numbers</b> per bucket: how many tokens were left, and when it last refilled. When a request arrives, it works out the refill since then in one line:</p>
+      <div class="formula">tokens = min(capacity, tokens + elapsed × rate)<br>if tokens ≥ 1: take one, allow · else: drop</div>
+      <p class="small muted">"elapsed" is the time since the last request, and <code>min</code> keeps the bucket from going over capacity (the overflow you saw in stage 1). This "lazy" refill is cheap and exact. Stripe's Redis-based limiter works this way.<a class="cite" href="https://gist.github.com/ptarjan/e38f45f2dfe601419ca3af937fff574d" target="_blank" rel="noopener">[3]</a></p>
+      <p>Three rounds. Read the arrivals on the timeline, <b>type how many requests get dropped</b>, then watch it play out. Each correct call earns XP. Get at least 2 of 3 right for a bonus.</p>
+      <div class="sim tl" id="tl2wrap">
+        <svg id="tl2" viewBox="0 0 400 150" role="img" aria-label="Timeline of request arrivals"></svg>
+        <div class="meter" id="meter2"></div>
+        <div class="sim-bar"><label class="fxt"><input type="checkbox" id="fxT"> Show the formula at each step</label><span class="small muted" id="r2status"></span></div>
+        <div class="simlog" id="log2"><div>Waiting for your prediction…</div></div>
+      </div>
+      <div class="challenge" id="r2box"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>How many buckets?</h2><div class="sub">One bucket per rule, per key</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>One bucket is never enough. The book's rule: <b>each limit rule gets its own bucket, for each thing you limit by</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener">[1]</a> Different endpoints usually need different buckets. If you limit by IP address, every IP address gets a bucket. And if the whole system has one ceiling, a single <b>global</b> bucket shared by every request does the job.</p>
+      <p>Here are the book's example rules for a social app:</p>
+      <div class="rules">
+        <div class="rule"><i style="background:var(--accent)"></i><span>✍️ Write a post: <b>1 / second</b>, per user</span></div>
+        <div class="rule"><i style="background:var(--teal)"></i><span>🤝 Add a friend: <b>150 / day</b>, per user</span></div>
+        <div class="rule"><i style="background:var(--warn)"></i><span>❤️ Like a post: <b>5 / second</b>, per user</span></div>
+        <div class="rule glob"><i style="background:var(--coin)"></i><span>🌐 Whole system: <b>10,000 / second</b>, global</span></div>
+      </div>
+      <div class="challenge boxed" id="r3box"></div>
+      <div class="sim">
+        <canvas id="bgrid" aria-label="Grid of tiny buckets, one square per bucket" role="img"></canvas>
+        <div class="glegend" id="glegend"><span class="muted">Answer a round to fill the grid. One square = one bucket.</span></div>
+      </div>
+
+      <div class="callout tip" style="margin-top:18px"><b>The book's scorecard for token bucket.</b> Pros: easy to implement, memory efficient (two numbers per bucket), and it allows short bursts as long as tokens are left. Con: its two parameters, bucket size and refill rate, can be hard to tune well. Amazon (API Gateway throttling) and Stripe both use it.<a class="cite" href="https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-request-throttling.html" target="_blank" rel="noopener">[4]</a><a class="cite" href="https://stripe.com/blog/rate-limiters" target="_blank" rel="noopener">[2]</a></div>
+
+      <h3 style="margin:22px 0 4px;font-size:18px">Hard or soft?</h3>
+      <p>The book's wrap-up names two flavours of limit. <b>Hard</b>: requests can never go over the threshold. <b>Soft</b>: requests may go over it for a short time. Two limiters below both say "10 per minute". Fire 14 requests at each and see which one is which.</p>
+      <div class="sim">
+        <div class="hs">
+          <div class="hsrow"><div class="hsname">Limiter A <span id="hsA">0 allowed</span></div><div class="cells" id="cellsA"></div></div>
+          <div class="hsrow"><div class="hsname">Limiter B <span id="hsB">0 allowed</span></div><div class="cells" id="cellsB"></div></div>
+        </div>
+        <div class="sim-bar"><button class="btn primary" id="hsGo">▶ Send 14 requests in one minute</button><span class="small muted">black line = the limit of 10</span></div>
+      </div>
+      <div class="challenge" id="hsAsk"></div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>The leaking bucket</h2><div class="sub">Same burst, different personality</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The <b>leaking bucket</b> (also called the leaky bucket) looks similar, but it doesn't hand out tokens. It holds the <b>requests themselves</b> and lets them out at a fixed rate, like water dripping from a hole in the bottom.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener">[1]</a> It is usually built as a <b>FIFO queue</b> (first in, first out: the oldest request leaves first).</p>
+      <ul>
+        <li>A request arrives. If the queue has room, it joins the back of the queue. If the queue is full, it's dropped.</li>
+        <li>At regular intervals, the request at the front is taken out and processed.</li>
+        <li>Two parameters: <b>bucket size</b> (how long the queue can get) and <b>outflow rate</b> (how many requests are processed per second).</li>
+      </ul>
+      <p>Both buckets below hold 4 and work at 1 per second. Both start ready (token bucket full, queue empty). A burst of <b>8 requests</b> hits each one at t = 0. Then at t = 1.5 s a fresh <b style="color:var(--vip)">VIP</b> request arrives. <b>Predict first.</b></p>
+      <div class="pred" id="pred4"></div>
+      <div class="sim" style="margin-top:14px">
+        <div class="duo">
+          <div><h4>🪙 Token bucket <span>size 4 · +1 token/s</span></h4><svg id="lk4a" class="bk" viewBox="0 0 300 222" role="img" aria-label="Token bucket racing a burst of 8"></svg><div class="pstat"><span class="stat g">answered <b id="aAns">0</b></span><span class="stat r">dropped <b id="aDrop">0</b></span></div><div class="vipnote" id="aVip"></div></div>
+          <div><h4>💧 Leaking bucket <span>queue 4 · 1 out/s</span></h4><svg id="lk4b" class="bk" viewBox="0 0 300 222" role="img" aria-label="Leaking bucket racing a burst of 8"></svg><div class="pstat"><span class="stat g">answered <b id="bAns">0</b></span><span class="stat r">dropped <b id="bDrop">0</b></span></div><div class="vipnote" id="bVip"></div></div>
+        </div>
+        <div class="sim-bar"><button class="btn primary" id="lkGo" disabled>▶ Burst of 8 at t = 0</button><span class="bignum" id="lkClock">t = 0.0 s</span></div>
+      </div>
+      <div id="cmp4"></div>
+      <div class="callout" id="s4note" style="display:none"><b>The book's scorecard for leaking bucket.</b> Pros: memory efficient, because the queue has a fixed size; and requests leave at a fixed rate, which suits anything that needs a <b>stable outflow</b>. Cons: a burst fills the queue with <b>old</b> requests, and if they aren't processed in time, <b>recent requests get rate limited</b>. Your VIP just waited 3.5 s behind stale requests, and with one more early arrival it would have been dropped. Plus the same tuning problem: two parameters. Shopify is the book's example user.<a class="cite" href="https://shopify.dev/docs/api/usage/rate-limits" target="_blank" rel="noopener">[5]</a></div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Burst Hydra</h2><div class="sub">Pick the bucket, tune the knobs</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Five heads, five calls. Pick the bucket, the knob to turn, or the kind of limit. Remember: <b>bucket size</b> sets the biggest burst, <b>refill rate</b> sets the long-run average.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">Two buckets in 60 seconds</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> Buckets track tokens. The other three algorithms count requests inside windows of time, and one of them lets through <i>twice</i> the limit at the edge of a window. That's Quest 4.3, <i>Windows of Time</i>.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 4: "Design a Rate Limiter"</a>, Step 2, the token bucket and leaking bucket sections (with their pros and cons), plus the wrap-up's hard vs soft point. Then read Stripe's <a href="https://stripe.com/blog/rate-limiters" target="_blank" rel="noopener">"Scaling your API with rate limiters"</a> to see a token bucket in production, and Shopify's <a href="https://shopify.dev/docs/api/usage/rate-limits" target="_blank" rel="noopener">API rate limits</a> page for a leaky bucket you can actually call.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <p style="margin:0 0 8px">• <b>The refiller is a mental model.</b> Production limiters don't add tokens on a timer. They store the token count and last timestamp, then compute the refill on each request, the way you did in stage 2. Stripe's sample code does exactly this in Redis.<a class="cite" href="https://gist.github.com/ptarjan/e38f45f2dfe601419ca3af937fff574d" target="_blank" rel="noopener">[3]</a></p>
+      <p style="margin:0 0 8px">• <b>There are two "leaky buckets".</b> The book's version is the <i>leaky bucket as a queue</i>: it delays requests and lets them out at a fixed pace. The other is the <i>leaky bucket as a meter</i>: it rejects over-limit requests instead of queueing them, and it is mathematically the same as a token bucket (an equivalent form is called GCRA, the generic cell rate algorithm).<a class="cite" href="https://en.wikipedia.org/wiki/Leaky_bucket" target="_blank" rel="noopener">[7]</a> Shopify's API limits are meter-style: an over-limit call gets an HTTP 429 error straight away. It is not queued.<a class="cite" href="https://shopify.dev/docs/api/usage/rate-limits" target="_blank" rel="noopener">[5]</a></p>
+      <p style="margin:0">• <b>"Amazon uses token bucket"</b> refers specifically to API Gateway's request throttling, where you set a <i>rate</i> and a <i>burst</i>, which are the refill rate and bucket size by other names.<a class="cite" href="https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-request-throttling.html" target="_blank" rel="noopener">[4]</a> It isn't a claim about every Amazon system.</p>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"where do the two numbers per bucket actually live when there are 20 API servers?"</i> (that's Quest 4.4) or <i>"is a leaky bucket as a meter really the same as a token bucket?"</i>
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 4 "Design a Rate Limiter" (ByteByteGo).</li>
+        <li>Paul Tarjan, "Scaling your API with rate limiters", Stripe blog, 2017.</li>
+        <li>Paul Tarjan, Stripe rate limiter code samples (GitHub gist).</li>
+        <li>AWS, "Throttle requests to your REST APIs for better throughput in API Gateway" (token bucket).</li>
+        <li>Shopify, "Shopify API rate limits" (leaky bucket).</li>
+        <li>Wikipedia, "Token bucket".</li>
+        <li>Wikipedia, "Leaky bucket" (as a meter vs as a queue).</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0402',
+  winTitle: 'Buckets mastered',
+  badge: '🪣 Badge: Bucket Baron',
+  cheatsheet: '../reference/ch04-rate-limiter-cheatsheet.html',
+});
+const { sleep, shuffle } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+const CITE1 = '<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener">[1]</a>';
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+function tween(dur, f) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 1) { f(1); return res(); }
+    const t0 = performance.now();
+    const fr = now => { const p = Math.min(1, (now - t0) / dur); f(p); p < 1 ? requestAnimationFrame(fr) : res(); };
+    requestAnimationFrame(fr);
+  });
+}
+const place = (g, x, y) => g.setAttribute('transform', `translate(${x.toFixed(1)},${y.toFixed(1)})`);
+async function fly(g, pts, dur) {
+  for (let i = 1; i < pts.length; i++) {
+    const [x0, y0] = pts[i - 1], [x1, y1] = pts[i];
+    await tween(dur, p => { const e = ease(p); place(g, x0 + (x1 - x0) * e, y0 + (y1 - y0) * e); });
+  }
+}
+async function fade(el, dur) { await tween(dur, p => el.setAttribute('opacity', String(1 - p))); el.remove(); }
+function coin(parent, x, y, r = 11) { const g = S('g', { class: 'coin' }, parent); S('circle', { cx: 0, cy: 0, r }, g); S('text', { x: 0, y: 0.5 }, g).textContent = 'T'; place(g, x, y); return g; }
+function packet(parent, label, cls, x, y) { const g = S('g', { class: 'pkt ' + (cls || '') }, parent); S('rect', { x: -15, y: -9, width: 30, height: 18, rx: 5 }, g); S('text', { x: 0, y: 0.5 }, g).textContent = label; place(g, x, y); return g; }
+function box(parent, x, y, w, h, label) { const g = S('g', { class: 'box' }, parent); S('rect', { x, y, width: w, height: h, rx: 8 }, g); S('text', { x: x + w / 2, y: y + h / 2 }, g).textContent = label; return g; }
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); while (l.children.length > 60) l.firstChild.remove(); l.scrollTop = l.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); Q.addXP(xp || 10, li);
+  return true;
+}
+function nextBtn(row, label, fn, primary = true) { const b = document.createElement('button'); b.className = 'btn' + (primary ? ' primary' : ''); b.textContent = label; b.onclick = fn; row.appendChild(b); return b; }
+const fmt = x => { const r = Math.round(x * 100) / 100; return String(r); };
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+/* ================= STAGE 1: live token bucket ================= */
+Q.onStage(1, () => {
+  const CAP = 4, PERIOD = 15, GAME_PER_REAL = 15; // 4 tokens per minute; 1 real s = 15 game s
+  const SLOT_Y = [168, 138, 108, 78];
+  const svg = $('#tb1');
+  svg.innerHTML = '';
+  // refiller tap
+  S('rect', { class: 'pipe', x: 120, y: 10, width: 86, height: 10, rx: 3 }, svg);
+  S('rect', { class: 'pipe', x: 194, y: 18, width: 12, height: 16, rx: 2 }, svg);
+  S('text', { class: 'lbl', x: 216, y: 19 }, svg).textContent = 'refiller: +1 token / 15 s';
+  // bucket
+  S('path', { class: 'inside', d: 'M146 46 L160 186 L240 186 L254 46 Z' }, svg);
+  S('path', { class: 'shell', d: 'M146 46 L160 186 L240 186 L254 46' }, svg);
+  S('rect', { class: 'pipe', x: 194, y: 186, width: 12, height: 10, rx: 2 }, svg);
+  S('text', { class: 'lbl c', x: 104, y: 116 }, svg).textContent = 'bucket';
+  S('text', { class: 'lbl c', x: 104, y: 132 }, svg).textContent = 'size = 4';
+  SLOT_Y.forEach(y => S('circle', { class: 'slot', cx: 200, cy: y, r: 12 }, svg));
+  const coinsG = S('g', {}, svg);
+  // lane
+  S('line', { class: 'lane', x1: 70, y1: 226, x2: 330, y2: 226 }, svg);
+  box(svg, 6, 206, 62, 40, 'Client');
+  box(svg, 332, 206, 62, 40, 'API ✓');
+  S('text', { class: 'drop', x: 214, y: 266 }, svg).textContent = '✗ dropped';
+  const clockT = S('text', { class: 'clock', x: 394, y: 66 }, svg);
+  S('text', { class: 'lbl e', x: 394, y: 46 }, svg).textContent = 'game clock';
+  const fxG = S('g', {}, svg);
+
+  const st = { tokens: CAP, game: 0, next: PERIOD, speed: 1, allowed: 0, dropped: 0, spilled: 0, sawDrop: false };
+  const goals = new Set();
+  let quizShown = false, last = performance.now(), spillLogged = 0;
+
+  function renderCoins() {
+    coinsG.innerHTML = '';
+    for (let i = 0; i < st.tokens; i++) coin(coinsG, 200, SLOT_Y[i]);
+    $('#tbTokens').textContent = st.tokens;
+    $('#tbAllowed').textContent = st.allowed; $('#tbDropped').textContent = st.dropped; $('#tbSpilled').textContent = st.spilled;
+  }
+  const mmss = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+  function renderClock() {
+    clockT.textContent = mmss(st.game);
+    $('#tbClock').textContent = `game clock ${mmss(st.game)} · next token in ${Math.max(0, Math.ceil(st.next - st.game))} s`;
+  }
+  function refill() {
+    if (st.tokens < CAP) {
+      st.tokens++;
+      const slot = SLOT_Y[st.tokens - 1];
+      const c = coin(fxG, 200, 34);
+      fly(c, [[200, 34], [200, slot]], 320).then(() => { c.remove(); renderCoins(); });
+    } else {
+      st.spilled++; renderCoins();
+      const c = coin(fxG, 200, 34), t = S('text', { class: 'spill', x: 292, y: 60 }, fxG);
+      t.textContent = 'overflow!';
+      fly(c, [[200, 34], [214, 40], [282, 88], [296, 150]], 220).then(() => fade(c, 200));
+      setTimeout(() => t.remove(), Q.reduced ? 500 : 900);
+      if (spillLogged < 2) { spillLogged++; logTo('tbLog', '🪙 New token, but the bucket is full, so it spilled over the rim and was lost.', 'w'); }
+    }
+  }
+  function tick() {
+    const now = performance.now(), dt = Math.min(0.5, (now - last) / 1000); last = now;
+    if (!st.speed) return;
+    st.game += dt * GAME_PER_REAL * st.speed;
+    while (st.game >= st.next) { st.next += PERIOD; refill(); }
+    renderClock();
+  }
+  setInterval(tick, 100);
+
+  function send(n) {
+    let ok = 0;
+    const res = [];
+    for (let i = 0; i < n; i++) { if (st.tokens >= 1) { st.tokens--; st.allowed++; ok++; res.push(true); } else { st.dropped++; res.push(false); } }
+    // the tokens taken leave from the top of the stack
+    const taken = res.filter(Boolean).length, topBefore = st.tokens + taken;
+    renderCoins();
+    for (let i = 0; i < taken; i++) { const c = coin(fxG, 200, SLOT_Y[topBefore - 1 - i]); fly(c, [[200, SLOT_Y[topBefore - 1 - i]], [200, 220]], 260).then(() => fade(c, 150)); }
+    res.forEach((good, i) => setTimeout(async () => {
+      const p = packet(fxG, 'req', '', 70, 226);
+      await fly(p, [[70, 226], [200, 226]], 380);
+      p.classList.add(good ? 'ok' : 'no');
+      if (good) await fly(p, [[200, 226], [330, 226]], 380); else await fly(p, [[200, 226], [204, 250]], 220);
+      fade(p, 200);
+    }, Q.reduced ? 0 : i * 110));
+    const drops = n - ok;
+    if (n === 1) logTo('tbLog', ok ? `→ request took a token. ${st.tokens} left.` : '→ bucket empty: request <b>dropped</b>.', ok ? 'g' : 'e');
+    else logTo('tbLog', `→ burst of ${n}: <b>${ok}</b> took tokens${drops ? `, <b>${drops}</b> dropped (no tokens left)` : ''}.`, drops ? 'w' : 'g');
+    // goals
+    if (n === 5 && ok >= 4 && checkGoal('#s1goals', 'burst', goals, 15)) logTo('tbLog', '✓ 4 through in one instant: a full bucket can be spent all at once.', 'g');
+    if (n === 1 && ok && st.sawDrop && checkGoal('#s1goals', 'recover', goals, 15)) logTo('tbLog', '✓ The refiller earned you a fresh token. Waiting works, spamming doesn’t.', 'g');
+    if (drops) st.sawDrop = true;
+    maybeQuiz();
+  }
+  $('#tbOne').onclick = () => send(1);
+  $('#tbFive').onclick = () => send(5);
+  $$('#tbSpeed button').forEach(b => b.onclick = () => {
+    st.speed = +b.dataset.v; last = performance.now();
+    $$('#tbSpeed button').forEach(x => x.classList.toggle('on', x === b));
+    logTo('tbLog', st.speed ? '▶ clock running' : '⏸ clock paused: no refills while paused');
+  });
+  $('#tbReset').onclick = () => {
+    Object.assign(st, { tokens: CAP, game: 0, next: PERIOD, allowed: 0, dropped: 0, spilled: 0, sawDrop: false });
+    fxG.innerHTML = ''; renderCoins(); renderClock(); logTo('tbLog', '↻ bucket reset to 4 tokens');
+  };
+  function maybeQuiz() {
+    if (quizShown || goals.size < 2) return;
+    quizShown = true;
+    $('#s1note').style.display = 'block';
+    setTimeout(() => Q.quiz($('#s1quiz'), {
+      q: 'Which token bucket parameter sets the <b>biggest burst</b> you will ever let through at once?',
+      options: ['The bucket size (capacity)', 'The refill rate per second', 'The number of API servers'],
+      correct: 0,
+      good: 'A full bucket is the most tokens you can ever hold, so it’s the biggest burst. The refill rate decides the average over time.',
+      bad: 'The refill rate sets the long-run average. The biggest burst is the most tokens the bucket can hold at once: its <b>size</b>. You got 4 through in one instant because the size is 4.',
+      onDone: () => setTimeout(() => Q.clearStage(1), 900),
+    }), 400);
+  }
+  renderCoins(); renderClock();
+});
+
+/* ================= STAGE 2: calculate, then watch ================= */
+Q.onStage(2, () => {
+  const R3 = Array.from({ length: 12 }, (_, i) => ({ t: (i + 1) * 0.25, n: 1 }));
+  const ROUNDS = [
+    { cap: 4, per: 1, every: 15, start: 4, groups: [{ t: 0, n: 6 }], tmax: 15, step: 5, ans: 2, tol: 0, unit: 's',
+      chips: ['capacity 4', 'refill 1 token / 15 s', 'starts full'],
+      q: '6 requests arrive at the same instant, t = 0. How many are dropped?',
+      explain: 'A full bucket holds 4 tokens, so the first 4 requests take them and requests 5 and 6 find it empty. <b>2 dropped.</b> The bucket size is the biggest burst you will ever let through.' },
+    { cap: 4, per: 1, every: 15, start: 4, groups: [{ t: 0, n: 6 }, { t: 30, n: 3 }], tmax: 40, step: 10, ans: 3, tol: 0, unit: 's',
+      chips: ['capacity 4', 'refill 1 token / 15 s', 'starts full'],
+      q: 'Same bucket. 6 requests at t = 0, then 3 more at t = 30 s. How many are dropped in total?',
+      explain: 'At t = 0 it’s round 1 again: 4 in, 2 dropped. By t = 30 s, 30 × 1/15 = 2 tokens have come back. Two of the three late requests get one, and the third is dropped. <b>2 + 1 = 3 dropped.</b>' },
+    { cap: 10, per: 2, every: 1, start: 0, groups: R3, tmax: 3, step: 0.5, ans: 6, tol: 1, unit: 's',
+      chips: ['capacity 10', 'refill 2 tokens / s', 'starts EMPTY'],
+      q: 'A big bucket that starts empty. One request every 0.25 s from t = 0.25 to t = 3.0 (12 in all). How many are dropped? (±1 counts)',
+      explain: 'The bucket earns a token every 0.5 s, but requests come every 0.25 s, twice as fast. Every other request finds a whole token: <b>6 allowed, 6 dropped.</b> The size of 10 never matters, because the bucket never fills up. Over the long run a token bucket lets through its <b>refill rate</b>, not its bucket size.' },
+  ];
+  const svg = $('#tl2'), meter = $('#meter2');
+  let ri = 0, correct = 0, busy = false;
+  const X0 = 34, X1 = 380, AY = 118;
+
+  function drawTimeline(r) {
+    svg.innerHTML = '';
+    const xOf = t => X0 + (t / r.tmax) * (X1 - X0);
+    S('line', { class: 'axis', x1: X0 - 6, y1: AY, x2: X1 + 8, y2: AY }, svg);
+    for (let t = 0; t <= r.tmax + 1e-9; t += r.step) {
+      S('line', { class: 'tick', x1: xOf(t), y1: AY, x2: xOf(t), y2: AY + 6 }, svg);
+      S('text', { class: 'tlab', x: xOf(t), y: AY + 20 }, svg).textContent = fmt(t) + (t === 0 ? ' s' : '');
+    }
+    const marks = [];
+    let k = 0;
+    r.groups.forEach(g => { for (let j = 0; j < g.n; j++) { const y = AY - 12 - j * 15; marks.push({ t: g.t, el: S('rect', { class: 'mk', x: xOf(g.t) - 8, y: y - 6, width: 16, height: 12, rx: 3 }, svg), k: k++ }); } });
+    const cur = S('line', { class: 'cur', x1: xOf(0), y1: 8, x2: xOf(0), y2: AY, opacity: 0 }, svg);
+    const curLab = S('text', { class: 'curlab', x: xOf(0), y: 10, opacity: 0 }, svg);
+    return { xOf, marks, cur, curLab };
+  }
+  function drawMeter(cap, tokens) {
+    if (meter.dataset.cap !== String(cap)) {
+      meter.dataset.cap = cap;
+      meter.innerHTML = `<span class="ml">Tokens</span>${Array.from({ length: cap }, () => '<span class="cell"><i></i></span>').join('')}<span class="val"></span>`;
+    }
+    $$('.cell i', meter).forEach((c, i) => c.style.height = Math.max(0, Math.min(1, tokens - i)) * 100 + '%');
+    $('.val', meter).textContent = `${fmt(tokens)} / ${cap}`;
+  }
+  async function watch(r, tl) {
+    let tokens = r.start, lastT = 0, n = 0, drops = 0;
+    const per = r.per, ev = r.every;
+    $('#log2').innerHTML = `<div>Start: ${r.start} token${r.start === 1 ? '' : 's'} at t = 0.</div>`;
+    drawMeter(r.cap, tokens);
+    const fast = Q.reduced ? 0 : r.groups.length > 6 ? 230 : 380;
+    for (const g of r.groups) {
+      const x = tl.xOf(g.t);
+      tl.cur.setAttribute('opacity', 1); tl.curLab.setAttribute('opacity', 1);
+      const fromX = +tl.cur.getAttribute('x1');
+      await tween(fast, p => { const xx = fromX + (x - fromX) * ease(p); tl.cur.setAttribute('x1', xx); tl.cur.setAttribute('x2', xx); tl.curLab.setAttribute('x', Math.min(370, Math.max(30, xx))); });
+      tl.curLab.textContent = `t=${fmt(g.t)}`;
+      const dt = g.t - lastT, before = tokens;
+      tokens = Math.min(r.cap, tokens + dt * per / ev);
+      lastT = g.t;
+      if (dt > 0) logTo('log2', `t = ${fmt(g.t)} s · refill: <span class="fx">min(${r.cap}, ${fmt(before)} + ${fmt(dt)} × ${per}/${ev}) = </span><b>${fmt(tokens)}</b> token${tokens === 1 ? '' : 's'}`);
+      drawMeter(r.cap, tokens);
+      const these = [];
+      for (let j = 0; j < g.n; j++) {
+        const m = tl.marks[n++];
+        const ok = tokens >= 1 - 1e-9;
+        if (ok) tokens -= 1; else drops++;
+        m.el.classList.add(ok ? 'ok' : 'no');
+        drawMeter(r.cap, tokens);
+        these.push(ok);
+        if (g.n > 1) await sleep(Q.reduced ? 0 : 160);
+      }
+      const okN = these.filter(Boolean).length, noN = these.length - okN;
+      logTo('log2', `t = ${fmt(g.t)} s · ${g.n === 1 ? (okN ? `request takes a token → <b>${fmt(tokens)}</b> left ✓` : `less than 1 token (${fmt(tokens)}) → <b>dropped</b> ✗`) : `${g.n} requests: <b>${okN}</b> take tokens${noN ? `, <b>${noN}</b> dropped` : ''} → ${fmt(tokens)} left`}`, noN ? 'e' : 'g');
+      await sleep(Q.reduced ? 0 : 120);
+    }
+    logTo('log2', `Total dropped: <b>${drops}</b> of ${n}.`, 'w');
+    return drops;
+  }
+  function show() {
+    const r = ROUNDS[ri];
+    const tl = drawTimeline(r);
+    drawMeter(r.cap, r.start);
+    $('#r2status').textContent = `Round ${ri + 1} of 3`;
+    $('#log2').innerHTML = '<div>Waiting for your prediction…</div>';
+    const bx = $('#r2box');
+    bx.innerHTML = `<div class="step">Round ${ri + 1} of ${ROUNDS.length}</div><h3>${r.q}</h3>
+      <div class="params">${r.chips.map(c => `<span class="chip">${c}</span>`).join('')}</div>
+      <div class="answer"><label for="r2in" class="small"><b>Dropped:</b></label><input id="r2in" type="number" inputmode="numeric" min="0" max="20" aria-label="How many requests are dropped"><button class="btn primary" id="r2go">Lock in &amp; watch</button></div>
+      <div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+    const inp = $('#r2in', bx), go = $('#r2go', bx);
+    const submit = async () => {
+      if (busy) return;
+      const v = parseInt(inp.value, 10);
+      if (!Number.isFinite(v)) { Q.toast('type a number first', go, 'practice'); inp.focus(); return; }
+      busy = true; inp.disabled = true; go.disabled = true;
+      await watch(r, tl);
+      const ok = Math.abs(v - r.ans) <= r.tol;
+      const ex = $('.explain', bx); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+      ex.innerHTML = (ok ? `<b>Called it${v !== r.ans ? ' (close enough)' : ''}.</b> ` : `<b>You said ${v}; it was ${r.ans}.</b> `) + r.explain;
+      if (ok) { correct++; Q.addXP(20, go); } else Q.loseHeart(go);
+      busy = false;
+      nextBtn($('.row', bx), ri < ROUNDS.length - 1 ? 'Next round →' : 'Finish the rounds →', () => {
+        ri++;
+        if (ri < ROUNDS.length) return show();
+        const good = correct >= 2;
+        bx.innerHTML = `<div class="explain show ${good ? 'good' : 'bad'}"><b>${correct} of 3 right.</b> ${good ? 'That earns the bonus. You can run the lazy refill formula in your head.' : 'No bonus this time. Replay the rounds to practise the formula: refill first, then take a token.'}</div><div class="row" style="margin-top:12px"><button class="btn" id="r2replay">↻ Replay the 3 rounds</button></div>`;
+        if (good) Q.addXP(10, bx);
+        $('#r2replay').onclick = () => { ri = 0; correct = 0; show(); };
+        Q.clearStage(2);
+      });
+    };
+    go.onclick = submit;
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
+  }
+  $('#fxT').addEventListener('change', e => $('#log2').classList.toggle('fx-on', e.target.checked));
+  show();
+});
+
+/* ================= STAGE 3: how many buckets + hard/soft ================= */
+Q.onStage(3, () => {
+  const done = { rounds: false, label: false, quiz: false };
+  const tryClear = () => { if (done.rounds && done.label && done.quiz) setTimeout(() => Q.clearStage(3), 700); };
+
+  /* --- the bucket grid (canvas) --- */
+  const cv = $('#bgrid');
+  const KINDS = { post: ['--accent', 'post'], friend: ['--teal', 'add friend'], like: ['--warn', 'like'], glob: ['--coin', 'global'], ip: ['--vip', 'login per IP'] };
+  let gridState = [];
+  function drawGrid(parts, animate) {
+    gridState = parts;
+    const total = parts.reduce((s, p) => s + p.n, 0);
+    const W = cv.clientWidth || 320, H = cv.clientHeight || 190, dpr = window.devicePixelRatio || 1;
+    cv.width = W * dpr; cv.height = H * dpr;
+    const cx = cv.getContext('2d'); cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const pad = 10, aw = W - pad * 2, ah = H - pad * 2;
+    let cell = Math.floor(Math.sqrt(aw * ah / Math.max(1, total)));
+    cell = Math.max(2, Math.min(34, cell));
+    let cols = Math.max(1, Math.floor(aw / cell));
+    while (Math.ceil(total / cols) * cell > ah && cell > 2) { cell--; cols = Math.floor(aw / cell); }
+    const gap = cell >= 10 ? 3 : cell >= 4 ? 1 : 0.5, sq = cell - gap;
+    const ox = pad + (aw - cols * cell) / 2;
+    const seq = []; parts.forEach(p => { for (let i = 0; i < p.n; i++) seq.push(p.k); });
+    const colors = {}; Object.keys(KINDS).forEach(k => colors[k] = css(KINDS[k][0]));
+    const paint = upto => {
+      cx.clearRect(0, 0, W, H);
+      for (let i = 0; i < upto; i++) {
+        const x = ox + (i % cols) * cell, y = pad + Math.floor(i / cols) * cell;
+        cx.fillStyle = colors[seq[i]];
+        if (sq >= 8) { cx.beginPath(); cx.roundRect ? cx.roundRect(x, y, sq, sq, 4) : cx.rect(x, y, sq, sq); cx.fill(); } else cx.fillRect(x, y, sq, sq);
+      }
+    };
+    if (!animate || Q.reduced) paint(seq.length); else tween(700, p => paint(Math.round(seq.length * p)));
+    $('#glegend').innerHTML = parts.filter(p => p.n).map(p => `<span><i style="background:var(${KINDS[p.k][0]})"></i>${KINDS[p.k][1]} · ${p.n.toLocaleString('en-US')}</span>`).join('') + `<span class="tot">${total.toLocaleString('en-US')} buckets</span>`;
+  }
+  const redraw = () => { if (gridState.length) drawGrid(gridState, false); };
+  addEventListener('resize', redraw);
+  try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', redraw); } catch (_) {}
+
+  /* --- three counting rounds --- */
+  const ROUNDS = [
+    { q: 'One user is active. How many buckets does that user need for their <b>own</b> rules? (Don’t count the global one.)', ans: 3,
+      parts: [{ k: 'post', n: 1 }, { k: 'friend', n: 1 }, { k: 'like', n: 1 }, { k: 'glob', n: 1 }],
+      explain: 'One bucket per rule: post, add friend, like. <b>3 buckets</b> for that user. The book uses exactly this example. The global 10,000/s bucket is a 4th, but it’s shared by everyone.' },
+    { q: 'Now <b>1,000 users</b> are active at once. How many buckets exist in total, <b>including</b> the global one?', ans: 3001,
+      parts: [{ k: 'post', n: 1000 }, { k: 'friend', n: 1000 }, { k: 'like', n: 1000 }, { k: 'glob', n: 1 }],
+      explain: '3 per user × 1,000 users = 3,000, plus the single shared global bucket = <b>3,001</b>. Each bucket is only two numbers (tokens left, last refill time), so even millions of them fit in memory.' },
+    { q: 'You add a login rule: <b>5 attempts per minute, per IP address</b>. 5,000 different IP addresses hit /login. How many <b>extra</b> buckets is that?', ans: 5000,
+      parts: [{ k: 'post', n: 1000 }, { k: 'friend', n: 1000 }, { k: 'like', n: 1000 }, { k: 'glob', n: 1 }, { k: 'ip', n: 5000 }],
+      explain: 'Throttling by IP means <b>one bucket per IP address</b>: 5,000 more, for 8,001 in all. The key you limit by (user ID, IP, or "everyone") decides how many buckets you get.' },
+  ];
+  let ri = 0;
+  function showRound() {
+    const r = ROUNDS[ri], bx = $('#r3box');
+    bx.innerHTML = `<div class="step">Count the buckets · round ${ri + 1} of 3</div><h3>${r.q}</h3>
+      <div class="answer"><input id="r3in" type="text" inputmode="numeric" aria-label="Number of buckets" autocomplete="off"><button class="btn primary" id="r3go">Check</button></div>
+      <div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+    const inp = $('#r3in', bx), go = $('#r3go', bx);
+    const submit = () => {
+      const v = parseInt(String(inp.value).replace(/[\s,._']/g, ''), 10);
+      if (!Number.isFinite(v)) { Q.toast('type a number first', go, 'practice'); inp.focus(); return; }
+      inp.disabled = true; go.disabled = true;
+      const ok = v === r.ans;
+      const ex = $('.explain', bx); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+      ex.innerHTML = (ok ? '<b>Right.</b> ' : `<b>You said ${v.toLocaleString('en-US')}; it’s ${r.ans.toLocaleString('en-US')}.</b> `) + r.explain;
+      ok ? Q.addXP(15, go) : Q.loseHeart(go);
+      drawGrid(r.parts, true);
+      nextBtn($('.row', bx), ri < ROUNDS.length - 1 ? 'Next round →' : 'Done counting →', () => {
+        ri++;
+        if (ri < ROUNDS.length) return showRound();
+        bx.innerHTML = '<p class="small" style="margin:0"><b>✓ Counting done.</b> Rule × key = buckets. Now try the hard vs soft demo below.</p><div class="row" style="margin-top:10px"><button class="btn" id="r3replay">↻ Replay the count</button></div>';
+        $('#r3replay').onclick = () => { ri = 0; showRound(); };
+        done.rounds = true; tryClear();
+      });
+    };
+    go.onclick = submit;
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
+  }
+  showRound();
+
+  /* --- hard vs soft meters --- */
+  const hardIsA = Math.random() < 0.5;
+  const LIM = { A: hardIsA ? 10 : 12, B: hardIsA ? 12 : 10 };
+  ['A', 'B'].forEach(k => { $('#cells' + k).innerHTML = Array.from({ length: 14 }, () => '<div></div>').join('') + '<span class="lim"></span>'; });
+  let fired = false, asked = false, playing = false;
+  $('#hsGo').onclick = async () => {
+    if (playing) return; playing = true; $('#hsGo').disabled = true;
+    const ca = $$('#cellsA div'), cb = $$('#cellsB div');
+    [...ca, ...cb].forEach(c => c.className = '');
+    let a = 0, b = 0;
+    for (let i = 0; i < 14; i++) {
+      const okA = i < LIM.A, okB = i < LIM.B;
+      ca[i].className = okA ? 'ok' : 'no'; cb[i].className = okB ? 'ok' : 'no';
+      if (okA) a++; if (okB) b++;
+      $('#hsA').textContent = `${a} allowed`; $('#hsB').textContent = `${b} allowed`;
+      await sleep(Q.reduced ? 0 : 140);
+    }
+    playing = false; $('#hsGo').disabled = false; $('#hsGo').textContent = '↻ Send them again';
+    if (!fired) { fired = true; askLabel(); }
+  };
+  function askLabel() {
+    if (asked) return; asked = true;
+    const bx = $('#hsAsk');
+    bx.innerHTML = '<h3>Which limiter is the <b>hard</b> one?</h3><div class="row"><button class="opt" data-k="A">Limiter A</button><button class="opt" data-k="B">Limiter B</button></div><div class="explain"></div>';
+    $$('.opt', bx).forEach(btn => btn.onclick = () => {
+      $$('.opt', bx).forEach(x => x.disabled = true);
+      const hardK = hardIsA ? 'A' : 'B', softK = hardIsA ? 'B' : 'A';
+      const ok = btn.dataset.k === hardK;
+      btn.classList.add(ok ? 'right' : 'wrong');
+      if (!ok) $(`.opt[data-k="${hardK}"]`, bx).classList.add('right');
+      const ex = $('.explain', bx); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+      ex.innerHTML = `<b>Limiter ${hardK} is hard</b>: request 11 was refused, and it never goes past 10. <b>Limiter ${softK} is soft</b>: it let 12 through, briefly going over, then clamped down. A token bucket with a big bucket behaves "softer" over short windows, because a full bucket can be spent in one burst.`;
+      ok ? Q.addXP(15, btn) : Q.loseHeart(btn);
+      done.label = true;
+      setTimeout(() => Q.quiz($('#s3quiz'), {
+        q: 'According to the book, what is the main <b>con</b> of the token bucket algorithm?',
+        options: ['Its two parameters can be hard to tune', 'It needs a huge amount of memory', 'It cannot allow any burst of traffic'],
+        correct: 0,
+        good: 'Bucket size and refill rate interact, and picking good values for real traffic takes care. Memory is a <i>pro</i> (two numbers per bucket), and so is allowing bursts.',
+        bad: 'Memory use and bursts are both on the <i>pro</i> side: a bucket is two numbers, and it lets short bursts through. The con is tuning: two parameters that are hard to get right.',
+        onDone: () => { done.quiz = true; tryClear(); },
+      }), 500);
+    });
+  }
+});
+
+/* ================= STAGE 4: token vs leaking, side by side ================= */
+Q.onStage(4, () => {
+  const SLOT_Y = [126, 102, 78, 54];
+  const CH = [0, 1, 2, 4, 8];
+  const PRED = [
+    { id: 'tAns', g: 'tok', q: 'Answered by t = 1 s?', ans: 4 },
+    { id: 'tDrop', g: 'tok', q: 'Dropped in total?', ans: 4 },
+    { id: 'lAns', g: 'leak', q: 'Answered by t = 1 s?', ans: 1 },
+    { id: 'lDrop', g: 'leak', q: 'Dropped in total?', ans: 4 },
+  ];
+  const picks = {};
+  let scored = false, playing = false, quizShown = false;
+  $('#pred4').innerHTML = [['tok', '🪙 Token bucket'], ['leak', '💧 Leaking bucket']].map(([g, name]) => `<div class="pgroup"><h4>${name}</h4>${PRED.filter(p => p.g === g).map(p => `<div class="pq">${p.q}</div><div class="pcs" data-p="${p.id}" role="group" aria-label="${name}: ${p.q}">${CH.map(c => `<button class="pc" data-v="${c}">${c}</button>`).join('')}</div>`).join('')}</div>`).join('');
+  $$('#pred4 .pcs').forEach(row => $$('.pc', row).forEach(b => b.onclick = () => {
+    if (scored || playing) return;
+    picks[row.dataset.p] = +b.dataset.v;
+    $$('.pc', row).forEach(x => x.classList.toggle('on', x === b));
+    $('#lkGo').disabled = Object.keys(picks).length < 4;
+  }));
+
+  function frame(svg, kind) {
+    svg.innerHTML = '';
+    S('path', { class: 'inside', d: 'M105 30 L115 140 L185 140 L195 30 Z' }, svg);
+    S('path', { class: 'shell', d: 'M105 30 L115 140 L185 140 L195 30' }, svg);
+    SLOT_Y.forEach(y => S(kind === 'tok' ? 'circle' : 'rect', kind === 'tok' ? { class: 'slot', cx: 150, cy: y, r: 10 } : { class: 'slot', x: 135, y: y - 9, width: 30, height: 18, rx: 4 }, svg));
+    if (kind === 'tok') {
+      S('text', { class: 'lbl c', x: 150, y: 16 }, svg).textContent = '+1 token / s';
+      S('line', { class: 'lane', x1: 40, y1: 178, x2: 258, y2: 178 }, svg);
+      box(svg, 4, 162, 36, 32, '8×');
+    } else {
+      S('rect', { class: 'pipe', x: 144, y: 140, width: 12, height: 22, rx: 2 }, svg);
+      S('text', { class: 'lbl', x: 162, y: 156 }, svg).textContent = 'leak 1/s';
+      S('line', { class: 'lane', x1: 150, y1: 178, x2: 258, y2: 178 }, svg);
+      S('line', { class: 'lane', x1: 40, y1: 16, x2: 150, y2: 16 }, svg);
+      box(svg, 4, 2, 36, 28, '8×');
+    }
+    box(svg, 258, 162, 38, 32, 'API');
+    S('text', { class: 'drop', x: kind === 'tok' ? 162 : 22, y: 214 }, svg).textContent = '✗ dropped';
+    return { stack: S('g', {}, svg), fx: S('g', {}, svg) };
+  }
+  const A = { svg: $('#lk4a') }, B = { svg: $('#lk4b') };
+  function reset() {
+    Object.assign(A, frame(A.svg, 'tok'), { tokens: 4, ans: 0, drop: 0, by1: 0 });
+    Object.assign(B, frame(B.svg, 'leak'), { queue: [], vis: 0, ans: 0, drop: 0, by1: 0 });
+    renderA(); renderB();
+    $('#aVip').textContent = ''; $('#bVip').textContent = '';
+    $('#lkClock').textContent = 't = 0.0 s';
+  }
+  function renderA() { A.stack.innerHTML = ''; for (let i = 0; i < A.tokens; i++) coin(A.stack, 150, SLOT_Y[i], 10); $('#aAns').textContent = A.ans; $('#aDrop').textContent = A.drop; }
+  function renderB() { B.stack.innerHTML = ''; B.queue.slice(0, B.vis).forEach((q, i) => packet(B.stack, q, q === 'VIP' ? 'vip' : '', 150, SLOT_Y[i])); $('#bAns').textContent = B.ans; $('#bDrop').textContent = B.drop; }
+
+  const D = 300; // ms per hop
+  function tokBurst() {
+    for (let i = 0; i < 8; i++) {
+      const ok = A.tokens >= 1;
+      if (ok) { A.tokens--; A.ans++; A.by1++; } else A.drop++;
+      setTimeout(async () => {
+        const p = packet(A.fx, '#' + (i + 1), '', 40, 178);
+        await fly(p, [[40, 178], [150, 178]], D);
+        p.classList.add(ok ? 'ok' : 'no');
+        if (ok) await fly(p, [[150, 178], [258, 178]], D); else await fly(p, [[150, 178], [150, 200]], D * .6);
+        fade(p, 180);
+      }, Q.reduced ? 0 : i * 70);
+    }
+    renderA();
+  }
+  function tokRefill() {
+    if (A.tokens >= 4) return;
+    A.tokens++;
+    const c = coin(A.fx, 150, 20, 10);
+    fly(c, [[150, 20], [150, SLOT_Y[A.tokens - 1]]], 260).then(() => { c.remove(); renderA(); });
+  }
+  function tokVip(t) {
+    const ok = A.tokens >= 1;
+    if (ok) { A.tokens--; A.ans++; } else A.drop++;
+    renderA();
+    (async () => {
+      const p = packet(A.fx, 'VIP', 'vip', 40, 178);
+      await fly(p, [[40, 178], [150, 178]], D);
+      p.classList.add(ok ? 'ok' : 'no');
+      await fly(p, ok ? [[150, 178], [258, 178]] : [[150, 178], [150, 200]], D);
+      fade(p, 180);
+    })();
+    $('#aVip').textContent = ok ? `VIP answered at ${t} s: waited 0 s (used the token that arrived at 1 s).` : `VIP dropped at ${t} s: no token.`;
+  }
+  function leakBurst() {
+    for (let i = 0; i < 8; i++) {
+      const ok = B.queue.length < 4;
+      if (ok) B.queue.push('#' + (i + 1)); else B.drop++;
+      const slotY = SLOT_Y[Math.min(3, i)];
+      setTimeout(async () => {
+        const p = packet(B.fx, '#' + (i + 1), ok ? '' : 'no', 40, 16);
+        await fly(p, [[40, 16], [150, 16]], D * .8);
+        if (ok) { await fly(p, [[150, 16], [150, slotY]], D * .7); p.remove(); B.vis = Math.min(B.queue.length, B.vis + 1); renderB(); }
+        else { await fly(p, [[150, 16], [100, 30], [40, 196]], D * .6); fade(p, 180); renderB(); }
+      }, Q.reduced ? 0 : i * 60);
+    }
+    if (Q.reduced) { B.vis = B.queue.length; renderB(); }
+  }
+  function leakOut(t) {
+    if (!B.queue.length) return;
+    const head = B.queue.shift();
+    B.ans++; if (t <= 1) B.by1++;
+    B.vis = B.queue.length; renderB();
+    (async () => {
+      const p = packet(B.fx, head, head === 'VIP' ? 'vip' : '', 150, SLOT_Y[0]);
+      await fly(p, [[150, SLOT_Y[0]], [150, 178]], D * .7);
+      p.classList.add('ok');
+      await fly(p, [[150, 178], [258, 178]], D);
+      fade(p, 180);
+    })();
+    if (head === 'VIP') $('#bVip').textContent = `VIP answered at ${t} s: waited ${t - 1.5} s behind old requests.`;
+  }
+  function leakVip(t) {
+    const ok = B.queue.length < 4;
+    if (ok) B.queue.push('VIP'); else B.drop++;
+    const slotY = SLOT_Y[Math.min(3, B.queue.length - 1)];
+    (async () => {
+      const p = packet(B.fx, 'VIP', 'vip', 40, 16);
+      await fly(p, [[40, 16], [150, 16]], D * .8);
+      if (ok) { await fly(p, [[150, 16], [150, slotY]], D * .7); p.remove(); B.vis = B.queue.length; renderB(); }
+      else { p.classList.add('no'); await fly(p, [[150, 16], [40, 196]], D); fade(p, 180); }
+    })();
+    $('#bVip').textContent = ok ? `VIP joined the queue at ${t} s, behind ${B.queue.length - 1} old requests…` : `VIP dropped at ${t} s: the queue is full of old requests.`;
+  }
+  const EVENTS = [
+    [0, () => { tokBurst(); leakBurst(); }],
+    [1, () => { tokRefill(); leakOut(1); }],
+    [1.5, () => { tokVip(1.5); leakVip(1.5); }],
+    [2, () => { tokRefill(); leakOut(2); }],
+    [3, () => { tokRefill(); leakOut(3); }],
+    [4, () => { tokRefill(); leakOut(4); }],
+    [5, () => { tokRefill(); leakOut(5); }],
+  ];
+  async function play() {
+    if (playing) return; playing = true;
+    $('#lkGo').disabled = true;
+    $$('#pred4 .pc').forEach(b => b.disabled = true);
+    reset();
+    const MS = Q.reduced ? 0 : 1000; // real ms per simulated second
+    const t0 = performance.now();
+    const clk = setInterval(() => { $('#lkClock').textContent = `t = ${Math.min(5.5, (performance.now() - t0) / (MS || 1)).toFixed(1)} s`; }, 100);
+    let cur = 0;
+    for (const [t, f] of EVENTS) { await sleep((t - cur) * MS); cur = t; f(); }
+    await sleep(Q.reduced ? 50 : 900);
+    clearInterval(clk); $('#lkClock').textContent = 't = 5.5 s';
+    playing = false;
+    $('#lkGo').disabled = false; $('#lkGo').textContent = '↻ Replay the race';
+    score();
+  }
+  function score() {
+    const actual = { tAns: A.by1, tDrop: A.drop, lAns: B.by1, lDrop: B.drop };
+    const row = (name, a, d, vip, pa, pd) => `<tr><td><b>${name}</b></td><td>${a}${pa !== undefined ? ` <span class="small muted">(you: ${pa})</span>` : ''}</td><td>${d}${pd !== undefined ? ` <span class="small muted">(you: ${pd})</span>` : ''}</td><td>${vip}</td></tr>`;
+    $('#cmp4').innerHTML = `<div class="tablewrap"><table class="cmp"><thead><tr><th></th><th>by 1 s</th><th>dropped</th><th>VIP wait</th></tr></thead><tbody>
+      ${row('🪙 Token', actual.tAns, actual.tDrop, '0 s', picks.tAns, picks.tDrop)}${row('💧 Leaking', actual.lAns, actual.lDrop, '3.5 s', picks.lAns, picks.lDrop)}</tbody></table></div>`;
+    if (scored) return;
+    scored = true;
+    PRED.forEach(p => { const b = $(`#pred4 .pcs[data-p="${p.id}"] .pc[data-v="${picks[p.id]}"]`); b.classList.add(picks[p.id] === p.ans ? 'right' : 'wrong'); if (picks[p.id] !== p.ans) $(`#pred4 .pcs[data-p="${p.id}"] .pc[data-v="${p.ans}"]`).classList.add('right'); });
+    const tokOK = picks.tAns === 4 && picks.tDrop === 4, leakOK = picks.lAns === 1 && picks.lDrop === 4;
+    const go = $('#lkGo');
+    Q.addXP(10, go);
+    setTimeout(() => { tokOK ? Q.addXP(15, $('#pred4 .pgroup')) : Q.loseHeart($('#pred4 .pgroup')); }, 350);
+    setTimeout(() => { leakOK ? Q.addXP(15, $$('#pred4 .pgroup')[1]) : Q.loseHeart($$('#pred4 .pgroup')[1]); }, 700);
+    $('#s4note').style.display = 'block';
+    if (!quizShown) {
+      quizShown = true;
+      setTimeout(() => Q.quiz($('#s4quiz'), {
+        q: 'You call a downstream payment processor that can take <b>exactly 10 calls a second, steadily</b>. Bursts break it. Which bucket do you put in front of it?',
+        options: ['Leaking bucket: steady outflow', 'Token bucket: lets bursts through', 'Either one: they behave the same'],
+        correct: 0,
+        good: 'A leaking bucket releases requests at a fixed rate whatever arrives, which is exactly what a fragile downstream needs. A token bucket would happily forward a burst as big as its bucket.',
+        bad: 'You just watched the token bucket pass 4 requests in the same instant. A downstream that breaks on bursts needs the <b>leaking bucket</b>, which releases one at a time at a fixed rate.',
+        onDone: () => setTimeout(() => Q.clearStage(4), 900),
+      }), 1000);
+    }
+  }
+  $('#lkGo').onclick = play;
+  reset();
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => {
+  const BUCKETS = [{ k: 'tok', label: 'Token bucket', sub: 'tokens refill to a cap' }, { k: 'leak', label: 'Leaking bucket', sub: 'queue drains at a rate' }];
+  const KNOBS = [
+    { k: 'sizeUp', label: 'Bucket size ↑', sub: 'more tokens held' },
+    { k: 'sizeDown', label: 'Bucket size ↓', sub: 'fewer tokens held' },
+    { k: 'rateUp', label: 'Refill rate ↑', sub: 'tokens come faster' },
+    { k: 'rateDown', label: 'Refill rate ↓', sub: 'tokens come slower' },
+  ];
+  Q.boss($('#boss'), {
+    name: '🐉 Burst Hydra',
+    xp: 20,
+    scenarios: [
+      { e: '📱', t: 'The app-launch flurry', d: 'Your public API. When someone opens the app it fires 10 calls at once, then goes quiet for minutes. You want that to just work.', choices: BUCKETS, a: 'tok',
+        why: 'Bursty user traffic with a low average is the token bucket’s home turf: a full bucket lets the 10-call burst straight through, and the refill rate caps the average.' },
+      { e: '🗄️', t: 'The fragile legacy database', d: 'Writes go into an old database that falls over above 50 writes a second, even for a brief spike.', choices: BUCKETS, a: 'leak',
+        why: 'You need a steady outflow, not bursts. A leaking bucket releases writes at a fixed 50/s however they arrive. A token bucket would forward a burst as big as its bucket.' },
+      { e: '🚀', t: 'Throttled at launch', d: 'You run a token bucket. Users complain that a burst of 100 calls at app launch gets throttled, though their hourly average is low.', choices: KNOBS, a: 'sizeUp',
+        why: 'The average is fine; the burst is the problem. The biggest burst allowed is the bucket size, so raise it. Raising the refill rate would also raise everyone’s long-run average, which you don’t need.' },
+      { e: '🔥', t: 'Too much, all day long', d: 'Bursts are fine, but across the day each user’s average is too high and your servers run hot from morning to night.', choices: KNOBS, a: 'rateDown',
+        why: 'The long-run rate a token bucket allows is its refill rate. Lower it. The bucket size only controls bursts, so shrinking it wouldn’t fix a high average.' },
+      { e: '📜', t: 'The contract cap', d: 'A partner contract says you may never send more than 100 calls a minute to their API. Not even for a moment.', choices: [{ k: 'hard', label: 'Hard limit', sub: 'never over the line' }, { k: 'soft', label: 'Soft limit', sub: 'brief overshoot is ok' }], a: 'hard',
+        why: 'The book: with a hard limit the number of requests can never exceed the threshold. A soft limit allows short overshoots, which would break this contract.' },
+    ],
+    outro: 'The pattern: bursty users → token bucket; fragile downstream → leaking bucket. Size sets the burst, rate sets the average.',
+    onDone: () => Q.clearStage(5),
+  });
+});
+
+/* ================= STAGE 6: interview drill ================= */
+Q.onStage(6, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"Compare the token bucket and the leaking bucket. When would you use each?"</i>',
+  placeholder: 'A token bucket holds up to N tokens…',
+  model: '"A <b>token bucket</b> holds up to a fixed number of tokens and refills at a set rate. Extra tokens overflow. Each request takes a token or is dropped. Its two parameters are <b>bucket size</b>, the biggest burst, and <b>refill rate</b>, the long-run average. It allows short bursts and is cheap, since it’s two numbers per bucket. Amazon API Gateway and Stripe use it. A <b>leaking bucket</b> is a FIFO queue drained at a fixed rate. If the queue is full, new requests are dropped. Its parameters are <b>queue size</b> and <b>outflow rate</b>. Output is smooth and steady, but a burst fills the queue with old requests, so fresh ones wait or get dropped. Shopify is the book’s example. Both have two knobs that are hard to tune. I’d pick a token bucket for bursty user-facing traffic, and a leaking bucket when a downstream needs a steady rate, like a payment processor or a fragile database."',
+  checks: ['I named both parameter pairs: size + refill rate, queue size + outflow rate', 'I contrasted bursts: token allows them, leaking smooths them out', 'I gave a use case for each (bursty users vs steady downstream)', 'I gave one con for each (tuning; old requests starving new ones)'],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

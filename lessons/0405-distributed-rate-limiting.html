@@ -1,0 +1,1132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Many Doors, One Count</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: lane colours (A/B), map land, stage sims */
+:root { --la: #5a48f0; --lb: #c27400; --land: #e4ddcf; --land-edge: #d3c9b5; --on-l: #ffffff; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --la: #8f82ff; --lb: #ffb547; --land: #23264a; --land-edge: #33376a; --on-l: #0e0f1d; }
+}
+:root[data-theme="dark"] { --la: #8f82ff; --lb: #ffb547; --land: #23264a; --land-edge: #33376a; --on-l: #0e0f1d; }
+
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.challenge .locked-in { font-size: 14px; color: var(--muted); margin-top: 8px; min-height: 20px; }
+.bignum { font-family: var(--mono); font-weight: 700; }
+.bignum.bad { color: var(--bad); }
+.bignum.good { color: var(--good); }
+.seg button { min-height: 40px; }
+.steps3 { margin: 8px 0 12px; padding-left: 22px; }
+.steps3 li { margin: 3px 0; }
+pre.code { background: var(--code-bg); color: var(--code-ink); border-radius: 12px; padding: 12px 14px; font: 12.5px/1.55 var(--mono); overflow-x: auto; margin: 10px 0 0; }
+pre.code .c { color: #8b93c9; }
+details.more { margin-top: 14px; border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; background: var(--bg); font-size: 15px; }
+details.more summary { cursor: pointer; font-weight: 600; min-height: 28px; }
+
+/* stage 1: race lanes */
+.racegrid { display: grid; grid-template-columns: 1fr 150px 1fr; gap: 12px; padding: 14px; align-items: start; }
+.redisbox { grid-column: 2; grid-row: 1; text-align: center; border: 2px solid var(--line); border-radius: 16px; padding: 12px 8px; background: var(--panel); transition: border-color .3s, background .3s; }
+.redisbox.bad { border-color: var(--bad); background: var(--bad-soft); }
+.redisbox.good { border-color: var(--good); background: var(--good-soft); }
+.redisbox.busy { border-color: var(--accent); }
+.rlbl { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.rcount { font: 700 46px/1.1 var(--mono); }
+.rcount.flash { animation: blip .5s; }
+@keyframes blip { 45% { transform: scale(1.25); } }
+.rlim { font-size: 13px; color: var(--muted); }
+.rbusy { font-size: 12px; color: var(--accent); font-weight: 600; min-height: 18px; margin-top: 4px; }
+.lane { border: 2px solid var(--line); border-radius: 16px; padding: 10px; background: var(--panel); display: grid; gap: 8px; }
+.lane.A { grid-column: 1; grid-row: 1; border-top: 6px solid var(--la); }
+.lane.B { grid-column: 3; grid-row: 1; border-top: 6px solid var(--lb); }
+.lane-h { font-weight: 700; display: flex; justify-content: space-between; gap: 6px; flex-wrap: wrap; align-items: center; }
+.lane .verdict { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: var(--bg-2); color: var(--muted); }
+.lane .verdict.ok { background: var(--good-soft); color: var(--good); }
+.lane .verdict.rej { background: var(--bad-soft); color: var(--bad); }
+.lane .mem { font: 600 13px var(--mono); color: var(--muted); }
+.lane .mem b { color: var(--ink); }
+.lane .stp { width: 100%; min-height: 42px; text-align: left; padding: 8px 12px; font-size: 14px; }
+.lane .stp.done { background: var(--bg-2); color: var(--muted); border-style: dashed; }
+.lane .stp.now { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.chiprow { display: grid; gap: 4px; }
+.chiprow span { font: 600 12.5px var(--mono); padding: 5px 9px; border-radius: 8px; background: var(--bg-2); color: var(--muted); border: 1px solid var(--line); transition: background .2s, color .2s; }
+.chiprow span.now { background: var(--accent); color: #fff; border-color: transparent; }
+.chiprow span.done { color: var(--ink); }
+.waitbar { height: 10px; border-radius: 99px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; }
+.waitbar div { height: 100%; width: 0; background: var(--warn); transition: width .3s linear; }
+.trips { font-size: 12.5px; color: var(--muted); font-family: var(--mono); }
+.trips b { color: var(--ink); }
+#raceAct { padding: 0 14px 12px; }
+@media (max-width: 620px) {
+  .racegrid { grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px 10px; }
+  .redisbox { grid-column: 1 / span 2; grid-row: 1; display: flex; align-items: center; justify-content: center; gap: 12px; padding: 8px; flex-wrap: wrap; }
+  .rcount { font-size: 34px; }
+  .lane.A { grid-column: 1; grid-row: 2; }
+  .lane.B { grid-column: 2; grid-row: 2; }
+  .lane { padding: 8px; }
+  .lane .stp { padding: 8px; font-size: 13px; }
+}
+
+/* stage 2: limiter topology */
+.topo svg { max-width: 560px; margin: 0 auto; }
+.topo .ln { stroke: var(--line); stroke-width: 3; fill: none; }
+.topo .ln.rl { stroke-dasharray: 5 5; }
+.topo .ln.off { opacity: .25; }
+.topo .nd rect { fill: var(--panel); stroke: var(--line); stroke-width: 2; }
+.topo .nd text { fill: var(--ink); font: 700 13px var(--font); text-anchor: middle; dominant-baseline: central; }
+.topo .nd text.sb { fill: var(--muted); font: 600 11px var(--mono); }
+.topo .nd.lim rect { stroke: var(--accent); }
+.topo .nd.redis rect { stroke: var(--bad); }
+.topo .nd.off { opacity: .3; }
+.topo .nd.dead rect { stroke: var(--bad); fill: var(--bad-soft); }
+.topo .nd.dead text { fill: var(--bad); }
+.topo .heat-bg { fill: var(--bg-2); stroke: var(--line); }
+.topo .heat { fill: var(--warn); transition: width .3s; }
+.topo .heat-t { fill: var(--muted); font: 600 10.5px var(--mono); }
+.topo .pk { fill: var(--ink); }
+.topo .pk.ok { fill: var(--good); }
+.topo .pk.rej { fill: var(--bad); }
+.topo .t429 { fill: var(--bad); font: 700 12px var(--mono); text-anchor: middle; }
+
+/* stage 3: map */
+.mapsim svg { max-width: 720px; margin: 0 auto; }
+.mapsim .landp { fill: var(--land); stroke: var(--land-edge); stroke-width: .6; stroke-linejoin: round; }
+.mapsim .grid { stroke: var(--line); stroke-width: .4; }
+.mapsim .city circle { stroke: var(--bg); stroke-width: 1.2; }
+.mapsim .city text { fill: var(--ink); font: 700 7.5px var(--font); }
+.mapsim .user circle { fill: var(--la); }
+.mapsim .db circle { fill: var(--bad); }
+.mapsim .edge circle { fill: var(--teal); }
+.mapsim .route { fill: none; stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.mapsim .sync { fill: none; stroke: var(--teal); stroke-width: .9; stroke-dasharray: 2 3; opacity: .8; animation: dash 1.2s linear infinite; }
+@keyframes dash { to { stroke-dashoffset: -10; } }
+.mapsim .pkt { fill: var(--accent); }
+.readouts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+@media (max-width: 560px) { .readouts { grid-template-columns: 1fr 1fr; } .readouts .ro:first-child { grid-column: 1 / span 2; } }
+.ro { border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; background: var(--bg); }
+.ro small { display: block; font-size: 11.5px; color: var(--muted); font-weight: 600; }
+.ro b { font: 700 20px var(--mono); }
+.ro.bad b { color: var(--bad); }
+.ro.good b { color: var(--good); }
+.calcrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+.calcrow input { width: 130px; min-height: 42px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: 600 16px var(--mono); padding: 6px 10px; }
+.hintbox { font-size: 14px; background: var(--bg-2); border-radius: 12px; padding: 10px 12px; margin-top: 8px; }
+.hintbox ul { margin: 4px 0 0; padding-left: 18px; }
+
+/* stage 4: ops dashboard */
+.incident { border: 1px solid var(--line); border-radius: 18px; overflow: hidden; background: var(--bg); margin-top: 14px; }
+.inc-h { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; align-items: center; padding: 10px 14px; background: var(--panel); border-bottom: 1px solid var(--line); font-weight: 700; font-size: 15px; }
+.inc-h .tag { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 99px; background: var(--warn-soft); color: var(--warn); }
+.inc-h .tag.red { background: var(--bad-soft); color: var(--bad); }
+.inc-b { padding: 12px 14px; }
+.inc-b svg { display: block; width: 100%; height: auto; }
+.chart .ok { fill: var(--good); }
+.chart .rej { fill: var(--bad); }
+.chart .ax { fill: var(--muted); font: 600 9px var(--mono); }
+.chart .axl { stroke: var(--line); }
+.chart .mark { stroke: var(--ink); stroke-dasharray: 3 3; }
+.chart .mark-t { fill: var(--ink); font: 700 9px var(--font); }
+.leg { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+.leg i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.tickets { margin-top: 10px; display: grid; gap: 6px; }
+.tickets div { font-size: 13.5px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; }
+.tickets .cnt { font-weight: 700; background: none; border: 0; padding: 0; }
+.diag { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+@media (max-width: 560px) { .diag { grid-template-columns: 1fr; } }
+.eprow { border: 1px solid var(--line); border-radius: 14px; padding: 12px; background: var(--panel); margin-top: 10px; }
+.eprow .top { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.eprow .seg button.on.open { background: var(--good); }
+.eprow .seg button.on.closed { background: var(--bad); }
+.eprow svg { display: block; width: 100%; height: auto; margin-top: 10px; }
+.eprow .msg { font-size: 14px; margin-top: 8px; }
+.mini .ok { fill: var(--good); }
+.mini .rej { fill: var(--bad); }
+.mini .unp { fill: none; stroke: var(--warn); stroke-width: 1.5; stroke-dasharray: 3 2; }
+.mini .ax { fill: var(--muted); font: 600 9px var(--mono); }
+.mini .dn { stroke: var(--bad); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.alert { display: inline-block; margin-top: 6px; font-size: 13px; font-weight: 700; color: var(--warn); }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 4.5 · Design a Rate Limiter</div>
+    <h1>Many Doors, One Count</h1>
+    <p class="lede">One limiter on one box is easy. Now run fifty of them, in three regions, sharing one Redis that might fall over. This is where interviewers start digging.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can show the <b>read-check-write race</b> (two requests both see 3), fix it with a <b>Lua script</b> or a <b>sorted set</b>, explain why <b>sticky sessions</b> lose to a <b>central Redis</b>, talk through <b>edge servers</b> and <b>eventual consistency</b>, and say what you’d <b>monitor</b> and what happens <b>when Redis dies</b>.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>The race</h2><div class="sub">Two requests, one counter, wrong answer</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>On one server with one thread, a rate limiter is simple. The book points out that real systems run <b>many servers</b>, each with <b>many threads</b> (tasks running at the same moment). That brings two new problems: <b>race conditions</b> and <b>synchronization</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener">[1]</a> This stage is about the first.</p>
+      <p>Here is the limiter’s logic, written as three separate steps, the way the book lays it out:</p>
+      <ol class="steps3">
+        <li><b>Read</b> the counter from Redis.</li>
+        <li><b>Check</b>: would counter + 1 go over the limit? If yes, reject with 429.</li>
+        <li>If not, <b>Write</b> counter + 1 back to Redis and let the request in.</li>
+      </ol>
+      <p>A <b>race condition</b> is a bug where the result depends on the exact timing of two tasks running at once. Below, the counter is at <b>3</b> and the limit is <b>4</b>. So exactly <b>one</b> of requests A and B should get in. You control the timing.</p>
+
+      <div class="challenge boxed" id="racePredict"></div>
+      <div class="sim" id="raceSim">
+        <div class="sim-bar"><span class="seg" id="raceMode" role="group" aria-label="How the limiter runs"><button data-m="plain" class="on">Plain</button><button data-m="lua">Lua script</button><button data-m="lock">Lock</button></span><span class="small muted" id="raceModeNote">3 separate Redis commands</span></div>
+        <div class="racegrid">
+          <div class="redisbox" id="rBox"><div class="rlbl">Redis</div><div class="rcount" id="rCount">3</div><div class="rlim">counter · limit 4</div><div class="rbusy" id="rBusy"></div></div>
+          <div class="lane A" id="laneA"></div>
+          <div class="lane B" id="laneB"></div>
+        </div>
+        <div id="raceAct"></div>
+        <div class="sim-bar"><span>Let in: <b class="bignum" id="rIn">0</b> · Rejected: <b class="bignum" id="rRej">0</b></span><button class="btn" id="raceReset" style="padding:7px 12px;font-size:14px">↻ Reset</button></div>
+        <div class="simlog" id="raceLog"><div>Counter = 3, limit = 4. Predict first, then run the steps.</div></div>
+      </div>
+      <ul class="checklist" id="s1goals">
+        <li data-g="bug"><span class="box">✓</span><span><b>Plain:</b> break it. Get <i>both</i> A and B through.</span></li>
+        <li data-g="lua"><span class="box">✓</span><span><b>Lua script:</b> run A and B as scripts and watch the count stay right</span></li>
+        <li data-g="lock"><span class="box">✓</span><span><b>Lock:</b> fire both together and look at the waiting</span></li>
+      </ul>
+      <div class="callout" id="bugNote" style="display:none"><b>That’s the book’s exact bug.</b> Both requests read 3, both decided “3 + 1 = 4, fine”, and both wrote 4. The second write wiped out the first. Two requests got in, but the counter only went up by one. With a true count it should read 5.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener">[1]</a> Under real load this happens thousands of times a second, so a client can blow far past its limit.</div>
+      <p>The obvious fix is a <b>lock</b>: a flag that says “I’m using this counter, everyone else wait.” The book’s view is that locks <b>slow the system down a lot</b>. It names two common alternatives instead:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener">[1]</a></p>
+      <ul>
+        <li><b>A Lua script.</b> Redis can run a small script written in Lua (a tiny programming language). While a script runs, Redis runs <b>no other command</b>. So read, check and write happen as one <b>atomic</b> step: nothing can sneak in between.<a class="cite" href="https://redis.io/docs/latest/develop/interact/programmability/eval-intro/" target="_blank" rel="noopener">[3]</a></li>
+        <li><b>A Redis sorted set.</b> A sorted set is a list of items kept in order by a number called a score. Use the request timestamps as scores and send the commands as one transaction.</li>
+      </ul>
+      <details class="more"><summary>Show me both fixes in code</summary>
+<pre class="code"><span class="c">-- Lua: read, check and write as ONE atomic step
+-- KEYS[1] = counter key, ARGV[1] = limit, ARGV[2] = window in seconds</span>
+local n = tonumber(redis.call('GET', KEYS[1]) or '0')
+if n + 1 > tonumber(ARGV[1]) then return 0 end  <span class="c">-- reject: 429</span>
+n = redis.call('INCR', KEYS[1])
+if n == 1 then redis.call('EXPIRE', KEYS[1], ARGV[2]) end
+return 1                                         <span class="c">-- allow</span></pre>
+<pre class="code"><span class="c"># Sorted set (sliding window log), sent as one MULTI ... EXEC transaction</span>
+ZREMRANGEBYSCORE key 0 (now - window)   <span class="c"># drop old timestamps</span>
+ZADD key now now                        <span class="c"># add this request</span>
+ZCARD key                               <span class="c"># how many in the window?</span>
+EXPIRE key window
+<span class="c"># then: allow only if the count is within the limit</span></pre>
+        <p class="small muted" style="margin:8px 0 0">This sorted-set recipe is adapted from the one ClassDojo published (they fetch the set and count it, same idea).<a class="cite" href="https://engineering.classdojo.com/blog/2015/02/06/rolling-rate-limiter/" target="_blank" rel="noopener">[2]</a> The book only names the idea. One catch: the transaction runs all four commands together, but your code decides allow or reject <i>afterwards</i>. So a rejected request has already been added to the set. The Lua version checks before it writes.</p>
+      </details>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Sticky or shared?</h2><div class="sub">The synchronization problem</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Millions of users means one rate limiter server isn’t enough, so you run several behind a <b>load balancer</b> (LB: the box that spreads requests across servers). The web tier is <b>stateless</b>: any server can handle any request, so one client’s calls can land on different limiters.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener">[1]</a></p>
+      <p>If each limiter keeps its own counts, limiter 1 knows nothing about what the client did through limiter 2. Getting them to agree is the <b>synchronization</b> problem. Try the three setups. One client sends 10 requests. The limit is <b>5 per minute</b>.</p>
+      <div class="challenge boxed" id="topoPredict"></div>
+      <div class="sim topo">
+        <div class="sim-bar"><span class="seg" id="topoMode" role="group" aria-label="Limiter setup"><button data-m="local" class="on">Local</button><button data-m="sticky">Sticky</button><button data-m="central">Central Redis</button></span><span class="small muted" id="topoNote"></span></div>
+        <svg id="topoSvg" viewBox="0 0 360 224" role="img" aria-label="Client, load balancer, two rate limiters, Redis and API servers"></svg>
+        <div class="sim-bar">
+          <span class="row" style="gap:8px"><button class="btn primary" id="topoSend" disabled>Send 10 requests</button><button class="btn" id="topoKill" style="display:none">💀 Limiter 1 dies</button><button class="btn" id="topoReset">↻ Reset</button></span>
+          <span>Let in this minute: <b class="bignum" id="topoIn">0</b> <span class="muted small">/ limit 5</span></span>
+        </div>
+        <div class="simlog" id="topoLog"></div>
+      </div>
+      <ul class="checklist" id="s2goals">
+        <li data-g="local"><span class="box">✓</span><span><b>Local:</b> each limiter counts on its own</span></li>
+        <li data-g="sticky"><span class="box">✓</span><span><b>Sticky:</b> pin the client to limiter 1, then kill limiter 1</span></li>
+        <li data-g="central"><span class="box">✓</span><span><b>Central Redis:</b> both limiters share one counter</span></li>
+      </ul>
+      <div class="callout" id="stickyNote" style="display:none"><b>Why the book rejects sticky sessions.</b> A <b>sticky session</b> means the load balancer always sends the same client to the same limiter. It works until it doesn’t. The book calls it neither <b>scalable</b> nor <b>flexible</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener">[1]</a> You just saw both: one heavy client pins all its load on one box (the heat bar), and when that box dies, the client’s count dies with it.</div>
+      <div class="callout tip"><b>The book’s choice: a central store.</b> All limiters read and write the same counters in <b>Redis</b>. Routing no longer matters, and a dead limiter loses nothing, because the count never lived on it. Combine this with stage 1: the shared counter must be updated atomically.</div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Go to the edge</h2><div class="sub">Multi-data-center speed vs exactness</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>A central Redis is correct, but it lives in one place. The book’s first performance tip: a <b>multi-data-center</b> setup matters, because users far from the data center see high latency. Cloud providers run many <b>edge servers</b> (small data centers close to users). The book notes Cloudflare had <b>194</b> of them in 2020. Traffic goes to the closest one.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener">[1]</a><a class="cite" href="https://www.cloudflare.com/learning/serverless/glossary/what-is-edge-computing/" target="_blank" rel="noopener">[5]</a></p>
+      <p>Its second tip: keep the edges’ counters in sync with <b>eventual consistency</b>. Each edge updates its own copy right away and shares changes with the others a little later. Copies may disagree for a moment, but they catch up. (You met this idea in World 6, in <a href="0004-quorum-consensus.html">Majority Rules</a>.)</p>
+      <div class="sim mapsim">
+        <div class="sim-bar"><span class="seg" id="mapMode" role="group" aria-label="Where counters live"><button data-m="central" class="on">One Redis</button><button data-m="edge">Edge counters</button></span><button class="btn" id="mapSend" style="padding:7px 12px;font-size:14px">Send a request</button></div>
+        <svg id="mapSvg" viewBox="0 8 360 136" role="img" aria-label="World map: a user in Sydney, Redis in Virginia, and edge locations"></svg>
+        <div class="readouts">
+          <div class="ro" id="roLat"><small>Added latency per call</small><b id="latVal">—</b></div>
+          <div class="ro" id="roSyd"><small>Sydney edge count</small><b id="sydVal">—</b></div>
+          <div class="ro" id="roFra"><small>Frankfurt edge count</small><b id="fraVal">—</b></div>
+        </div>
+        <div class="simlog" id="mapLog"><div>A user in Sydney. Every API call has to check the rate limiter first.</div></div>
+      </div>
+      <div class="challenge boxed" id="calc1"></div>
+      <div class="challenge boxed" id="calc2"></div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Watch the gauges</h2><div class="sub">Monitoring, and what happens when Redis dies</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Shipping the limiter isn’t the end. The book says to collect analytics afterwards and check two things: is the <b>algorithm</b> effective, and are the <b>rules</b> effective?<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener">[1]</a> You’re on call. Read each dashboard (green = let in, red = rejected with 429) and pick the fix.</p>
+      <div id="incBox"></div>
+      <h3 style="margin:26px 0 4px;font-size:18px">When Redis itself goes down</h3>
+      <p>The book’s requirements include <b>high fault tolerance</b>: if part of the limiter fails, for example a cache server goes offline, the whole system must not go down with it.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener">[1]</a> So decide in advance what each endpoint does without its counters:</p>
+      <ul>
+        <li><b>Fail open</b>: let every request through, unlimited, and alert a human. The product keeps working, but nothing protects it.</li>
+        <li><b>Fail closed</b>: reject every request. Nothing gets abused, but you’ve turned a cache outage into a product outage.</li>
+      </ul>
+      <div class="incident" id="redisInc">
+        <div class="inc-h"><span>🔴 02:14 · Redis cluster unreachable</span><span class="tag red">Incident 4</span></div>
+        <div class="inc-b">
+          <p class="small" style="margin:0">The limiter can’t read or write any counter. Pick a mode for each endpoint, then apply.</p>
+          <div class="eprow" data-ep="search"><div class="top"><div><b class="mono">/search</b><div class="small muted">product search · 20k requests/min</div></div><span class="seg" role="group" aria-label="/search failure mode"><button data-v="open" class="open">Fail open</button><button data-v="closed" class="closed">Fail closed</button></span></div><svg class="mini" viewBox="0 0 360 64" aria-hidden="true"></svg><div class="msg"></div></div>
+          <div class="eprow" data-ep="login"><div class="top"><div><b class="mono">/login</b><div class="small muted">password check · attackers love it</div></div><span class="seg" role="group" aria-label="/login failure mode"><button data-v="open" class="open">Fail open</button><button data-v="closed" class="closed">Fail closed</button></span></div><svg class="mini" viewBox="0 0 360 64" aria-hidden="true"></svg><div class="msg"></div></div>
+          <div class="row" style="margin-top:12px"><button class="btn primary" id="applyFail" disabled>Apply and watch</button></div>
+        </div>
+      </div>
+      <div class="callout warn"><b>Honest caveat.</b> Fail open vs fail closed isn’t in the book’s deep dive. It follows from the “high fault tolerance” requirement, and interviewers ask it all the time. Stripe’s write-up on its limiters says they should fail open, so a limiter bug never blocks good traffic.<a class="cite" href="https://stripe.com/blog/rate-limiters" target="_blank" rel="noopener">[4]</a> A common middle path: fall back to a rough per-server limit in memory until Redis returns.</div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Split-Brain Swarm</h2><div class="sub">Distributed curveballs</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Six follow-ups an interviewer throws once your limiter runs on many machines. Pick the best answer for each.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">Scaling the limiter in 60 seconds</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next up: the boss.</b> You now have every piece of the rate limiter chapter. <i>Throttle It Live</i> runs the whole thing as a mock interview, from scoping questions to this deep dive.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 4: “Design a Rate Limiter”</a>, Step 3 sections “Rate limiter in a distributed environment”, “Performance optimization” and “Monitoring”. Then read Stripe’s <a href="https://stripe.com/blog/rate-limiters" target="_blank" rel="noopener">Scaling your API with rate limiters</a> for how a real team runs them, and Redis’s <a href="https://redis.io/docs/latest/develop/interact/programmability/eval-intro/" target="_blank" rel="noopener">scripting intro</a> for why scripts are atomic.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <ul style="margin:0;padding-left:20px">
+        <li><b>One Redis is one point of failure.</b> A single instance is also a bottleneck. Real systems shard counters across a Redis cluster (split keys by user or API key) and add replicas.</li>
+        <li><b>Not every counter races.</b> For a plain fixed-window counter, <code>INCR</code> alone is atomic (Quest 4.4): increment first, then compare the number it returns. The race appears when you read, decide in your code, and write in separate commands.</li>
+        <li><b>Global limits are approximate.</b> With regional counters synced eventually, a global limit can briefly overshoot. An exact global cap costs a cross-region round trip on every call. Cloudflare’s write-up counts per location, which works because a client usually keeps hitting the same nearby one.<a class="cite" href="https://blog.cloudflare.com/counting-things-a-lot-of-different-things/" target="_blank" rel="noopener">[6]</a></li>
+        <li><b>The 194 is dated.</b> That was Cloudflare in 2020. It now lists well over 300 cities. The point stands: limit close to the user.</li>
+      </ul>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>“does a Lua script block all of Redis while it runs?”</i> or <i>“how would you rate-limit per user across 3 regions exactly?”</i>
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 4 “Design a Rate Limiter” (ByteByteGo).</li>
+        <li>ClassDojo Engineering, “Better Rate Limiting With Redis Sorted Sets”, 2015.</li>
+        <li>Redis docs, “Scripting with Lua”.</li>
+        <li>Stripe, “Scaling your API with rate limiters”, 2017.</li>
+        <li>Cloudflare Learning Center, “What is edge computing?”.</li>
+        <li>Cloudflare blog, “How we built rate limiting capable of scaling to millions of domains”, 2017.</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0405',
+  winTitle: 'Every door agrees',
+  badge: '🌐 Badge: Sync Sentinel',
+  cheatsheet: '../reference/ch04-rate-limiter-cheatsheet.html',
+});
+const { sleep, shuffle } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+const BOOK = '<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter" target="_blank" rel="noopener">[1]</a>';
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+const T = ms => Q.reduced ? 0 : ms;
+const wait = ms => sleep(T(ms));
+function anim(dur, f) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 1) { f(1); return res(); }
+    const t0 = performance.now();
+    const fr = now => { const p = Math.min(1, (now - t0) / dur); f(p); p < 1 ? requestAnimationFrame(fr) : res(); };
+    requestAnimationFrame(fr);
+  });
+}
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); Q.addXP(xp || 10, li);
+  return true;
+}
+// Predict now, grade later (after the learner runs the sim themselves).
+function ask(box, { step, title, options, correct, xp = 10, onPick }) {
+  box.innerHTML = `${step ? `<div class="step">${step}</div>` : ''}<h3>${title}</h3><div class="opts"></div><div class="locked-in"></div><div class="explain"></div>`;
+  const opts = $('.opts', box);
+  let picked = null, graded = false;
+  shuffle(options.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+    const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+    b.onclick = () => {
+      if (picked !== null) return;
+      picked = i; $$('.opt', opts).forEach(x => x.disabled = true); b.classList.add('picked');
+      $('.locked-in', box).textContent = '🔒 Prediction locked in. Now run it.';
+      onPick && onPick(i);
+    };
+    opts.appendChild(b);
+  });
+  return {
+    get picked() { return picked; },
+    get graded() { return graded; },
+    grade(explain) {
+      if (picked === null || graded) return null;
+      graded = true;
+      const ok = picked === correct, b = $(`.opt[data-i="${picked}"]`, opts);
+      b.classList.add(ok ? 'right' : 'wrong');
+      if (!ok) $(`.opt[data-i="${correct}"]`, opts).classList.add('right');
+      $('.locked-in', box).textContent = '';
+      const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+      ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + explain;
+      ok ? Q.addXP(xp, b) : Q.loseHeart(b);
+      return ok;
+    },
+  };
+}
+// Type-a-number check. One shot: right earns XP, wrong costs a heart and shows the working.
+function calc(box, { step, title, hint, unit, check, explain, xp = 20, onDone }) {
+  box.innerHTML = `<div class="step">${step}</div><h3>${title}</h3>${hint ? `<div class="hintbox">${hint}</div>` : ''}
+    <div class="calcrow"><input type="number" inputmode="decimal" aria-label="Your answer${unit ? ' in ' + unit : ''}" placeholder="?"><span class="muted">${unit || ''}</span><button class="btn primary">Check</button></div><div class="explain"></div>`;
+  const inp = $('input', box), btn = $('.btn', box);
+  const go = () => {
+    const v = parseFloat(inp.value);
+    if (!isFinite(v)) { Q.toast('type a number', btn, 'practice'); return; }
+    btn.disabled = true; inp.readOnly = true;
+    const ok = check(v), ex = $('.explain', box);
+    ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+    ex.innerHTML = (ok ? '<b>Right.</b> ' : '<b>Not quite.</b> ') + explain;
+    ok ? Q.addXP(xp, btn) : Q.loseHeart(btn);
+    onDone && onDone(ok);
+  };
+  btn.onclick = go;
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+}
+
+/* ================= STAGE 1: the race ================= */
+Q.onStage(1, () => {
+  const LIMIT = 4, START = 3;
+  const goals = new Set();
+  const preds = {};
+  let mode = 'plain', counter = START, letIn = 0, rej = 0, busy = false;
+  let lanes;
+  const fresh = () => ({ step: 0, saw: null, verdict: null, trips: 0, wait: 0 });
+  const NOTE = { plain: '3 separate Redis commands', lua: 'read + check + write in one script', lock: 'grab a lock, then 3 commands' };
+
+  function setCounter(v, cls) {
+    counter = v; const c = $('#rCount'); c.textContent = v;
+    c.classList.remove('flash'); void c.offsetWidth; c.classList.add('flash');
+    $('#rBox').className = 'redisbox' + (cls ? ' ' + cls : '');
+  }
+  function tally() { $('#rIn').textContent = letIn; $('#rRej').textContent = rej; }
+  function verdictHTML(l) {
+    if (l.verdict === 'ok' && l.step === 3) return '<span class="verdict ok">let in ✓</span>';
+    if (l.verdict === 'rej') return '<span class="verdict rej">429 ✗</span>';
+    if (l.verdict === 'ok') return '<span class="verdict ok">check ok</span>';
+    if (l.wait > 0 && l.step === 0) return '<span class="verdict">waiting…</span>';
+    return '<span class="verdict">pending</span>';
+  }
+  function chips(L, l) {
+    const list = mode === 'lock' ? ['acquire lock', 'read', 'check', 'write', 'release lock'] : ['read', 'check', 'write'];
+    const at = l.chip == null ? -1 : l.chip;
+    return `<div class="chiprow">${list.map((t, i) => `<span class="${i === at ? 'now' : i < at || l.allDone ? 'done' : ''}">${i + 1}. ${t}</span>`).join('')}</div>`;
+  }
+  function renderLane(L) {
+    const l = lanes[L], el = $('#lane' + L);
+    const ready = !!(preds[mode] && preds[mode].picked !== null);
+    let body = '';
+    if (mode === 'plain') {
+      const names = ['Read', 'Check', 'Write'];
+      body = names.map((n, i) => {
+        const done = l.step > i || (l.verdict === 'rej' && i === 2);
+        const dis = !ready || busy || done || l.step !== i || (l.verdict === 'rej');
+        const skipped = l.verdict === 'rej' && i === 2;
+        return `<button class="btn stp${done ? ' done' : ''}${!dis ? ' now' : ''}" data-l="${L}" data-s="${i}" ${dis ? 'disabled' : ''} aria-label="Request ${L}: ${n}">${skipped ? '— skip ' : done ? '✓ ' : ''}${n} ${L}</button>`;
+      }).join('');
+    } else {
+      body = chips(L, l);
+      if (mode === 'lua') {
+        const done = l.step === 3;
+        body += `<button class="btn stp${done ? ' done' : ' now'}" data-run="${L}" ${!ready || busy || done ? 'disabled' : ''}>${done ? '✓ script ran' : `▶ Run ${L} as script`}</button>`;
+      } else {
+        body += `<div class="small muted">waiting for the lock</div><div class="waitbar"><div style="width:${Math.min(100, l.wait * 25)}%"></div></div>`;
+      }
+    }
+    el.innerHTML = `<div class="lane-h"><span>Request ${L}</span>${verdictHTML(l)}</div>
+      <div class="mem">saw: <b>${l.saw == null ? '–' : l.saw}</b></div>${body}
+      <div class="trips">Redis trips: <b>${l.trips}</b>${l.wait ? ` · waited: <b>${l.wait}</b>` : ''}</div>`;
+    $$('[data-s]', el).forEach(b => b.onclick = () => plainStep(b.dataset.l, +b.dataset.s));
+    $$('[data-run]', el).forEach(b => b.onclick = () => runScript(b.dataset.run));
+  }
+  function render() {
+    renderLane('A'); renderLane('B'); tally();
+    const act = $('#raceAct'), ready = !!(preds[mode] && preds[mode].picked !== null);
+    if (mode === 'lock') {
+      const done = lanes.A.step === 3 && lanes.B.step === 3;
+      act.innerHTML = `<button class="btn primary" id="fireBoth" ${!ready || busy || done ? 'disabled' : ''}>▶ Fire A and B together</button>`;
+      $('#fireBoth').onclick = fireLock;
+    } else if (mode === 'lua') act.innerHTML = '<p class="small muted" style="margin:0">Redis runs one script at a time. Fire them in either order.</p>';
+    else act.innerHTML = '<p class="small muted" style="margin:0">Tap the steps in any order you like. Each lane must go Read → Check → Write.</p>';
+  }
+  function reset(msg) {
+    lanes = { A: fresh(), B: fresh() }; letIn = 0; rej = 0; busy = false;
+    setCounter(START); $('#rBusy').textContent = '';
+    render();
+    if (msg !== false) logTo('raceLog', msg || `↻ Reset. Counter = ${START}, limit = ${LIMIT}.`);
+  }
+  const bothDone = () => lanes.A.step === 3 && lanes.B.step === 3;
+
+  function plainStep(L, s) {
+    const l = lanes[L];
+    if (busy || l.step !== s) return;
+    if (s === 0) { l.saw = counter; l.trips++; l.step = 1; logTo('raceLog', `${L} reads the counter → <b>${l.saw}</b>`); }
+    else if (s === 1) {
+      if (l.saw + 1 > LIMIT) { l.verdict = 'rej'; l.step = 3; rej++; logTo('raceLog', `${L} checks: ${l.saw} + 1 = ${l.saw + 1} &gt; ${LIMIT} → reject (429)`, 'e'); }
+      else { l.verdict = 'ok'; l.step = 2; logTo('raceLog', `${L} checks: ${l.saw} + 1 = ${l.saw + 1} ≤ ${LIMIT} → OK, will let it in`); }
+    } else if (s === 2) {
+      l.trips++; l.step = 3; letIn++; setCounter(l.saw + 1);
+      logTo('raceLog', `${L} writes <b>${l.saw + 1}</b> to Redis and lets the request in`, 'g');
+    }
+    render();
+    if (bothDone()) finishPlain();
+  }
+  function finishPlain() {
+    if (letIn === 2) {
+      setCounter(counter, 'bad');
+      logTo('raceLog', `🐞 Both got in. ${START} + 2 = 5 requests allowed, but the counter says ${counter}. One write was lost.`, 'e');
+      $('#bugNote').style.display = 'block';
+      preds.plain.grade(`Both requests read 3, so both wrote 3 + 1 = <b>4</b>. The counter ends at 4 even though 5 requests are now in. That’s a <b>lost update</b>.`);
+      if (checkGoal('#s1goals', 'bug', goals)) setTimeout(() => switchHint('lua'), 300);
+      maybeQuiz();
+    } else {
+      logTo('raceLog', 'Correct result this time: one in, one 429. That order was safe because one request wrote before the other read. Reset, and try reading <b>both</b> before either writes.', 'w');
+    }
+  }
+  async function runScript(L) {
+    if (busy) return; busy = true;
+    const l = lanes[L];
+    $('#rBox').className = 'redisbox busy'; $('#rBusy').textContent = `running ${L}’s script · all else waits`;
+    l.trips = 1;
+    for (let i = 0; i < 3; i++) {
+      l.chip = i;
+      if (i === 0) l.saw = counter;
+      if (i === 1) l.verdict = l.saw + 1 > LIMIT ? 'rej' : 'ok';
+      if (i === 2 && l.verdict === 'ok') setCounter(l.saw + 1, 'busy');
+      render(); await wait(380);
+      if (i === 1 && l.verdict === 'rej') break;
+    }
+    l.chip = null; l.allDone = true; l.step = 3;
+    if (l.verdict === 'ok') { letIn++; logTo('raceLog', `${L}’s script: read ${l.saw}, ${l.saw} + 1 ≤ ${LIMIT}, wrote ${l.saw + 1}. One Redis trip.`, 'g'); }
+    else { rej++; logTo('raceLog', `${L}’s script: read ${l.saw}, ${l.saw} + 1 &gt; ${LIMIT} → 429. Nothing written.`, 'e'); }
+    busy = false; $('#rBusy').textContent = ''; $('#rBox').className = 'redisbox';
+    render();
+    if (bothDone()) {
+      setCounter(counter, 'good');
+      logTo('raceLog', `✓ Counter = ${counter}, one in, one rejected. Neither script could see the other half-done.`, 'g');
+      preds.lua.grade('Each script runs start to finish before the next one starts. The second script reads <b>4</b>, sees 4 + 1 &gt; 4, and rejects. Counter 4, exactly one request in, and only <b>one</b> Redis trip each.');
+      if (checkGoal('#s1goals', 'lua', goals)) setTimeout(() => switchHint('lock'), 300);
+      maybeQuiz();
+    }
+  }
+  async function fireLock() {
+    if (busy) return; busy = true; render();
+    const A = lanes.A, B = lanes.B;
+    $('#rBusy').textContent = 'lock held by A';
+    logTo('raceLog', 'A and B arrive together. A grabs the lock first.');
+    const stepA = async (i, fn) => { A.chip = i; if (fn) fn(); render(); await wait(420); };
+    await stepA(0, () => { A.trips++; B.trips++; B.wait = 0; });
+    B.wait = 1; render();
+    await stepA(1, () => { A.trips++; A.saw = counter; B.wait = 2; });
+    await stepA(2, () => { A.verdict = 'ok'; B.wait = 3; });
+    await stepA(3, () => { A.trips++; setCounter(A.saw + 1); letIn++; B.wait = 4; });
+    await stepA(4, () => { A.trips++; });
+    A.chip = null; A.allDone = true; A.step = 3;
+    logTo('raceLog', `A: lock → read 3 → ok → write 4 → unlock. 4 Redis trips. B waited the whole time.`, 'w');
+    $('#rBusy').textContent = 'lock held by B';
+    const stepB = async (i, fn) => { B.chip = i; if (fn) fn(); render(); await wait(420); };
+    await stepB(0, () => { B.trips++; });
+    await stepB(1, () => { B.trips++; B.saw = counter; });
+    await stepB(2, () => { B.verdict = 'rej'; rej++; });
+    await stepB(4, () => { B.trips++; });
+    B.chip = null; B.allDone = true; B.step = 3;
+    busy = false; $('#rBusy').textContent = ''; setCounter(counter, 'good'); render();
+    logTo('raceLog', `B: lock → read 4 → 429 → unlock. Correct count, but A made 4 trips instead of 1, and B waited for A’s whole turn.`, 'w');
+    preds.lock.grade('The lock makes it correct: B can only read after A has written, so B sees 4 and gets a 429. The price: every request pays extra trips to take and release the lock, and requests for the same counter <b>queue up</b> behind each other. That’s the slowdown the book warns about.');
+    checkGoal('#s1goals', 'lock', goals);
+    maybeQuiz();
+  }
+  const PRED = {
+    plain: { step: 'Plain · predict first', title: 'Your challenge: interleave the six steps so <b>both</b> A and B get in. If you pull it off, what will the counter show at the end?', options: ['Counter ends at 3', 'Counter ends at 4', 'Counter ends at 5'], correct: 1 },
+    lua: { step: 'Lua script · predict first', title: 'Now each request runs as <b>one</b> Lua script. Fire A and B one after the other. How does it end?', options: ['One in, counter at 4', 'Both in, counter at 5', 'Both in, counter at 4'], correct: 0 },
+    lock: { step: 'Lock · predict first', title: 'Plain steps again, but each request must grab a <b>lock</b> first. A and B arrive together. How does it end?', options: ['Right count, but B waits', 'Wrong count, but no waiting', 'Right count, and no waiting'], correct: 0 },
+  };
+  // one prediction box per mode, created on first visit and kept (hidden) when you switch away
+  function showPredict() {
+    const wrap = $('#racePredict');
+    $$(':scope > div[data-m]', wrap).forEach(d => d.hidden = d.dataset.m !== mode);
+    if (preds[mode]) return;
+    const box = document.createElement('div'); box.dataset.m = mode; wrap.appendChild(box);
+    preds[mode] = ask(box, { ...PRED[mode], onPick: () => render() });
+  }
+  function setMode(m) {
+    mode = m;
+    $$('#raceMode button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
+    $('#raceModeNote').textContent = NOTE[m];
+    showPredict();
+    reset(false);
+    logTo('raceLog', `— Mode: ${$(`#raceMode [data-m="${m}"]`).textContent}. Counter = ${START}, limit = ${LIMIT}.`);
+  }
+  function switchHint(m) { logTo('raceLog', `→ Next: switch to <b>${m === 'lua' ? 'Lua script' : 'Lock'}</b> mode up top.`); }
+  $$('#raceMode button').forEach(b => b.onclick = () => { if (!busy) setMode(b.dataset.m); });
+  $('#raceReset').onclick = () => { if (!busy) reset(); };
+  lanes = { A: fresh(), B: fresh() };
+  showPredict(); render();
+
+  let quizShown = false;
+  function maybeQuiz() {
+    if (quizShown || goals.size < 3) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s1quiz'), {
+      q: 'A lock fixes the race too. Why does the book reach for a Lua script or a sorted set instead?',
+      options: ['Locks slow the whole system down a lot', 'Locks cannot stop two writes at once', 'Redis has no way to build any lock'],
+      correct: 0,
+      good: 'Every request pays extra round trips to take and release the lock, and requests on a hot counter queue up. The book says locks <b>significantly slow down</b> the system. A Lua script gets the same safety in one atomic trip.' + BOOK,
+      bad: 'Locks <i>do</i> make it correct, and you can build one on Redis. The problem is speed: extra round trips plus queuing on hot counters. The book says locks <b>significantly slow down</b> the system.' + BOOK,
+      onDone: () => setTimeout(() => Q.clearStage(1), 900),
+    }), 500);
+  }
+});
+
+/* ================= STAGE 2: sticky or shared ================= */
+Q.onStage(2, () => {
+  const LIMIT = 5;
+  const svg = $('#topoSvg');
+  const N = {
+    cl: { x: 4, y: 96, w: 48, h: 44, t: 'Client' },
+    lb: { x: 66, y: 96, w: 50, h: 44, t: 'LB' },
+    l1: { x: 134, y: 36, w: 78, h: 46, t: 'Limiter 1' },
+    l2: { x: 134, y: 154, w: 78, h: 46, t: 'Limiter 2' },
+    rd: { x: 228, y: 96, w: 58, h: 44, t: 'Redis' },
+    api: { x: 300, y: 96, w: 56, h: 44, t: 'API' },
+  };
+  const C = k => [N[k].x + N[k].w / 2, N[k].y + N[k].h / 2];
+  const line = (a, b, cls) => S('line', { x1: a[0], y1: a[1], x2: b[0], y2: b[1], class: 'ln ' + (cls || '') }, svg);
+  line(C('cl'), C('lb')); line(C('lb'), C('l1')); line(C('lb'), C('l2'));
+  line([212, 59], [328, 96]); line([212, 177], [328, 140]);
+  const r1 = line([190, 82], [246, 96], 'rl'), r2 = line([190, 154], [246, 140], 'rl');
+  const nodes = {};
+  for (const k in N) {
+    const n = N[k], g = S('g', { class: 'nd' + (k[0] === 'l' && k !== 'lb' ? ' lim' : '') + (k === 'rd' ? ' redis' : '') }, svg);
+    S('rect', { x: n.x, y: n.y, width: n.w, height: n.h, rx: 10 }, g);
+    const t = S('text', { x: n.x + n.w / 2, y: n.y + n.h / 2 - (k === 'cl' || k === 'api' ? 0 : 8) }, g); t.textContent = n.t;
+    const sb = S('text', { x: n.x + n.w / 2, y: n.y + n.h / 2 + 10, class: 'sb' }, g);
+    nodes[k] = { g, sb };
+  }
+  const heat = {};
+  [['l1', 18], ['l2', 210]].forEach(([k, y]) => {
+    S('rect', { x: 134, y, width: 78, height: 8, rx: 4, class: 'heat-bg' }, svg);
+    const f = S('rect', { x: 134, y, width: 0, height: 8, rx: 4, class: 'heat' }, svg);
+    const t = S('text', { x: 218, y: y + 7, class: 'heat-t' }, svg);
+    heat[k] = { f, t };
+  });
+  const fx = S('g', {}, svg);
+  const goals = new Set(), preds = {};
+  let mode = 'local', st;
+  const NOTE = { local: 'round-robin · each limiter counts alone', sticky: 'same client → same limiter', central: 'round-robin · one shared counter' };
+
+  function fresh() { return { c1: 0, c2: 0, cr: 0, h1: 0, h2: 0, dead1: false, in: 0, phase: 0, busy: false }; }
+  function draw() {
+    const central = mode === 'central';
+    nodes.rd.g.classList.toggle('off', !central); r1.classList.toggle('off', !central); r2.classList.toggle('off', !central);
+    nodes.rd.sb.textContent = central ? `count ${st.cr}/${LIMIT}` : 'unused';
+    nodes.l1.sb.textContent = st.dead1 ? 'DEAD' : central ? '→ Redis' : `count ${st.c1}/${LIMIT}`;
+    nodes.l2.sb.textContent = central ? '→ Redis' : `count ${st.c2}/${LIMIT}`;
+    nodes.l1.g.classList.toggle('dead', st.dead1);
+    nodes.lb.sb.textContent = mode === 'sticky' ? 'sticky' : 'rr';
+    const tot = Math.max(1, st.h1 + st.h2);
+    heat.l1.f.setAttribute('width', 78 * st.h1 / tot); heat.l2.f.setAttribute('width', 78 * st.h2 / tot);
+    heat.l1.t.textContent = st.h1 + st.h2 ? `load ${Math.round(100 * st.h1 / tot)}%` : 'load';
+    heat.l2.t.textContent = st.h1 + st.h2 ? `load ${Math.round(100 * st.h2 / tot)}%` : 'load';
+    const iv = $('#topoIn'); iv.textContent = st.in; iv.className = 'bignum ' + (st.in > LIMIT ? 'bad' : st.in ? 'good' : '');
+    const ready = !!(preds[mode] && preds[mode].picked !== null);
+    const send = $('#topoSend');
+    send.disabled = !ready || st.busy || (mode === 'sticky' ? st.phase === 1 || st.phase >= 3 : st.phase >= 1);
+    send.textContent = mode === 'sticky' && st.phase === 2 ? 'Send 10 more (same minute)' : 'Send 10 requests';
+    const kill = $('#topoKill'); kill.style.display = mode === 'sticky' ? '' : 'none'; kill.disabled = st.busy || st.phase !== 1;
+  }
+  async function fly(pts, cls, dur) {
+    const c = S('circle', { r: 5, class: 'pk ' + (cls || ''), cx: pts[0][0], cy: pts[0][1] }, fx);
+    for (let i = 1; i < pts.length; i++) {
+      const [a, b] = [pts[i - 1], pts[i]];
+      await anim(dur, p => { c.setAttribute('cx', a[0] + (b[0] - a[0]) * p); c.setAttribute('cy', a[1] + (b[1] - a[1]) * p); });
+    }
+    return c;
+  }
+  async function oneReq(route, ok, central) {
+    const L = C(route), path = [C('cl'), C('lb'), L];
+    const c = await fly(path, '', 150);
+    if (central) { await fly([L, C('rd'), L], '', 110).then(x => x.remove()); }
+    if (ok) { c.classList.add('ok'); await fly([L, C('api')], 'ok', 160).then(x => x.remove()); }
+    else {
+      c.classList.add('rej');
+      const t = S('text', { x: C('cl')[0], y: N.cl.y - 6, class: 't429' }, fx); t.textContent = '429';
+      await fly([L, C('lb'), C('cl')], 'rej', 120).then(x => x.remove());
+      setTimeout(() => t.remove(), T(500));
+    }
+    c.remove();
+  }
+  async function burst(routeOf, central) {
+    st.busy = true; draw();
+    const jobs = [];
+    for (let i = 0; i < 10; i++) {
+      const r = routeOf(i);
+      if (r === 'kill') continue;
+      let ok;
+      if (central) { ok = st.cr < LIMIT; if (ok) st.cr++; }
+      else if (r === 'l1') { ok = st.c1 < LIMIT; if (ok) st.c1++; }
+      else { ok = st.c2 < LIMIT; if (ok) st.c2++; }
+      if (r === 'l1') st.h1++; else st.h2++;
+      if (ok) st.in++;
+      draw();
+      logTo('topoLog', `req ${i + 1} → ${r === 'l1' ? 'limiter 1' : 'limiter 2'} → ${ok ? 'let in' : '429'}`, ok ? '' : 'e');
+      jobs.push(oneReq(r, ok, central));
+      await wait(170);
+    }
+    await Promise.all(jobs);
+    st.busy = false; draw();
+  }
+  async function send() {
+    if (st.busy) return;
+    if (mode === 'local') {
+      await burst(i => i % 2 ? 'l2' : 'l1', false);
+      st.phase = 1; draw();
+      logTo('topoLog', `All 10 let in. Each limiter saw only 5 and thought the client was within its limit.`, 'e');
+      preds.local.grade('Round-robin sends 5 requests to each limiter. Each one counts 5, which is within the limit, so <b>all 10</b> get in: double the limit. Add more limiters and it gets worse.');
+      checkGoal('#s2goals', 'local', goals); maybeQuiz();
+    } else if (mode === 'sticky' && st.phase === 0) {
+      await burst(() => 'l1', false);
+      st.phase = 1; draw();
+      logTo('topoLog', 'Sticky works: limiter 1 saw all 10, let 5 in. Now press 💀 to kill limiter 1.', 'g');
+      preds.sticky.grade('All 10 go to limiter 1, which sees the full picture: <b>5 in, 5 rejected</b>. Correct, for now. Look at the heat bars though: limiter 1 carries 100% of this client. Now kill it.');
+    } else if (mode === 'sticky' && st.phase === 2) {
+      await burst(() => 'l2', false);
+      st.phase = 3; draw();
+      logTo('topoLog', `Limiter 2 started from zero and let 5 more in. ${st.in} requests this minute against a limit of ${LIMIT}.`, 'e');
+      $('#stickyNote').style.display = 'block';
+      checkGoal('#s2goals', 'sticky', goals); maybeQuiz();
+    }
+  }
+  // central mode kills limiter 1 after the 4th request
+  async function centralBurst() {
+    st.busy = true; draw();
+    const jobs = [];
+    for (let i = 0; i < 10; i++) {
+      if (i === 4) { st.dead1 = true; draw(); logTo('topoLog', '💀 Chaos: limiter 1 dies mid-burst. LB sends the rest to limiter 2.', 'w'); }
+      const r = i < 4 ? (i % 2 ? 'l2' : 'l1') : 'l2';
+      const ok = st.cr < LIMIT; if (ok) { st.cr++; st.in++; }
+      if (r === 'l1') st.h1++; else st.h2++;
+      draw();
+      logTo('topoLog', `req ${i + 1} → ${r === 'l1' ? 'limiter 1' : 'limiter 2'} → Redis count ${st.cr} → ${ok ? 'let in' : '429'}`, ok ? '' : 'e');
+      jobs.push(oneReq(r, ok, true));
+      await wait(190);
+    }
+    await Promise.all(jobs);
+    st.busy = false; draw();
+  }
+  $('#topoSend').onclick = async () => {
+    if (mode === 'central' && st.phase === 0 && !st.busy) {
+      await centralBurst();
+      st.phase = 1; draw();
+      logTo('topoLog', 'Exactly 5 let in. Routing changed and a limiter died, but the count lived in Redis the whole time.', 'g');
+      preds.central.grade('Both limiters read and write <b>one</b> counter in Redis, so it doesn’t matter where a request lands or which limiter dies. <b>5 in, 5 rejected.</b>');
+      checkGoal('#s2goals', 'central', goals); maybeQuiz();
+      return;
+    }
+    send();
+  };
+  $('#topoKill').onclick = () => {
+    if (st.busy || st.phase !== 1) return;
+    st.dead1 = true; st.phase = 2; draw();
+    logTo('topoLog', '💀 Limiter 1 died, and its in-memory counts died with it. The LB re-pins the client to limiter 2.', 'w');
+  };
+  const PRED = {
+    local: { step: 'Local counters · predict', title: 'Round-robin: requests alternate between the two limiters. Each limiter only knows its own count. How many of the 10 get in?', options: ['5 of the 10 get in', 'All 10 get in', 'None of them get in'], correct: 1 },
+    sticky: { step: 'Sticky sessions · predict', title: 'The LB now pins this client to limiter 1, so all 10 requests go there. How many get in?', options: ['5 of the 10 get in', 'All 10 get in', 'None of them get in'], correct: 0 },
+    central: { step: 'Central Redis · predict', title: 'Round-robin again, both limiters share one Redis counter, and limiter 1 will die halfway through. How many get in?', options: ['5 of the 10 get in', 'All 10 get in', 'Only 2 of them get in'], correct: 0 },
+  };
+  function setMode(m) {
+    if (st && st.busy) return;
+    mode = m; st = fresh(); fx.innerHTML = '';
+    $$('#topoMode button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
+    $('#topoNote').textContent = NOTE[m];
+    const wrap = $('#topoPredict');
+    $$(':scope > div[data-m]', wrap).forEach(d => d.hidden = d.dataset.m !== m);
+    if (!preds[m]) { const box = document.createElement('div'); box.dataset.m = m; wrap.appendChild(box); preds[m] = ask(box, { ...PRED[m], onPick: () => draw() }); }
+    $('#topoLog').innerHTML = `<div>${$(`#topoMode [data-m="${m}"]`).textContent}: limit ${LIMIT} per minute, one client, 10 requests.</div>`;
+    draw();
+  }
+  $$('#topoMode button').forEach(b => b.onclick = () => setMode(b.dataset.m));
+  $('#topoReset').onclick = () => { if (!st.busy) setMode(mode); };
+  setMode('local');
+
+  let quizShown = false;
+  function maybeQuiz() {
+    if (quizShown || goals.size < 3) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s2quiz'), {
+      q: 'The interviewer asks: “Why not just use sticky sessions?” What two downsides does the book give?',
+      options: ['Not scalable, and not flexible', 'Too slow, and too costly to run', 'Not secure, and hard to debug'],
+      correct: 0,
+      good: 'Sticky sessions tie each client to one box, so you can’t spread a heavy client’s load or move it freely, and a failure resets its count. The book says neither <b>scalable</b> nor <b>flexible</b>, and picks a central Redis instead.' + BOOK,
+      bad: 'The book’s words: neither <b>scalable</b> nor <b>flexible</b>. One box carries a heavy client, you can’t rebalance it, and when the box dies its counts go too. A central Redis avoids all of that.' + BOOK,
+      onDone: () => setTimeout(() => Q.clearStage(2), 900),
+    }), 500);
+  }
+});
+
+/* ================= STAGE 3: go to the edge ================= */
+Q.onStage(3, () => {
+  const svg = $('#mapSvg');
+  const P = (lon, lat) => [lon + 180, 80 - lat];
+  const LAND = [
+    [[-165, 65], [-140, 70], [-95, 72], [-75, 62], [-60, 50], [-70, 43], [-80, 32], [-82, 25], [-97, 26], [-97, 18], [-88, 15], [-80, 8], [-90, 13], [-105, 20], [-115, 30], [-124, 40], [-125, 50], [-140, 60], [-165, 58]],
+    [[-80, 10], [-62, 10], [-50, 0], [-35, -7], [-40, -22], [-58, -38], [-68, -55], [-75, -50], [-72, -30], [-80, -5]],
+    [[-10, 36], [-9, 44], [-2, 48], [-5, 58], [5, 62], [12, 70], [30, 70], [40, 65], [40, 45], [28, 40], [20, 38], [12, 44], [3, 42]],
+    [[-17, 15], [-17, 22], [-8, 35], [10, 37], [32, 31], [43, 12], [51, 11], [40, -5], [40, -15], [32, -28], [20, -35], [12, -18], [9, 0], [-8, 5]],
+    [[40, 45], [40, 65], [60, 70], [100, 77], [140, 72], [180, 68], [160, 60], [140, 50], [130, 35], [120, 25], [108, 20], [105, 10], [100, 2], [95, 15], [90, 22], [80, 10], [72, 20], [60, 25], [50, 28], [43, 12], [35, 30], [28, 40]],
+    [[114, -22], [122, -17], [131, -12], [137, -12], [142, -11], [146, -19], [153, -26], [150, -37], [141, -38], [131, -31], [116, -35], [114, -28]],
+  ];
+  for (let x = 30; x < 360; x += 30) S('line', { x1: x, y1: 8, x2: x, y2: 144, class: 'grid' }, svg);
+  for (let y = 20; y < 144; y += 30) S('line', { x1: 0, y1: y, x2: 360, y2: y, class: 'grid' }, svg);
+  LAND.forEach(poly => S('polygon', { class: 'landp', points: poly.map(([lo, la]) => P(lo, la).join(',')).join(' ') }, svg));
+  const SYD = P(151, -34), VA = P(-77, 39), FRA = P(8.7, 50);
+  const EDGES = [[151, -34, 'Sydney'], [8.7, 50, 'Frankfurt'], [-77, 39, 'Virginia'], [104, 1], [140, 36], [-122, 37], [-46, -23], [73, 19], [28, -26], [0, 51], [-99, 19]];
+  const syncG = S('g', {}, svg), routeG = S('g', {}, svg), edgeG = S('g', {}, svg), fx = S('g', {}, svg);
+  const city = (pt, cls, r, label, dx = 4, dy = -4) => { const g = S('g', { class: 'city ' + cls }, svg); S('circle', { cx: pt[0], cy: pt[1], r }, g); if (label) { const t = S('text', { x: pt[0] + dx, y: pt[1] + dy }, g); t.textContent = label; } return g; };
+  EDGES.forEach(([lo, la]) => { const p = P(lo, la); const g = S('g', { class: 'city edge' }, edgeG); S('circle', { cx: p[0], cy: p[1], r: 2.6 }, g); });
+  const dbG = city(VA, 'db', 4, 'Redis · Virginia', -30, -7);
+  city(SYD, 'user', 4, 'You · Sydney', -40, 12);
+  city(FRA, 'user', 0.01, 'Frankfurt', 4, -4);
+  const routePath = `M${SYD[0]} ${SYD[1]} Q ${(SYD[0] + VA[0]) / 2} ${-30} ${VA[0]} ${VA[1]}`;
+  const route = S('path', { d: routePath, class: 'route' }, routeG);
+  const edgePts = EDGES.map(([lo, la]) => P(lo, la));
+  [[0, 3], [3, 4], [5, 10], [10, 2], [5, 2], [2, 9], [9, 1], [1, 7], [7, 3], [2, 6], [1, 8], [5, 10]].forEach(([a, b]) => S('line', { x1: edgePts[a][0], y1: edgePts[a][1], x2: edgePts[b][0], y2: edgePts[b][1], class: 'sync' }, syncG));
+  let mode = 'central', busy = false, q1 = false, q2 = false;
+  function setMode(m) {
+    if (busy) return;
+    mode = m;
+    $$('#mapMode button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
+    const edge = m === 'edge';
+    edgeG.style.display = edge ? '' : 'none'; syncG.style.display = edge ? '' : 'none';
+    route.style.display = edge ? 'none' : ''; dbG.style.opacity = edge ? .35 : 1;
+    $('#latVal').textContent = '—'; $('#roLat').className = 'ro';
+    logTo('mapLog', edge ? '🌐 Edge counters: each region checks its own counter, and regions sync every ~1 s (teal lines).' : '🏛️ One Redis in Virginia: every check travels about 15,700 km each way.');
+  }
+  async function packet(pathEl, dur, back) {
+    const c = S('circle', { r: 3, class: 'pkt' }, fx), len = pathEl.getTotalLength();
+    await anim(dur, p => { const pt = pathEl.getPointAtLength(len * (back ? 1 - p : p)); c.setAttribute('cx', pt.x); c.setAttribute('cy', pt.y); });
+    c.remove();
+  }
+  async function sendOne() {
+    if (busy) return; busy = true;
+    const lv = $('#latVal');
+    if (mode === 'central') {
+      route.style.display = '';
+      const t0 = performance.now();
+      const tick = setInterval(() => { lv.textContent = Math.min(196, Math.round((performance.now() - t0) / 1600 * 196)) + ' ms'; }, 40);
+      await packet(route, 800); await packet(route, 800, true);
+      clearInterval(tick); lv.textContent = '≈ 196 ms'; $('#roLat').className = 'ro bad';
+      logTo('mapLog', 'Sydney → Virginia → Sydney: ≈ 196 ms added before the API even starts work.', 'e');
+    } else {
+      const ring = S('circle', { cx: SYD[0], cy: SYD[1], r: 3, fill: 'none', stroke: 'var(--teal)', 'stroke-width': 1.5 }, fx);
+      await anim(500, p => ring.setAttribute('r', 3 + p * 8));
+      ring.remove();
+      lv.textContent = '≈ 5 ms'; $('#roLat').className = 'ro good';
+      logTo('mapLog', 'Checked at the Sydney edge: ≈ 5 ms. The count reaches other regions on the next sync.', 'g');
+    }
+    busy = false;
+  }
+  $$('#mapMode button').forEach(b => b.onclick = () => setMode(b.dataset.m));
+  $('#mapSend').onclick = sendOne;
+  setMode('central');
+
+  calc($('#calc1'), {
+    step: 'Calculate · 1 of 2',
+    title: 'Every API call from Sydney must check the Redis in Virginia first. Roughly how much latency does that add to <b>each</b> call?',
+    hint: '<ul><li>Sydney ↔ Virginia: about <b>15,700 km</b>.</li><li>Light in fibre covers about <b>200 km per ms</b>.</li><li>Cables don’t run straight: add about <b>25%</b>.</li><li>A check is a <b>round trip</b>: there and back.</li></ul>',
+    unit: 'ms',
+    check: v => v >= 150 && v <= 250,
+    explain: 'One way: 15,700 ÷ 200 ≈ 79 ms, plus 25% ≈ 98 ms. There and back ≈ <b>196 ms, call it 200</b>. That’s added to <i>every</i> API call, before any real work starts. (Anything from 150 to 250 counts.) Press <b>Send a request</b> on the map to watch it.',
+    onDone: async () => {
+      q1 = true;
+      if (mode !== 'central') setMode('central');
+      await sendOne();
+      logTo('mapLog', '→ Now switch to <b>Edge counters</b> and send again.');
+      maybe();
+    },
+  });
+
+  calc($('#calc2'), {
+    step: 'Calculate · 2 of 2',
+    title: 'Edge counters, synced every ~1 s. The global limit is <b>100 per minute</b>. In the same second, before any sync, one client sends 100 requests through Sydney and 100 through Frankfurt. Worst case, how many get in?',
+    unit: 'requests',
+    check: v => v === 200,
+    explain: 'Sydney’s counter goes 0 → 100: all within the limit as far as it knows. Frankfurt’s does the same. Neither has heard from the other yet, so <b>200</b> get in: double the global limit. After the sync both see 200 and block the rest. That brief overshoot is the price of eventual consistency.',
+    onDone: async () => {
+      q2 = true;
+      if (mode !== 'edge') setMode('edge');
+      busy = true;
+      const sy = $('#sydVal'), fr = $('#fraVal');
+      await anim(900, p => { const n = Math.round(p * 100); sy.textContent = n + '/100'; fr.textContent = n + '/100'; });
+      sy.textContent = '100/100'; fr.textContent = '100/100';
+      logTo('mapLog', 'Sydney: 100 in. Frankfurt: 100 in. Each edge thinks it’s exactly at the limit.', 'w');
+      await wait(700);
+      sy.textContent = '200/100'; fr.textContent = '200/100';
+      $('#roSyd').className = 'ro bad'; $('#roFra').className = 'ro bad';
+      logTo('mapLog', '🔄 Sync arrives: both now see 200 against a limit of 100. Overshoot: 100 requests.', 'e');
+      busy = false;
+      maybe();
+    },
+  });
+
+  let quizShown = false;
+  function maybe() {
+    if (quizShown || !q1 || !q2) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s3quiz'), {
+      tag: 'Frame it',
+      q: 'Which sentence frames the edge trade-off the way you’d say it in an interview?',
+      options: [
+        'Edge counters trade exactness for speed: fine for soft limits, not for hard ones',
+        'Edge counters are both faster and exact, so always prefer them to a central store',
+        'Edge counters are slower but exact, so save them for billing-grade hard limits',
+      ],
+      correct: 0,
+      good: 'Local checks are fast (≈5 ms, not ≈200 ms), but counts converge only after a sync, so a client spread across regions can briefly overshoot. Fine for “protect the servers” limits. If you truly need an exact global cap, you pay the cross-region trip.',
+      bad: 'Edge counters are <i>fast</i> but <i>approximate</i>: each region checks locally (≈5 ms) and syncs later, so a global limit can briefly overshoot. Fine for soft limits. An exact global cap needs the slow cross-region trip.',
+      onDone: () => setTimeout(() => Q.clearStage(3), 900),
+    }), 500);
+  }
+});
+
+/* ================= STAGE 4: monitoring + fail modes ================= */
+Q.onStage(4, () => {
+  const OPTS = [
+    { k: 'relax', t: 'Relax the rules a little' },
+    { k: 'algo', t: 'Switch to a burst-friendly algorithm' },
+    { k: 'fine', t: 'Nothing: the limiter is doing its job' },
+    { k: 'more', t: 'Add more rate limiter servers' },
+  ];
+  const INC = [
+    {
+      title: 'Tuesday 09:00–17:00 · /feed', tag: 'Tickets ×10',
+      data: [96, 104, 110, 98, 102, 107, 99, 95, 101, 108, 103, 97, 100, 106, 98, 102].map((t, i) => ({ t, r: Math.round(t * (0.27 + (i % 3) * 0.03)) })),
+      labels: ['09:00', '13:00', '17:00'],
+      tickets: ['🎫 52 support tickets today (normal: 5)', '“I scrolled twice and got ‘Too Many Requests’?”', '“Your app keeps blocking me, I’m not a bot.”'],
+      a: 'relax',
+      why: 'A normal day, normal traffic, and about <b>30%</b> of requests rejected. The tickets come from ordinary users. The book’s example exactly: if rules are <b>too strict</b>, many valid requests get dropped, so <b>relax the rules</b> a little.' + BOOK,
+    },
+    {
+      title: 'Wednesday · /api (public)', tag: '1 noisy key',
+      data: Array.from({ length: 16 }, (_, i) => ({ t: 370 + (i % 4) * 8, r: 290 + (i % 4) * 8 })),
+      labels: ['09:00', '13:00', '17:00'],
+      tickets: ['🎫 0 support tickets', 'Top source of 429s: API key <b>key_7f3a</b> (a scraper): 99% of all rejections', 'Every other client: 0.1% rejected'],
+      a: 'fine',
+      why: 'Lots of red, but look at <i>who</i>. One scraper is hammering the API, and it’s getting 429s. Everyone else is fine and nobody is complaining. That’s the limiter <b>working</b>. Monitoring isn’t only for finding bugs; it also tells you when to leave things alone.',
+    },
+    {
+      title: 'Friday 11:00–13:00 · /checkout (flash sale at 12:00)', tag: 'Revenue lost',
+      data: Array.from({ length: 24 }, (_, i) => { const t = i === 12 ? 320 : i === 13 ? 250 : i === 14 ? 120 : i < 12 ? 40 + (i % 3) * 3 : 25; return { t, r: Math.max(0, t - 60) }; }),
+      labels: ['11:00', '12:00', '13:00'], mark: 12,
+      tickets: ['🎫 “The sale started and I got an error at checkout.”', 'Hour average: well <b>under</b> the limit', 'Peak minute: 5× normal, mostly rejected'],
+      a: 'algo',
+      why: 'Real customers arrived all at once. The current algorithm only allows a smooth rate, so the burst bounced even though the hour was quiet overall. The book’s fix: <b>replace the algorithm</b> with one that supports bursts, and <b>token bucket</b> is a good fit: a full bucket lets a short spike through.' + BOOK,
+    },
+  ];
+  let idx = 0, diagDone = false, failDone = false;
+  const box = $('#incBox');
+  function chart(svgEl, data, labels, mark) {
+    const W = 360, H = 130, top = 8, bot = 20, n = data.length, gap = 2, bw = (W - gap * (n - 1)) / n;
+    const max = Math.max(...data.map(d => d.t));
+    svgEl.innerHTML = '';
+    S('line', { x1: 0, y1: H - bot, x2: W, y2: H - bot, class: 'axl' }, svgEl);
+    data.forEach((d, i) => {
+      const x = i * (bw + gap), hT = (H - top - bot) * d.t / max, hR = (H - top - bot) * d.r / max;
+      S('rect', { x, y: H - bot - (hT - hR), width: bw, height: hT - hR, class: 'ok', rx: 1.5 }, svgEl);
+      S('rect', { x, y: H - bot - hT, width: bw, height: hR, class: 'rej', rx: 1.5 }, svgEl);
+    });
+    labels.forEach((l, i) => { const t = S('text', { x: i === 0 ? 0 : i === labels.length - 1 ? W : W / 2, y: H - 6, class: 'ax', 'text-anchor': i === 0 ? 'start' : i === labels.length - 1 ? 'end' : 'middle' }, svgEl); t.textContent = l; });
+    const mx = S('text', { x: 0, y: 8, class: 'ax' }, svgEl); mx.textContent = `peak ${max}/bar`;
+    if (mark != null) { const x = mark * (bw + gap) - gap / 2; S('line', { x1: x, y1: top, x2: x, y2: H - bot, class: 'mark' }, svgEl); const t = S('text', { x: x - 4, y: 18, class: 'mark-t', 'text-anchor': 'end' }, svgEl); t.textContent = 'sale starts'; }
+  }
+  function show() {
+    const inc = INC[idx];
+    box.innerHTML = `<div class="incident"><div class="inc-h"><span>📈 ${inc.title}</span><span class="tag">Incident ${idx + 1} · ${inc.tag}</span></div>
+      <div class="inc-b"><div class="leg"><span><i style="background:var(--good)"></i>let in</span><span><i style="background:var(--bad)"></i>rejected (429)</span></div>
+      <svg class="chart" viewBox="0 0 360 130" role="img" aria-label="Requests let in versus rejected over time"></svg>
+      <div class="tickets">${inc.tickets.map((t, i) => `<div class="${i === 0 ? 'cnt' : ''}">${t}</div>`).join('')}</div>
+      <p class="small" style="margin:12px 0 0"><b>Your diagnosis:</b></p>
+      <div class="diag">${shuffle(OPTS).map(o => `<button class="opt" data-k="${o.k}">${o.t}</button>`).join('')}</div>
+      <div class="explain"></div><div class="row" style="margin-top:10px"></div></div></div>`;
+    chart($('svg', box), inc.data, inc.labels, inc.mark);
+    $$('.diag .opt', box).forEach(b => b.onclick = () => {
+      $$('.diag .opt', box).forEach(x => x.disabled = true);
+      const ok = b.dataset.k === inc.a;
+      b.classList.add(ok ? 'right' : 'wrong');
+      if (!ok) $(`.diag .opt[data-k="${inc.a}"]`, box).classList.add('right');
+      const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad'); ex.innerHTML = inc.why;
+      ok ? Q.addXP(10, b) : Q.loseHeart(b);
+      const nx = document.createElement('button'); nx.className = 'btn primary';
+      nx.textContent = idx < INC.length - 1 ? 'Next incident →' : 'Done with the dashboards';
+      nx.onclick = () => {
+        idx++;
+        if (idx < INC.length) return show();
+        box.innerHTML = '<div class="callout tip" style="margin-top:14px"><b>Three dashboards read.</b> Too strict → relax the rules. Burst rejected → token bucket. One abuser blocked → working as intended. Now handle incident 4 below.<div class="row" style="margin-top:8px"><button class="btn" id="incAgain">↻ Replay the dashboards</button></div></div>';
+        $('#incAgain').onclick = () => { idx = 0; show(); };
+        diagDone = true; maybe();
+      };
+      $('.row', box).appendChild(nx);
+    });
+  }
+  show();
+
+  /* incident 4: Redis down */
+  const pick = {};
+  function mini(svgEl, kind) {
+    svgEl.innerHTML = '';
+    const n = 20, gap = 2, W = 360, bw = (W - gap * (n - 1)) / n, base = 50, downAt = 8;
+    for (let i = 0; i < n; i++) {
+      const x = i * (bw + gap), h = 30 + (i * 7 % 9);
+      const cls = i < downAt || kind === 'open' ? 'ok' : 'rej';
+      S('rect', { x, y: base - h, width: bw, height: h, class: cls, rx: 1.5 }, svgEl);
+      if (i >= downAt && kind === 'open') S('rect', { x: x + .75, y: base - h + .75, width: bw - 1.5, height: h - 1.5, class: 'unp', rx: 1.5 }, svgEl);
+    }
+    const dx = downAt * (bw + gap) - gap / 2;
+    S('line', { x1: dx, y1: 4, x2: dx, y2: base, class: 'dn' }, svgEl);
+    const t = S('text', { x: dx + 4, y: 62, class: 'ax' }, svgEl); t.textContent = '02:14 Redis down';
+    const t2 = S('text', { x: 0, y: 62, class: 'ax' }, svgEl); t2.textContent = '02:00';
+  }
+  $$('#redisInc .eprow').forEach(row => {
+    const ep = row.dataset.ep;
+    $$('.seg button', row).forEach(b => b.onclick = () => {
+      if ($('#applyFail').dataset.done) return;
+      pick[ep] = b.dataset.v;
+      $$('.seg button', row).forEach(x => x.classList.toggle('on', x === b));
+      $('#applyFail').disabled = !(pick.search && pick.login);
+    });
+  });
+  $('#applyFail').onclick = async () => {
+    const btn = $('#applyFail');
+    if (btn.dataset.done) return;
+    btn.dataset.done = '1'; btn.disabled = true;
+    $$('#redisInc .seg button').forEach(b => b.disabled = true);
+    for (const ep of ['search', 'login']) {
+      const row = $(`#redisInc .eprow[data-ep="${ep}"]`), v = pick[ep], msg = $('.msg', row);
+      mini($('svg', row), v);
+      await wait(500);
+      if (ep === 'search') {
+        if (v === 'open') { msg.innerHTML = '<span class="alert">🔔 Paged on-call: limiter bypassed on /search</span><br>Search keeps working for everyone. For a while nothing caps abusive clients, so the team watches closely until Redis is back. This matches “high fault tolerance”: a cache failure doesn’t take the product down.'; Q.addXP(15, row); }
+        else { msg.innerHTML = '<b style="color:var(--bad)">Search is down for everyone.</b> A cache outage just became a product outage, which is exactly what the “high fault tolerance” requirement says must not happen. For an ordinary read endpoint, fail open and alert.'; Q.loseHeart(row); }
+      } else {
+        if (v === 'closed') { msg.innerHTML = 'Logins fail until Redis is back, which hurts. But no attacker gets unlimited password guesses during the outage. For a security limit, failing closed (or falling back to a strict local limit) is the defensible call.'; Q.addXP(15, row); }
+        else { msg.innerHTML = '<span class="alert">🔔 Paged on-call: limiter bypassed on /login</span><br><b>Defensible, but risky.</b> Users can log in, yet an attacker can now guess passwords at full speed. Many teams fail closed here, or fall back to a strict per-server limit. No heart lost: this one is a judgment call. Just be ready to defend it.'; Q.toast('judgment call', row, 'practice'); }
+      }
+    }
+    failDone = true; maybe();
+  };
+
+  let quizShown = false;
+  function maybe() {
+    if (quizShown || !diagDone || !failDone) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s4quiz'), {
+      q: 'After launch, the book says to watch the analytics for two things. Which two?',
+      options: ['Whether the algorithm and the rules are effective', 'Whether Redis CPU and memory stay at healthy levels', 'Whether every client reads the rate limit headers'],
+      correct: 0,
+      good: 'Is the <b>algorithm</b> effective (does it cope with bursts like a flash sale?) and are the <b>rules</b> effective (are valid users being dropped?). Your incidents 1 and 3 were one of each.' + BOOK,
+      bad: 'Redis health and client behaviour matter too, but the book’s two checks are: is the <b>algorithm</b> effective, and are the <b>rules</b> effective? Incident 1 was a rules problem, incident 3 an algorithm problem.' + BOOK,
+      onDone: () => setTimeout(() => Q.clearStage(4), 900),
+    }), 500);
+  }
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss'), {
+  name: '🐝 Split-Brain Swarm',
+  xp: 15,
+  scenarios: [
+    { e: '🧵', t: 'Counter says 4, five got in', d: 'Two limiter threads both read the counter as 3, both decide “fine”, and both write 4.', a: 'atomic',
+      choices: [{ k: 'atomic', label: 'Atomic check', sub: 'Lua script or sorted set' }, { k: 'lock', label: 'Lock it', sub: 'every request waits its turn' }, { k: 'rep', label: 'More replicas', sub: 'add Redis read copies' }],
+      why: 'That’s a <b>race condition</b> on read-check-write. Make the check and the increment one atomic step: a Lua script (Redis runs nothing else meanwhile) or a sorted-set transaction. A lock also works but slows everything down, and replicas don’t help at all.' },
+    { e: '🔀', t: 'Twice the limit through two doors', d: 'A client’s calls land on different limiters (the web tier is stateless), and it gets roughly 2× its limit.', a: 'central',
+      choices: [{ k: 'central', label: 'Central Redis', sub: 'all limiters share counters' }, { k: 'sticky', label: 'Sticky sessions', sub: 'pin client to one limiter' }, { k: 'half', label: 'Halve each limit', sub: 'split the quota per box' }],
+      why: 'That’s the <b>synchronization</b> problem. The book’s fix: a centralized store like Redis that every limiter reads and writes. Halving only works if traffic splits exactly evenly, and breaks the moment you add a box.' },
+    { e: '🧲', t: '“Why not sticky sessions?”', d: 'The interviewer pushes back on your central Redis and suggests pinning each client to one limiter.', a: 'sf',
+      choices: [{ k: 'sf', label: 'Not scalable or flexible', sub: 'the book’s two reasons' }, { k: 'slow', label: 'Too slow per call', sub: 'adds a round trip' }, { k: 'tls', label: 'Breaks HTTPS', sub: 'can’t pin encrypted traffic' }],
+      why: 'The book: sticky sessions are neither <b>scalable</b> nor <b>flexible</b>. A heavy client overloads its one box, you can’t rebalance freely, and when that box dies the client’s count resets.' },
+    { e: '🌏', t: 'Asia says the API got slow', d: 'Since you added the limiter (one Redis in Virginia), users in Asia see every call take about 200 ms longer.', a: 'edge',
+      choices: [{ k: 'edge', label: 'Edge counters', sub: 'local check, sync eventually' }, { k: 'lua', label: 'Use a Lua script', sub: 'one trip instead of two' }, { k: 'big', label: 'Bigger Redis box', sub: 'more CPU and memory' }],
+      why: 'Distance is the problem, not Redis speed. Check limits at the nearest edge or region and sync counters with <b>eventual consistency</b>. The cost: a global limit can briefly overshoot.' },
+    { e: '🛒', t: 'Redis is down. Checkout should…', d: 'The Redis cluster behind your limiter is unreachable. It’s peak shopping hour.', a: 'open',
+      choices: [{ k: 'open', label: 'Fail open + alert', sub: 'let traffic through, page on-call' }, { k: 'closed', label: 'Fail closed', sub: 'reject every checkout' }, { k: 'retry', label: 'Retry Redis', sub: 'hold each request until it answers' }],
+      why: '“High fault tolerance” means a cache failure mustn’t take the whole system down. For checkout, fail open (maybe with a rough local limit) and alert. Failing closed turns a cache blip into lost sales; holding requests piles up threads and fails anyway.' },
+    { e: '🎫', t: 'Valid users get 429s all day', d: 'Normal traffic, no attack, but about a third of requests are rejected and support is drowning.', a: 'relax',
+      choices: [{ k: 'relax', label: 'Relax the rules', sub: 'monitoring says too strict' }, { k: 'lua', label: 'Switch to Lua', sub: 'fix the race condition' }, { k: 'sticky', label: 'Sticky sessions', sub: 'keep counts consistent' }],
+      why: 'Monitoring did its job: the rules are <b>too strict</b> and valid requests are being dropped. The book’s answer: relax them a little. A race would let <i>extra</i> traffic in, not block it.' },
+  ],
+  outro: 'Atomic counter, shared store, close to the user, watch the gauges, and know your failure mode.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: drill ================= */
+Q.onStage(6, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>“Your rate limiter now runs on 50 servers in 3 regions. What breaks, and how do you fix it?”</i>',
+  placeholder: 'First problem: two requests can read the same count…',
+  model: '“Three things break. First, a <b>race</b>: two requests read the same count, both pass, both write, and one update is lost. I’d make check-and-increment <b>atomic</b> with a Redis Lua script or a sorted-set transaction. A lock works but is too slow. Second, <b>synchronization</b>: the web tier is stateless, so one client hits many limiters. Rather than sticky sessions, which don’t scale and aren’t flexible, all limiters share counters in a <b>central Redis</b>. Third, <b>latency</b>: far-away users pay a long round trip, so I’d check limits at edge or regional nodes and sync counters with <b>eventual consistency</b>, accepting a brief overshoot of the global limit. Then I’d <b>monitor</b> allowed vs rejected traffic: too many valid users dropped means relax the rules, and bursts like a flash sale mean switching to token bucket. If Redis goes down, the limiter <b>fails open</b> with an alert for normal endpoints, and closed for security limits like login.”',
+  checks: [
+    'I named the read-check-write race and an atomic fix (Lua script or sorted set), and said locks are too slow',
+    'I chose a central Redis over sticky sessions, and said why sticky loses',
+    'I covered latency: edge or regional counters with eventual consistency, and the overshoot trade-off',
+    'I said what to monitor (rules too strict, algorithm vs bursts) and what to change',
+    'I said what happens when Redis dies (fail open vs fail closed)',
+  ],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

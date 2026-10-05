@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>The Message Vault</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: storage bins (s1), long-tail chart + index lab (s2), schema builder + query bug (s3), ID mint (s4) */
+:root {
+  --ch1: #5a48f0; --ch2: #c2560f; --ram: #0d9a96; --spill: #d4423f;
+  --f-ts: #5a48f0; --f-dc: #0d9a96; --f-mc: #c27400; --f-sq: #b8409a; --on-f: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --ch1: #8f82ff; --ch2: #ff9d5c; --ram: #31d3c8; --spill: #ff6d6a; --f-ts: #8f82ff; --f-dc: #31d3c8; --f-mc: #ffb547; --f-sq: #f07ad0; --on-f: #0e0f1d; }
+}
+:root[data-theme="dark"] { --ch1: #8f82ff; --ch2: #ff9d5c; --ram: #31d3c8; --spill: #ff6d6a; --f-ts: #8f82ff; --f-dc: #31d3c8; --f-mc: #ffb547; --f-sq: #f07ad0; --on-f: #0e0f1d; }
+
+.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; margin-top: 16px; }
+.boxed h3 { margin: 4px 0 10px; font-size: 18px; }
+.step { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.sim-bar .btn, .bigbtn { min-height: 40px; }
+.sim-bar .btn { padding: 8px 12px; font-size: 14px; }
+.seg button { min-height: 40px; }
+.seg button[disabled] { opacity: .45; cursor: not-allowed; }
+.fb { margin-top: 10px; font-size: 15px; min-height: 24px; }
+.fb.good { color: var(--good); }
+.fb.bad { color: var(--bad); }
+
+/* stage 1: deck + bins */
+.deck { padding: 16px 14px 6px; text-align: center; }
+.dcard { display: inline-block; min-width: 230px; max-width: 100%; border-radius: 16px; padding: 16px 18px; background: var(--panel); border: 2px solid var(--line); box-shadow: var(--shadow); animation: rise .3s; }
+.dcard .em { font-size: 30px; line-height: 1; }
+.dcard b { display: block; font-size: 19px; margin-top: 6px; }
+.dcard span { font-size: 13.5px; color: var(--muted); }
+.dcard.done { border-style: dashed; box-shadow: none; }
+.binbtns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px 14px 4px; }
+.binbtns .btn { min-height: 48px; }
+.bins { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 8px 14px 14px; }
+.bin { border: 2px solid var(--line); border-radius: 14px; padding: 10px; background: var(--panel); min-height: 120px; min-width: 0; }
+.bin h4 { margin: 0 0 6px; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.bin ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 5px; }
+.bin li { font-size: 12.5px; padding: 3px 8px; border-radius: 8px; background: var(--bg-2); animation: rise .3s; }
+.bin li.miss { background: var(--bad-soft); }
+.bin.kv { border-color: color-mix(in srgb, var(--teal) 50%, var(--line)); }
+.bin.rdb { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.bingo { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+@media (max-width: 600px) { .bingo { grid-template-columns: 1fr; } }
+.btile { border: 2px solid var(--line); border-radius: 14px; padding: 12px; background: var(--bg); transition: border-color .3s, background .3s; }
+.btile p { margin: 0 0 10px; font-size: 15px; font-weight: 500; }
+.btile .row .opt { padding: 7px 14px; min-height: 40px; font-size: 14px; }
+.btile.ok { border-color: var(--good); background: var(--good-soft); }
+.btile.no { border-color: var(--bad); background: var(--bad-soft); }
+.btile .why { font-size: 13.5px; color: var(--muted); margin-top: 8px; display: none; }
+.btile.ok .why, .btile.no .why { display: block; }
+
+/* stage 2: long tail + index lab */
+.lab { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 14px; padding: 10px 10px 0; }
+@media (max-width: 680px) { .lab { grid-template-columns: 1fr; } }
+.lab figure { margin: 0; }
+.lab figcaption { font-size: 12.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); text-align: center; }
+.lab svg text { font-family: var(--font); }
+.ax { stroke: var(--line); stroke-width: 1.5; }
+.axl { fill: var(--muted); font-size: 11px; }
+.hbar { fill: var(--accent); }
+.tbar { fill: color-mix(in srgb, var(--teal) 60%, var(--line)); }
+.tailbr { fill: none; stroke: var(--teal); stroke-width: 1.5; }
+.taill { fill: var(--teal); font-size: 11.5px; font-weight: 700; }
+.pin { fill: var(--warn); }
+.pinl { fill: var(--ink); font-size: 11px; font-weight: 600; }
+.node { fill: var(--bg-2); stroke: var(--line); stroke-width: 1.5; }
+.ramz { fill: color-mix(in srgb, var(--ram) 14%, transparent); }
+.raml { stroke: var(--ram); stroke-width: 2; stroke-dasharray: 5 4; }
+.ramt { fill: var(--ram); font-size: 10.5px; font-weight: 700; }
+.ix { fill: var(--accent); transition: height .4s, y .4s; }
+.ixs { fill: var(--spill); }
+.nl { fill: var(--muted); font-size: 10.5px; font-weight: 600; }
+.diskt { fill: var(--spill); font-size: 10.5px; font-weight: 700; }
+.slider { padding: 10px 14px 0; display: grid; gap: 4px; }
+.slider label { display: flex; justify-content: space-between; font-weight: 600; font-size: 14px; gap: 8px; flex-wrap: wrap; }
+.slider input { width: 100%; accent-color: var(--accent); height: 32px; }
+.meter { padding: 6px 14px 12px; }
+.meter .ml { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; flex-wrap: wrap; }
+.meter .ml b { font-family: var(--mono); }
+.meter .trk { height: 14px; border-radius: 99px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; margin-top: 6px; }
+.meter .fl { height: 100%; width: 2%; border-radius: 99px; background: var(--good); transition: width .45s, background .45s; }
+.meter.warn .fl { background: var(--warn); } .meter.warn .ml b { color: var(--warn); }
+.meter.bad .fl { background: var(--bad); } .meter.bad .ml b { color: var(--bad); }
+.meter.good .ml b { color: var(--good); }
+
+/* stage 3: schema builder */
+.tray { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
+.fchip { font-family: var(--mono); font-size: 13px; padding: 8px 11px; border-radius: 10px; border: 2px solid var(--line); background: var(--bg-2); min-height: 40px; transition: border-color .2s, background .2s, transform .1s, opacity .2s; }
+.fchip:hover { border-color: var(--accent); }
+.fchip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); transform: translateY(-2px); }
+.fchip.nope { animation: shake .4s; border-color: var(--bad); }
+.fchip.spent { opacity: .4; }
+.tgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+@media (max-width: 520px) { .tgrid { grid-template-columns: 1fr; } }
+.tcard { border: 2px solid var(--line); border-radius: 14px; background: var(--panel); padding: 10px; cursor: pointer; min-height: 150px; transition: border-color .2s, background .2s; min-width: 0; }
+.tcard:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.tcard.full { border-color: var(--good); cursor: default; }
+.tcard.miss { animation: shake .4s; border-color: var(--bad); }
+.tcard .th b { font-family: var(--mono); font-size: 15px; display: block; }
+.tcard .th span { font-size: 12.5px; color: var(--muted); }
+.tcard ol { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 4px; }
+.tcard li { display: grid; grid-template-columns: 26px 1fr auto; gap: 6px; align-items: center; font-family: var(--mono); font-size: 12.5px; background: var(--bg-2); border-radius: 8px; padding: 0 8px; min-height: 30px; animation: rise .3s; }
+.tcard li.ph { background: none; border: 1px dashed var(--line); color: var(--muted); animation: none; }
+.tcard li .ty { color: var(--muted); font-size: 11.5px; }
+.tcard li .k { font-size: 13px; text-align: center; }
+.tcard li.pk { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.tcard li.sk { background: var(--teal-soft); color: var(--teal); font-weight: 600; }
+.tcard li.keyable { cursor: pointer; outline: 2px dashed color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: -2px; min-height: 40px; }
+.tcard li.keyable:hover, .tcard li.keyable:focus-visible { background: var(--accent-soft); }
+.tcard li.wrongk { animation: shake .4s; background: var(--bad-soft); }
+.tcard .pkline { font-size: 12px; color: var(--muted); margin-top: 6px; min-height: 18px; font-family: var(--mono); }
+.keyask { margin-top: 12px; border-radius: 14px; padding: 12px 14px; background: var(--accent-soft); font-weight: 600; font-size: 15px; display: none; }
+.keyask.on { display: block; animation: rise .35s; }
+.keyask.done { background: var(--good-soft); }
+.code { background: var(--code-bg); color: var(--code-ink); border-radius: 14px; padding: 10px 8px; font-family: var(--mono); font-size: clamp(11px, 3vw, 13.5px); margin: 10px 0 4px; }
+.code .ln { display: block; width: 100%; text-align: left; white-space: pre-wrap; border: 0; background: none; color: inherit; font: inherit; padding: 6px 8px; border-radius: 6px; min-height: 40px; line-height: 1.5; }
+.code button.ln { cursor: pointer; outline: 1px dashed #3a3f6a; outline-offset: -1px; }
+.code button.ln:hover:not([disabled]) { background: #24284a; }
+.code button.ln[disabled] { cursor: default; outline: none; }
+.code .ln.bad { background: #4a1d24; color: #ffb4b4; }
+.code .ln.right { background: #163a2a; color: #9ff0c4; }
+.feed { margin-top: 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); padding: 10px; display: grid; gap: 6px; }
+.msg { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; align-items: baseline; padding: 7px 10px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); transition: transform .45s cubic-bezier(.2,.8,.2,1), border-color .3s, background .3s; }
+.msg .who { font-weight: 700; font-size: 14px; }
+.msg .txt { font-size: 15px; }
+.msg .meta { grid-column: 1 / -1; font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+.msg.swap { border-color: var(--bad); background: var(--bad-soft); }
+.msg.fixed { border-color: var(--good); background: var(--good-soft); }
+
+/* stage 4: ID mint */
+.chans { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px 10px 4px; }
+.chan { border: 2px solid var(--line); border-radius: 14px; background: var(--panel); padding: 8px; min-width: 0; display: flex; flex-direction: column; }
+.chan.c1 { border-color: color-mix(in srgb, var(--ch1) 55%, var(--line)); }
+.chan.c2 { border-color: color-mix(in srgb, var(--ch2) 55%, var(--line)); }
+.chan .ch { display: flex; justify-content: space-between; align-items: center; gap: 6px; flex-wrap: wrap; }
+.chan .ch b { font-size: 14px; }
+.chan .ctr { font-family: var(--mono); font-size: 11px; padding: 2px 7px; border-radius: 99px; background: var(--bg-2); color: var(--muted); white-space: nowrap; }
+.chan .cid { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.chan ul { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 4px; min-height: 96px; max-height: 190px; overflow-y: auto; align-content: start; }
+.chan li { font-size: 13px; padding: 4px 7px; border-radius: 8px; background: var(--bg-2); animation: rise .3s; overflow-wrap: anywhere; }
+.chan li .id { display: block; font-family: var(--mono); font-size: 11px; font-weight: 700; }
+.chan.c1 li .id { color: var(--ch1); }
+.chan.c2 li .id { color: var(--ch2); }
+.chan .btn { width: 100%; padding: 8px 10px; font-size: 14px; min-height: 40px; margin-top: auto; }
+.gen { margin: 8px 10px 4px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); padding: 10px 12px; font-size: 14px; }
+.gen .gh { font-weight: 700; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.bits { display: flex; border-radius: 8px; overflow: hidden; font-family: var(--mono); font-size: 11px; color: var(--on-f); margin-top: 4px; }
+.bits div { padding: 5px 4px; text-align: center; min-width: 0; overflow-wrap: anywhere; line-height: 1.25; }
+.bits div small { display: block; opacity: .85; font-size: 10px; }
+.bits .b0 { background: var(--muted); flex: 1 1 18px; }
+.bits .b1 { background: var(--f-ts); flex: 41 1 0; }
+.bits .b2 { background: var(--f-dc); flex: 9 1 0; }
+.bits .b3 { background: var(--f-mc); flex: 9 1 0; }
+.bits .b4 { background: var(--f-sq); flex: 14 1 0; }
+.gen .bigid { font-family: var(--mono); font-weight: 700; overflow-wrap: anywhere; }
+.merged { margin: 6px 10px 12px; border: 2px dashed var(--line); border-radius: 14px; padding: 10px; display: none; }
+.merged.on { display: block; animation: rise .35s; }
+.merged ol { list-style: none; padding: 0; margin: 6px 0 0; display: grid; gap: 4px; }
+.merged li { display: grid; grid-template-columns: minmax(0, auto) 1fr; gap: 8px; align-items: baseline; font-size: 13px; padding: 4px 8px; border-radius: 8px; background: var(--bg-2); }
+.merged li .id { font-family: var(--mono); font-weight: 700; font-size: 11.5px; overflow-wrap: anywhere; }
+.merged li.dup { background: var(--bad-soft); }
+.merged li.dup .id { color: var(--bad); }
+.merged .mh { font-weight: 700; font-size: 14px; }
+.merged .mh.bad { color: var(--bad); }
+.merged .mh.good { color: var(--good); }
+.tag1 { color: var(--ch1); font-weight: 700; }
+.tag2 { color: var(--ch2); font-weight: 700; }
+@media (max-width: 380px) { .chan li { font-size: 12px; } }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 12.3 · Design a Chat System</div>
+    <h1>The Message Vault</h1>
+    <p class="lede">Tens of billions of chat messages arrive every day. Most of them are read once and never again, but every one of them has to stay findable. Pick where they live, design the tables, and give every message a number that keeps it in order.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can say why chat history goes in a <b>key-value store</b>, draw the <b>1-on-1</b> and <b>group</b> message tables with their keys, and explain why <code>created_at</code> can't order messages and which <b>message ID</b> scheme the book picks.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Two kinds of data</h2><div class="sub">Know the read/write pattern first</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>In Quest 12.2 the high-level design had a box called <b>KV store</b>. Time to open it. A chat app stores two very different kinds of data:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener">[1]</a></p>
+      <ul>
+        <li><b>Generic data</b>: user profiles, settings, friend lists. It's small, structured, and has to be correct. The book puts it in a <b>relational database</b> (tables, SQL, transactions), with <i>replication</i> (copies on several machines) for availability and <i>sharding</i> (splitting rows across machines) for scale.</li>
+        <li><b>Chat history</b>: the messages themselves. This is the unusual part, and it goes in a <b>key-value store</b>: a database that stores values under a key and finds them by that key, very fast, without SQL joins.</li>
+      </ul>
+      <p>Sort the cards. Tap the database each one belongs in.</p>
+
+      <div class="sim">
+        <div class="deck" id="deck"></div>
+        <div class="binbtns">
+          <button class="btn bigbtn" id="toRdb">🗃️ Relational DB</button>
+          <button class="btn bigbtn" id="toKv">🔑 Key-value store</button>
+        </div>
+        <div class="fb" id="binFb" style="padding:0 14px"></div>
+        <div class="bins">
+          <div class="bin rdb"><h4>🗃️ Relational DB</h4><ul id="binRdb"></ul></div>
+          <div class="bin kv"><h4>🔑 Key-value store</h4><ul id="binKv"></ul></div>
+        </div>
+      </div>
+
+      <h3 style="margin:22px 0 6px;font-size:18px">Why is chat history special?</h3>
+      <p>Before you pick a database, look at how the data is <b>read</b> and <b>written</b>. The book lists four facts about chat history:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener">[1]</a></p>
+      <ol>
+        <li><b>It's huge.</b> In 2016, Facebook Messenger and WhatsApp together handled about 60 billion messages a day.<a class="cite" href="https://www.theverge.com/2016/4/12/11415198/facebook-messenger-whatsapp-number-messages-vs-sms-f8-2016" target="_blank" rel="noopener">[2]</a></li>
+        <li><b>Recent chats get almost all the reads.</b> People rarely scroll back to old conversations.</li>
+        <li><b>But old messages must stay reachable.</b> Search, "show my mentions", and "jump to this message" all need <i>random access</i>: going straight to one message anywhere in the history.</li>
+        <li><b>Reads and writes are about equal</b>: roughly <b>1:1</b> for 1-on-1 chat. Most apps read far more than they write. Chat doesn't.</li>
+      </ol>
+      <div class="boxed">
+        <div class="step">Pattern bingo</div>
+        <h3>True or false, for chat history?</h3>
+        <div class="bingo" id="bingo"></div>
+      </div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Why a key-value store?</h2><div class="sub">The long tail problem</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The left chart shows how often messages of each age get read. There's a tall <b>head</b> (today's messages) and a <b>long tail</b>: years of old messages that are rarely read but must stay reachable. That tail is most of the data.</p>
+      <p>The right panel is a single relational database. To find one message fast, it keeps an <b>index</b> (a sorted lookup structure, like a book's index). Lookups are fast while the index fits in <b>RAM</b> (memory). Once it's bigger than RAM, parts of it live on disk, and disk is much slower. Drag the slider to add years of history.</p>
+
+      <div class="sim">
+        <div class="slider"><label for="yrs"><span>Years of history: <span class="mono" id="yrsVal">1</span></span><span class="muted small" id="yrsHint">50M users chatting daily</span></label><input type="range" id="yrs" min="1" max="10" step="1" value="1" aria-label="Years of chat history"></div>
+        <div class="lab">
+          <figure><figcaption>Reads by message age</figcaption><svg id="tailSvg" viewBox="0 0 340 210" role="img" aria-label="Bar chart: reads per message age, a tall head and a long flat tail"></svg></figure>
+          <figure><figcaption id="ixCap">One relational DB node</figcaption><svg id="ixSvg" viewBox="0 0 340 210" role="img" aria-label="Index size compared with RAM"></svg></figure>
+        </div>
+        <div class="meter" id="meter"><div class="ml"><span>🔎 Jump to a 3-year-old message</span><b id="latVal">2 ms</b></div><div class="trk"><div class="fl" id="latFill"></div></div></div>
+        <div class="sim-bar">
+          <span class="seg" id="modeSeg"><button data-m="rdb" class="on">Relational, 1 node</button><button data-m="kv" disabled>KV store, partitioned</button></span>
+          <span class="small muted">toy numbers</span>
+        </div>
+        <div class="simlog" id="log2"><div>1 year of history. The index fits in RAM. Lookups are quick.</div></div>
+      </div>
+      <div class="boxed" id="p2"></div>
+      <ul class="checklist" id="s2goals">
+        <li data-g="kv"><span class="box">✓</span><span>Switch to <b>KV store, partitioned</b></span></li>
+        <li data-g="ten"><span class="box">✓</span><span>Push the KV store to <b>10 years</b>. Does the lookup stay fast?</span></li>
+      </ul>
+      <div class="callout" id="kvNote" style="display:none"><b>The book's four reasons for a key-value store</b><a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener">[1]</a>
+        <ol style="margin:6px 0 0;padding-left:20px">
+          <li><b>Easy horizontal scaling</b>: add machines and the data spreads across them.</li>
+          <li><b>Very low latency</b> (wait time) for reads by key.</li>
+          <li><b>Relational databases handle the long tail badly</b>: once indexes grow large, random access gets expensive.</li>
+          <li><b>Proven chat apps use them</b>: Facebook Messenger used <b>HBase</b>,<a class="cite" href="https://engineering.fb.com/2010/11/15/core-infra/the-underlying-technology-of-messages/" target="_blank" rel="noopener">[3]</a> and Discord used <b>Cassandra</b>.<a class="cite" href="https://discord.com/blog/how-discord-stores-billions-of-messages" target="_blank" rel="noopener">[4]</a></li>
+        </ol>
+      </div>
+      <div class="callout warn"><b>Honest caveat.</b> The real trick in this sim is <i>partitioning by key</i>, so each lookup touches one small piece. You can also shard a relational database by channel, and some big chat apps do. Facebook later moved Messenger off HBase onto MySQL (MyRocks), and Discord moved from Cassandra to ScyllaDB.<a class="cite" href="https://discord.com/blog/how-discord-stores-trillions-of-messages" target="_blank" rel="noopener">[5]</a> "Key-value store" is a sensible interview default, not a law of nature.</div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Design the tables</h2><div class="sub">1-on-1 and group message tables</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book gives two message tables: one for <b>1-on-1</b> chat and one for <b>group</b> chat.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener">[1]</a> A group chat is called a <b>channel</b>. Build them: tap a column, then tap the table it belongs in. Some columns go in both tables. Two of them belong in neither.</p>
+
+      <div class="boxed">
+        <div class="step">Part 1 · Schema builder</div>
+        <div class="tray" id="tray"></div>
+        <div class="fb" id="fb3"></div>
+        <div class="tgrid" id="tgrid"></div>
+        <div class="keyask" id="keyask"></div>
+      </div>
+      <div class="callout tip" id="keyNote" style="display:none"><b>Why these keys?</b> In the 1-on-1 table the <b>primary key</b> (the column that uniquely identifies a row) is <code>message_id</code>, and it alone decides message order. In the group table the primary key is the pair <b>(channel_id, message_id)</b>. <code>channel_id</code> is the <b>partition key</b>: the column that decides which machine stores the row. Every query in a group chat works inside one channel, so the whole channel's history sits together on one partition. Inside it, rows are kept sorted by <code>message_id</code> (the <b>sort key</b>, which Cassandra calls a <i>clustering key</i>).</div>
+
+      <div class="boxed">
+        <div class="step">Part 2 · Spot the bug</div>
+        <h3>Ben answered before Ana asked?</h3>
+        <p class="small">This query loads channel 42. Look at the feed it produced. Tap the line of the query that causes the bug.</p>
+        <div class="code" id="code3"></div>
+        <div class="feed" id="feed3" aria-live="polite"></div>
+        <div class="fb" id="fbBug"></div>
+        <div class="row" style="margin-top:8px"><button class="btn primary" id="fixBtn" style="display:none">🔧 Change it to ORDER BY message_id</button></div>
+      </div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Mint the IDs</h2><div class="sub">Unique and sortable by time</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Since <code>message_id</code> decides the order, it needs two properties:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener">[1]</a> it must be <b>unique</b>, and it must be <b>sortable by time</b> (a newer message always gets a higher ID). The book weighs three ways to make one:</p>
+      <ol>
+        <li><b>auto_increment</b>: MySQL can number rows 1, 2, 3 for you. But NoSQL databases (like Cassandra or HBase) usually don't offer it.</li>
+        <li><b>A global 64-bit generator like Snowflake</b>: one ID scheme for every message everywhere (you built it in <a href="0703-snowflake-bit-layout.html">Quest 7.3</a>).</li>
+        <li><b>A local sequence number</b>: each channel counts its own messages 1, 2, 3. IDs are unique only <i>within</i> that channel.</li>
+      </ol>
+      <p>Send some messages in both channels and watch the IDs. Then merge both channels into one list.</p>
+
+      <div class="sim">
+        <div class="sim-bar" style="border-top:0;border-bottom:1px solid var(--line)">
+          <span class="seg" id="idSeg"><button data-m="local" class="on">Local per channel</button><button data-m="snow">Global Snowflake</button></span>
+          <span class="small muted" id="modeHint">each channel counts on its own</span>
+        </div>
+        <div class="chans">
+          <div class="chan c1"><div class="ch"><b>👫 Alice–Bob</b><span class="ctr" id="ctr1">next: 1</span></div><span class="cid">channel_id 7</span><ul id="list1" aria-live="polite"></ul><button class="btn" id="send1">Send ✉️</button></div>
+          <div class="chan c2"><div class="ch"><b>📚 Book club</b><span class="ctr" id="ctr2">next: 1</span></div><span class="cid">channel_id 42</span><ul id="list2" aria-live="polite"></ul><button class="btn" id="send2">Send ✉️</button></div>
+        </div>
+        <div class="gen" id="gen"></div>
+        <div class="sim-bar">
+          <span class="row" style="gap:8px"><button class="btn" id="both">⚡ Both at once</button><button class="btn primary" id="mergeBtn" disabled>🔀 Merge both channels</button></span>
+          <button class="btn" id="idReset">↻ Clear</button>
+        </div>
+        <div class="merged" id="merged"></div>
+      </div>
+      <ul class="checklist" id="s4goals">
+        <li data-g="local"><span class="box">✓</span><span>Local mode: send at least 2 messages in <b>each</b> channel</span></li>
+        <li data-g="dup"><span class="box">✓</span><span>Merge them and find the duplicate IDs</span></li>
+        <li data-g="snow"><span class="box">✓</span><span>Switch to <b>Global Snowflake</b>, send 2+ in each, and merge again</span></li>
+      </ul>
+      <div class="callout warn" id="dmNote" style="display:none"><b>Watch the 1-on-1 table.</b> The book keys the 1-on-1 table by <code>message_id</code> alone. With local IDs, Alice–Bob's message #3 and Carol–Dan's message #3 would clash. So if you choose local IDs, treat every 1-on-1 chat as a two-person channel and key it by (channel_id, message_id) too. Interviewers like it when you spot that.</div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Shuffle Imp</h2><div class="sub">Keep the vault in order</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The Shuffle Imp is loose in the vault, scrambling data and swapping messages. Six situations. For each one, pick the storage or ID choice that beats it.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">Defend your storage</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> Messages now have a home and an order. Next, follow one from Alice's phone to Bob's, and keep Bob's laptop and phone in sync using the biggest message ID each device has seen. That's <a href="1204-chat-message-flows.html">Quest 12.4, <i>Special Delivery</i></a>.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 12: "Design a Chat System"</a>, sections "Storage", "Data models" and "Message ID" (about three pages). Then read Discord's <a href="https://discord.com/blog/how-discord-stores-billions-of-messages" target="_blank" rel="noopener">How Discord Stores Billions of Messages</a>. It's the book's design under real load, and it's a great read.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <ul style="margin:0;padding-left:20px">
+        <li><b>Hot partitions.</b> Discord's real key is <code>(channel_id, bucket)</code>, where a bucket is a fixed time window (about 10 days). That stops one busy channel from growing into one giant partition. The book's plain <code>channel_id</code> key would make huge, hot partitions for very large channels.<a class="cite" href="https://discord.com/blog/how-discord-stores-billions-of-messages" target="_blank" rel="noopener">[4]</a></li>
+        <li><b>Who hands out the next number?</b> A local sequence still needs one safe source per channel, such as a single owner per channel or an atomic counter in Redis or the database. If two chat servers both mint "the next ID" for the same channel, you get duplicates. The book calls local IDs "easier" and skips this part.</li>
+        <li><b>Sync cursors.</b> In 12.4 each device remembers one <code>cur_max_message_id</code>. With per-channel IDs, one number can't cover every channel. A device needs a cursor per channel, or each user's inbox needs its own sequence. Raise it if the interviewer pushes.</li>
+        <li><b>Discord uses global IDs.</b> Its <code>message_id</code> is a Snowflake, so it sorts by time across every channel. Both of the book's schemes are workable.</li>
+        <li><b>Storage moves.</b> Facebook moved Messenger from HBase to MyRocks (MySQL on RocksDB) around 2018. Discord moved from Cassandra to ScyllaDB in 2022.<a class="cite" href="https://discord.com/blog/how-discord-stores-trillions-of-messages" target="_blank" rel="noopener">[5]</a></li>
+      </ul>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"what's the difference between a partition key and a primary key?"</i> or <i>"how would search work over a key-value store?"</i> Follow-up questions are part of the quest.
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 12 "Design a Chat System": Storage, Data models, Message ID (ByteByteGo).</li>
+        <li>The Verge, "Facebook Messenger and WhatsApp process 60 billion messages a day", April 2016.</li>
+        <li>Meta Engineering, "The Underlying Technology of Messages", 2010 (HBase).</li>
+        <li>Discord, "How Discord Stores Billions of Messages", 2017 (Cassandra).</li>
+        <li>Discord, "How Discord Stores Trillions of Messages", 2023 (ScyllaDB).</li>
+        <li><a href="https://github.com/twitter-archive/snowflake" target="_blank" rel="noopener">Twitter Snowflake</a> (archived repository).</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '1203',
+  badge: '🗄️ Badge: Vault Keeper',
+  winTitle: 'Every message filed in order',
+  cheatsheet: '../reference/ch12-chat-cheatsheet.html',
+});
+const { sleep, shuffle, esc } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function keyTap(el, fn) {
+  el.addEventListener('click', fn);
+  el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(e); } });
+}
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); Q.addXP(xp || 10, li);
+  return true;
+}
+function predict(box, { step, title, options, correct, act, explain, xp = 20 }) {
+  box.innerHTML = `${step ? `<div class="step">${step}</div>` : ''}<h3>${title}</h3><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+  const opts = $('.opts', box);
+  let busy = false;
+  return new Promise(resolve => {
+    shuffle(options.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = async () => {
+        if (busy) return; busy = true;
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        b.classList.add('picked');
+        await act();
+        const ok = i === correct;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-i="${correct}"]`, opts).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + explain;
+        ok ? Q.addXP(xp, b) : Q.loseHeart(b);
+        resolve({ ok, row: $('.row', box) });
+      };
+      opts.appendChild(b);
+    });
+  });
+}
+// run quizzes one after another in the same mount, then call done
+function quizChain(mount, list, done) {
+  let i = 0;
+  const next = () => {
+    if (i >= list.length) { done && setTimeout(done, 900); return; }
+    const cfg = list[i++];
+    Q.quiz(mount, { ...cfg, onDone: () => setTimeout(next, 700) });
+  };
+  next();
+}
+
+/* ================= STAGE 1: two kinds of data ================= */
+Q.onStage(1, () => {
+  const CARDS = [
+    { e: '👤', t: 'User profile', d: 'name, email, bio', a: 'rdb', why: 'Generic data: small, structured, must be correct. Relational DB with replication and sharding.' },
+    { e: '🔔', t: 'Notification settings', d: 'mute, sounds, quiet hours', a: 'rdb', why: 'Per-user settings are generic data. They change rarely and need to be right.' },
+    { e: '🤝', t: 'Friend list', d: 'who is friends with whom', a: 'rdb', why: 'Relationships between users are classic relational data: joins and constraints.' },
+    { e: '💬', t: 'Messages in a 1-on-1 chat', d: 'Alice ↔ Bob history', a: 'kv', why: 'Chat history: huge, written constantly, read mostly when recent. Key-value store.' },
+    { e: '👥', t: 'Messages in a group chat', d: 'the #book-club history', a: 'kv', why: 'Also chat history. It goes in the key-value store, keyed by channel.' },
+    { e: '📋', t: 'Group member list', d: 'who belongs to which group', a: 'rdb', why: 'Membership is generic data. It is small, and joining or leaving should be one safe transaction.' },
+    { e: '🟢', t: 'Last-seen timestamp', d: '"last active 5 min ago"', a: 'kv', why: 'The book keeps online status and last_active_at in the key-value store (you will meet it in 12.5).' },
+    { e: '🖼️', t: 'Profile photo URL', d: 'link to the avatar image', a: 'rdb', why: 'Just one more field on the user profile. (The image file itself would live in object storage.)' },
+  ];
+  let deck = shuffle(CARDS), di = 0, binsDone = false, bingoDone = false, quizShown = false;
+  const draw = () => {
+    if (di >= deck.length) {
+      $('#deck').innerHTML = '<div class="dcard done"><div class="em">✅</div><b>All 8 cards sorted</b><span>Generic data on the left, chat history and presence on the right.</span></div>';
+      $('#toRdb').disabled = $('#toKv').disabled = true;
+      return;
+    }
+    const c = deck[di];
+    $('#deck').innerHTML = `<div class="dcard" aria-live="polite"><div class="em">${c.e}</div><b>${c.t}</b><span>${c.d}</span></div><div class="small muted" style="margin-top:6px">card ${di + 1} of ${deck.length}</div>`;
+  };
+  function drop(k, btn) {
+    if (di >= deck.length) return;
+    const c = deck[di++], ok = c.a === k;
+    const li = document.createElement('li'); li.textContent = c.t; if (!ok) li.className = 'miss';
+    $(c.a === 'kv' ? '#binKv' : '#binRdb').appendChild(li);
+    const fb = $('#binFb');
+    fb.className = 'fb ' + (ok ? 'good' : 'bad');
+    fb.innerHTML = `<b>${ok ? '✓' : '✗ It goes in the ' + (c.a === 'kv' ? 'key-value store' : 'relational DB') + '.'}</b> ${c.why}`;
+    ok ? Q.addXP(5, btn) : Q.loseHeart(btn);
+    draw();
+    if (di >= deck.length) { binsDone = true; maybeQuiz(); }
+  }
+  $('#toRdb').onclick = e => drop('rdb', e.currentTarget);
+  $('#toKv').onclick = e => drop('kv', e.currentTarget);
+  draw();
+
+  const BINGO = [
+    { t: 'Writes are rare compared to reads.', a: false, why: 'False. For 1-on-1 chat, reads and writes are about 1:1. Every message sent is one write.' },
+    { t: 'Old messages are read as often as new ones.', a: false, why: 'False. Recent chats get most of the reads. Old ones are rarely looked at.' },
+    { t: 'Users sometimes jump straight to an old message.', a: true, why: 'True. Search, mentions and "jump to message" all need random access into old history.' },
+    { t: 'Volume is in the tens of billions of messages a day.', a: true, why: 'True. Messenger plus WhatsApp handled about 60 billion a day back in 2016.' },
+  ];
+  let answered = 0;
+  $('#bingo').innerHTML = BINGO.map((b, i) => `<div class="btile" data-i="${i}"><p>${b.t}</p><div class="row"><button class="opt" data-v="1">True</button><button class="opt" data-v="0">False</button></div><div class="why">${b.why}</div></div>`).join('');
+  $$('#bingo .btile').forEach(tile => {
+    const b = BINGO[+tile.dataset.i];
+    $$('.opt', tile).forEach(btn => btn.onclick = () => {
+      $$('.opt', tile).forEach(x => x.disabled = true);
+      const ok = (btn.dataset.v === '1') === b.a;
+      btn.classList.add(ok ? 'right' : 'wrong');
+      if (!ok) $(`.opt[data-v="${b.a ? 1 : 0}"]`, tile).classList.add('right');
+      tile.classList.add(ok ? 'ok' : 'no');
+      ok ? Q.addXP(5, btn) : Q.loseHeart(btn);
+      if (++answered === BINGO.length) { bingoDone = true; maybeQuiz(); }
+    });
+  });
+
+  function maybeQuiz() {
+    if (quizShown || !binsDone || !bingoDone) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s1quiz'), {
+      q: 'What read:write ratio does the book give for 1-on-1 chat?',
+      options: ['About 1:1, reads match writes', 'About 10:1, reads dominate', 'About 1:10, writes dominate'],
+      correct: 0,
+      good: 'Roughly one read for every write. That matters: a read-heavy app can lean on caches, but chat has to be good at <b>writing</b> too.',
+      bad: 'The book says about <b>1:1</b> for 1-on-1 chat. Each message is written once and read about once by the person it was sent to. Caching alone won\'t save you, so the store must be good at writes too.',
+      onDone: () => setTimeout(() => Q.clearStage(1), 900),
+    }), 400);
+  }
+});
+
+/* ================= STAGE 2: why a key-value store ================= */
+Q.onStage(2, () => {
+  const RAM = 3;            // the single node's RAM holds the index for 3 years of history (toy units)
+  const L = { years: 1, mode: 'rdb', predicted: false, quizShown: false };
+  const goals = new Set();
+  const tail = $('#tailSvg'), ix = $('#ixSvg');
+  const latency = () => {
+    if (L.mode === 'kv') return 2 + L.years * 0.15;
+    if (L.years <= RAM) return 1.5 + L.years * 0.3;
+    return 2.4 + Math.pow(L.years - RAM, 1.6) * 6;
+  };
+  function drawTail() {
+    tail.innerHTML = '';
+    const x0 = 30, x1 = 330, yb = 172, n = L.years * 4, w = (x1 - x0) / n;
+    S('line', { class: 'ax', x1: x0, y1: yb, x2: x1, y2: yb }, tail);
+    S('line', { class: 'ax', x1: x0, y1: 16, x2: x0, y2: yb }, tail);
+    const yl = S('text', { class: 'axl', x: 12, y: 96, transform: 'rotate(-90 12 96)', 'text-anchor': 'middle' }, tail); yl.textContent = 'reads';
+    for (let q = 0; q < n; q++) {
+      const h = 140 * Math.exp(-q * 1.25) + 5;
+      S('rect', { class: q < 2 ? 'hbar' : 'tbar', x: (x0 + q * w + w * .12).toFixed(1), y: (yb - h).toFixed(1), width: Math.max(1, w * .76).toFixed(1), height: h.toFixed(1), rx: 1.5 }, tail);
+    }
+    const t0 = S('text', { class: 'axl', x: x0, y: 188 }, tail); t0.textContent = 'today';
+    const t1 = S('text', { class: 'axl', x: x1, y: 188, 'text-anchor': 'end' }, tail); t1.textContent = `${L.years} yr${L.years > 1 ? 's' : ''} ago`;
+    const bx = x0 + 2 * w;
+    S('path', { class: 'tailbr', d: `M${bx.toFixed(1)} 150 v-6 H${x1} v6` }, tail);
+    const tl = S('text', { class: 'taill', x: ((bx + x1) / 2).toFixed(1), y: 138, 'text-anchor': 'middle' }, tail); tl.textContent = 'the long tail';
+    const hl = S('text', { class: 'axl', x: x0 + w + 8, y: 30 }, tail); hl.textContent = '← head: recent chats';
+    // the "jump to a 3-year-old message" pin
+    const q = Math.min(n - 1, 12), px = x0 + q * w + w / 2;
+    S('path', { class: 'pin', d: `M${px.toFixed(1)} 162 l-6 -12 a7 7 0 1 1 12 0 z` }, tail);
+    const pl = S('text', { class: 'pinl', x: Math.min(px, 300).toFixed(1), y: 112, 'text-anchor': 'middle' }, tail); pl.textContent = L.years >= 3 ? '🔎 3 yrs old' : '🔎 oldest';
+  }
+  function drawIx() {
+    ix.innerHTML = '';
+    const top = 26, bot = 178, unit = (bot - top) / 10;
+    if (L.mode === 'rdb') {
+      $('#ixCap').textContent = 'One relational DB node';
+      const x = 120, w = 100;
+      S('rect', { class: 'node', x, y: top, width: w, height: bot - top, rx: 8 }, ix);
+      const ry = bot - RAM * unit;
+      S('rect', { class: 'ramz', x: x + 1, y: ry, width: w - 2, height: bot - ry - 1, rx: 6 }, ix);
+      S('line', { class: 'raml', x1: x - 14, y1: ry, x2: x + w + 14, y2: ry }, ix);
+      const rt = S('text', { class: 'ramt', x: x - 18, y: ry + 4, 'text-anchor': 'end' }, ix); rt.textContent = 'RAM';
+      const inRam = Math.min(L.years, RAM), over = Math.max(0, L.years - RAM);
+      S('rect', { class: 'ix', x: x + 28, y: bot - inRam * unit, width: w - 56, height: inRam * unit, rx: 3 }, ix);
+      if (over) {
+        S('rect', { class: 'ixs', x: x + 28, y: bot - L.years * unit, width: w - 56, height: over * unit, rx: 3 }, ix);
+        const dt = S('text', { class: 'diskt', x: x + w + 18, y: bot - (RAM + over / 2) * unit + 4 }, ix); dt.textContent = 'on disk';
+      }
+      const nl = S('text', { class: 'nl', x: x + w / 2, y: 198, 'text-anchor': 'middle' }, ix); nl.textContent = `index: ${L.years} yr${L.years > 1 ? 's' : ''} of messages`;
+    } else {
+      const nodes = Math.min(5, Math.max(3, Math.ceil(L.years / 2)));
+      $('#ixCap').textContent = `KV store · ${nodes} nodes, keyed by channel_id`;
+      const gap = 10, w = (300 - gap * (nodes - 1)) / nodes, per = L.years / nodes;
+      for (let i = 0; i < nodes; i++) {
+        const x = 20 + i * (w + gap);
+        S('rect', { class: 'node', x: x.toFixed(1), y: top, width: w.toFixed(1), height: bot - top, rx: 8 }, ix);
+        const ry = bot - RAM * unit;
+        S('rect', { class: 'ramz', x: (x + 1).toFixed(1), y: ry, width: (w - 2).toFixed(1), height: bot - ry - 1, rx: 6 }, ix);
+        S('line', { class: 'raml', x1: x.toFixed(1), y1: ry, x2: (x + w).toFixed(1), y2: ry }, ix);
+        S('rect', { class: 'ix', x: (x + w * .25).toFixed(1), y: (bot - per * unit).toFixed(1), width: (w * .5).toFixed(1), height: (per * unit).toFixed(1), rx: 3 }, ix);
+        const t = S('text', { class: 'nl', x: (x + w / 2).toFixed(1), y: 198, 'text-anchor': 'middle' }, ix); t.textContent = `node ${i + 1}`;
+      }
+      const rt = S('text', { class: 'ramt', x: 20, y: bot - RAM * unit - 6 }, ix); rt.textContent = 'RAM per node';
+    }
+  }
+  function drawMeter() {
+    const ms = latency(), m = $('#meter');
+    $('#latVal').textContent = ms < 10 ? `${ms.toFixed(1)} ms` : `${Math.round(ms)} ms`;
+    $('#latFill').style.width = Math.max(2, Math.min(100, ms / 150 * 100)) + '%';
+    m.className = 'meter ' + (ms < 10 ? 'good' : ms < 40 ? 'warn' : 'bad');
+  }
+  function update() {
+    $('#yrs').value = L.years; $('#yrsVal').textContent = L.years;
+    drawTail(); drawIx(); drawMeter();
+    if (L.mode === 'kv' && L.years === 10 && checkGoal('#s2goals', 'ten', goals)) {
+      logTo('log2', '10 years in the KV store: still one small partition per lookup. The jump stays fast.', 'g');
+      maybeQuiz();
+    }
+  }
+  let lastLogged = 1;
+  $('#yrs').addEventListener('input', e => {
+    let v = +e.target.value;
+    if (!L.predicted && v > RAM) { v = RAM; $('#yrsHint').textContent = 'predict first ↓'; Q.toast('predict first ↓', e.target, 'practice'); }
+    L.years = v; update();
+    if (v !== lastLogged) {
+      lastLogged = v;
+      if (L.mode === 'rdb') logTo('log2', v <= RAM ? `${v} yrs: index fits in RAM. ${latency().toFixed(1)} ms.` : `${v} yrs: ${v - RAM} yr${v - RAM > 1 ? 's' : ''} of index spilled to disk. Old lookups now ${Math.round(latency())} ms.`, v <= RAM ? '' : 'e');
+    }
+  });
+  $$('#modeSeg button').forEach(b => b.onclick = () => {
+    if (b.disabled || L.mode === b.dataset.m) return;
+    L.mode = b.dataset.m;
+    $$('#modeSeg button').forEach(x => x.classList.toggle('on', x === b));
+    if (L.mode === 'kv') {
+      logTo('log2', `Partitioned by channel_id: ${L.years} yrs of history split over several nodes. Each lookup goes straight to one small partition by key.`, 'g');
+      $('#kvNote').style.display = 'block';
+      if (checkGoal('#s2goals', 'kv', goals)) maybeQuiz();
+    } else logTo('log2', 'Back to one relational node with one big index.');
+    update();
+  });
+
+  async function animateTo(target) {
+    const step = Q.reduced ? 0 : 260;
+    while (L.years < target) { L.years++; update(); if (L.years > RAM) logTo('log2', `${L.years} yrs: index spills to disk → ${Math.round(latency())} ms`, 'e'); await sleep(step); }
+  }
+  function runPredict() {
+    L.mode = 'rdb'; $$('#modeSeg button').forEach(x => x.classList.toggle('on', x.dataset.m === 'rdb'));
+    L.years = RAM; update();
+    predict($('#p2'), {
+      step: 'Predict first',
+      title: 'At 3 years the index exactly fills RAM. History keeps growing to 8 years. What happens to the cost of jumping to a 3-year-old message?',
+      options: ['It stays about flat', 'It rises slowly, in step', 'It rises sharply'],
+      correct: 2,
+      act: async () => {
+        const sm = Q.reduced ? 'auto' : 'smooth';
+        $('#s2 .lab').scrollIntoView({ behavior: sm, block: 'start' });
+        await sleep(Q.reduced ? 0 : 400);
+        await animateTo(8);
+        await sleep(Q.reduced ? 0 : 700);
+        $('#p2').scrollIntoView({ behavior: sm, block: 'start' });
+      },
+      explain: 'Once the index is bigger than RAM, a lookup for an old message has to go to disk, maybe several times. The cost doesn\'t grow politely in step with the data. It jumps. That\'s the book\'s point: <b>relational databases handle the long tail badly</b> when indexes grow large. Now try the KV store.',
+    }).then(({ row }) => {
+      L.predicted = true; lastLogged = L.years;
+      $('#yrsHint').textContent = 'slide freely now';
+      $('#modeSeg button[data-m="kv"]').disabled = false;
+      const b = document.createElement('button'); b.className = 'btn'; b.textContent = '↻ Predict again';
+      b.onclick = () => runPredict(); row.appendChild(b);
+    });
+  }
+  runPredict();
+
+  function maybeQuiz() {
+    if (L.quizShown || goals.size < 2) return;
+    L.quizShown = true;
+    quizChain($('#s2quiz'), [
+      { q: 'Which pair are <b>both</b> reasons the book gives for storing chat history in a key-value store?',
+        options: ['Easy horizontal scaling and very low latency', 'Strong joins and multi-row transactions', 'Built-in full-text search and SQL views'],
+        correct: 0,
+        good: 'Those are two of the four. The other two: relational DBs handle the long tail badly, and proven chat apps (Facebook Messenger, Discord) use key-value stores.',
+        bad: 'Joins, transactions, SQL views and search are things relational databases are good at, not reasons to leave them. The book\'s reasons: <b>easy horizontal scaling</b>, <b>very low latency</b>, the long-tail problem, and proven chat apps use them.' },
+      { q: 'Per the book, which store did <b>Discord</b> use for chat history?',
+        options: ['Cassandra', 'HBase', 'MySQL', 'Redis'],
+        correct: 0,
+        good: 'Discord used <b>Cassandra</b>. Facebook Messenger used <b>HBase</b>. (Both have since moved on: see the Level-up note.)',
+        bad: 'Discord used <b>Cassandra</b>. HBase was Facebook Messenger\'s store. Easy to swap, so say both in the interview.' },
+    ], () => Q.clearStage(2));
+  }
+});
+
+/* ================= STAGE 3: design the tables ================= */
+Q.onStage(3, () => {
+  const TYPES = { message_id: 'bigint', message_from: 'bigint', message_to: 'bigint', channel_id: 'bigint', user_id: 'bigint', content: 'text', created_at: 'timestamp' };
+  const TABLES = {
+    one: { name: 'message', sub: '1-on-1 chat', cols: ['message_id', 'message_from', 'message_to', 'content', 'created_at'] },
+    grp: { name: 'group_message', sub: 'group chat (channel)', cols: ['channel_id', 'message_id', 'user_id', 'content', 'created_at'] },
+  };
+  const CHIPS = ['message_id', 'message_from', 'message_to', 'channel_id', 'user_id', 'content', 'created_at', 'read_receipt_list', 'avatar_url'];
+  const HINT = {
+    'one:channel_id': 'The book\'s 1-on-1 table has a sender and a receiver, no channel.',
+    'one:user_id': 'Close. The 1-on-1 table names its sender message_from, and pairs it with message_to.',
+    'grp:message_from': 'In a group the sender is just user_id. There\'s no single receiver to pair it with.',
+    'grp:message_to': 'A group message has no single receiver. The channel is who it goes to.',
+    read_receipt_list: 'Not in the book\'s tables. A list of readers would grow with group size and change with every read.',
+    avatar_url: 'That\'s profile data. It lives with the user profile in the relational DB, not on every message.',
+  };
+  const placed = { one: new Set(), grp: new Set() };
+  let chip = null, keyStep = 0, keyMissed = false, tablesXp = new Set(), bugDone = false, keysDone = false, quizShown = false;
+  const keyed = { one: {}, grp: {} };
+  const KEYSTEPS = [
+    { t: 'one', col: 'message_id', role: 'pk', ask: '🔑 1-on-1 table: tap the column that is the <b>primary key</b> (it also decides message order).',
+      wrong: { created_at: 'Two messages can share a created_at, so it can\'t identify a row or break ties.', message_from: 'One sender sends many messages, so message_from isn\'t unique.', message_to: 'One person receives many messages, so message_to isn\'t unique.', content: '"ok" gets sent millions of times. Content is never a key.' } },
+    { t: 'grp', col: 'channel_id', role: 'pk', ask: '🧭 Group table: tap the <b>partition key</b>, the column that decides which machine stores the row.',
+      wrong: { message_id: 'Partitioning by message_id would scatter one channel\'s history over every machine. Loading a chat would hit them all.', user_id: 'Partitioning by sender would split one conversation across many machines.', created_at: 'Partitioning by time would put everyone\'s "now" on one hot machine.', content: 'Content is never a key.' } },
+    { t: 'grp', col: 'message_id', role: 'sk', ask: '↕️ Group table: inside one channel\'s partition, which column <b>sorts</b> the messages (the second half of the primary key)?',
+      wrong: { created_at: 'Two messages can share a timestamp, and server clocks drift. It can\'t break ties.', user_id: 'Sorting by sender would group each person\'s messages together, not in conversation order.', content: 'Content is never a key.', channel_id: 'That\'s already the partition key. Every row in this partition has the same channel_id.' } },
+  ];
+
+  function renderTray() {
+    const spent = c => !Object.keys(TABLES).some(t => TABLES[t].cols.includes(c) && !placed[t].has(c)) && Object.keys(TABLES).some(t => TABLES[t].cols.includes(c));
+    $('#tray').innerHTML = CHIPS.map(c => `<button class="fchip${spent(c) ? ' spent' : ''}" data-f="${c}" aria-pressed="${chip === c}"${spent(c) ? ' disabled' : ''}>${c}</button>`).join('');
+    $$('#tray .fchip').forEach(b => b.onclick = () => { chip = chip === b.dataset.f ? null : b.dataset.f; renderTray(); if (chip) $('#fb3').innerHTML = `<span class="muted">Now tap a table for <code>${chip}</code>.</span>`; });
+  }
+  function renderTables() {
+    $('#tgrid').innerHTML = Object.entries(TABLES).map(([k, t]) => {
+      const full = placed[k].size === t.cols.length;
+      const rows = t.cols.map(c => {
+        if (!placed[k].has(c)) return `<li class="ph"><span class="k"></span><span>· · ·</span><span></span></li>`;
+        const r = keyed[k][c], cls = r === 'pk' ? 'pk' : r === 'sk' ? 'sk' : '';
+        const ks = KEYSTEPS[keyStep], active = keysOn() && ks && ks.t === k && !r;
+        return `<li class="${cls}${active ? ' keyable' : ''}" data-c="${c}"${active ? ` role="button" tabindex="0" aria-label="Pick ${c}"` : ''}><span class="k">${r === 'pk' ? '🔑' : r === 'sk' ? '↕️' : ''}</span><span>${c}</span><span class="ty">${TYPES[c]}</span></li>`;
+      }).join('');
+      const pkl = k === 'one' ? (keyed.one.message_id ? 'PRIMARY KEY (message_id)' : '') : (keyed.grp.message_id ? 'PRIMARY KEY ((channel_id), message_id)' : keyed.grp.channel_id ? 'PRIMARY KEY ((channel_id), …)' : '');
+      return `<div class="tcard${full ? ' full' : ''}" data-t="${k}" ${full ? '' : `role="button" tabindex="0" aria-label="Put the selected column in the ${t.name} table"`}><div class="th"><b>${t.name}</b><span>${t.sub}</span></div><ol>${rows}</ol><div class="pkline">${pkl}</div></div>`;
+    }).join('');
+    $$('#tgrid .tcard').forEach(el => { if (!el.classList.contains('full')) keyTap(el, e => { if (e.target.closest('li.keyable')) return; place(el.dataset.t, el); }); });
+    $$('#tgrid li.keyable').forEach(li => keyTap(li, e => { e.stopPropagation(); pickKey(li.closest('.tcard').dataset.t, li.dataset.c, li); }));
+  }
+  const keysOn = () => placed.one.size === 5 && placed.grp.size === 5 && keyStep < KEYSTEPS.length;
+  function place(t, el) {
+    const fb = $('#fb3');
+    if (!chip) { fb.innerHTML = '<span class="muted">Pick a column chip first, then tap a table.</span>'; return; }
+    const c = chip, ok = TABLES[t].cols.includes(c);
+    if (!ok) {
+      el.classList.remove('miss'); void el.offsetWidth; el.classList.add('miss');
+      const b = $(`#tray .fchip[data-f="${c}"]`); if (b) { b.classList.remove('nope'); void b.offsetWidth; b.classList.add('nope'); }
+      fb.className = 'fb bad'; fb.textContent = '✗ ' + (HINT[`${t}:${c}`] || HINT[c] || `${c} doesn't belong in that table.`);
+      return;
+    }
+    if (placed[t].has(c)) { fb.className = 'fb'; fb.innerHTML = `<span class="muted"><code>${c}</code> is already in that table.</span>`; return; }
+    placed[t].add(c);
+    chip = null;
+    fb.className = 'fb good'; fb.innerHTML = `✓ <code>${c}</code> <span class="muted">(${TYPES[c]})</span> added to <code>${TABLES[t].name}</code>.`;
+    if (placed[t].size === TABLES[t].cols.length && !tablesXp.has(t)) { tablesXp.add(t); Q.addXP(5, el); fb.innerHTML += ` Table complete.`; }
+    renderTray(); renderTables(); showAsk();
+  }
+  function showAsk() {
+    const a = $('#keyask');
+    if (keysOn()) { a.className = 'keyask on'; a.innerHTML = KEYSTEPS[keyStep].ask; }
+    else if (keyStep >= KEYSTEPS.length) { a.className = 'keyask on done'; a.innerHTML = '✅ Keys set: <code>message</code> by message_id; <code>group_message</code> partitioned by channel_id, sorted by message_id.'; }
+    else a.className = 'keyask';
+  }
+  function pickKey(t, c, li) {
+    const ks = KEYSTEPS[keyStep];
+    if (!ks || ks.t !== t) return;
+    const fb = $('#fb3');
+    if (c !== ks.col) {
+      li.classList.remove('wrongk'); void li.offsetWidth; li.classList.add('wrongk');
+      fb.className = 'fb bad'; fb.textContent = '✗ ' + (ks.wrong[c] || 'Not that one.') + ' Try again.';
+      if (!keyMissed) { keyMissed = true; Q.loseHeart(li); }
+      return;
+    }
+    keyed[t][c] = ks.role;
+    fb.className = 'fb good';
+    fb.textContent = ['✓ message_id is unique for every message and rises over time, so it identifies the row and orders the chat.',
+      '✓ Every group query runs inside one channel, so keep the whole channel on one partition.',
+      '✓ Inside the channel, rows are stored sorted by message_id. Loading "the latest 50" is one quick read.'][keyStep];
+    if (!keyMissed) Q.addXP(10, li);
+    keyMissed = false; keyStep++;
+    renderTables(); showAsk();
+    if (keyStep >= KEYSTEPS.length) { keysDone = true; $('#keyNote').style.display = 'block'; maybeQuiz(); }
+  }
+  renderTray(); renderTables();
+
+  // ---- part 2: spot the bug
+  const LINES = [
+    { k: 'A', t: 'SELECT user_id, content, created_at', why: 'Picking these columns is fine. The order comes from elsewhere.' },
+    { k: 'B', t: 'FROM group_message', why: 'Right table. The problem is how the rows are sorted.' },
+    { k: 'C', t: 'WHERE channel_id = 42', why: 'Filtering by the partition key is exactly right: one partition, one machine.' },
+    { k: 'D', t: 'ORDER BY created_at', bug: true },
+    { k: 'E', t: 'LIMIT 50;', why: 'Fifty rows is fine. It doesn\'t change their order.' },
+  ];
+  const MSGS = [
+    { id: 1001, who: 'Ana', txt: 'Anyone up for pizza tonight? 🍕', at: '19:59:41' },
+    { id: 1002, who: 'Cy', txt: 'Maybe, what time?', at: '19:59:52' },
+    { id: 1003, who: 'Ana', txt: 'Are you free at 8, Ben?', at: '20:00:07' },
+    { id: 1004, who: 'Ben', txt: 'Yes!', at: '20:00:07' },
+  ];
+  let fixed = false, missed = false;
+  function renderCode() {
+    $('#code3').innerHTML = LINES.map(l => {
+      const t = l.k === 'D' && fixed ? 'ORDER BY message_id' : l.t;
+      const cls = l.k === 'D' && bugDone ? ' right' : '';
+      return `<button class="ln${cls}" data-k="${l.k}"${bugDone ? ' disabled' : ''}>${esc(t)}</button>`;
+    }).join('');
+    $$('#code3 .ln').forEach(b => b.onclick = () => pickLine(b));
+  }
+  function renderFeed() {
+    // created_at ties for 1003/1004: the buggy query happens to return Ben's reply first
+    const order = fixed ? [0, 1, 2, 3] : [0, 1, 3, 2];
+    $('#feed3').innerHTML = order.map(i => {
+      const m = MSGS[i], hot = i >= 2;
+      return `<div class="msg${hot ? (fixed ? ' fixed' : ' swap') : ''}" data-id="${m.id}"><span class="who">${m.who}</span><span class="txt">${esc(m.txt)}</span><span class="meta">message_id ${m.id} · created_at ${m.at}</span></div>`;
+    }).join('');
+  }
+  function pickLine(b) {
+    if (bugDone) return;
+    const l = LINES.find(x => x.k === b.dataset.k), fb = $('#fbBug');
+    if (!l.bug) {
+      b.classList.add('bad'); b.disabled = true;
+      fb.className = 'fb bad'; fb.textContent = '✗ ' + l.why;
+      if (!missed) { missed = true; Q.loseHeart(b); }
+      return;
+    }
+    bugDone = true;
+    fb.className = 'fb good';
+    fb.innerHTML = '✓ Found it. Ana\'s question and Ben\'s answer were both stamped <code>20:00:07</code>: <code>created_at</code> here is stored to the second, and they came through two chat servers whose clocks don\'t agree perfectly anyway. A tie gives no order, so the database returned them either way. The book\'s rule: <b>message_id decides the order, not created_at.</b>';
+    if (!missed) Q.addXP(20, b);
+    renderCode();
+    $('#fixBtn').style.display = '';
+  }
+  $('#fixBtn').onclick = async () => {
+    if (fixed) return;
+    fixed = true; $('#fixBtn').style.display = 'none';
+    const els = $$('#feed3 .msg'), first = new Map(els.map(e => [e.dataset.id, e.getBoundingClientRect().top]));
+    renderCode(); renderFeed();
+    if (!Q.reduced) {
+      $$('#feed3 .msg').forEach(e => { const d = first.get(e.dataset.id) - e.getBoundingClientRect().top; if (d) { e.style.transition = 'none'; e.style.transform = `translateY(${d}px)`; } });
+      void $('#feed3').offsetWidth;
+      $$('#feed3 .msg').forEach(e => { e.style.transition = ''; e.style.transform = ''; });
+      await sleep(500);
+    }
+    $('#fbBug').innerHTML += ' <br>Fixed: 1003 comes before 1004, every time.';
+    maybeQuiz();
+  };
+  renderCode(); renderFeed();
+
+  function maybeQuiz() {
+    if (quizShown || !keysDone || !fixed) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s3quiz'), {
+      q: 'Why does the book make <code>channel_id</code> the partition key for group messages?',
+      options: ['Every group query runs inside one channel', 'Channel IDs are shorter than message IDs', 'It keeps each user\'s messages on one node'],
+      correct: 0,
+      good: 'Loading a chat, scrolling back, fetching new messages: all of it happens within one channel. With channel_id as the partition key, each of those is a read from one partition on one machine.',
+      bad: 'Size doesn\'t matter here, and grouping by user would split conversations apart. The reason: <b>every query in a group chat works within one channel</b>, so the whole channel should live in one partition.',
+      onDone: () => setTimeout(() => Q.clearStage(3), 900),
+    }), 400);
+  }
+});
+
+/* ================= STAGE 4: mint the IDs ================= */
+Q.onStage(4, () => {
+  const EPOCH = 1288834974657n, DC = 1n, MC = 7n;   // Twitter's Snowflake epoch; datacenter 1, machine 7
+  const TEXTS = [
+    ['hey 👋', 'lunch tomorrow?', 'sure, 12:30', 'see you there', 'running late', 'ok!'],
+    ['chapter 3 tonight?', 'I loved the ending', 'no spoilers!!', 'next pick?', 'how about sci-fi', '+1'],
+  ];
+  const st = { mode: 'local', msgs: [[], []], ctr: [0, 0], lastMs: -1n, seq: 0n, last: null, quizShown: false };
+  const goals = new Set();
+  const CH = [{ id: 7, name: 'Alice–Bob', cls: 'tag1' }, { id: 42, name: 'Book club', cls: 'tag2' }];
+  function snow() {
+    let ms = BigInt(Date.now()) - EPOCH;
+    if (ms < st.lastMs) ms = st.lastMs;                 // never go backwards
+    if (ms === st.lastMs) { st.seq = (st.seq + 1n) & 4095n; if (st.seq === 0n) ms = st.lastMs + 1n; }
+    else st.seq = 0n;
+    st.lastMs = ms;
+    const id = (ms << 22n) | (DC << 17n) | (MC << 12n) | st.seq;
+    st.last = { id, ms, seq: st.seq };
+    return id;
+  }
+  function mint(c) { if (st.mode === 'local') return BigInt(++st.ctr[c]); return snow(); }
+  function render() {
+    [0, 1].forEach(c => {
+      $('#list' + (c + 1)).innerHTML = st.msgs[c].map(m => `<li><span class="id">#${m.id}</span>${esc(m.t)}</li>`).join('');
+      const ul = $('#list' + (c + 1)); ul.scrollTop = ul.scrollHeight;
+      $('#ctr' + (c + 1)).textContent = st.mode === 'local' ? `next: ${st.ctr[c] + 1}` : 'shared generator';
+    });
+    const g = $('#gen');
+    if (st.mode === 'local') {
+      g.innerHTML = `<div class="gh">Who hands out IDs?</div>Each channel keeps its <b>own counter</b>: <span class="tag1">Alice–Bob → ${st.ctr[0]}</span> · <span class="tag2">Book club → ${st.ctr[1]}</span>. Simple, small numbers, ordered inside each channel.`;
+    } else {
+      const l = st.last;
+      g.innerHTML = `<div class="gh">One global 64-bit generator</div>${l ? `Latest ID: <span class="bigid">${l.id}</span>
+        <div class="bits" aria-label="64-bit layout"><div class="b0">0<small>s</small></div><div class="b1">${l.ms}<small>41 bits · ms since epoch</small></div><div class="b2">${DC}<small>5 · dc</small></div><div class="b3">${MC}<small>5 · machine</small></div><div class="b4">${l.seq}<small>12 · seq</small></div></div>` : 'Send a message to mint the first ID: timestamp | datacenter | machine | sequence.'}`;
+    }
+    $('#mergeBtn').disabled = !(st.msgs[0].length && st.msgs[1].length);
+  }
+  function send(c) {
+    const m = { id: mint(c), t: TEXTS[c][st.msgs[c].length % TEXTS[c].length], c };
+    st.msgs[c].push(m);
+    $('#merged').classList.remove('on');
+  }
+  function after() {
+    render();
+    if (st.mode === 'local' && st.msgs[0].length >= 2 && st.msgs[1].length >= 2) checkGoal('#s4goals', 'local', goals, 5);
+  }
+  $('#send1').onclick = () => { send(0); after(); };
+  $('#send2').onclick = () => { send(1); after(); };
+  $('#both').onclick = () => { send(0); send(1); after(); if (st.mode === 'snow' && st.last) Q.toast(`same ms → seq ${st.last.seq}`, $('#both'), 'practice'); };
+  $('#mergeBtn').onclick = () => {
+    const all = [...st.msgs[0], ...st.msgs[1]].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : a.c - b.c));
+    const counts = new Map(); all.forEach(m => counts.set(m.id, (counts.get(m.id) || 0) + 1));
+    const dups = [...counts.entries()].filter(([, n]) => n > 1).map(([id]) => id);
+    const box = $('#merged');
+    box.innerHTML = `<div class="mh ${dups.length ? 'bad' : 'good'}">${dups.length ? `⚠️ ${dups.length} duplicate ID${dups.length > 1 ? 's' : ''}: ${dups.map(d => '#' + d).join(', ')}` : '✅ Every ID is unique, and the list is in time order across both channels.'}</div>
+      <ol>${all.map(m => `<li class="${counts.get(m.id) > 1 ? 'dup' : ''}"><span class="id">#${m.id}</span><span><span class="${CH[m.c].cls}">${CH[m.c].name}</span> · ${esc(m.t)}</span></li>`).join('')}</ol>
+      ${dups.length ? `<p class="small" style="margin:8px 0 0">But the real key is <b>(channel_id, message_id)</b>: <span class="tag1">(7, ${dups[0]})</span> and <span class="tag2">(42, ${dups[0]})</span> are different rows. Does a clash across channels actually matter?</p>` : ''}`;
+    box.classList.add('on');
+    if (st.mode === 'local' && dups.length && goals.has('local')) { checkGoal('#s4goals', 'dup', goals, 5); $('#dmNote').style.display = 'block'; }
+    if (st.mode === 'snow' && !dups.length && st.msgs[0].length >= 2 && st.msgs[1].length >= 2) checkGoal('#s4goals', 'snow', goals, 5);
+    maybeQuiz();
+  };
+  function reset(mode) {
+    st.mode = mode || st.mode; st.msgs = [[], []]; st.ctr = [0, 0]; st.last = null;
+    $$('#idSeg button').forEach(b => b.classList.toggle('on', b.dataset.m === st.mode));
+    $('#modeHint').textContent = st.mode === 'local' ? 'each channel counts on its own' : 'one generator for every channel';
+    $('#merged').classList.remove('on');
+    render();
+  }
+  $$('#idSeg button').forEach(b => b.onclick = () => { if (b.dataset.m !== st.mode) reset(b.dataset.m); });
+  $('#idReset').onclick = () => reset();
+  render();
+
+  function maybeQuiz() {
+    if (st.quizShown || goals.size < 3) return;
+    st.quizShown = true;
+    quizChain($('#s4quiz'), [
+      { tag: 'Check 1 of 3', q: 'What two properties must <code>message_id</code> have?',
+        options: ['Unique, and sortable by time', 'Random, and hard to guess', 'Short, and easy to read aloud'],
+        correct: 0,
+        good: 'Unique so it identifies one message, and sortable by time so a newer message always has a bigger ID. That\'s what lets it replace created_at as the ordering column.',
+        bad: 'The book\'s two rules: IDs must be <b>unique</b>, and <b>sortable by time</b> (new rows get higher IDs than old ones). Random IDs would break the ordering.' },
+      { tag: 'Check 2 of 3', q: 'Alice–Bob and Book club both have a message #3. Is that a problem for chat?',
+        options: ['No: order only matters inside one channel', 'Yes: every ID must be unique worldwide', 'Yes: users would see each other\'s messages'],
+        correct: 0,
+        good: 'You only ever sort messages within one channel, and the key is (channel_id, message_id), which stays unique. That\'s exactly why the book says a local sequence is enough.',
+        bad: 'Messages are only ever ordered <b>within one channel</b>, and the row key is (channel_id, message_id), so (7, 3) and (42, 3) never collide. Nobody sees anyone else\'s #3.' },
+      { tag: 'Check 3 of 3', q: 'Your chat history lives in Cassandra. Which message ID scheme does the book pick?',
+        options: ['auto_increment, like MySQL offers', 'A global Snowflake-style generator', 'A local per-channel sequence number'],
+        correct: 2,
+        good: 'NoSQL stores like Cassandra usually have no auto_increment. A global Snowflake works, but the book prefers a <b>local sequence</b>: order inside a channel is all chat needs, and it\'s easier to build.',
+        bad: 'auto_increment is out: NoSQL databases usually don\'t offer it. A global Snowflake would work, but the book picks a <b>local per-channel sequence</b>: keeping order within each channel is enough, and it\'s easier to implement.' },
+    ], () => Q.clearStage(4));
+  }
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss'), {
+  name: '😈 Shuffle Imp',
+  xp: 15,
+  choices: [
+    { k: 'kv', label: 'Key-value store', sub: 'HBase, Cassandra' },
+    { k: 'rdb', label: 'Relational DB', sub: 'tables, SQL, ACID' },
+    { k: 'local', label: 'Local sequence ID', sub: 'counter per channel' },
+    { k: 'snow', label: 'Global Snowflake ID', sub: '64-bit, everywhere' },
+  ],
+  scenarios: [
+    { e: '👤', t: 'Profiles and friends', d: 'Store each user\'s display name, email and friend list. Correctness matters more than raw volume.', a: 'rdb', why: 'This is generic data: small, structured, and it needs to be right. The book keeps it in a relational database, replicated and sharded.' },
+    { e: '🌊', t: 'The flood', d: '60 billion new messages a day, and users can jump straight to one from three years ago.', a: 'kv', why: 'Huge volume, about 1:1 reads to writes, and random access into a long tail of old data. That\'s the book\'s case for a key-value store: scales out, low latency, no giant index on one machine.' },
+    { e: '🔀', t: 'Swapped in the same instant', d: 'Two messages in one chat get the same created_at and show up in the wrong order.', a: 'local', why: 'Order by a message ID, never by the timestamp. The book\'s choice is a local per-channel sequence: each new message in the channel gets the next number, so ties can\'t happen.' },
+    { e: '🧾', t: 'One audit log for everything', d: 'Compliance wants one ID per message that is unique and roughly time-ordered across all channels.', a: 'snow', why: 'Local IDs repeat across channels. When the ID has to mean something system-wide, use a global 64-bit Snowflake-style generator: timestamp, machine and sequence bits.' },
+    { e: '🪶', t: 'The simplest order on Cassandra', d: 'Keep messages in order within each group chat, and keep it as simple as possible.', a: 'local', why: 'Cassandra has no auto_increment. Order only matters inside a channel, so the book picks a local sequence number: easier than a global generator.' },
+    { e: '🧩', t: 'Who is in which group?', d: 'Add users to groups, and answer "which groups is Bob in?" with transactions.', a: 'rdb', why: 'Membership is generic data with relationships and transactions: relational DB territory. Joins and ACID are exactly what it\'s good at.' },
+  ],
+  outro: 'The pattern: generic data → relational. Chat history → key-value store. Order by message ID, local per channel by default, global when you need it everywhere.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: interview drill ================= */
+Q.onStage(6, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"Where do you store the messages, and how do you keep them in order?"</i>',
+  placeholder: 'Profiles go in a relational DB, but chat history is different…',
+  model: '"User profiles, settings and friend lists go in a relational database with replication and sharding. Chat history is different: tens of billions of writes a day, reads and writes about 1:1, mostly recent reads, but some random access for search and jump-to-message. So I\'d put it in a key-value store like HBase or Cassandra. It scales horizontally, has low latency, and handles the long tail better than one huge relational index. For group chat the key is (channel_id, message_id), with channel_id as the partition key, because every query runs inside one channel. I\'d order by message_id, not created_at, because timestamps can tie. Message IDs must be unique and sortable by time. A per-channel sequence is enough, since order only matters within a channel, and it\'s simpler than a global Snowflake-style generator, which would also work."',
+  checks: ['I justified the KV store from the read/write pattern (volume, ~1:1, recent reads, random access)', 'I gave the group table key: channel_id as partition key, message_id for order', 'I explained why not created_at, and which ID scheme I\'d use'],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

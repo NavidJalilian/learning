@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>When Clocks Lie</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: machine colours (stage 3), bit-section colours (stage 4), sequence grid (stage 1), clock panel + ID log (stage 2) */
+:root { --mA: #5a48f0; --mB: #c27400; --mC: #0d9a96; --on-m: #ffffff;
+  --b-sign: #8a8798; --b-ts: #5a48f0; --b-dc: #0d9a96; --b-m: #c27400; --b-seq: #b8409a; --on-b: #ffffff; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --mA: #8f82ff; --mB: #ffb547; --mC: #31d3c8; --on-m: #0e0f1d;
+    --b-sign: #6a6880; --b-ts: #8f82ff; --b-dc: #31d3c8; --b-m: #ffb547; --b-seq: #f07ad0; --on-b: #0e0f1d; }
+}
+:root[data-theme="dark"] { --mA: #8f82ff; --mB: #ffb547; --mC: #31d3c8; --on-m: #0e0f1d;
+  --b-sign: #6a6880; --b-ts: #8f82ff; --b-dc: #31d3c8; --b-m: #ffb547; --b-seq: #f07ad0; --on-b: #0e0f1d; }
+
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.lbl { display: block; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.bignum { font-family: var(--mono); font-weight: 700; }
+.bignum.bad { color: var(--bad); }
+.bignum.good { color: var(--good); }
+.idp { opacity: .45; }
+.sim-bar .seg button { min-height: 40px; }
+.seg button[disabled] { opacity: .4; cursor: not-allowed; }
+.hint { font-size: 13px; color: var(--muted); }
+
+/* stage 1: sequence meter */
+.mtop { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 12px 14px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.mtop b { font-family: var(--mono); font-size: 14px; word-break: break-all; }
+.tagf { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 99px; background: var(--teal-soft); color: var(--teal); margin-left: 4px; }
+.tagf.tick { background: var(--warn-soft); color: var(--warn); }
+.gridwrap { padding: 14px; display: grid; place-items: center; gap: 8px; }
+#seqGrid { width: 100%; max-width: 384px; aspect-ratio: 1; display: block; border-radius: 8px; image-rendering: pixelated; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--muted); justify-content: center; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+.stats { display: flex; gap: 14px; flex-wrap: wrap; }
+
+/* stage 2: clock panel + ID log */
+.clockpanel { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 14px; background: var(--panel); border-bottom: 1px solid var(--line); align-items: start; }
+.clockpanel b { font-family: var(--mono); font-size: 18px; display: block; transition: color .3s; }
+.clockpanel b.jump { color: var(--warn); animation: blip .6s; }
+@keyframes blip { 40% { transform: scale(1.12); } }
+@media (max-width: 560px) { .clockpanel, .mtop { grid-template-columns: 1fr 1fr; } .clockpanel .gwrap { grid-column: 1 / -1; } .mtop > :last-child { grid-column: 1 / -1; } .clockpanel b { font-size: 16px; } }
+.idlog { font-family: var(--mono); font-size: 12.5px; padding: 8px 14px; background: var(--panel); border-top: 1px solid var(--line); max-height: 230px; min-height: 90px; overflow-y: auto; }
+.idrow { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 4px 10px; padding: 3px 6px; border-radius: 6px; animation: rise .25s; }
+.idrow .id { word-break: break-all; text-align: right; }
+.idrow .sq { color: var(--muted); }
+@media (max-width: 560px) { .idrow { grid-template-columns: auto minmax(0, 1fr); } .idrow .id { grid-column: 1 / -1; text-align: left; } .evbtn .idv { grid-column: 2 / -1; text-align: left; } }
+.idrow.dup { background: var(--bad-soft); color: var(--bad); font-weight: 600; }
+.idrow.note { display: block; color: var(--warn); }
+.idrow.note.g { color: var(--good); }
+.idrow.note.e { color: var(--bad); }
+
+/* stage 3: ordering */
+.mleg { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 14px; margin: 8px 0; }
+.mleg span { display: inline-flex; align-items: center; gap: 6px; }
+.mdot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; flex: none; }
+.evlist { display: grid; gap: 8px; }
+.evbtn { display: grid; grid-template-columns: 28px auto minmax(0, 1fr); gap: 4px 10px; align-items: center; text-align: left; border: 2px solid var(--line); background: var(--panel); border-radius: 12px; padding: 9px 12px; min-height: 44px; }
+.evbtn:hover:not([disabled]) { border-color: var(--accent); }
+.evbtn .rk { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; background: var(--bg-2); color: var(--muted); font-weight: 700; font-size: 13px; }
+.evbtn .who { font-weight: 700; white-space: nowrap; display: inline-flex; gap: 6px; align-items: center; }
+.evbtn .idv { font-family: var(--mono); font-size: 13px; word-break: break-all; text-align: right; }
+.evbtn.done { border-color: var(--good); background: var(--good-soft); }
+.evbtn.done .rk { background: var(--good); color: #fff; }
+.evbtn.no { border-color: var(--bad); animation: shake .4s; }
+.evbtn[disabled] { cursor: default; }
+#ord3 .lane { font: 700 11px var(--font); fill: var(--muted); letter-spacing: .06em; }
+#ord3 .tl { font: 600 11px var(--mono); fill: var(--muted); text-anchor: middle; }
+#ord3 .nd text { font: 700 13px var(--font); fill: var(--on-m); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+#ord3 .nd circle.c { stroke: var(--bg); stroke-width: 3; }
+#ord3 .nd .hit { fill: transparent; }
+#ord3 .nd.tap { cursor: pointer; }
+#ord3 .nd:focus { outline: none; }
+#ord3 .nd.tap:hover circle.c, #ord3 .nd:focus-visible circle.c { stroke: var(--ink); }
+#ord3 .nd.sel circle.c { stroke: var(--ink); stroke-width: 4; }
+#ord3 .ln { stroke: var(--line); stroke-width: 3; fill: none; transition: stroke .3s; }
+#ord3 .ln.x { stroke: var(--bad); stroke-width: 4; }
+#ord3 .ln.found { stroke: var(--bad); stroke-width: 4; }
+#ord3 .bt { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; }
+#ord3 .btx { font: 700 12px var(--font); fill: var(--ink); text-anchor: middle; dominant-baseline: central; }
+.found { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.found span { font-family: var(--mono); font-size: 13px; padding: 4px 9px; border-radius: 8px; background: var(--bad-soft); color: var(--bad); font-weight: 600; }
+.slider { padding: 12px 14px; display: grid; gap: 4px; background: var(--panel); border-top: 1px solid var(--line); }
+.slider label { display: flex; justify-content: space-between; font-weight: 600; font-size: 14px; gap: 8px; flex-wrap: wrap; }
+.slider input { width: 100%; accent-color: var(--mB); height: 32px; }
+
+/* stage 4: bit budget lab */
+.bitbar { display: flex; height: 44px; border-radius: 10px; overflow: hidden; margin: 14px; border: 1px solid var(--line); }
+.bitbar div { display: grid; place-items: center; color: var(--on-b); font: 700 12px var(--mono); overflow: hidden; white-space: nowrap; transition: flex-grow .3s; min-width: 0; }
+.bitrows { display: grid; gap: 8px; padding: 0 14px 14px; }
+.bitrow { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+.bitrow .sw { width: 14px; height: 14px; border-radius: 4px; }
+.bitrow .nm { font-weight: 600; font-size: 15px; }
+.bitrow .nm small { display: block; color: var(--muted); font-weight: 500; font-size: 12.5px; }
+.stepper { display: inline-flex; align-items: center; gap: 6px; }
+.stepper .btn { width: 40px; height: 40px; padding: 0; font-size: 20px; line-height: 1; }
+.stepper b { font-family: var(--mono); min-width: 28px; text-align: center; }
+.readouts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; padding: 12px 14px; background: var(--panel); border-top: 1px solid var(--line); }
+@media (max-width: 560px) { .readouts { grid-template-columns: 1fr 1fr; } }
+.readouts div { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+.readouts b { font-family: var(--mono); font-size: 16px; display: block; }
+.budget { padding: 10px 14px; font-weight: 600; font-size: 14px; background: var(--panel); border-top: 1px solid var(--line); }
+.budget.bad { color: var(--bad); background: var(--bad-soft); }
+.budget.good { color: var(--good); }
+.missions { display: grid; gap: 10px; margin-top: 14px; }
+.mission { border: 2px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--bg); opacity: .6; }
+.mission.on { border-color: var(--accent); opacity: 1; }
+.mission.won { border-color: var(--good); background: var(--good-soft); opacity: 1; }
+.mission h3 { margin: 0 0 4px; font-size: 16px; }
+.mission p { margin: 0; font-size: 14px; }
+.conds { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 3px; font-size: 13.5px; }
+.conds li::before { content: "✗ "; color: var(--bad); font-weight: 700; }
+.conds li.ok::before { content: "✓ "; color: var(--good); }
+
+/* stage 5: availability options */
+.ha { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 14px 0; }
+@media (max-width: 640px) { .ha { grid-template-columns: 1fr; } }
+.ha div { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--bg); font-size: 14px; }
+.ha h3 { margin: 0 0 4px; font-size: 15px; }
+.ha .v { font-weight: 700; font-size: 13px; }
+.ha .v.bad { color: var(--bad); }
+.ha .v.good { color: var(--good); }
+.ha svg { width: 100%; height: auto; display: block; margin: 4px 0 6px; }
+.ha svg .bx { fill: var(--panel); stroke: var(--line); stroke-width: 2; }
+.ha svg .gen { fill: var(--teal); }
+.ha svg .spof { fill: var(--bad); }
+.ha svg .wire { stroke: var(--muted); stroke-width: 2; }
+.ha svg text { font: 700 10px var(--font); fill: var(--ink); text-anchor: middle; dominant-baseline: central; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 7.4 · Design a Unique ID Generator</div>
+    <h1>When Clocks Lie</h1>
+    <p class="lede">You've sketched Snowflake on the whiteboard. Now the interviewer leans in: "What breaks it?" Push the generator past its limits, roll its clock backwards, and re-split its bits until nothing can surprise you.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can answer the follow-ups that come after the Snowflake sketch: what happens past <b>4,096 IDs in a millisecond</b>, what happens when a <b>clock jumps back</b>, why the order is only <b>rough</b>, how you'd <b>re-split the bits</b>, and how you keep the generator <b>available</b>.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>The 4,097th ID</h2><div class="sub">What happens when the sequence runs out?</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Quick recap from Quest 7.3. A Snowflake ID is 64 bits: <b>1</b> sign bit, <b>41</b> bits of timestamp (milliseconds), <b>5</b> datacenter bits, <b>5</b> machine bits and <b>12</b> sequence bits.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems" target="_blank" rel="noopener">[1]</a> The <b>sequence number</b> is a counter. It starts at 0 each millisecond and goes up by one for every ID that machine hands out in that millisecond.</p>
+      <p>12 bits hold the values 0 to 4,095. That's <b>4,096 IDs per millisecond per machine</b>. The book stops there. But what does the code do when request number 4,097 shows up and the clock still reads the same millisecond?</p>
+
+      <div class="challenge boxed" id="s1predict"></div>
+
+      <div class="sim" id="seqSim">
+        <div class="mtop">
+          <div><span class="lbl">Machine</span><b>dc 1 · m 3</b></div>
+          <div><span class="lbl">Clock (ms since epoch)</span><b id="s1clock">500000000000</b><span class="tagf" id="s1tag">frozen</span></div>
+          <div><span class="lbl">Sequence</span><b id="s1seq">—</b></div>
+        </div>
+        <div class="gridwrap">
+          <canvas id="seqGrid" role="img" aria-label="Sequence meter: 4,096 dots, one per sequence value in this millisecond"></canvas>
+          <div class="legend"><span><i style="background:var(--line)"></i>unused</span><span><i style="background:var(--accent)"></i>issued, this ms</span><span><i style="background:var(--teal)"></i>issued, next ms</span><span><i style="background:var(--bad)"></i>duplicate</span></div>
+        </div>
+        <div class="sim-bar">
+          <span class="row" style="gap:8px"><span class="small muted">Burst</span><span class="seg" id="burstSeg"><button data-b="1000" class="on">1,000</button><button data-b="4096">4,096</button><button data-b="5000" disabled>5,000</button></span></span>
+          <span class="row" style="gap:8px"><span class="small muted">At #4,097</span><span class="seg" id="modeSeg"><button data-m="wait" class="on">Wait</button><button data-m="wrap">Wrap to 0</button></span></span>
+          <button class="btn primary" id="fire1">🔥 Fire burst</button>
+        </div>
+        <div class="sim-bar"><span class="stats"><span>Issued: <span class="bignum" id="s1issued">0</span></span><span>Next ms: <span class="bignum" id="s1next">0</span></span><span>Duplicates: <span class="bignum" id="s1dups">0</span></span></span></div>
+        <div class="simlog" id="s1log"><div>All requests in a burst land inside one millisecond. The clock is frozen until something makes it tick.</div></div>
+      </div>
+      <ul class="checklist" id="s1goals">
+        <li data-g="fit"><span class="box">✓</span><span>Fire a burst that fits: <b>1,000</b> or <b>4,096</b></span></li>
+        <li data-g="wrap"><span class="box">✓</span><span>Fire <b>5,000</b> with <b>Wrap to 0</b> and find the duplicate</span></li>
+        <li data-g="wait"><span class="box">✓</span><span>Fire <b>5,000</b> with <b>Wait</b> and watch the clock tick</span></li>
+      </ul>
+      <div class="callout tip"><b>Where this comes from.</b> The book only gives the 4,096 limit. The wait-for-the-next-millisecond rule is what Twitter's original Snowflake code does: when the sequence would wrap inside the same millisecond, it spins until the clock moves on, then restarts at 0.<a class="cite" href="https://github.com/twitter-archive/snowflake" target="_blank" rel="noopener">[4]</a> The cost is a stall of under a millisecond in an extreme burst. The gain is that it never hands out a duplicate.</div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Time runs backwards</h2><div class="sub">NTP corrections and duplicate IDs</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Snowflake trusts the clock. The book admits the weak spot in its wrap-up: it assumed every ID server has the same clock, and that isn't true once you have many machines.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems" target="_blank" rel="noopener">[1]</a> Every computer's clock <b>drifts</b> (runs a little fast or slow). The usual fix is <b>NTP</b>, the Network Time Protocol: each machine regularly asks time servers for the correct time and corrects its own clock.<a class="cite" href="https://en.wikipedia.org/wiki/Network_Time_Protocol" target="_blank" rel="noopener">[2]</a></p>
+      <p>Here's the catch. If a clock is running ahead, the correction can <b>step</b> it straight back. Your generator then re-enters milliseconds it has already used. Try it: each press mints one ID, and 1 ms passes between presses.</p>
+      <div class="sim">
+        <div class="clockpanel">
+          <div><span class="lbl">Local clock</span><b id="c2now">12:00:00.100</b></div>
+          <div><span class="lbl">Last timestamp used</span><b id="c2last">—</b></div>
+          <div class="gwrap"><span class="lbl">Clock guard</span><span class="seg" id="guardSeg"><button data-g="0" class="on">OFF</button><button data-g="1" disabled>ON</button></span><div class="hint" id="guardHint">unlocks once you've seen the bug</div></div>
+        </div>
+        <div class="sim-bar">
+          <span class="row" style="gap:8px"><button class="btn primary" id="mint2">▶ Mint ID</button><button class="btn" id="ntp2" disabled>⟲ NTP correction: −5 ms</button><button class="btn" id="reset2">↻ Reset</button></span>
+          <span class="small">IDs: <span class="bignum" id="c2count">0</span> · dupes: <span class="bignum" id="c2dups">0</span></span>
+        </div>
+        <div class="idlog" id="idlog2" aria-live="polite"><div class="idrow note g">Machine dc 1 · m 7 is ready. Mint 5 IDs to unlock the NTP button.</div></div>
+      </div>
+      <div class="challenge boxed" id="s2predict" style="display:none"></div>
+      <ul class="checklist" id="s2goals">
+        <li data-g="mint"><span class="box">✓</span><span>Mint 5 IDs</span></li>
+        <li data-g="dup"><span class="box">✓</span><span>Step the clock back with the guard <b>OFF</b> and mint again</span></li>
+        <li data-g="guard"><span class="box">✓</span><span>Turn the guard <b>ON</b>, step back again, and mint</span></li>
+      </ul>
+      <div class="callout tip"><b>The real defences.</b> (1) <b>Remember the last timestamp</b>. If the clock now reads earlier than that, refuse or wait until it catches up. Twitter's code throws an error that says the clock moved backwards and it refuses to make IDs for that many milliseconds.<a class="cite" href="https://github.com/twitter-archive/snowflake" target="_blank" rel="noopener">[4]</a> (2) Tell NTP to <b>slew</b>: speed the clock up or slow it down a little until it's right, instead of jumping it. (3) <b>Alert</b> on big jumps, so a human finds out.</div>
+      <div class="callout warn"><b>This really happens.</b> At the leap second on 1 January 2017, Cloudflare's DNS code saw time go backwards. A duration came out negative, the code panicked, and some DNS lookups failed.<a class="cite" href="https://blog.cloudflare.com/how-and-why-the-leap-second-affected-cloudflare-dns/" target="_blank" rel="noopener">[5]</a> A <b>leap second</b> is an extra second added to official time now and then to keep clocks in step with the Earth's spin. It's the same bug class as a backwards NTP step.</div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Roughly in order</h2><div class="sub">Clock skew between machines</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Even with NTP, two machines' clocks never agree exactly. The gap between them is called <b>clock skew</b>, usually a few milliseconds. Since the timestamp is the first part of the ID, a machine whose clock is ahead stamps its IDs "from the future".</p>
+      <p>Six events happen on three machines. Machine <b>B's clock runs 3 ms fast</b>. Each event got a Snowflake ID from its own machine. The grey digits are the same in all six IDs, so compare the bold ones.</p>
+      <div class="mleg"><span><i class="mdot" style="background:var(--mA)"></i>Machine A (m 1)</span><span><i class="mdot" style="background:var(--mB)"></i>Machine B (m 2), +3 ms fast</span><span><i class="mdot" style="background:var(--mC)"></i>Machine C (m 3)</span></div>
+      <div class="sim">
+        <svg id="ord3" viewBox="0 0 360 250" role="img" aria-label="Events in real-time order on top, and in ID order below"></svg>
+        <div class="slider" id="skewBox" style="display:none">
+          <label for="skew"><span>Machine B's clock is ahead by <span class="bignum" id="skewVal">3 ms</span></span><span>Crossings: <span class="bignum bad" id="crossVal">4</span></span></label>
+          <input type="range" id="skew" min="0" max="10" step="1" value="3" aria-label="Machine B clock skew in milliseconds">
+        </div>
+        <div class="simlog" id="s3log"><div>Top row: the order things really happened. Bottom row: the order of their IDs. Fill it in below.</div></div>
+      </div>
+      <div class="challenge boxed" id="s3step1">
+        <div class="step">Step 1 of 3</div>
+        <h3>Tap the IDs from smallest to largest</h3>
+        <div class="evlist" id="evlist"></div>
+      </div>
+      <div class="challenge boxed" id="s3step2" style="display:none">
+        <div class="step">Step 2 of 3</div>
+        <h3>Find the crossings</h3>
+        <p class="small" style="margin-top:0">Each line joins an event's real-time spot (top) to its ID rank (bottom). Two lines <b>cross</b> when one event happened first but got the bigger ID. Tap two events in the top row to name a crossing pair. There are <b>4</b>. <span class="muted">Hint: not every crossing involves B.</span></p>
+        <div class="found" id="found"></div>
+      </div>
+      <div class="challenge boxed" id="s3step3" style="display:none">
+        <div class="step">Step 3 of 3</div>
+        <h3>Drag the skew</h3>
+        <ul class="checklist" id="s3goals" style="margin-top:0">
+          <li data-g="zero"><span class="box">✓</span><span>Set B's skew to <b>0 ms</b>. How many crossings are left?</span></li>
+          <li data-g="ten"><span class="box">✓</span><span>Set it to <b>10 ms</b>. What happens?</span></li>
+        </ul>
+      </div>
+      <div class="callout" id="s3note" style="display:none"><b>Roughly sortable.</b> When Twitter announced Snowflake, it called the IDs "roughly sortable".<a class="cite" href="https://blog.twitter.com/engineering/en_us/a/2010/announcing-snowflake.html" target="_blank" rel="noopener">[3]</a> The project's README uses the term <b>k-sorted</b>: every ID sits close to its true position, but not always exactly there.<a class="cite" href="https://github.com/twitter-archive/snowflake" target="_blank" rel="noopener">[4]</a> So "sorted by time" really means sorted to within the clock skew. Inside a single millisecond the machine bits decide the order, not real time. That's fine for a newest-first feed. It's not fine for "who clicked first", which needs a single sequencer (one place that numbers every event) or a logical clock.</div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Tune the bits</h2><div class="sub">Section length tuning</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The 41 | 5 | 5 | 12 split isn't sacred. The book's wrap-up says you can re-tune it. Its example: a <b>long-lived, low-traffic</b> system can take bits away from the sequence and give them to the timestamp.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems" target="_blank" rel="noopener">[1]</a></p>
+      <p>Think of the 63 usable bits as a budget shared by three needs. <b>Lifetime</b> comes from the timestamp bits. <b>Fleet size</b> comes from the datacenter and machine bits. <b>Burst size</b> comes from the sequence bits. One extra timestamp bit doubles the lifetime: 41 bits ≈ 69.7 years, 42 bits ≈ 139 years. Sony's Sonyflake counts time in <b>10 ms units</b> instead, so 39 bits last about 174 years.<a class="cite" href="https://github.com/sony/sonyflake" target="_blank" rel="noopener">[6]</a></p>
+      <div class="sim">
+        <div class="bitbar" id="bitbar" aria-hidden="true"></div>
+        <div class="bitrows" id="bitrows"></div>
+        <div class="sim-bar"><span class="row" style="gap:8px"><span class="small muted">Timestamp unit</span><span class="seg" id="unitSeg"><button data-u="1" class="on">1 ms</button><button data-u="10">10 ms</button></span></span><button class="btn" id="bitsReset">↻ Book default</button></div>
+        <div class="readouts">
+          <div><span class="lbl">Lifetime</span><b id="roLife">—</b></div>
+          <div><span class="lbl">Datacenters</span><b id="roDc">—</b></div>
+          <div><span class="lbl">Machines / DC</span><b id="roM">—</b></div>
+          <div><span class="lbl" id="roSeqL">IDs / ms / machine</span><b id="roSeq">—</b></div>
+        </div>
+        <div class="budget" id="budget"></div>
+      </div>
+      <div class="missions" id="missions"></div>
+      <div class="callout tip"><b>The other two sections are set at startup.</b> The book says datacenter and machine IDs are chosen when the system starts and normally stay fixed. Changing them needs careful review, because a slip can give two machines the same ID.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems" target="_blank" rel="noopener">[1]</a> In practice they come from config or from a coordination service. Twitter's original Snowflake registered its workers in <b>ZooKeeper</b>, a service that hands out shared settings and locks.<a class="cite" href="https://github.com/twitter-archive/snowflake" target="_blank" rel="noopener">[4]</a></div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Chrono Lich</h2><div class="sub">Diagnose the incident</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>One last wrap-up point from the book. Every write in your system needs an ID, so the generator is <b>mission-critical</b> and must be <b>highly available</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems" target="_blank" rel="noopener">[1]</a> The book doesn't say how. Here are the usual options:</p>
+      <div class="ha">
+        <div>
+          <h3>One ID box</h3>
+          <svg viewBox="0 0 120 56" aria-hidden="true"><rect class="bx" x="4" y="6" width="30" height="18" rx="4"/><rect class="bx" x="4" y="32" width="30" height="18" rx="4"/><line class="wire" x1="34" y1="15" x2="84" y2="28"/><line class="wire" x1="34" y1="41" x2="84" y2="28"/><circle class="spof" cx="96" cy="28" r="14"/><text x="19" y="15">app</text><text x="19" y="41">app</text><text x="96" y="28" style="fill:#fff">ID</text></svg>
+          <span class="v bad">✗ single point of failure</span><br>If it dies, nobody can write.
+        </div>
+        <div>
+          <h3>Library in every app</h3>
+          <svg viewBox="0 0 120 56" aria-hidden="true"><rect class="bx" x="4" y="6" width="50" height="44" rx="6"/><rect class="bx" x="66" y="6" width="50" height="44" rx="6"/><circle class="gen" cx="29" cy="36" r="9"/><circle class="gen" cx="91" cy="36" r="9"/><text x="29" y="16">app</text><text x="91" y="16">app</text></svg>
+          <span class="v good">✓ no network hop</span><br>Each process needs its own unique machine ID.
+        </div>
+        <div>
+          <h3>Replicated ID service</h3>
+          <svg viewBox="0 0 120 56" aria-hidden="true"><rect class="bx" x="4" y="19" width="26" height="18" rx="4"/><line class="wire" x1="30" y1="28" x2="50" y2="28"/><rect class="bx" x="50" y="18" width="16" height="20" rx="3"/><line class="wire" x1="66" y1="28" x2="90" y2="12"/><line class="wire" x1="66" y1="28" x2="90" y2="44"/><circle class="gen" cx="98" cy="12" r="9"/><circle class="gen" cx="98" cy="44" r="9"/><text x="17" y="28">app</text><text x="58" y="28">LB</text></svg>
+          <span class="v good">✓ survives a node loss</span><br>Several instances behind a load balancer, each with its own machine ID.
+        </div>
+      </div>
+      <p>Now the boss. Seven incident reports land on your desk. For each one, pick the fix that addresses the <b>root cause</b>.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">Survive the follow-ups</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next up: the chapter boss.</b> <i>Mint It Live</i> is a full mock interview. You'll scope the problem, compare the four approaches from 7.1 to 7.3, sketch Snowflake, and then face exactly these follow-ups.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 7: "Design a Unique ID Generator in Distributed Systems"</a>. Read Step 3 (the sequence number and the fixed datacenter and machine IDs) and the Step 4 wrap-up (clock sync, section tuning, high availability). Then skim the <a href="https://github.com/twitter-archive/snowflake" target="_blank" rel="noopener">original Snowflake repo</a>. Its README lists the requirements Twitter had, and the ID worker is only a page of code.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <p style="margin-top:0">The book never says what happens past 4,096 IDs in a millisecond, or when a clock goes backwards. What you practised here comes from Twitter's original code: wait for the next millisecond, and refuse while the clock is behind.<a class="cite" href="https://github.com/twitter-archive/snowflake" target="_blank" rel="noopener">[4]</a></p>
+      <p>NTP keeps clocks within a few milliseconds of each other on a good network, not exactly together. Most NTP daemons slew small errors and only step large ones (ntpd's default step threshold is 128 ms).<a class="cite" href="https://en.wikipedia.org/wiki/Network_Time_Protocol" target="_blank" rel="noopener">[2]</a> Many big fleets also "smear" a leap second over several hours, so the clock never jumps. Systems that need tight time bounds use special hardware: Google's TrueTime uses GPS and atomic clocks. That's far more than this interview question needs.</p>
+      <p style="margin-bottom:0">About "multiple cores" in the book: on one machine, all cores normally read the same system clock. The real risk is several processes or threads on one machine using the <b>same machine ID</b>. Give each process its own worker ID, or share one generator behind a lock.</p>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"why not just use a monotonic clock?"</i> or <i>"how would two datacenters agree on who gets which datacenter ID?"</i> Follow-up questions are part of the quest.
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 7 "Design a Unique ID Generator in Distributed Systems" (ByteByteGo), Step 3 and Step 4.</li>
+        <li>Wikipedia, "Network Time Protocol" (the book's reference for clock sync).</li>
+        <li>Twitter Engineering, "Announcing Snowflake", 2010.</li>
+        <li>twitter-archive/snowflake on GitHub: README and the ID worker (next-millisecond wait, clock-moved-backwards refusal).</li>
+        <li>Cloudflare, "How and why the leap second affected Cloudflare DNS", 2017.</li>
+        <li>sony/sonyflake on GitHub: 39-bit time in 10 ms units.</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0704',
+  winTitle: 'The clock can\'t fool you now',
+  badge: '⏱️ Badge: Time Keeper',
+  cheatsheet: '../reference/ch07-unique-id-cheatsheet.html',
+});
+const { sleep, shuffle } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+// Snowflake layout: 1 sign | 41 timestamp | 5 datacenter | 5 machine | 12 sequence. 64-bit, so BigInt.
+const mkId = (ts, dc, m, seq) => (BigInt(ts) << 22n) | (BigInt(dc) << 17n) | (BigInt(m) << 12n) | BigInt(seq);
+const fmtN = n => n.toLocaleString('en-US');
+function idHTML(id, keep = 8) { const s = id.toString(); return `<span class="idp">${s.slice(0, -keep)}</span><b>${s.slice(-keep)}</b>`; }
+function logTo(el, html, cls) { el.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); el.scrollTop = el.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); if (xp) Q.addXP(xp, li);
+  return true;
+}
+const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const themeFns = [];
+const onTheme = fn => themeFns.push(fn);
+try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => themeFns.forEach(f => f())); } catch (_) {}
+new MutationObserver(() => themeFns.forEach(f => f())).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+// Predict-then-watch round. Resolves after the learner picks and the action has played.
+function predict(box, { step, title, options, correct, act, explain, xp = 20 }) {
+  box.innerHTML = `${step ? `<div class="step">${step}</div>` : ''}<h3>${title}</h3><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+  const opts = $('.opts', box);
+  let busy = false;
+  return new Promise(resolve => {
+    shuffle(options.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = async () => {
+        if (busy) return; busy = true;
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        b.classList.add('picked');
+        if (act) await act();
+        const ok = i === correct;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-i="${correct}"]`, opts).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Not quite.</b> ') + explain;
+        ok ? Q.addXP(xp, b) : Q.loseHeart(b);
+        resolve({ ok, row: $('.row', box) });
+      };
+      opts.appendChild(b);
+    });
+  });
+}
+// Several quizzes in a row; resolves when the last one is answered.
+function quizChain(mount, list, done) {
+  let i = 0;
+  const next = () => {
+    if (i >= list.length) { setTimeout(done, 900); return; }
+    const q = list[i++];
+    Q.quiz(mount, { ...q, onDone: () => setTimeout(next, 500) });
+  };
+  next();
+}
+// Pick-several question (the engine's quiz is single-answer).
+function multiQuiz(mount, { tag = 'Check', q, options, correct, good, bad, xp = 20, onDone }) {
+  const box = document.createElement('div');
+  box.className = 'quiz';
+  box.innerHTML = `<span class="tag">${tag}</span><p class="q">${q}</p><div class="opts"></div><div class="row" style="margin-top:10px"><button class="btn primary q-check" disabled>Check my picks</button></div><div class="explain"></div>`;
+  const opts = $('.opts', box), chk = $('.q-check', box), picked = new Set();
+  shuffle(options.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+    const b = document.createElement('button'); b.className = 'opt'; b.dataset.i = i; b.setAttribute('aria-pressed', 'false');
+    b.textContent = '☐ ' + o;
+    b.onclick = () => {
+      picked.has(i) ? picked.delete(i) : picked.add(i);
+      b.classList.toggle('picked', picked.has(i)); b.setAttribute('aria-pressed', picked.has(i));
+      b.textContent = (picked.has(i) ? '☑ ' : '☐ ') + o;
+      chk.disabled = picked.size !== correct.length;
+    };
+    opts.appendChild(b);
+  });
+  chk.onclick = () => {
+    chk.disabled = true;
+    $$('.opt', opts).forEach(b => { b.disabled = true; const i = +b.dataset.i; if (correct.includes(i)) b.classList.add('right'); else if (picked.has(i)) b.classList.add('wrong'); });
+    const ok = correct.every(i => picked.has(i)) && picked.size === correct.length;
+    const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+    ex.innerHTML = (ok ? '<b>Correct.</b> ' + good : '<b>Not quite.</b> ' + (bad || good));
+    ok ? Q.addXP(xp, chk) : Q.loseHeart(chk);
+    onDone && onDone(ok);
+  };
+  mount.appendChild(box);
+  return box;
+}
+function segPick(seg, btn) { $$('button', seg).forEach(b => b.classList.toggle('on', b === btn)); }
+
+/* ================= STAGE 1: the 4,097th ID ================= */
+Q.onStage(1, () => {
+  const DC = 1, M = 3, T0 = 500000000000, CAP = 4096;
+  const cv = $('#seqGrid'), ctx = cv.getContext('2d');
+  const CELL = 6, SIZE = 64 * CELL, dpr = Math.min(3, window.devicePixelRatio || 1);
+  cv.width = SIZE * dpr; cv.height = SIZE * dpr; ctx.scale(dpr, dpr);
+  const cells = new Uint8Array(CAP); // 0 unused · 1 issued this ms · 2 duplicate · 3 issued next ms
+  const log = $('#s1log'), goals = new Set();
+  let burst = 1000, mode = 'wait', predicted = false, busy = false, quizShown = false;
+
+  function draw() {
+    const col = ['--line', '--accent', '--bad', '--teal'].map(cssVar);
+    ctx.clearRect(0, 0, SIZE, SIZE);
+    for (let i = 0; i < CAP; i++) { ctx.fillStyle = col[cells[i]]; ctx.fillRect((i % 64) * CELL, (i / 64 | 0) * CELL, CELL - 1, CELL - 1); }
+  }
+  onTheme(draw);
+  function setClock(ts, ticked) {
+    $('#s1clock').textContent = ts;
+    const t = $('#s1tag'); t.textContent = ticked ? '+1 ms' : 'frozen'; t.className = 'tagf' + (ticked ? ' tick' : '');
+  }
+  function stats(issued, next, dups, seq) {
+    $('#s1issued').textContent = fmtN(issued);
+    $('#s1next').textContent = fmtN(next);
+    const d = $('#s1dups'); d.textContent = fmtN(dups); d.className = 'bignum' + (dups ? ' bad' : issued ? ' good' : '');
+    $('#s1seq').textContent = seq < 0 ? '—' : seq;
+  }
+  function syncBtns() {
+    $$('#burstSeg button').forEach(b => b.disabled = busy || (b.dataset.b === '5000' && !predicted));
+    $$('#modeSeg button').forEach(b => b.disabled = busy);
+    $('#fire1').disabled = busy;
+  }
+  $$('#burstSeg button').forEach(b => b.onclick = () => { burst = +b.dataset.b; segPick($('#burstSeg'), b); });
+  $$('#modeSeg button').forEach(b => b.onclick = () => { mode = b.dataset.m; segPick($('#modeSeg'), b); });
+
+  // The generator, exactly as specified: same ms → sequence + 1; at 4,096 either wrap (bug) or wait for the next ms.
+  function simulate(n, how) {
+    const ev = [], seen = new Map();
+    let ts = T0, seq = -1;
+    for (let r = 1; r <= n; r++) {
+      let note = '';
+      if (seq + 1 >= CAP) { if (how === 'wrap') { seq = 0; note = 'wrap'; } else { ts += 1; seq = 0; note = 'wait'; } }
+      else seq++;
+      const id = mkId(ts, DC, M, seq), k = id.toString();
+      const dupOf = seen.get(k);
+      if (dupOf === undefined) seen.set(k, r);
+      ev.push({ r, ts, seq, id, dupOf, note });
+    }
+    return ev;
+  }
+
+  async function fire() {
+    if (busy) return;
+    busy = true; syncBtns();
+    const n = burst, how = mode;
+    cells.fill(0); draw(); setClock(T0, false); stats(0, 0, 0, -1);
+    log.innerHTML = '';
+    logTo(log, `🔥 ${fmtN(n)} requests arrive inside ms ${T0}. Rule at #4,097: <b>${how === 'wait' ? 'wait for the next ms' : 'wrap to 0'}</b>.`);
+    const ev = simulate(n, how);
+    const step = Q.reduced ? ev.length : 160;
+    let dups = 0, next = 0, firstDup = null;
+    for (let i = 0; i < ev.length; i++) {
+      const e = ev[i];
+      if (e.note === 'wait') {
+        draw(); stats(i, next, dups, CAP - 1);
+        logTo(log, `#4,096 → seq 4095. The meter is full.`);
+        logTo(log, `#4,097 → no sequence left in this ms. ⏳ Spin until the clock ticks…`, 'w');
+        await sleep(Q.reduced ? 0 : 900);
+        setClock(e.ts, true); cells.fill(0); draw();
+        logTo(log, `🕐 Clock reads ${e.ts}. Sequence restarts at 0 → ${idHTML(e.id, 10)}`, 'g');
+        await sleep(Q.reduced ? 0 : 400);
+      }
+      if (e.note === 'wrap') {
+        draw(); stats(i, next, dups, CAP - 1);
+        logTo(log, `#4,096 → seq 4095. The meter is full.`);
+        await sleep(Q.reduced ? 0 : 600);
+        logTo(log, `#4,097 → seq wraps to 0 in the <b>same</b> ms → ${idHTML(e.id, 10)}`, 'e');
+        logTo(log, `✗ That's exactly the ID request #${e.dupOf} got.`, 'e');
+        await sleep(Q.reduced ? 0 : 500);
+      }
+      if (e.r === 1) logTo(log, `#1 → seq 0 → ${idHTML(e.id, 10)}`);
+      if (e.dupOf !== undefined) { dups++; if (!firstDup) firstDup = e; cells[e.seq] = 2; }
+      else if (e.ts > T0) { next++; cells[e.seq] = 3; }
+      else cells[e.seq] = 1;
+      if ((i + 1) % step === 0) { draw(); stats(i + 1, next, dups, e.seq); await sleep(16); }
+    }
+    const last = ev[ev.length - 1];
+    draw(); stats(ev.length, next, dups, last.seq);
+    if (n <= CAP) logTo(log, `✓ ${fmtN(n)} IDs, all unique, all in one ms. ${n === CAP ? 'Exactly full: one more would not fit.' : 'Plenty of room left.'}`, 'g');
+    else if (dups) logTo(log, `✗ ${fmtN(dups)} duplicates. Requests #4,097 to #${fmtN(n)} re-used IDs #1 to #${fmtN(dups)}.`, 'e');
+    else logTo(log, `✓ ${fmtN(n)} IDs, 0 duplicates. The last ${fmtN(next)} waited under 1 ms for the next tick.`, 'g');
+    busy = false; syncBtns();
+    if (n <= CAP) checkGoal('#s1goals', 'fit', goals, 5);
+    else if (how === 'wrap') checkGoal('#s1goals', 'wrap', goals, 5);
+    else checkGoal('#s1goals', 'wait', goals, 5);
+    maybeQuiz();
+  }
+  $('#fire1').onclick = fire;
+  draw(); syncBtns();
+
+  predict($('#s1predict'), {
+    step: 'Predict first',
+    title: 'Request #4,097 arrives while the clock still shows the same millisecond. All 4,096 sequence values are used. What should the generator do?',
+    options: ['Wrap the sequence to 0 straight away', 'Wait for the next ms, then start at 0', 'Borrow spare bits from the machine ID'],
+    correct: 1,
+    explain: 'Real generators <b>wait</b>: they spin until the clock reaches the next millisecond, then restart the sequence at 0. Request #4,097 is under a millisecond late, never a duplicate. Wrapping now would reuse timestamp + sequence pairs already handed out. Borrowing machine bits would make this machine\'s IDs look like another machine\'s. The <b>5,000</b> burst is unlocked, so try both rules.',
+  }).then(() => { predicted = true; syncBtns(); });
+  if (Q.isCleared(1)) { predicted = true; syncBtns(); }
+
+  function maybeQuiz() {
+    if (quizShown || !predicted || goals.size < 3) return;
+    quizShown = true;
+    quizChain($('#s1quiz'), [
+      { q: 'With 12 sequence bits, how many IDs can one machine mint in a single millisecond?',
+        options: ['4,096 IDs (2¹²)', '4,095 IDs (2¹² − 1)', '8,192 IDs (2¹³)'], correct: 0,
+        good: 'The sequence runs from 0 to 4,095. That\'s 4,096 different values, so 4,096 IDs per millisecond per machine.',
+        bad: '4,095 is the <i>largest value</i>, but counting starts at 0, so there are 4,096 values: 4,096 IDs per millisecond per machine.' },
+      { q: 'Why is wrapping the sequence back to 0 inside the same millisecond a bug?',
+        options: ['It reissues IDs from that same ms', 'It makes IDs stop sorting by time', 'It overflows the 64-bit number'], correct: 0,
+        good: 'Same timestamp + same datacenter + same machine + same sequence = the same 64 bits. Request #4,097 gets request #1\'s ID.',
+        bad: 'Nothing overflows and the order is fine. The problem is that every section of the ID repeats, so request #4,097 gets exactly the ID request #1 already has.' },
+    ], () => Q.clearStage(1));
+  }
+});
+
+/* ================= STAGE 2: time runs backwards ================= */
+Q.onStage(2, () => {
+  const TB = 500000000000, DC = 1, M = 7;
+  const box = $('#idlog2'), goals = new Set();
+  let now, last, seq, minted, seen, dups, guard = false, busy = false, waiting = false, steppedBack = false, quizShown = false;
+  const pad = (n, w) => String(n).padStart(w, '0');
+  function clock(ms) {
+    const t = 12 * 3600000 + ms;
+    return `${pad(Math.floor(t / 3600000) % 24, 2)}:${pad(Math.floor(t / 60000) % 60, 2)}:${pad(Math.floor(t / 1000) % 60, 2)}.${pad(t % 1000, 3)}`;
+  }
+  function render() {
+    $('#c2now').textContent = clock(now);
+    $('#c2last').textContent = last < 0 ? '—' : clock(last);
+    $('#c2count').textContent = minted;
+    const d = $('#c2dups'); d.textContent = dups; d.className = 'bignum' + (dups ? ' bad' : minted ? ' good' : '');
+    $('#mint2').disabled = busy || waiting;
+    $('#ntp2').disabled = busy || waiting || minted < 5;
+    $('#reset2').disabled = busy;
+    const on = $('#guardSeg [data-g="1"]'); on.disabled = !(goals.has('dup') || Q.isCleared(2));
+    $('#guardHint').style.display = on.disabled ? '' : 'none';
+  }
+  function note(html, cls) { box.insertAdjacentHTML('beforeend', `<div class="idrow note ${cls || ''}">${html}</div>`); box.scrollTop = box.scrollHeight; }
+  function reset() {
+    now = 100; last = -1; seq = 0; minted = 0; seen = new Map(); dups = 0; steppedBack = false;
+    box.innerHTML = '<div class="idrow note g">Machine dc 1 · m 7 is ready. Mint 5 IDs to unlock the NTP button.</div>';
+    render();
+  }
+  async function mint() {
+    busy = true; render();
+    let guarded = false;
+    if (now < last && guard) {
+      const lag = last - now;
+      note(`⛔ Clock (${clock(now)}) is behind the last timestamp (${clock(last)}). Refusing for ${lag} ms. Waiting for the clock to catch up…`, 'e');
+      waiting = true; render();
+      while (now < last) { await sleep(Q.reduced ? 0 : 260); now++; render(); }
+      waiting = false; guarded = true;
+      note('✓ Clock caught up. Generating again.', 'g');
+    }
+    if (now === last) seq = (seq + 1) & 4095; else seq = 0;
+    last = now;
+    const id = mkId(TB + now, DC, M, seq), k = id.toString();
+    const row = document.createElement('div'); row.className = 'idrow';
+    row.innerHTML = `<span class="t">${clock(now)}</span><span class="sq">seq ${seq}</span><span class="id">${idHTML(id, 9)}</span>`;
+    box.appendChild(row);
+    let dup = false;
+    if (seen.has(k)) { dup = true; dups++; row.classList.add('dup'); seen.get(k).classList.add('dup'); note(`✗ Duplicate! Same ID as the one minted earlier at ${clock(now)}.`, 'e'); }
+    else seen.set(k, row);
+    box.scrollTop = box.scrollHeight;
+    minted++; now++;          // one millisecond passes before the next request
+    busy = false; render();
+    if (minted >= 5) checkGoal('#s2goals', 'mint', goals, 0);
+    if (guarded && steppedBack) { steppedBack = false; checkGoal('#s2goals', 'guard', goals, 10); maybeQuiz(); }
+    return { dup };
+  }
+  $('#mint2').onclick = () => { if (!busy && !waiting) mint(); };
+  $('#ntp2').onclick = () => {
+    if (busy || waiting) return;
+    const before = now; now -= 5; steppedBack = true;
+    note(`⟲ NTP stepped the clock back 5 ms: ${clock(before)} → ${clock(now)}`);
+    const c = $('#c2now'); c.classList.remove('jump'); void c.offsetWidth; c.classList.add('jump');
+    render();
+    if (!guard && !goals.has('dup')) askPredict();
+  };
+  $('#reset2').onclick = () => { if (!busy) reset(); };
+  $$('#guardSeg button').forEach(b => b.onclick = () => {
+    guard = b.dataset.g === '1'; segPick($('#guardSeg'), b);
+    note(guard ? '🛡️ Guard ON: if now &lt; last timestamp, refuse and wait.' : 'Guard OFF: the clock is trusted blindly.', guard ? 'g' : '');
+  });
+
+  function askPredict() {
+    const pb = $('#s2predict');
+    pb.style.display = '';
+    busy = true; render();   // the prediction's own action mints the next ID
+    predict(pb, {
+      step: 'Predict first',
+      title: 'The clock just jumped back 5 ms, and the guard is OFF. The next ID this machine mints will be…',
+      options: ['Fine: brand new and unique', 'Possibly a copy of an earlier ID', 'Bigger than every ID so far'],
+      correct: 1,
+      act: async () => { busy = false; await mint(); },
+      explain: 'The clock now shows a millisecond this machine already used, and the sequence restarts at 0 in a "new" millisecond. Same timestamp, same machine, same sequence: the <b>same ID</b>. It\'s also <i>smaller</i> than the last one, so the order breaks too. Now turn the guard <b>ON</b> and try again.',
+    }).then(() => { checkGoal('#s2goals', 'dup', goals, 0); render(); pb.scrollIntoView({ behavior: Q.reduced ? 'auto' : 'smooth', block: 'nearest' }); maybeQuiz(); });
+  }
+  reset();
+
+  function maybeQuiz() {
+    if (quizShown || !goals.has('dup') || !goals.has('guard')) return;
+    quizShown = true;
+    const mount = $('#s2quiz');
+    Q.quiz(mount, {
+      q: 'Why can NTP break a Snowflake generator?',
+      options: ['It can step the clock backwards', 'It renumbers each machine\'s ID', 'It freezes the clock during a sync'],
+      correct: 0,
+      good: 'NTP corrects drift. If a clock ran fast, the fix can be a jump backwards, and the generator walks back into milliseconds it already used.',
+      bad: 'NTP only touches the clock. It corrects drift, and if a clock ran fast the fix can be a jump <b>backwards</b> into milliseconds the generator already used.',
+      onDone: () => setTimeout(() => multiQuiz(mount, {
+        q: 'Pick the <b>two</b> defences that actually stop duplicates after a clock jump.',
+        options: ['Refuse or wait while now < last timestamp', 'Configure NTP to slew rather than step', 'Reset the sequence number back to 0', 'Restart the generator to clear its state'],
+        correct: [0, 1],
+        good: 'The guard catches any backwards jump. Slewing makes big jumps rare in the first place. Resetting the sequence is exactly what causes the duplicate, and a restart forgets the last timestamp, so the guard can no longer catch the jump.',
+        bad: 'The two that work: the <b>guard</b> (refuse or wait while the clock is behind) and <b>slewing</b> (correct gradually, never jump). Resetting the sequence to 0 is what <i>creates</i> the duplicate. Restarting throws away the last timestamp, which the guard needs.',
+        onDone: () => setTimeout(() => Q.clearStage(2), 900),
+      }), 500),
+    });
+  }
+});
+
+/* ================= STAGE 3: roughly in order ================= */
+Q.onStage(3, () => {
+  const TB = 500000000000, DC = 1, MN = { A: 1, B: 2, C: 3 };
+  const EV = [
+    { n: 'E1', m: 'A', t: 10.0 }, { n: 'E2', m: 'B', t: 11.0 }, { n: 'E3', m: 'C', t: 12.2 },
+    { n: 'E4', m: 'A', t: 12.6 }, { n: 'E5', m: 'B', t: 17.0 }, { n: 'E6', m: 'C', t: 18.0 },
+  ];
+  const localMs = (e, sk) => Math.floor(e.t + (e.m === 'B' ? sk : 0));
+  const idOf = (e, sk) => mkId(TB + localMs(e, sk), DC, MN[e.m], 0);
+  const rankOrder = sk => EV.map((_, i) => i).sort((a, b) => (idOf(EV[a], sk) < idOf(EV[b], sk) ? -1 : 1));
+  function crossings(sk) {
+    const out = [];
+    for (let i = 0; i < EV.length; i++) for (let j = i + 1; j < EV.length; j++) if (idOf(EV[i], sk) > idOf(EV[j], sk)) out.push(i + '-' + j);
+    return out;
+  }
+  const svg = $('#ord3'), log = $('#s3log');
+  const X = i => 30 + i * 60, YT = 62, YB = 200;
+  let skew = 3, stage = 1, sel = -1, ordered = [], heartLost1 = false, heartLost2 = false, quizShown = false;
+  const found = new Set(), goals = new Set();
+  const nodes = [];
+
+  // ---- static SVG scaffolding ----
+  S('text', { class: 'lane', x: 6, y: 18 }, svg).textContent = 'REAL TIME →';
+  const linesG = S('g', {}, svg), botG = S('g', {}, svg), topG = S('g', {}, svg);
+  S('text', { class: 'lane', x: 6, y: 160 }, svg).textContent = 'ID ORDER: SMALLEST → LARGEST';
+  EV.forEach((e, i) => {
+    const g = S('g', { class: 'nd' }, topG);
+    S('circle', { class: 'hit', cx: X(i), cy: YT, r: 26 }, g);
+    const c = S('circle', { class: 'c', cx: X(i), cy: YT, r: 17 }, g); c.style.fill = `var(--m${e.m})`;
+    S('text', { x: X(i), y: YT }, g).textContent = e.n;
+    S('text', { class: 'tl', x: X(i), y: YT + 34 }, svg).textContent = `t=${e.t.toFixed(1)}`;
+    g.addEventListener('click', () => tapNode(i));
+    g.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); tapNode(i); } });
+    nodes.push(g);
+  });
+  function drawBottom(revealed) {
+    linesG.innerHTML = ''; botG.innerHTML = '';
+    const ord = rankOrder(skew), xs = crossings(skew), inX = new Set(xs.flatMap(p => p.split('-').map(Number)));
+    for (let r = 0; r < 6; r++) {
+      const i = ord[r];
+      S('rect', { class: 'bt', x: X(r) - 22, y: YB - 15, width: 44, height: 30, rx: 8 }, botG);
+      const t = S('text', { class: 'btx', x: X(r), y: YB }, botG); t.textContent = revealed ? EV[i].n : '?';
+      if (revealed) t.style.fill = `var(--m${EV[i].m})`;
+      S('text', { class: 'tl', x: X(r), y: YB + 32 }, botG).textContent = '#' + (r + 1);
+      if (revealed) {
+        const ln = S('path', { class: 'ln', d: `M${X(i)} ${YT + 18} L${X(r)} ${YB - 16}` }, linesG);
+        ln.dataset.i = i;
+        if (stage >= 3 && inX.has(i)) ln.classList.add('x');
+        if (stage === 2 && [...found].some(p => p.split('-').map(Number).includes(i))) ln.classList.add('found');
+      }
+    }
+    return xs;
+  }
+  function setTap(on) {
+    nodes.forEach((g, i) => {
+      g.classList.toggle('tap', on);
+      if (on) { g.setAttribute('tabindex', 0); g.setAttribute('role', 'button'); g.setAttribute('aria-label', `Event ${EV[i].n} on machine ${EV[i].m}, real time ${EV[i].t} ms`); }
+      else { g.removeAttribute('tabindex'); g.removeAttribute('role'); g.removeAttribute('aria-label'); }
+    });
+  }
+  drawBottom(false);
+
+  // ---- step 1: tap IDs smallest → largest ----
+  const order3 = rankOrder(3);
+  $('#evlist').innerHTML = EV.map((e, i) => `<button class="evbtn" data-i="${i}" aria-label="Event ${e.n}, machine ${e.m}, ID ${idOf(e, 3)}"><span class="rk">·</span><span class="who"><i class="mdot" style="background:var(--m${e.m})"></i>${e.n} · ${e.m}</span><span class="idv">${idHTML(idOf(e, 3), 8)}</span></button>`).join('');
+  $$('#evlist .evbtn').forEach(b => b.onclick = () => {
+    if (stage !== 1) return;
+    const i = +b.dataset.i;
+    if (ordered.includes(i)) return;
+    if (order3[ordered.length] !== i) {
+      b.classList.remove('no'); void b.offsetWidth; b.classList.add('no');
+      if (!heartLost1) { heartLost1 = true; Q.loseHeart(b); } else Q.toast('not the smallest left', b, 'practice');
+      return;
+    }
+    ordered.push(i);
+    b.classList.add('done'); b.disabled = true; $('.rk', b).textContent = ordered.length;
+    if (ordered.length === EV.length) step1Done(b);
+  });
+  function step1Done(b) {
+    Q.addXP(15, b);
+    stage = 2; drawBottom(true); setTap(true);
+    logTo(log, 'ID order: E1, E4, E3, E2, E6, E5. Real order: E1 to E6. Some lines cross.');
+    logTo(log, 'B\'s clock reads 14 at E2 and 20 at E5, 3 ms ahead of real time.', 'w');
+    $('#s3step2').style.display = '';
+    setTimeout(() => $('#s3step2').scrollIntoView({ behavior: Q.reduced ? 'auto' : 'smooth', block: 'nearest' }), 300);
+  }
+
+  // ---- step 2: name the crossing pairs ----
+  const ANSWER = crossings(3);
+  function tapNode(i) {
+    if (stage !== 2) return;
+    if (sel === -1) { sel = i; nodes[i].classList.add('sel'); return; }
+    if (sel === i) { nodes[i].classList.remove('sel'); sel = -1; return; }
+    const a = Math.min(sel, i), b = Math.max(sel, i), key = a + '-' + b;
+    nodes[sel].classList.remove('sel'); sel = -1;
+    const pair = `${EV[a].n} ↔ ${EV[b].n}`;
+    if (found.has(key)) { Q.toast('already found', nodes[i], 'practice'); return; }
+    if (ANSWER.includes(key)) {
+      found.add(key);
+      $('#found').insertAdjacentHTML('beforeend', `<span>${pair}</span>`);
+      const why = EV[a].m === 'B' || EV[b].m === 'B'
+        ? `${EV[a].n} happened first, but B's fast clock gave ${EV[a].m === 'B' ? EV[a].n : EV[b].n} a later timestamp.`
+        : `Same millisecond (12) on both machines, so the machine bits decide: C (3) sorts after A (1), though ${EV[a].n} came first.`;
+      logTo(log, `✓ ${pair} cross. ${why}`, 'g');
+      Q.addXP(5, nodes[i]);
+      drawBottom(true);
+      if (found.size === ANSWER.length) step2Done();
+    } else {
+      logTo(log, `✗ ${pair} don't cross: ${EV[a].n} happened first <i>and</i> got the smaller ID.`, 'e');
+      if (!heartLost2) { heartLost2 = true; Q.loseHeart(nodes[i]); } else Q.toast('lines don\'t cross', nodes[i], 'practice');
+    }
+  }
+  function step2Done() {
+    stage = 3; setTap(false); drawBottom(true);
+    logTo(log, 'All 4 crossings found. Now change the skew and watch the lines.', 'g');
+    $('#skewBox').style.display = ''; $('#s3step3').style.display = '';
+    setTimeout(() => $('#s3step3').scrollIntoView({ behavior: Q.reduced ? 'auto' : 'smooth', block: 'nearest' }), 300);
+  }
+
+  // ---- step 3: skew slider ----
+  $('#skew').oninput = e => {
+    if (stage < 3) return;
+    skew = +e.target.value;
+    const xs = drawBottom(true);
+    $('#skewVal').textContent = skew + ' ms';
+    const cv = $('#crossVal'); cv.textContent = xs.length; cv.className = 'bignum ' + (xs.length > 1 ? 'bad' : 'good');
+    if (skew === 0 && checkGoal('#s3goals', 'zero', goals, 0)) logTo(log, 'Skew 0: one crossing is left, E3 ↔ E4. They share millisecond 12, so the machine number (C = 3 beats A = 1) decides, not real time.', 'w');
+    if (skew === 10 && checkGoal('#s3goals', 'ten', goals, 0)) logTo(log, `Skew 10: ${xs.length} crossings. The more the clocks disagree, the further an ID can sit from its true spot.`, 'e');
+    if (goals.size === 2 && !quizShown) { Q.addXP(10, $('#skew')); showQuiz(); }
+  };
+  function showQuiz() {
+    quizShown = true;
+    $('#s3note').style.display = '';
+    quizChain($('#s3quiz'), [
+      { q: 'How did Twitter describe the order of Snowflake IDs?',
+        options: ['Roughly sortable (k-sorted)', 'Strictly ordered on all machines', 'Ordered only within a datacenter'], correct: 0,
+        good: 'Each ID lands close to its true time position, within about the clock skew, but not always exactly there.',
+        bad: 'Twitter only promised <b>roughly sortable</b> (k-sorted): close to the true order, within the clock skew. You just watched it break across machines.' },
+      { q: 'Which feature should <b>not</b> trust Snowflake ID order on its own?',
+        options: ['Showing a feed with newest posts first', 'Deciding who clicked first in a contest', 'Paging back through older messages'], correct: 1,
+        good: 'A few milliseconds of skew can flip two clicks. A strict "who was first" needs one sequencer or a logical clock. Feeds and paging don\'t care about a few ms.',
+        bad: 'Feeds and paging tolerate a few ms of disorder. "Who clicked first" doesn\'t: skew can flip two clicks, so it needs one sequencer or a logical clock.' },
+    ], () => Q.clearStage(3));
+  }
+});
+
+/* ================= STAGE 4: tune the bits ================= */
+Q.onStage(4, () => {
+  const DEF = { ts: 41, dc: 5, m: 5, seq: 12 };
+  const SEC = [
+    { k: 'ts', name: 'Timestamp', sub: 'how long IDs last', col: '--b-ts', min: 20, max: 50 },
+    { k: 'dc', name: 'Datacenter', sub: 'how many sites', col: '--b-dc', min: 0, max: 20 },
+    { k: 'm', name: 'Machine', sub: 'machines per site', col: '--b-m', min: 0, max: 20 },
+    { k: 'seq', name: 'Sequence', sub: 'IDs per tick', col: '--b-seq', min: 0, max: 24 },
+  ];
+  const YEAR = 365.25 * 24 * 3600 * 1000;
+  let B = { ...DEF }, unit = 1, mi = 0, quizShown = false;
+  const used = () => B.ts + B.dc + B.m + B.seq;
+  const life = () => Math.pow(2, B.ts) * unit / YEAR;
+  const gens = () => Math.pow(2, B.dc + B.m);
+  const perTick = () => Math.pow(2, B.seq);
+  const perSec = () => perTick() * 1000 / unit;
+  const fmtLife = y => y >= 100 ? fmtN(Math.round(y)) + ' yrs' : y >= 10 ? y.toFixed(1) + ' yrs' : y >= 1 ? y.toFixed(1) + ' yrs' : Math.round(y * 365.25) + ' days';
+  const MISSIONS = [
+    { t: '🧾 Billing system', d: '20 servers today, with room to grow to <b>1,000+ generators</b>. Only about 50 IDs a second, but the IDs must last <b>100+ years</b>.',
+      conds: () => [[used() === 63, 'all 63 bits used'], [life() >= 100, 'lifetime ≥ 100 years'], [gens() >= 1000, '≥ 1,000 generators (datacenters × machines)'], [perSec() >= 50, '≥ 50 IDs/second per machine']],
+      win: 'Long life, low traffic: exactly the book\'s example. You took bits from the sequence and gave them to the timestamp.' },
+    { t: '⚡ Flash sale', d: '8 machines. One machine can get <b>20,000 ID requests in a single millisecond</b>. IDs must last at least 10 years.',
+      conds: () => [[used() === 63, 'all 63 bits used'], [perTick() >= 20000, '≥ 20,000 IDs per tick (15+ sequence bits)'], [gens() >= 8, '≥ 8 generators'], [life() >= 10, 'lifetime ≥ 10 years']],
+      win: 'Huge bursts, small fleet: the sequence got fat and the datacenter and machine bits shrank. 15 bits = 32,768 per tick.' },
+    { t: '📘 Back to the book', d: 'Restore the default: 41 | 5 | 5 | 12, counting in 1 ms.',
+      conds: () => [[unit === 1, '1 ms units'], [B.ts === 41 && B.dc === 5 && B.m === 5 && B.seq === 12, '41 | 5 | 5 | 12']],
+      win: 'The default: ~69 years, 32 datacenters × 32 machines, 4,096 IDs per ms per machine. A balanced, general-purpose split.' },
+  ];
+
+  $('#bitrows').innerHTML = SEC.map(s => `<div class="bitrow"><span class="sw" style="background:var(${s.col})"></span><span class="nm">${s.name}<small>${s.sub}</small></span><span class="stepper"><button class="btn" data-k="${s.k}" data-d="-1" aria-label="${s.name} bits minus one">−</button><b id="bv-${s.k}">0</b><button class="btn" data-k="${s.k}" data-d="1" aria-label="${s.name} bits plus one">+</button></span></div>`).join('');
+  $$('#bitrows .btn').forEach(b => b.onclick = () => {
+    const s = SEC.find(x => x.k === b.dataset.k);
+    B[s.k] = Math.max(s.min, Math.min(s.max, B[s.k] + +b.dataset.d));
+    update();
+  });
+  $$('#unitSeg button').forEach(b => b.onclick = () => { unit = +b.dataset.u; segPick($('#unitSeg'), b); update(); });
+  $('#bitsReset').onclick = () => { B = { ...DEF }; unit = 1; segPick($('#unitSeg'), $('#unitSeg [data-u="1"]')); update(); };
+
+  function renderMissions() {
+    $('#missions').innerHTML = MISSIONS.map((m, i) => {
+      const cs = m.conds();
+      return `<div class="mission ${i < mi ? 'won' : i === mi ? 'on' : ''}"><h3>${i < mi ? '✅' : `Mission ${i + 1}:`} ${m.t}</h3><p>${m.d}</p>${i === mi ? `<ul class="conds">${cs.map(([ok, t]) => `<li class="${ok ? 'ok' : ''}">${t}</li>`).join('')}</ul>` : ''}${i < mi ? `<p class="small" style="margin-top:6px">${m.win}</p>` : ''}</div>`;
+    }).join('');
+  }
+  function update() {
+    const u = used();
+    const parts = [['sign', 1, '--b-sign'], ...SEC.map(s => [s.k, B[s.k], s.col])];
+    const tot = Math.max(64, u + 1);
+    $('#bitbar').innerHTML = parts.map(([k, n, c]) => `<div style="flex:${n} 1 0;background:var(${c})" title="${k}: ${n} bits">${n / tot > .055 ? n : ''}</div>`).join('') + (u < 63 ? `<div style="flex:${63 - u} 1 0;background:var(--bg-2);color:var(--muted)">${(63 - u) / tot > .055 ? 63 - u : ''}</div>` : '');
+    SEC.forEach(s => { $('#bv-' + s.k).textContent = B[s.k]; });
+    $$('#bitrows .btn').forEach(b => { const s = SEC.find(x => x.k === b.dataset.k); b.disabled = +b.dataset.d < 0 ? B[s.k] <= s.min : B[s.k] >= s.max; });
+    $('#roLife').textContent = fmtLife(life());
+    $('#roDc').textContent = fmtN(Math.pow(2, B.dc));
+    $('#roM').textContent = fmtN(Math.pow(2, B.m));
+    $('#roSeqL').textContent = `IDs / ${unit} ms / machine`;
+    $('#roSeq').textContent = fmtN(perTick());
+    const bg = $('#budget');
+    if (u === 63) { bg.className = 'budget good'; bg.textContent = `1 sign + ${u} = 64 bits ✓ Budget balanced.`; }
+    else { bg.className = 'budget bad'; bg.textContent = u > 63 ? `1 sign + ${u} = ${u + 1} bits ✗ Over budget by ${u - 63}. Take bits away somewhere.` : `1 sign + ${u} = ${u + 1} bits ✗ ${63 - u} bits unused. Give them to a section.`; }
+    if (mi < MISSIONS.length && MISSIONS[mi].conds().every(c => c[0])) {
+      mi++; renderMissions();
+      Q.addXP(10, $$('#missions .mission.won').pop() || $('#missions'));
+      if (mi === MISSIONS.length) showQuiz();
+      return;
+    }
+    renderMissions();
+  }
+  update();
+  function showQuiz() {
+    if (quizShown) return; quizShown = true;
+    Q.quiz($('#s4quiz'), {
+      q: 'Two machines boot with the same datacenter ID and the same machine ID. What happens?',
+      options: ['They can mint identical IDs in the same ms', 'The second one refuses to start up at all', 'IDs stay unique because of the sequence'],
+      correct: 0,
+      good: 'Nothing in the ID tells them apart. If both mint in the same millisecond with the same sequence value, the 64 bits match. That\'s why the book wants careful review before these values change.',
+      bad: 'Plain Snowflake has no check for this. Each machine runs its own sequence from 0, so the same millisecond + same sequence on both = identical IDs. Unique machine IDs are the whole guarantee.',
+      onDone: () => setTimeout(() => Q.clearStage(4), 900),
+    });
+  }
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss'), {
+  name: '💀 The Chrono Lich',
+  xp: 15,
+  choices: [
+    { k: 'clock', label: 'Clock guard / NTP', sub: 'time went wrong' },
+    { k: 'bits', label: 'Re-tune the bits', sub: 'the budget is wrong' },
+    { k: 'ids', label: 'Fix machine IDs', sub: 'two nodes share one' },
+    { k: 'ha', label: 'Add redundancy', sub: 'single point of failure' },
+  ],
+  scenarios: [
+    { e: '🔁', t: 'Dupes after the nightly sync', d: 'Monitoring shows 12 duplicate IDs on one host, all minted in the second after its nightly NTP sync.', a: 'clock',
+      why: 'NTP stepped that clock backwards, so the generator re-entered milliseconds it had used. Add the guard (refuse or wait while now &lt; last timestamp), set NTP to slew small errors, and alert on big jumps.' },
+    { e: '🐑', t: 'The cloned VM', d: 'Ops cloned a VM from a snapshot to debug it. Both copies kept serving traffic. Now some orders share an ID.', a: 'ids',
+      why: 'The snapshot carried its machine ID, so two live generators share datacenter + machine bits. Same ms + same sequence = the same ID. Hand out machine IDs at startup from a coordinator (or a lease), never bake them into an image.' },
+    { e: '📜', t: 'IDs must last until 2120', d: 'Legal needs the IDs to keep working for about 95 more years. You\'re on the default 41-bit timestamp.', a: 'bits',
+      why: '41 bits of milliseconds last about 69 years. Move bits into the timestamp (42 bits ≈ 139 years) or count in 10 ms units like Sonyflake. If traffic is low, take the bits from the sequence, as the book suggests.' },
+    { e: '💤', t: '40 seconds of nothing', d: 'The one and only ID-service box restarts for a deploy. For 40 seconds every write in the company fails.', a: 'ha',
+      why: 'Every write needs an ID, so one box is a single point of failure. Run the generator as a library in each app server, or run several instances behind a load balancer, each with its own machine ID.' },
+    { e: '🕳️', t: 'Leap-second night', d: 'Right at a leap second (23:59:60 UTC), a burst of duplicate IDs shows up across several hosts.', a: 'clock',
+      why: 'A leap second can make the system clock repeat a second. It\'s the same failure as an NTP step: time went backwards. The guard catches it. Many fleets also smear the leap second over hours so the clock never jumps.' },
+    { e: '🚀', t: '10,000 IDs in one millisecond', d: 'A new hot path needs up to 10,000 IDs per millisecond from a single machine. Today it stalls.', a: 'bits',
+      why: '12 sequence bits give 4,096 per ms, so the generator keeps waiting for the next ms. 14 sequence bits give 16,384. Take the 2 bits from datacenter or machine if you don\'t need all 1,024 generators.' },
+    { e: '📈', t: '40 machines, one datacenter', d: 'Autoscaling wants 40 ID generators in a single datacenter. The layout has 5 machine bits.', a: 'bits',
+      why: '5 machine bits allow only 32 machines per datacenter. Better ID assignment can\'t fit 40 into 32 slots. That makes this structural: re-split, say 3 datacenter bits + 7 machine bits (8 DCs × 128 machines). Fake datacenter IDs for the extra 8 would work, but they\'re a fragile hack.' },
+  ],
+  outro: 'The pattern: time went wrong → guard the clock. Two nodes share an ID → fix the assignment. Limits too tight → re-split the bits. One box → replicate.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: interview drill ================= */
+Q.onStage(6, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"Nice Snowflake sketch. Now, what can go wrong with it, and what would you do about each problem?"</i>',
+  placeholder: 'First, the sequence can run out within a millisecond…',
+  model: '"If a machine needs more than 4,096 IDs in a millisecond, it waits for the next millisecond instead of wrapping the sequence, so the worst case is a sub-millisecond stall, never a duplicate. The real risk is the clock. NTP keeps clocks close, but it can step a clock backwards, and so can a leap second. So I keep the last timestamp I used, and if the clock reads earlier I refuse or wait until it catches up. I\'d also have NTP slew rather than step, and alert on big jumps. Because each machine has its own clock, IDs are only roughly time-ordered across machines, to within the clock skew. That\'s fine for feeds, not for strict ordering. If our needs differ, I\'d re-split the bits: for example, more timestamp bits and fewer sequence bits for a long-lived, low-traffic system. Datacenter and machine IDs are set once at startup and must never be shared, so they come from config or a coordinator. And since every write needs an ID, I\'d run the generator inside each service or as several instances behind a load balancer, never on one box."',
+  checks: [
+    'Sequence overflow: wait for the next millisecond, never wrap',
+    'Clock going backwards: remember the last timestamp, refuse or wait',
+    'Named NTP (and slewing instead of stepping, or leap seconds)',
+    'IDs are only roughly sorted across machines (clock skew)',
+    'Gave a section-tuning example (e.g. more timestamp bits, fewer sequence bits)',
+    'Machine IDs must be unique and fixed at startup',
+    'High availability: library in each service, or replicated instances',
+  ],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

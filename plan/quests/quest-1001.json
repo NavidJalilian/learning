@@ -1,0 +1,143 @@
+{
+ "n": "10.1",
+ "slug": "notification-channels",
+ "t": "Three Roads to the Lock Screen",
+ "d": "Push (APNs/FCM), SMS and email: who delivers what, and the contact info you need",
+ "boss": false,
+ "badge": "📮 Badge: Postmaster",
+ "winTitle": "Every road mapped!",
+ "goal": "Your win today: you can explain how one notification reaches an iPhone, an Android phone, a phone number and an inbox, name the third-party service on each road, and say what data you must have collected first (device token, phone number, email).",
+ "bookSections": "Intro; Step 2 — 'Different types of notifications' (iOS push, Android push, SMS, email) and 'Contact info gathering flow'",
+ "stages": [
+  {
+   "title": "Three roads, one ping",
+   "sub": "Push, SMS, email — and who carries each",
+   "teaches": "A notification alerts a user to something: breaking news, a product update, an event, an offer. The book covers three types: mobile push notifications, SMS messages and email. None of them is delivered by your own servers end to end: you hand the message to a third-party delivery service. iOS push goes through APNs (Apple Push Notification service), Android push through FCM (Firebase Cloud Messaging, Google's service), SMS through commercial SMS services like Twilio or Nexmo (now Vonage), and email through commercial email services like SendGrid or Mailchimp. You COULD run your own email servers, but most companies buy a service because it gets better delivery rates (fewer messages land in spam) and comes with analytics. Shape of every road: Provider (your system) → delivery service → user's device.",
+   "interaction": "Sort-into-bins game. On screen: 4 labelled lanes (iOS push, Android push, SMS, Email), each drawn as Provider → [empty slot] → device icon. Below, a tray of 8 tappable chips: APNs, FCM, Twilio, Nexmo/Vonage, SendGrid, Mailchimp, 'Our own SMTP server', 'Our own cell tower'. Learner taps a chip then taps a lane slot (or drags). Correct placements lock in with a little packet animation flying Provider → service → device. Wrong placement costs a heart and shows a one-line why (e.g. 'APNs only talks to Apple devices'). 'Our own SMTP server' is accepted in Email with a note: 'possible, but most teams buy a service for deliverability + analytics'. 'Our own cell tower' is the joke chip — it bounces off every lane ('SMS goes through carriers; you rent access via a provider').",
+   "check": "Q.quiz: 'Why do most companies use a service like SendGrid instead of running their own email servers?' Correct: 'Better delivery rates and built-in analytics'. Distractors: 'Email servers can't be self-hosted', 'It's required by law', 'SendGrid is faster than SMTP'."
+  },
+  {
+   "title": "Anatomy of an iOS push",
+   "sub": "Build the request APNs needs",
+   "teaches": "To send an iOS push, the provider builds a notification request for APNs containing two things: (1) the device token — a unique identifier APNs gives an app install on a device, which you must have stored; and (2) the payload — a JSON dictionary describing the notification. Book example: {\"aps\":{\"alert\":{\"title\":\"Game Request\",\"body\":\"Bob wants to play chess\",\"action-loc-key\":\"PLAY\"},\"badge\":5}}. APNs is Apple's remote service that propagates the push to the iOS device. Follow-up beyond the book: tokens go stale (app uninstalled, token rotated); APNs answers 410 Unregistered or 400 BadDeviceToken and you should delete that token, not retry.",
+   "interaction": "Request builder. Left: a 'Provider' card with an empty request envelope having two slots. Middle: an APNs cloud. Right: an iPhone lock-screen mock. A tray of 6 data chips: device token (a hex string like 'a1b2…f9'), payload JSON, user's email, user's phone number, user_id, user's password. Learner fills the two slots; only device token + payload are accepted (others shake with a reason, e.g. 'APNs has never heard of your user_id'). Then a payload editor with 3 inputs (title, body, badge number) pre-filled with the book's Game Request / Bob wants to play chess / 5. Pressing 'Send' animates the envelope to APNs then to the phone, rendering a banner with the title/body and a red app-icon badge showing the number. Predict-then-watch round: 'Bob uninstalled the app last week. You send with his old token. What happens?' choices: delivered anyway / APNs rejects it as unregistered / APNs queues it until he reinstalls. Then animate APNs returning '410 Unregistered' and a broom deleting the row from the device table.",
+   "check": "Q.quiz: 'What are the two things a provider must give APNs?' Correct: 'A device token and a JSON payload'. Distractors: 'The user's Apple ID and message text', 'A phone number and an SMS body', 'The user_id and a template name'."
+  },
+  {
+   "title": "Android, and when a road is closed",
+   "sub": "FCM, and keeping providers pluggable",
+   "teaches": "Android follows the same shape: Provider → FCM → Android device. The book stresses extensibility: the system should make it easy to plug in or unplug a third-party service, because a service may be unavailable in a new market or in the future. Example from the book: FCM is unavailable in China, so alternatives such as Jpush or PushY are used there. Design implication: hide each provider behind a common 'send' interface per channel so swapping one is configuration, not a rewrite.",
+   "interaction": "Plug-board sim. A world map strip with region tabs (US, EU, India, China). The Android lane shows Provider → [FCM plug] → device. Learner taps 'China': the FCM plug greys out with a red ✕ and packets bounce. A drawer of adapter plugs (FCM, Jpush, PushY, APNs, SendGrid) appears; learner must drag a valid Android-in-China adapter (Jpush or PushY) into the socket; packets flow again. Dragging APNs or SendGrid is rejected ('wrong channel'). Then a toggle 'Hard-coded FCM calls everywhere' vs 'Provider interface' shows how many code boxes light up red (12 vs 1) when you swap — making the extensibility point visual.",
+   "check": "Q.quiz: 'Your app launches in mainland China and Android pushes stop arriving. What's the book's fix?' Correct: 'Plug in a local push service such as Jpush or PushY behind the same interface'. Distractors: 'Send everything by email instead', 'Route Android through APNs', 'Retry FCM until it works'."
+  },
+  {
+   "title": "Collect the addresses first",
+   "sub": "Contact info gathering flow + spot the bug",
+   "teaches": "You can't send anything without an address: a device token, a phone number or an email. Book flow: when a user installs the app or signs up for the first time, API servers collect the user's contact info and store it in the database (user → load balancer → API servers → DB). Book tables: user table (user_id bigint, email varchar, country_code integer, phone_number integer, created_at timestamp) and device table (id bigint, device_token varchar, user_id bigint, last_logged_in_at timestamp). A user can have multiple devices, so device tokens live in their own table (one-to-many), and a push goes to every device of the user. Caveats beyond the book: phone numbers should be strings in E.164 form (e.g. +447911123456) — integers drop leading zeros and can overflow; last_logged_in_at helps prune stale devices.",
+   "interaction": "Two parts. (a) Animated signup: tap 'Install app' on a phone mock → watch a packet carry {device_token} through LB → API servers → device table; tap 'Sign up' → {email, phone} lands in user table. Then 'Log in on a tablet too' adds a second device row for the same user_id — learner sees why it's a separate table. (b) Spot-the-bug: the two book tables rendered as schema cards; learner taps up to 2 fields they'd challenge. Correct finds: phone_number integer (reveal: leading zeros/'+' lost; store as E.164 string) and country_code integer (minor: fine-ish but usually folded into the E.164 string). Tapping device table's user_id reveals 'Correct — this is the link that lets one user have many devices' (not a bug, no heart lost but no points).",
+   "check": "Q.quiz: 'Why is device_token in its own table instead of a column on the user table?' Correct: 'One user can have many devices, each with its own token'. Distractors: 'Tokens are too long for the user table', 'APNs requires a separate table', 'To keep tokens secret from the API servers'."
+  },
+  {
+   "title": "Boss: The Misrouted Mailbag",
+   "sub": "Pick the right road for each message",
+   "teaches": "Applying the channel map: which third-party service delivers each kind of message, given the user's device and what contact info exists.",
+   "interaction": "Q.boss named '📮 Misrouted Mailbag', choices: APNs, FCM, SMS provider (Twilio), Email service (SendGrid). Six scenarios: (1) 'Bob, on his iPhone, gets a chess game invite' → APNs. (2) 'An order-shipped alert to a Pixel phone with the app installed' → FCM. (3) 'A one-time login code for a user who has no app installed, only a verified phone number' → SMS. (4) 'A monthly invoice with an itemised table and a PDF link' → Email. (5) 'A billing service's payment-due reminder; the user only gave an email address' → Email. (6) 'A breaking-news alert to a Galaxy tablet' → FCM. Each with a one-line why.",
+   "check": "Boss clears when all 6 are answered (hearts lost on misses)."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "How does a ping reach a phone?",
+   "teaches": "Interview-ready summary of the three channels and the contact data behind them.",
+   "interaction": "Q.drill. Prompt: interviewer asks 'Walk me through how a push notification actually gets to a user's iPhone — and what changes for Android, SMS and email.' Model answer: 'Our system is the provider. For iOS we build a request with the device token we stored when the app was installed, plus a JSON payload, and send it to Apple's APNs, which delivers it to the phone. Android is the same shape via Google's FCM. SMS and email go through commercial providers like Twilio and SendGrid, which give us deliverability and analytics. We collect contact info at install and signup: users and their email/phone in one table, device tokens in a separate table because a user can have many devices. I'd keep each provider behind an interface so we can swap it, for example FCM isn't available in China. And when APNs says a token is unregistered, we delete it.' Checks: 'I named APNs/FCM and the SMS/email providers', 'I said a push needs a device token + payload', 'I explained where contact info comes from (install/signup) and one-to-many devices'.",
+   "check": "Self-grade against 3 checks."
+  }
+ ],
+ "caveats": [
+  "The book shows a simplified APNs payload; real requests also carry headers like apns-topic, apns-push-type and apns-priority, and go over HTTP/2.",
+  "Device tokens are not permanent: uninstalls and token rotation make them stale. APNs replies 410 (Unregistered) or 400 (BadDeviceToken); FCM replies UNREGISTERED. Delete those tokens instead of retrying (not covered by the book).",
+  "The book stores phone_number as an integer; in practice store an E.164 string — integers lose the leading '+' and zeros.",
+  "'Nexmo' has since been renamed Vonage; the book's provider names are examples, not endorsements."
+ ],
+ "sources": [
+  {
+   "label": "Alex Xu, System Design Interview Vol. 1, Ch. 10: Design a Notification System (ByteByteGo)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-notification-system"
+  },
+  {
+   "label": "Apple: User Notifications / APNs documentation",
+   "url": "https://developer.apple.com/documentation/usernotifications"
+  },
+  {
+   "label": "Apple: Sending notification requests to APNs",
+   "url": "https://developer.apple.com/documentation/usernotifications/sending-notification-requests-to-apns"
+  },
+  {
+   "label": "Apple: Handling notification responses from APNs (status codes, 410 Unregistered)",
+   "url": "https://developer.apple.com/documentation/usernotifications/handling-notification-responses-from-apns"
+  },
+  {
+   "label": "Firebase Cloud Messaging documentation",
+   "url": "https://firebase.google.com/docs/cloud-messaging"
+  },
+  {
+   "label": "Firebase: Best practices for FCM registration token management",
+   "url": "https://firebase.google.com/docs/cloud-messaging/manage-tokens"
+  },
+  {
+   "label": "Twilio SMS (book ref [1])",
+   "url": "https://www.twilio.com/docs/sms"
+  },
+  {
+   "label": "SendGrid (book ref [3])",
+   "url": "https://sendgrid.com/"
+  },
+  {
+   "label": "Mailchimp (book ref [4])",
+   "url": "https://mailchimp.com/"
+  },
+  {
+   "label": "E.164 international phone number format (Wikipedia)",
+   "url": "https://en.wikipedia.org/wiki/E.164"
+  }
+ ],
+ "id": "1001",
+ "file": "1001-notification-channels.html",
+ "world": 10,
+ "chapterTitle": "Design a Notification System",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-notification-system",
+ "cheatsheet": "../reference/ch10-notification-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "1001",
+   "n": "10.1",
+   "t": "Three Roads to the Lock Screen",
+   "d": "Push (APNs/FCM), SMS and email: who delivers what, and the contact info you need"
+  },
+  {
+   "id": "1002",
+   "n": "10.2",
+   "t": "Shatter the Single Server",
+   "d": "From one notification box to servers, per-channel queues and workers"
+  },
+  {
+   "id": "1003",
+   "n": "10.3",
+   "t": "Never Lose a Ping",
+   "d": "Notification log, at-least-once, dedupe, retries and watching the queue"
+  },
+  {
+   "id": "1004",
+   "n": "10.4",
+   "t": "Respect the Inbox",
+   "d": "Templates, opt-in settings, rate limits, auth, event tracking and the final design"
+  },
+  {
+   "id": "1005",
+   "n": "BOSS",
+   "t": "Ping the Planet — Live",
+   "d": "Full mock interview: design a notification system"
+  }
+ ]
+}

@@ -1,0 +1,125 @@
+{
+ "n": "12.1",
+ "slug": "chat-connections",
+ "t": "Open the Pipe",
+ "d": "What a chat service does, and polling vs long polling vs WebSocket",
+ "boss": false,
+ "badge": "🔌 Badge: Pipe Fitter",
+ "winTitle": "The pipe is open",
+ "goal": "Your win today: you can explain why the server, not the client, is the hard side of chat, walk through polling, long polling and WebSocket with each one's weakness, and defend WebSocket for both sending and receiving.",
+ "bookSections": "Step 1 (understand the problem and establish design scope: 1-on-1 + group, mobile + web, 50M DAU, 100-member groups, text < 100,000 chars, history forever); Step 2 opening: the chat service's three jobs, sender-side HTTP keep-alive, Polling, Long polling, WebSocket (figures 12-2 to 12-6)",
+ "stages": [
+  {
+   "title": "Clients never talk directly",
+   "sub": "The chat service has three jobs",
+   "teaches": "Book scope first, in one card: 1-on-1 and group chat (max 100 members), mobile app + web, 50 million DAU, text only, message under 100,000 characters, online indicator, multiple devices per account, push notifications, chat history kept forever, end-to-end encryption not required for now. Then the core idea: client A never connects to client B. Every message goes through a chat service that has three jobs: (1) receive messages from clients, (2) find the right recipients and relay the message, (3) if a recipient is offline, hold the message on the server until they come online. The sending side is easy: the client opens an HTTP connection and sends; a keep-alive header keeps it open so you don't redo the TCP handshake each time (Facebook first sent messages over HTTP). The hard side is receiving: HTTP is client-initiated, so the server has no natural way to push a message to B. Jargon: DAU = daily active users; keep-alive = reuse one TCP connection for many requests.",
+   "interaction": "A three-box diagram: phone A, a 'Chat service' box, phone B. A text field + Send button on A. Sending animates a message bubble A -> service -> B. A toggle on B: 'B online / offline'. With B offline, the bubble stops in a small 'held' tray under the service (badge counts held messages); flipping B back online drains the tray to B. A second toggle 'Let A connect straight to B' is disabled with a tooltip 'Not in this design: clients don't know each other's addresses, and B may be offline'. Then a prompt: 'Which leg is the hard one?' with two buttons on the arrows: A->service or service->B. Right answer: service->B (the server has to start the conversation, and HTTP doesn't let it).",
+   "check": "Quiz (3 Qs): which of the three jobs covers 'B's phone is off'? (hold until online); why is sending over HTTP fine? (client starts it; keep-alive avoids repeated handshakes); what's the hard part? (server-initiated delivery to the receiver)."
+  },
+  {
+   "title": "Polling",
+   "sub": "Are we there yet? Are we there yet?",
+   "teaches": "Polling: the client asks the server 'any new messages?' on a fixed interval. Simple, but costly: most answers are 'no', each one burns a request, server work and battery, and latency is up to one full interval. Shorter interval = lower latency but more waste; longer interval = less waste but slower delivery. You can't win both.",
+   "interaction": "Predict-then-watch timeline sim. A horizontal 60-second track; 4 messages for B arrive at random moments (shown as stars on the server row). A slider sets the poll interval (1s, 5s, 15s, 30s). Before pressing Run, the learner predicts for 5s: 'about how many empty responses?' (choices ~2 / ~8 / ~50). Running animates poll ticks on the client row; each tick returns either an empty grey response or the waiting message(s). Live counters: requests sent, empty responses, average delivery delay. Expected at 5s: 12 requests, ~8 empty, average delay ~2.5s. Then the learner re-runs at 1s and 30s and sees waste and latency trade places.",
+   "check": "Prediction scored (~8 is right at 5s). One quiz Q: 'Halving the poll interval does what?' (roughly doubles requests, halves the average wait)."
+  },
+  {
+   "title": "Long polling",
+   "sub": "Hold the line, but it still leaks",
+   "teaches": "Long polling: the client sends a request and the server holds it open until a message arrives or a timeout passes; then the client immediately asks again. Fewer empty answers than polling. The book's three drawbacks: (1) sender and receiver may be on different chat servers: HTTP servers are usually stateless and a round-robin load balancer can send the sender's request to a server that doesn't hold the receiver's open connection; (2) the server has no good way to tell if a client has disconnected; (3) it's still inefficient: a user who rarely chats still reconnects after every timeout.",
+   "interaction": "Spot-the-problem matching. Three short looping mini-animations, each a little failure: (a) round-robin LB arrow sends A's message to Server 1 while B's held request sits on Server 2 (message waits/goes nowhere), (b) B's phone quietly vanishes but Server 2 keeps holding the request with a '?' over it, (c) a sleepy user 'zzz' whose connection times out and reconnects every 30s with no messages ever. Below are three drawback cards: 'Wrong server', 'Can't tell you left', 'Wasted reconnects'. The learner drags (or taps card then animation) to match each card to its animation. Wrong matches cost a heart and shake.",
+   "check": "All three matched correctly. Quiz Q: 'Why does a stateless round-robin load balancer hurt long polling?' (the request carrying B's message may land on a server that isn't holding B's connection)."
+  },
+  {
+   "title": "WebSocket",
+   "sub": "One pipe, both directions",
+   "teaches": "WebSocket: the client starts with a normal HTTP request that asks to 'upgrade' (header Upgrade: websocket); the server answers 101 Switching Protocols and from then on the same connection is persistent and bi-directional, so the server can push any time. It uses port 80/443, so it usually gets through firewalls. The book uses WebSocket for sending as well as receiving: it simplifies the design and the implementation on both client and server. The cost: connections are long-lived state on the server, so connection management on the server side is now the critical problem (this sets up 12.2). Back-of-envelope: 1M online users polling every 5s = 200,000 requests/s, almost all empty; over WebSocket it's 1M open connections and traffic only when there's something to say.",
+   "interaction": "Two parts. (1) Tap-in-order the handshake: 'Client: HTTP GET with Upgrade: websocket' -> 'Server: 101 Switching Protocols' -> 'Connection stays open' -> 'Server pushes a message any time' -> 'Client sends on the same connection'. (2) Calculate-and-check: 'One million online users each poll every 5 seconds. Requests per second?' numeric input; accept 200,000 (+/-5%). Then a three-lane race replays the same 4-message, 60-second scenario from stage 2 for polling (5s), long polling (30s timeout) and WebSocket side by side, with request counters; WebSocket ends with 1 connection + 4 pushes.",
+   "check": "Order correct; calculation within tolerance; quiz Q: 'Why use WebSocket for sending too, when HTTP would work?' (one connection for both directions, simpler design)."
+  },
+  {
+   "title": "Boss: The Lag Wraith",
+   "sub": "Pick the right connection style",
+   "teaches": "Choosing the transport is a trade-off, not a reflex. Polling fits rare, non-urgent updates; long polling is a fallback when WebSockets are blocked; WebSocket fits real-time two-way traffic.",
+   "interaction": "Q.boss with one fixed choice set: Polling / Long polling / WebSocket. Scenarios: (1) 'Friends chat in real time and expect messages instantly in both directions' -> WebSocket. (2) 'An admin dashboard shows a count that changes about once an hour' -> Polling (cheap and simple at that rate). (3) 'Some corporate networks strip the Upgrade header, so WebSockets fail; you still want near-real-time messages' -> Long polling (fallback). (4) 'You measure 1M users polling every 2s and 99% of answers are empty' -> WebSocket. (5) 'A weather widget refreshes every 10 minutes' -> Polling. (6) 'The receiver must get a message the moment a friend sends it, and the server must notice quickly when the phone drops off' -> WebSocket (persistent connection; close/heartbeat signals).",
+   "check": "Boss HP to zero; each wrong answer shows the 'why'."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "The interview answer, in your words",
+   "teaches": "Pull it together in 30 seconds.",
+   "interaction": "Q.drill. Prompt: interviewer asks 'How does the server get a new message to the receiver?'. Model answer: 'Sending is easy, the client starts an HTTP request. Receiving is the hard part because the server has to start the conversation. Polling wastes requests and adds up to a full interval of delay. Long polling helps, but with a stateless load balancer the sender can land on a different server than the one holding the receiver's connection, the server can't tell when a client has gone, and idle users keep reconnecting. So I'd use WebSocket: it starts as HTTP, upgrades, and stays open in both directions over 80/443. I'd use it for sending too. The cost is that chat servers become stateful, so connection management matters.'",
+   "check": "Self-grade checks: 'I said why receiving is the hard side', 'I named at least two long-polling drawbacks', 'I picked WebSocket for both directions and named the cost (stateful servers)'."
+  }
+ ],
+ "caveats": [
+  "The book says long polling 'can't tell if a client disconnected'. Real servers do notice TCP resets or failed writes eventually; the problem is a quietly dead connection (phone lost signal) can look alive for a long time. WebSocket has the same issue, which is why real systems add heartbeats or pings (see 12.5).",
+  "WebSocket over 443 usually passes firewalls, but some proxies still break it. Libraries like Socket.IO and SignalR fall back to long polling automatically, and production chat systems keep a fallback.",
+  "Server-Sent Events (SSE) is a fourth option the book skips: server-to-client push over plain HTTP. It's fine for one-way feeds; chat needs two-way traffic, so WebSocket is still the natural pick.",
+  "The 200,000 requests/s polling figure is our worked example using the book's 1M concurrent users, not a number from the book."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo: Design a Chat System (book chapter)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-chat-system"
+  },
+  {
+   "label": "RFC 6455: The WebSocket Protocol",
+   "url": "https://datatracker.ietf.org/doc/html/rfc6455"
+  },
+  {
+   "label": "MDN: The WebSocket API",
+   "url": "https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API"
+  },
+  {
+   "label": "Erlang at Facebook (Eugene Letuchy, chat over HTTP long polling)",
+   "url": "https://www.erlang-factory.com/upload/presentations/31/EugeneLetuchy-ErlangatFacebook.pdf"
+  }
+ ],
+ "id": "1201",
+ "file": "1201-chat-connections.html",
+ "world": 12,
+ "chapterTitle": "Design a Chat System",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-chat-system",
+ "cheatsheet": "../reference/ch12-chat-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "1201",
+   "n": "12.1",
+   "t": "Open the Pipe",
+   "d": "What a chat service does, and polling vs long polling vs WebSocket"
+  },
+  {
+   "id": "1202",
+   "n": "12.2",
+   "t": "The Switchboard",
+   "d": "Stateless vs stateful services, the scaled design, and service discovery"
+  },
+  {
+   "id": "1203",
+   "n": "12.3",
+   "t": "The Message Vault",
+   "d": "Where chat history lives, the message tables, and how to mint message IDs"
+  },
+  {
+   "id": "1204",
+   "n": "12.4",
+   "t": "Special Delivery",
+   "d": "The 1-on-1 message flow, syncing many devices, and small-group fan-out"
+  },
+  {
+   "id": "1205",
+   "n": "12.5",
+   "t": "The Green Dot",
+   "d": "Online presence: login/logout, heartbeats, and fanning out status changes"
+  },
+  {
+   "id": "1206",
+   "n": "BOSS",
+   "t": "Design It Live: Chat",
+   "d": "Full mock interview: design a chat system for 50 million daily users"
+  }
+ ]
+}

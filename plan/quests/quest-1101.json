@@ -1,0 +1,118 @@
+{
+ "n": "11.1",
+ "slug": "news-feed-scope-and-flows",
+ "t": "Two Rivers",
+ "d": "Scope a news feed, design its two APIs, and sketch the publish and read flows",
+ "boss": false,
+ "badge": "🌊 Badge: River Splitter",
+ "winTitle": "The feed has two rivers",
+ "goal": "Your win today: you can scope 'design a news feed' in a minute, name its two endpoints with their parameters, and draw the publishing flow and the feed-building flow, saying what each box does.",
+ "bookSections": "Chapter intro (what a news feed is; same family as Facebook feed, Instagram feed, Twitter timeline); Step 1 Q&A (mobile + web, publish + see friends' posts, reverse chronological, up to 5,000 friends, 10M DAU, images and videos); Step 2: the two flows, Newsfeed APIs (feed publishing API, newsfeed retrieval API), Feed publishing high-level figure (11-2), Newsfeed building high-level figure (11-3)",
+ "stages": [
+  {
+   "title": "What's in a feed?",
+   "sub": "Scope it in under a minute",
+   "teaches": "A news feed is the endlessly updating list of stories in the middle of your home page: status updates, photos, videos, links, app activity and likes from the people, pages and groups you follow. Interviewers phrase it as 'design Facebook's news feed', 'design Instagram's feed' or 'design the Twitter timeline': same problem. The book's scoping answers (our wording): works on mobile app and web; core features are publishing a post and seeing friends' posts on your feed page; order is reverse chronological (newest first), assumed to keep things simple; a user can have up to 5,000 friends; traffic is 10 million daily active users (DAU = people who open the app at least once a day); posts can carry images and videos, not just text. Bridge from World 3: you saw this exact Q&A there as the framework's worked example; this world builds the full design. Each answer changes the design: 5,000 friends caps how far one post fans out; media means a CDN later; reverse-chronological means no ranking service in v1.",
+   "interaction": "Speed round. A 60-second clock and a deck of 9 question cards, dealt 3 at a time. 6 are design-shaping (Mobile, web or both? / What are the must-have features? / Newest-first or ranked? / How many friends can one user have? / How much traffic (DAU)? / Text only, or images and video?) and 3 are time-wasters (Which front-end framework? / Should posts support custom fonts? / Do we use microservices or a monolith?). Tapping a good card shows the interviewer's answer in a chat bubble and lights a requirement tile on a board (Mobile + web, Publish + view friends' feed, Newest first, <= 5,000 friends, 10M DAU, Images + video). Tapping a waster burns 8 seconds and the interviewer replies 'Let's not worry about that yet.' After all 6 tiles light, a mini-check: for each tile, tap the design consequence it unlocks from a list of 6 (e.g. '<= 5,000 friends' -> 'bounds how many feeds one post is copied into'; 'Images + video' -> 'media served from a CDN'; 'Newest first' -> 'no ranking step in v1'; '10M DAU' -> 'sizing for caches and fanout'; 'Mobile + web' -> 'one HTTP API serves both clients'; 'Publish + view' -> 'two flows: publishing and feed building').",
+   "check": "All 6 tiles lit and all 6 consequences matched (one wrong match costs a heart). Quiz (2 Qs): 'Which requirement is an assumption made for simplicity, and which real feeds usually drop?' (reverse chronological; real feeds rank); 'Which scope answer limits how many feeds a single post lands in?' (the 5,000-friend cap)."
+  },
+  {
+   "title": "Newest first, or best first?",
+   "sub": "Why the book picks the simple order",
+   "teaches": "Reverse chronological = sort by post time, newest on top. Ranked = sort by a score (the book's example: posts from close friends weigh more; Facebook's help page lists signals like who posted, how you've interacted with them and the type of post). Ranking needs extra data (affinity scores, engagement counts) and a scoring step at read time, so the book assumes reverse-chronological to keep the core design clear. Ranking is a sensible 'extension' to mention in the wrap-up, but explaining a ranking formula in depth is a rabbit hole (World 3's warning about EdgeRank). Key point: the fanout and caching skeleton you'll build works for both orders; ranking adds a step on top.",
+   "interaction": "Predict-then-watch. A phone mock shows 6 posts as cards, each with a timestamp (e.g. 9:02, 9:15, 9:40, 10:05, 10:06, 10:30), an author and a hidden 'closeness' score (1-10) revealed by a peek toggle. A switch flips 'Newest first' / 'Ranked (time + closeness)'. Before each flip, the learner taps the card they think lands on top. Newest first: the 10:30 post from a distant acquaintance (closeness 2). Ranked with the given toy formula score = closeness x 10 - minutes old / 10: the 9:40 post from your sister (closeness 9) wins. Cards animate into new positions. A footer shows 'extra data needed' chips that appear only in ranked mode: closeness per friend pair, likes/comments counts, a scoring step per feed load.",
+   "check": "Both predictions made (wrong ones cost no heart, just reveal). Quiz (2 Qs): 'Why does the book choose reverse chronological?' (simplicity; ranking adds data and a scoring step); 'Does switching to ranking throw away the fanout/caching design?' (no, it adds a scoring step on top)."
+  },
+  {
+   "title": "Two doors in the wall",
+   "sub": "The publish API and the retrieval API",
+   "teaches": "The book keeps the API to two HTTP endpoints, both authenticated with an auth_token. Feed publishing: POST /v1/me/feed, params: content (the post text) and auth_token. Newsfeed retrieval: GET /v1/me/feed, param: auth_token. 'me' means 'the caller', resolved from the token on the server, so a client can never post as, or read the feed of, someone else by changing an ID in the URL. POST because publishing creates something; GET because reading has no side effects and is safe to retry. Caveat taught here: the book's retrieval API has no paging parameter; a real one takes a cursor (e.g. 'posts older than this ID') and a page size, because nobody downloads a whole feed at once.",
+   "interaction": "API builder. Two blank request lines. Token tiles to drag (or tap-to-place): POST, GET, PUT, DELETE, /v1/me/feed, /v1/users/{user_id}/feed, content, auth_token, user_id, password. Line 1 must become 'POST /v1/me/feed' with params content + auth_token; line 2 'GET /v1/me/feed' with auth_token. Then spot-the-bug: 3 proposed requests appear, the learner taps the flaw in each: (a) 'GET /v1/me/feed?content=Hello&auth_token=...' (publishing with GET: a read must not create a post; proxies and retries may repeat it); (b) 'POST /v1/users/42/feed?content=Hi' (no auth_token, and the author is taken from the URL, so anyone can post as user 42); (c) 'GET /v1/me/feed?auth_token=...' returning 50,000 posts (no pagination: add a cursor + limit).",
+   "check": "Both lines built correctly and all 3 bugs found (each wrong tap costs a heart). Quiz (1 Q): 'What does me in /v1/me/feed stand for, and why is it safer than a user ID?' (the user identified by the auth token; can't be spoofed by editing the URL)."
+  },
+  {
+   "title": "River one: publishing",
+   "sub": "Where a new post goes",
+   "teaches": "Publishing flow (book's high-level figure 11-2, our wording): the user's client sends POST /v1/me/feed (resolved via DNS) to a load balancer, which spreads requests across web servers. Web servers route the request to internal services. Three services act on a new post: the post service saves it in the post database and the post cache; the fanout service pushes the new post into friends' news feeds, which live in a news feed cache so reads are fast; the notification service tells friends there's new content and sends push notifications. Jargon: fanout = copying one item out to many recipients; cache = fast in-memory store (e.g. Redis or Memcached) in front of a slower database.",
+   "interaction": "Assemble-then-run. An empty canvas with slots and a tray of 9 boxes: DNS, Load balancer, Web servers, Post service, Post cache, Post DB, Fanout service, News feed cache, Notification service (plus 2 decoys: 'Search indexer', 'Ranking service'). The learner drags each box into its slot; slots validate on drop (decoys bounce with a tooltip 'not in the book's v1'). Once complete, a 'Publish \"Hello!\"' button animates the post: DNS lookup, LB pick, web server, then a three-way split. Pause at the split with 3 job cards ('Persist the post', 'Put it in friends' feeds', 'Ping friends' phones') to drop on the three services. Then the animation finishes: post lands in cache + DB, 5 friend mini-feeds glow with a new ID, 5 phones buzz.",
+   "check": "Diagram assembled with no decoys, 3 jobs matched to services. Quiz (2 Qs): 'Which service writes into the news feed cache?' (fanout service); 'Which service owns the post's permanent copy?' (post service -> post DB)."
+  },
+  {
+   "title": "River two: feed building",
+   "sub": "How you read your feed",
+   "teaches": "Feed-building flow (book's figure 11-3): the client sends GET /v1/me/feed; the load balancer spreads it across web servers; web servers call the news feed service; the news feed service reads the user's feed from the news feed cache. The cache holds the IDs of the feed's posts (not full posts), which is enough to know what to show; turning IDs into full posts is the retrieval deep dive (quest 11.4). The key design idea: the expensive work (figuring out which posts belong in your feed) was done when the posts were published, so reading is a cheap lookup. That sets up the big question in 11.2: should we really do it at write time?",
+   "interaction": "Predict-then-watch on the reading side. Same canvas style: user -> LB -> web servers -> news feed service -> news feed cache. Before pressing 'Open app', the learner answers: 'How many database queries does the news feed service need to find which posts belong in your feed?' (0 / 1 per friend / 1 per post). Correct: 0 — it's one cache lookup, because the list was precomputed. The animation shows the cache returning a list of IDs like [p981, p977, p960, ...] with a callout 'IDs only, details later'. Then a cliffhanger card: 'Who wrote these IDs into your cache, and when?' with two answer buttons: 'The fanout service, when each friend posted' (right) / 'The news feed service, just now' (wrong for this design; that's the pull model, coming in 11.2).",
+   "check": "Prediction and cliffhanger answered. Quiz (1 Q): 'What does the news feed cache store?' (a list of post IDs per user, not full post objects)."
+  },
+  {
+   "title": "Boss: The Whiteboard Gremlin",
+   "sub": "Which river, which box?",
+   "teaches": "Placing each responsibility in the right flow and component is the core of the high-level design.",
+   "interaction": "Q.boss with a shared choice set of 4: 'Post service' / 'Fanout service' / 'Notification service' / 'News feed service'. Scenarios: (1) 'A new post must survive a server restart' -> Post service (persists to post DB). (2) 'Mia's 300 friends should see her post next time they open the app' -> Fanout service. (3) 'Mia's best friend gets a buzz on her lock screen' -> Notification service. (4) 'Leo opens the app and needs his list of post IDs' -> News feed service. (5) 'A popular post is read 10,000 times a minute; keep it off the database' -> Post service (post cache). (6) 'Every friend's precomputed list needs the new post's ID appended' -> Fanout service. Wrong picks cost a heart and show the why.",
+   "check": "Boss HP to zero."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "The two-flow pitch",
+   "teaches": "A crisp step-2 answer names the scope, the two APIs and both flows in under a minute.",
+   "interaction": "Q.drill. Prompt: 'The interviewer says: you've scoped it, now give me the high-level design.' Model answer (paraphrase): 'Two endpoints, both authenticated by token: POST /v1/me/feed with the content to publish, and GET /v1/me/feed to read. Two flows. Publishing: load balancer, web servers, then the post service stores the post in a DB and cache, the fanout service pushes the post ID into each friend's feed in a news feed cache, and a notification service alerts friends. Reading: load balancer, web servers, news feed service, which reads my precomputed list of post IDs from the news feed cache. Order is newest first for v1; ranking can come later.' Checks: 'Named both endpoints with POST vs GET', 'Mentioned auth_token / me resolved from token', 'Named post, fanout and notification services', 'Said the feed cache stores post IDs', 'Said reading is cheap because the work was done at publish time'.",
+   "check": "Drill completed and self-graded."
+  }
+ ],
+ "caveats": [
+  "Real feeds are ranked, not purely newest-first; the book assumes reverse chronological only to keep the design focused. The fanout skeleton survives; ranking adds a scoring step.",
+  "The book's GET /v1/me/feed has no pagination. Any real feed API takes a cursor (e.g. the last post ID seen) and a page size.",
+  "The 5,000-friend limit mirrors Facebook's real friend cap, but 'followers' of pages and public figures are unlimited, which is where fanout gets painful (quest 11.2).",
+  "The book's figure shows the notification service in the publishing flow but doesn't detail it; World 10 (notification system) covers that box."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo: Design a News Feed System (book chapter 11, online version)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-news-feed-system"
+  },
+  {
+   "label": "Facebook Help Center: How News Feed works (book reference)",
+   "url": "https://www.facebook.com/help/327131014036297/"
+  }
+ ],
+ "id": "1101",
+ "file": "1101-news-feed-scope-and-flows.html",
+ "world": 11,
+ "chapterTitle": "Design a News Feed System",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-news-feed-system",
+ "cheatsheet": "../reference/ch11-news-feed-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "1101",
+   "n": "11.1",
+   "t": "Two Rivers",
+   "d": "Scope a news feed, design its two APIs, and sketch the publish and read flows"
+  },
+  {
+   "id": "1102",
+   "n": "11.2",
+   "t": "Push, Pull, or Both",
+   "d": "Fanout on write vs fanout on read, the celebrity problem, and the hybrid fix"
+  },
+  {
+   "id": "1103",
+   "n": "11.3",
+   "t": "The Fanout Factory",
+   "d": "Inside publishing: auth and rate limits, the five-step fanout workflow, and an ID-only feed cache"
+  },
+  {
+   "id": "1104",
+   "n": "11.4",
+   "t": "Hydrate the Feed",
+   "d": "Inside reading: turn post IDs into a full feed, serve media from a CDN, and the five cache layers"
+  },
+  {
+   "id": "1105",
+   "n": "BOSS",
+   "t": "Design It Live: News Feed",
+   "d": "Full mock interview: design a news feed for 10 million daily users"
+  }
+ ]
+}

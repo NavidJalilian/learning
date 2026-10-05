@@ -1,0 +1,125 @@
+{
+ "n": "15.2",
+ "slug": "drive-blocks-and-delta-sync",
+ "t": "Chop It Into Blocks",
+ "d": "The high-level design, block servers, 4 MB blocks, delta sync, compress-then-encrypt",
+ "boss": false,
+ "badge": "🧱 Badge: Block Smith",
+ "winTitle": "Blocks forged!",
+ "goal": "Your win today: you can sketch the full high-level design (block servers, cloud + cold storage, API servers, metadata DB + cache, notification service, offline backup queue) and explain how splitting files into blocks makes sync fast and cheap with delta sync and compression.",
+ "bookSections": "Step 2 (High-level design: the component list); Step 3 (Block servers: delta sync, compression)",
+ "stages": [
+  {
+   "title": "Build the map",
+   "sub": "Step 2 · the high-level design, drag-to-place",
+   "teaches": "Book's high-level design components and what each does: User (browser or mobile app). Block servers: upload blocks to cloud storage; a file is split into blocks, each with a unique hash stored in the metadata DB; each block is stored as an independent object in S3; to rebuild a file, join its blocks in order. Block size: the book follows Dropbox's max of 4 MB. Cloud storage: the file's blocks live here (S3). Cold storage: for inactive data that's rarely accessed. Load balancer: spreads requests evenly among API servers. API servers: everything except the upload flow — user authentication, managing user profile, updating file metadata. Metadata database: metadata of users, files, blocks, versions (files themselves live in the cloud). Metadata cache: some metadata cached for fast retrieval. Notification service: a publisher/subscriber system that tells clients when a file is added/edited/removed elsewhere so they can pull the latest changes. Offline backup queue: if a client is offline and can't pull changes, the queue stores them so they sync when the client is back online.",
+   "interaction": "Drag-to-place architecture board. A blank diagram with labelled empty slots and arrows (user -> [ ] -> cloud storage, user -> [LB] -> [ ] -> [ ]+[ ], [ ] -> user, etc.). A tray holds 8 component tiles: Block servers, Cloud storage, Cold storage, Load balancer, API servers, Metadata DB, Metadata cache, Notification service, Offline backup queue. Each tile, when tapped, shows a one-line job description; learner drops it into a slot. Correct drop snaps and glows; wrong drop bounces with a hint ('this one only handles uploading blocks'). Finished board = the book's figure, and it is reused as a mini-map in later quests.",
+   "check": "Q.quiz: 'A client's laptop was closed all weekend while a coworker edited 30 shared files. Which component makes sure it catches up?' -> Offline backup queue (with the notification service). Distractors: cold storage, metadata cache, load balancer."
+  },
+  {
+   "title": "Split, squash, lock, ship",
+   "sub": "The block-server pipeline, sort-in-order",
+   "teaches": "Book flow: a new file is split into smaller blocks, each block is compressed, then encrypted, then uploaded to cloud storage. Compression algorithms depend on file type: gzip/bzip2 for text; images and video use different algorithms (often already compressed). Order matters: compress BEFORE encrypt — good encryption makes output look random, and random data doesn't compress. Each block is identified by a hash of its content (the book just says 'unique hash value'; in practice a cryptographic hash like SHA-256), stored in the metadata DB alongside block order.",
+   "interaction": "Tap-in-order: four shuffled pipeline tiles (Split into 4 MB blocks / Compress / Encrypt / Upload to S3) — learner taps them in order. Then a 'spot-the-bug' twist: a teammate's pipeline runs Encrypt then Compress; a live meter shows a 40 MB log file compressing to 6 MB in the right order but staying ~40 MB in the wrong order. Learner clicks the line that's wrong and picks the reason from 3 options (encrypted bytes look random so compression finds no patterns).",
+   "check": "Q.quiz: 'Which file is LEAST worth gzipping?' -> an .mp4 video (already compressed). Others: a CSV, a .log file, a JSON export."
+  },
+  {
+   "title": "Only send what changed",
+   "sub": "Delta sync, predict-then-watch",
+   "teaches": "Delta sync: when a file is modified, only the modified blocks are synced, not the whole file (the book's figure: only 'block 2' and 'block 5' are uploaded). Two wins: less bandwidth, faster sync — both non-functional requirements from step 1. How the system knows which blocks changed: compare each block's hash with the stored hash list. 10 blocks x 4 MB = a 40 MB file; editing 2 blocks sends 8 MB (20%). Also enables resumable uploads at block granularity and cross-file dedup later (quest 15.5).",
+   "interaction": "Predict-then-watch on a 40 MB 'thesis.docx' drawn as 10 numbered 4 MB blocks with short hash labels (a3f…, 9bc…). Round 1: learner edits a paragraph (button 'edit chapter 2' and 'edit chapter 5'); before syncing they type how many MB will be uploaded (answer 8). Watch: blocks 2 and 5 flash with new hashes and fly to the cloud; a counter shows '8 MB sent, 32 MB saved'. Round 2 (the honest caveat): 'insert one byte at the very start of the file' — predict how many blocks change with fixed-size 4 MB blocks. Watch: every boundary shifts, all 10 hashes change, 40 MB sent. Then a toggle 'content-defined chunking' (boundaries chosen by a rolling hash of the content, like rsync / Dropbox's real approach) re-runs it: only block 1 changes. Learner notes the takeaway in one tap: 'fixed blocks break on inserts; content-defined boundaries fix it'.",
+   "check": "Q.quiz: 'A 40 MB file in 4 MB blocks; you edit bytes inside blocks 3, 4 and 9 without changing the file's length. How much does delta sync upload?' -> 12 MB."
+  },
+  {
+   "title": "Lock it in",
+   "sub": "Quick recall",
+   "teaches": "Consolidation: 4 MB max block (Dropbox), hash per block in metadata DB, blocks stored as independent S3 objects, rebuild by joining blocks in order, delta sync, compress-then-encrypt, cold storage for inactive data, the offline backup queue's job.",
+   "interaction": "Three rapid Q.quiz cards in a row (tag 'Recall'): (1) 'How is a file rebuilt for download?' -> join its blocks in block order. (2) 'Where are the block hashes kept?' -> metadata DB (not S3, not the cache only). (3) 'What does an API server NOT do in this design?' -> upload file blocks (that's the block servers).",
+   "check": "All three quizzes answered."
+  },
+  {
+   "title": "Boss: The Bandwidth Hog",
+   "sub": "Interview scenarios",
+   "teaches": "Applying blocks, delta sync and pipeline order.",
+   "interaction": "Q.boss '👾 The Bandwidth Hog', 4 scenarios, 3 choices each. (1) 'A user fixes a typo in a 2 GB video project file; the whole 2 GB re-uploads. What's missing?' -> delta sync on blocks / a bigger pipe / a CDN. (2) 'Mobile users complain sync burns their data plan.' -> delta sync + compression / upload at night only / disable mobile sync. (3) 'Security asks that S3 never sees plaintext; ops asks that we compress. In what order?' -> compress then encrypt / encrypt then compress / either, it doesn't matter. (4) 'Why does the API server not just accept the whole file?' -> block servers own chunking/compressing/encrypting so API servers stay light and the block logic lives in one place / API servers can't speak HTTPS / S3 forbids it.",
+   "check": "Boss cleared when all 4 are answered."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "Explain block storage in 45 seconds",
+   "teaches": "Pulling the high-level design and block servers together.",
+   "interaction": "Q.drill. Prompt: 'Interviewer: how do files get from the client into storage, and how do you keep sync fast?' Model: 'Clients talk to API servers through a load balancer for metadata, and to block servers for file content. Block servers split each file into blocks of up to 4 MB, compress them, encrypt them, and store each as its own object in S3, with each block's hash and order in the metadata DB. When a file changes we compare hashes and only upload the blocks that changed — delta sync — which saves bandwidth and makes sync fast. Rarely used data moves to cold storage, a notification service tells other devices something changed, and an offline backup queue holds changes for devices that are offline.' Checks: block size ~4 MB; compress before encrypt; hashes in metadata DB; delta sync; notification service; offline backup queue.",
+   "check": "Self-graded checklist."
+  }
+ ],
+ "caveats": [
+  "Fixed-size blocks make delta sync fragile: inserting bytes near the start shifts every block boundary. Real sync engines use rsync-style rolling hashes or content-defined chunking so only the touched region changes. The book doesn't cover this.",
+  "In the book, block servers do the chunking, yet delta sync only saves *upload* bandwidth if the client knows which blocks changed. Real Dropbox clients chunk and hash locally and upload only blocks the server lacks; the book revisits this as an alternative in its wrap-up.",
+  "4 MB is Dropbox's block size, not a universal rule; bigger blocks mean fewer metadata rows but coarser deltas.",
+  "'Unique hash value' in practice means a cryptographic hash such as SHA-256; a weak hash would let two different blocks collide."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo — Design Google Drive (book chapter)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-google-drive"
+  },
+  {
+   "label": "Tridgell & Mackerras — The rsync algorithm (tech report)",
+   "url": "https://rsync.samba.org/tech_report/"
+  },
+  {
+   "label": "Dropbox Tech — Streaming File Synchronization",
+   "url": "https://dropbox.tech/infrastructure/streaming-file-synchronization"
+  },
+  {
+   "label": "How We've Scaled Dropbox (Kevin Modzelewski, 2012 talk)",
+   "url": "https://www.youtube.com/watch?v=PE4gwstWhmc"
+  }
+ ],
+ "id": "1502",
+ "file": "1502-drive-blocks-and-delta-sync.html",
+ "world": 15,
+ "chapterTitle": "Design Google Drive",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-google-drive",
+ "cheatsheet": "../reference/ch15-google-drive-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "1501",
+   "n": "15.1",
+   "t": "Claim Your Locker",
+   "d": "Scope Google Drive, run the numbers, design the upload/download/revision APIs, outgrow one server"
+  },
+  {
+   "id": "1502",
+   "n": "15.2",
+   "t": "Chop It Into Blocks",
+   "d": "The high-level design, block servers, 4 MB blocks, delta sync, compress-then-encrypt"
+  },
+  {
+   "id": "1503",
+   "n": "15.3",
+   "t": "The Metadata Ledger",
+   "d": "Strong consistency, cache invalidation, the metadata schema, and sync conflicts"
+  },
+  {
+   "id": "1504",
+   "n": "15.4",
+   "t": "Ping When It Changes",
+   "d": "The upload flow, the download flow, long-polling notifications and the offline backup queue"
+  },
+  {
+   "id": "1505",
+   "n": "15.5",
+   "t": "Thrift & Chaos",
+   "d": "Save storage space with dedup, version limits and cold storage, then survive every component failing"
+  },
+  {
+   "id": "1506",
+   "n": "BOSS",
+   "t": "Design Drive Live",
+   "d": "Full mock interview: design Google Drive with the 4-step framework"
+  }
+ ]
+}

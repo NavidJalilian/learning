@@ -1,0 +1,133 @@
+{
+ "n": "13.5",
+ "slug": "scaling-autocomplete",
+ "t": "Split the Alphabet",
+ "d": "Shard the trie, balance hot letters, and handle languages, countries and trends",
+ "boss": false,
+ "badge": "🔤 Badge: Alphabet Splitter",
+ "winTitle": "Every letter has a home",
+ "goal": "Your win today: you can shard the trie by first letter (and deeper), explain why that's uneven and how a shard map manager fixes it with historical data, and answer the book's three wrap-up follow-ups: multiple languages (Unicode), country-specific results (per-country tries on CDNs), and real-time trending queries (streaming).",
+ "bookSections": "Step 3 – Design deep dive: Scale the storage (first-character sharding, multi-level sharding, shard map manager); Step 4 – Wrap up (multi-language support, country-specific queries, trending/real-time queries)",
+ "stages": [
+  {
+   "title": "Slice by first letter",
+   "sub": "The naive shard",
+   "teaches": "Sharding = splitting data across servers. For an English-only system, shard by the first character. 2 servers: 'a'–'m' and 'n'–'z'. 3 servers: 'a'–'i', 'j'–'r', 's'–'z'. You can go up to 26 servers, one per letter. Past 26, shard on the second or even third letter: e.g. queries starting with 'a' split into 'aa'–'ag', 'ah'–'an', 'ao'–'au', 'av'–'az'. The problem: data is UNEVEN, because far more words start with 'c' than with 'x'.",
+   "interaction": "An a–z bar with draggable dividers and a server-count stepper (2, 3, 26, 30). Each letter has a bar for its share of queries (illustrative English first-letter distribution: s, c, p, m tall; x, z, q, y tiny). Load gauges above each server fill up from the letters it owns. Step 1: set 2 servers at a–m / n–z and 3 at a–i / j–r / s–z (book's splits); the gauges are unequal. Step 2: set 26 servers; the 's' server is in the red while 'x' idles. Step 3: at 30 servers, the learner must split one letter at the second level; picking 's' or 'c' gets a gold check, picking 'x' gets 'that server was already bored'.",
+   "check": "Q.quiz: 'Max servers with first-letter sharding alone?' (26). 'What do you do beyond that?' (shard on the 2nd/3rd character). 'Why are loads uneven?' (letter frequency isn't uniform)."
+  },
+  {
+   "title": "The shard map manager",
+   "sub": "Balance by history, not by alphabet",
+   "teaches": "Instead of fixed letter ranges, shard by HISTORICAL data distribution. A SHARD MAP MANAGER keeps a lookup database saying which shard holds which prefixes. Book example: if 's' gets about as many queries as 'u', 'v', 'w', 'x', 'y' and 'z' combined, use two shards: one for 's' alone and one for 'u'–'z'. Every read and write first asks the shard map manager where the prefix lives.",
+   "interaction": "Bin-packing puzzle: letter tiles sized by historical query volume; 4 shard bins each with a capacity line. The learner drags tiles into bins (contiguous ranges not required, mirroring the lookup table). A 'max shard load' meter must end under 110% of the average. When it's balanced, the shard map table auto-generates (prefix range → shard id). Then a lookup test: three queries ('sun', 'xylophone', 'cat') animate a packet: API server → Shard map manager → correct shard. The learner predicts the shard for each before it runs.",
+   "check": "Balanced if max bin ≤ 110% of mean; predicted shards must match the generated map."
+  },
+  {
+   "title": "Beyond English",
+   "sub": "Languages and countries",
+   "teaches": "Follow-up 1: support multiple languages by storing Unicode characters in trie nodes. Unicode is an encoding standard covering the characters of all the world's writing systems, modern and ancient. The node can no longer have a fixed 26 children, so children become a map. Follow-up 2: different countries search for different things, so build a different trie per country and store the tries in CDNs (content delivery networks: servers close to users) to cut response time.",
+   "interaction": "Sort mechanic: 6 situation cards dropped into 3 bins: 'Unicode trie nodes', 'Per-country tries on CDNs', 'Neither'. Cards: 'Japanese users type in kana' → Unicode; 'Top queries in Brazil differ from the US' → per-country; 'Users in India complain suggestions are slow and US-centric' → per-country + CDN; 'Accented é breaks the a–z array' → Unicode; 'Users want typo correction' → neither (out of scope); 'A German user wants German-language suggestions' → Unicode. Then a mini demo: a trie node shows a 26-slot array; inserting 'é' fails with an overflow animation; switching to 'children map' succeeds.",
+   "check": "All 6 cards correctly binned; Q.quiz: 'Why put country tries on CDNs?' (serve from close to the user → lower latency)."
+  },
+  {
+   "title": "Trending now",
+   "sub": "When the news breaks",
+   "teaches": "Follow-up 3: real-time trending queries (e.g. breaking news). The base design fails: offline workers aren't scheduled to rebuild yet, and even if they ran, a full trie build takes too long. The book's ideas: (1) shrink the working data set by sharding; (2) change the ranking model to give recent searches more weight; (3) treat data as a STREAM (data generated continuously, so you never have all of it at once), which needs different systems: Apache Hadoop MapReduce, Apache Spark Streaming, Apache Storm, Apache Kafka. The book says these are beyond its scope.",
+   "interaction": "Breaking-news sim. A timeline (Mon–Sun) with the weekly rebuild marked on Sunday. On Tuesday a 'NEWS: volcano erupts' event fires, and live searches for 'volcano eruption' spike (bar climbs). The dropdown for 'vo' still shows last week's list. The learner can toggle three mitigations: [Recency-weighted ranking], [Smaller shards, faster rebuild], [Streaming pipeline (Kafka → stream processor → trie)]. Each toggle shrinks the 'time until it appears' counter (e.g. ~5 days → hours → minutes); streaming alone gets it to minutes. Predict first: 'Which single change gets it into suggestions fastest?'",
+   "check": "Prediction: streaming pipeline. Q.quiz: 'Two reasons the weekly design can't show trends.' (workers not scheduled yet; full rebuild too slow)."
+  },
+  {
+   "title": "Boss: The Hot-Letter Titan",
+   "sub": "Scaling and follow-up scenarios",
+   "teaches": "Applying scaling + wrap-up answers.",
+   "interaction": "Q.boss() with 6 cards: (1) 'The 's' shard is melting' → shard map manager rebalances by history (split 's' to the second level). (2) 'We need 40 shards' → shard on the 2nd/3rd character. (3) 'Launching in Japan' → Unicode nodes + a country trie. (4) 'Users in Australia see 300 ms' → per-country trie served from a nearby CDN. (5) 'A celebrity news story breaks; suggestions are a week stale' → recency weighting + streaming pipeline. (6) 'Why not hash-shard prefixes randomly?' → it works for KV point lookups, but you lose the simple letter → shard rule; the book picks range-by-letter plus a map manager for balance (good trade-off to name).",
+   "check": "Engine-scored."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "Scale it and extend it",
+   "teaches": "Free recall.",
+   "interaction": "Q.drill(): 'The interviewer says: the trie no longer fits on one machine, and we're going global with trending results. Go.'",
+   "check": "Checklist: shard by first letter (2: a–m/n–z, 3: a–i/j–r/s–z, up to 26), deeper levels beyond 26; uneven letters → shard map manager with historical distribution (s alone vs u–z); Unicode nodes for languages; per-country tries on CDNs; trending: weekly workers too slow → recency weighting, smaller shards, streaming (Kafka, Spark Streaming, Storm)."
+  }
+ ],
+ "caveats": [
+  "The letter-frequency bars in the sim are illustrative. Real query distributions vary by product and language.",
+  "The book's ideas for trending are deliberately sketchy ('beyond the scope of this book'). Production systems typically run a separate real-time path for fresh queries and blend it with the batch trie, rather than rebuilding the whole trie from a stream.",
+  "Unicode makes the 'one byte per character' estimate from 13.1 wrong. UTF-8 uses 1–4 bytes per character, so storage estimates grow for non-Latin scripts.",
+  "Per-country tries on CDNs multiply storage by the number of countries. It's a latency-vs-storage trade-off."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo — Design a Search Autocomplete System (book chapter)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system"
+  },
+  {
+   "label": "Unicode — Frequently Asked Questions (basic)",
+   "url": "https://www.unicode.org/faq/basic_q.html"
+  },
+  {
+   "label": "Apache Hadoop",
+   "url": "https://hadoop.apache.org/"
+  },
+  {
+   "label": "Apache Spark Streaming",
+   "url": "https://spark.apache.org/streaming/"
+  },
+  {
+   "label": "Apache Storm",
+   "url": "https://storm.apache.org/"
+  },
+  {
+   "label": "Apache Kafka documentation",
+   "url": "https://kafka.apache.org/documentation/"
+  }
+ ],
+ "id": "1305",
+ "file": "1305-scaling-autocomplete.html",
+ "world": 13,
+ "chapterTitle": "Design a Search Autocomplete System",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system",
+ "cheatsheet": "../reference/ch13-autocomplete-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "1301",
+   "n": "13.1",
+   "t": "Every Keystroke Counts",
+   "d": "Scope autocomplete, do the envelope math, and see why one SQL table can't keep up"
+  },
+  {
+   "id": "1302",
+   "n": "13.2",
+   "t": "Grow the Trie",
+   "d": "The trie data structure, top-k search, and two tricks that make it O(1)"
+  },
+  {
+   "id": "1303",
+   "n": "13.3",
+   "t": "The Weekly Harvest",
+   "d": "Logs, aggregators, workers: how the trie gets built, stored and updated"
+  },
+  {
+   "id": "1304",
+   "n": "13.4",
+   "t": "Faster Than a Keystroke",
+   "d": "The query path, browser caching, data sampling, and the filter layer"
+  },
+  {
+   "id": "1305",
+   "n": "13.5",
+   "t": "Split the Alphabet",
+   "d": "Shard the trie, balance hot letters, and handle languages, countries and trends"
+  },
+  {
+   "id": "1306",
+   "n": "BOSS",
+   "t": "Autocomplete Live",
+   "d": "Full mock interview: design search autocomplete"
+  }
+ ]
+}

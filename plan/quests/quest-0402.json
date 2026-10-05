@@ -1,0 +1,136 @@
+{
+ "n": "4.2",
+ "slug": "token-and-leaking-bucket",
+ "t": "Token Tycoon",
+ "d": "The two bucket algorithms: token bucket and leaking bucket",
+ "boss": false,
+ "badge": "🪣 Badge: Bucket Baron",
+ "winTitle": "Buckets mastered",
+ "goal": "Your win today: you can run the token bucket and leaking bucket in your head, name their two parameters each, say who uses them (Amazon, Stripe; Shopify), and pick the right one for 'allow bursts' vs 'smooth steady output'.",
+ "bookSections": "Step 2 'Algorithms for rate limiting': token bucket and leaking bucket (with pros/cons); wrap-up point on hard vs soft rate limiting",
+ "stages": [
+  {
+   "title": "Fill the bucket",
+   "sub": "Token bucket, hands-on",
+   "teaches": "Token bucket: a container with a pre-defined capacity. A refiller puts tokens in at a preset rate; once the bucket is full, extra tokens overflow (are lost). Each request consumes one token. If there is a token, take it and let the request through; if not, the request is dropped. Book figure: bucket size 4, refill rate 4 per minute. Two parameters: bucket size (max tokens = the biggest burst allowed) and refill rate (tokens added per second = the long-run average rate). Because a full bucket can be spent at once, it allows short bursts of traffic.",
+   "interaction": "Live sim. A bucket drawn with 4 token slots, starting full. Game time is sped up (1 real second = 15 game seconds, so the refill of 4/min shows as 1 token every real second; a speed toggle offers 1× and paused). Buttons: 'Send 1 request' and 'Send burst of 5'. Each request is a packet that grabs a token (token disappears, packet goes green to 'API') or, with an empty bucket, bounces red ('dropped'). Overflow tokens visibly spill over the rim when the bucket is full. Counters: allowed / dropped / tokens now. Two mini-challenges with checkmarks: (1) 'Get 4 requests through in one instant' (burst while full); (2) 'Get a request dropped, then get one through again without sending a burst' (wait for refill).",
+   "check": "Both challenges completed; quiz: 'Which parameter sets the biggest burst you allow?' → bucket size."
+  },
+  {
+   "title": "Predict the drops",
+   "sub": "Calculate, then watch the bucket do it",
+   "teaches": "Real implementations don't run a refiller timer per bucket; they store two numbers (tokens left, time of last refill) and on each request compute tokens = min(capacity, tokens + elapsed × rate), then try to take one. This is cheap and exact.",
+   "interaction": "Three calculate-and-check rounds using the formula. Each shows a timeline of request arrivals; the learner types how many are dropped, then presses 'Watch' and the sim replays it with a running token count. Round 1: capacity 4, refill 1 token per 15 s, starts full; 6 requests at t=0 → 2 dropped. Round 2: same bucket; 6 requests at t=0, then 3 requests at t=30 s → t=0: 4 allowed, 2 dropped; t=30: 2 tokens refilled, 2 allowed, 1 dropped → 3 dropped total. Round 3: capacity 10, refill 2/s, starts with 0 tokens at t=0; 1 request every 0.25 s for 3 s (12 requests, at t=0.25…3.0) → tokens arrive 2/s; by the end about 6 tokens are earned, so ~6 allowed, 6 dropped (accept ±1 and explain the steady state: long-run you get the refill rate, not the burst size). A 'show formula' toggle displays tokens = min(cap, tokens + Δt × rate) per step.",
+   "check": "At least 2 of 3 rounds correct to earn full XP (all rounds must be attempted to clear)."
+  },
+  {
+   "title": "How many buckets?",
+   "sub": "One bucket per rule, per key",
+   "teaches": "Book: it is usually necessary to have different buckets for different API endpoints. If a user may make 1 post per second, add 150 friends per day, and like 5 posts per second, that user needs 3 buckets. If you throttle by IP address, each IP address needs a bucket. If the whole system allows a max of 10,000 requests per second, a global bucket shared by all requests makes sense. Pros (book): easy to implement; memory efficient; allows bursts of traffic for short periods as long as tokens are left. Cons: two parameters (bucket size, refill rate) can be hard to tune. Used by Amazon (API Gateway throttling) and Stripe. Hard vs soft rate limiting (wrap-up): hard = requests can never exceed the threshold; soft = requests can exceed the threshold for a short period. A token bucket with a big bucket behaves 'softer' over short windows.",
+   "interaction": "Bucket counter calc-and-check. A rules panel lists: post 1/sec per user, add friend 150/day per user, like 5/sec per user, plus a global 10,000 req/s. Round 1: 'How many buckets for 1 user?' → 3 user buckets (+1 global shared). Round 2: '1,000 active users?' → 3,000 + 1 global = 3,001. Round 3: 'Switch the login rule to per-IP; 5,000 distinct IPs hit /login' → 5,000 more buckets. Each correct answer animates a grid of tiny buckets filling the panel. Then a hard/soft toggle demo: two meters side by side, limit 10/min — hard meter turns red exactly at 11th, soft meter lets 12 through and then clamps; the learner labels which is which.",
+   "check": "Rounds answered; quiz: 'Token bucket's main con per the book?' → two parameters that are hard to tune."
+  },
+  {
+   "title": "The leaking bucket",
+   "sub": "Same burst, different personality",
+   "teaches": "Leaking bucket: like token bucket but requests are processed at a fixed rate. Usually built with a FIFO (first-in, first-out) queue. A request arrives → if the queue isn't full, it's added; if full, it's dropped. Requests are pulled from the queue and processed at regular intervals. Two parameters: bucket size (= queue size) and outflow rate (requests processed per second). Shopify uses leaky buckets. Pros: memory efficient given the limited queue size; requests processed at a fixed rate, good when you need a stable outflow. Cons: a burst fills the queue with old requests, and if they aren't processed in time, recent requests get rate limited; two parameters are hard to tune.",
+   "interaction": "Side-by-side predict-then-watch. Left: token bucket (size 4, refill 1/s). Right: leaking bucket (queue 4, outflow 1/s). Learner presses 'Burst of 8 at t=0'. Before watching, predict for each: how many get answered within the first second? (token: 4; leaky: 1) and how many are dropped? (token: 4; leaky: 4 — 4 queued, 4 dropped). Watch: token bucket sends 4 through at once; leaky bucket queues 4 and drips them out one per second while dropping the rest. Then at t=1.5 s a gold 'VIP fresh request' arrives: on the left it waits for a token (bounced if none); on the right it bounces because the queue is still full of old requests — illustrating the 'old requests starve new ones' con.",
+   "check": "Both predictions entered and compared; quiz: 'You call a downstream payment processor that can only take exactly 10 calls a second, steady. Which bucket?' → leaking bucket."
+  },
+  {
+   "title": "Boss: The Burst Hydra",
+   "sub": "Pick the bucket, tune the knobs",
+   "teaches": "Choosing between the buckets and their parameters.",
+   "interaction": "Q.boss with 5 scenarios, 2–3 choices. Examples: 'Public API; users open the app and fire 10 calls at once, then go quiet' → token bucket (allows short bursts); 'Writes into a legacy database that falls over above 50 writes/s' → leaking bucket (steady outflow); 'Users complain a burst of 100 at app launch gets throttled even though their hourly average is low; you use token bucket. Which knob?' → raise bucket size (not refill rate); 'Your average rate is too high overall, bursts are fine. Which knob?' → lower refill rate; 'A limit must never be exceeded, not even for a moment (e.g. a contractual cap). Hard or soft?' → hard.",
+   "check": "Boss defeated."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "Two buckets in 60 seconds",
+   "teaches": "Interview-ready comparison.",
+   "interaction": "Q.drill. Prompt: 'Compare token bucket and leaking bucket, and tell me when you'd use each.' Model answer: token bucket — tokens refill at a rate up to a capacity, each request takes one, allows bursts up to capacity, params bucket size + refill rate, used by Amazon/Stripe; leaking bucket — FIFO queue drained at a fixed rate, params queue size + outflow rate, smooth output, bursts fill the queue with old requests; choose token for bursty user traffic, leaky when the downstream needs a steady rate. Checks: both parameter pairs named; burst behavior contrasted; one use case each; one con each.",
+   "check": "Self-graded drill completed."
+  }
+ ],
+ "caveats": [
+  "The book's 'refiller' that adds tokens on a timer is a mental model. Production limiters (e.g. Stripe's Redis-based one) compute refills lazily from the last timestamp on each request.",
+  "There are two 'leaky bucket' ideas: leaky bucket as a queue (the book's version, which delays requests) and leaky bucket as a meter, which rejects instead of queueing and is mathematically equivalent to a token bucket (also known as GCRA). Shopify's API limits are meter-style: over-limit calls get a 429, they are not queued.",
+  "Amazon's 'token bucket' here specifically means API Gateway request throttling; it isn't a claim about every Amazon system."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo — Design a Rate Limiter (book chapter)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter"
+  },
+  {
+   "label": "Stripe — Scaling your API with rate limiters",
+   "url": "https://stripe.com/blog/rate-limiters"
+  },
+  {
+   "label": "Stripe's rate limiter code samples (gist by Paul Tarjan)",
+   "url": "https://gist.github.com/ptarjan/e38f45f2dfe601419ca3af937fff574d"
+  },
+  {
+   "label": "AWS — API Gateway request throttling (token bucket)",
+   "url": "https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-request-throttling.html"
+  },
+  {
+   "label": "Shopify — API rate limits (leaky bucket)",
+   "url": "https://shopify.dev/docs/api/usage/rate-limits"
+  },
+  {
+   "label": "Wikipedia — Token bucket",
+   "url": "https://en.wikipedia.org/wiki/Token_bucket"
+  },
+  {
+   "label": "Wikipedia — Leaky bucket (as a meter vs as a queue)",
+   "url": "https://en.wikipedia.org/wiki/Leaky_bucket"
+  }
+ ],
+ "id": "0402",
+ "file": "0402-token-and-leaking-bucket.html",
+ "world": 4,
+ "chapterTitle": "Design a Rate Limiter",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter",
+ "cheatsheet": "../reference/ch04-rate-limiter-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "0401",
+   "n": "4.1",
+   "t": "Bouncer at the Door",
+   "d": "What a rate limiter is, why you need one, how to scope it, and where it should sit"
+  },
+  {
+   "id": "0402",
+   "n": "4.2",
+   "t": "Token Tycoon",
+   "d": "The two bucket algorithms: token bucket and leaking bucket"
+  },
+  {
+   "id": "0403",
+   "n": "4.3",
+   "t": "Windows of Time",
+   "d": "Fixed window, sliding window log, and sliding window counter"
+  },
+  {
+   "id": "0404",
+   "n": "4.4",
+   "t": "The Counter Room",
+   "d": "Redis counters, rule files, 429 headers, and the detailed design"
+  },
+  {
+   "id": "0405",
+   "n": "4.5",
+   "t": "Many Doors, One Count",
+   "d": "Race conditions, syncing many limiters, multi-data-center speed, and monitoring"
+  },
+  {
+   "id": "0406",
+   "n": "BOSS",
+   "t": "Throttle It Live",
+   "d": "Full mock interview: design a rate limiter"
+  }
+ ]
+}

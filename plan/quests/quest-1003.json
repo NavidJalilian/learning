@@ -1,0 +1,146 @@
+{
+ "n": "10.3",
+ "slug": "notification-reliability",
+ "t": "Never Lose a Ping",
+ "d": "Notification log, at-least-once, dedupe, retries and watching the queue",
+ "boss": false,
+ "badge": "🛟 Badge: Lifeguard",
+ "winTitle": "Not one ping lost!",
+ "goal": "Your win today: you can explain why notifications may be delayed or reordered but never lost, why exactly-once delivery is impossible, how dedupe by event ID and retries work (and where they still leak), and which metric tells you to add workers.",
+ "bookSections": "Step 3 — Reliability ('How to prevent data loss?', 'Will recipients receive a notification exactly once?'); Additional components: retry mechanism, monitor queued notifications",
+ "stages": [
+  {
+   "title": "Delayed, reordered — never lost",
+   "sub": "The notification log",
+   "teaches": "Book requirement: notifications can be delayed or re-ordered, but never lost. To meet it, the system persists notification data in a database (the notification log, written by workers) and implements a retry mechanism, so a crash or failed send can be recovered. Plain-language reason: if the only copy of a notification lives in a worker's memory, a crash deletes it forever. Caveat beyond the book: in practice you also only acknowledge (remove) the message from the queue AFTER the send succeeds, so the queue itself redelivers on a crash — that's at-least-once delivery.",
+   "interaction": "Crash sim with predict-then-watch. A worker box pulls message #42 from the iOS PN queue, shows it 'in hand', then heads for APNs. Toggles: 'Notification log: OFF/ON' and 'Ack queue: before send / after send'. Learner presses 'Crash worker mid-send' after predicting 'Will the user get #42?' for the current setting. Outcomes: log OFF + ack before send → #42 vanishes (sad ghost icon, 'lost'); log ON or ack-after-send → a new worker picks up #42 from the log/queue and delivers it. Play 3 combos to complete.",
+   "check": "Q.quiz: 'Which of these does the book say a notification system may NOT do?' Correct: 'Lose a notification'. Distractors: 'Deliver it a bit late', 'Deliver two notifications out of order', 'Hold it in a queue during a spike'."
+  },
+  {
+   "title": "The exactly-once myth",
+   "sub": "Why duplicates happen",
+   "teaches": "Will a recipient receive a notification exactly once? Book's short answer: no. Most of the time it's delivered once, but the distributed nature of the system can cause duplicates. Mechanism: the worker sends to APNs, APNs accepts and delivers, then the worker crashes (or the ack is lost on the network) before recording success; the message is retried and the user gets it twice. You can't tell 'sent but ack lost' from 'never sent' over an unreliable network (the Two Generals problem), so pick at-least-once (maybe duplicates) over at-most-once (maybe lost) — and for notifications, the book picks never-lost.",
+   "interaction": "Predict-then-watch timeline. A horizontal timeline with lanes: Queue, Worker, APNs, Phone. Three runs, each with a different failure injected at a point the learner can see: (A) worker crashes BEFORE calling APNs; (B) APNs's response is lost on the network after it delivered; (C) worker crashes AFTER APNs delivered but BEFORE marking done. For each, learner predicts how many banners appear on the phone (0 / 1 / 2) given at-least-once retries. Answers: A → 1 (retried, delivered once), B → 2, C → 2. Then a switch 'at-most-once mode' replays them: A → 0 (lost!), B → 1, C → 1 — showing the trade: lost vs duplicated.",
+   "check": "Q.quiz: 'Why can't the worker just guarantee exactly-once delivery?' Correct: 'It can't tell a lost acknowledgement from a failed send, so it must either retry (risk a duplicate) or not (risk a loss)'. Distractors: 'APNs doesn't support it but FCM does', 'Exactly-once just needs a faster queue', 'Because workers are stateless'."
+  },
+  {
+   "title": "The dedupe gate",
+   "sub": "Seen this event ID before?",
+   "teaches": "Book's dedupe: when a notification event arrives, check whether its event ID has been seen before; if yes, discard it; otherwise send it. This reduces duplicates, it doesn't eliminate them. Leaks (beyond the book): (1) race — two workers check the same ID at the same time, both see 'new', both send; fix with an atomic 'set if absent' (e.g. Redis SET key NX EX ttl) rather than read-then-write; (2) crash between sending and recording the ID still causes a duplicate; (3) the seen-set must expire (TTL) or it grows forever. The event ID must be created by the calling service (an idempotency key), not by the worker, or retries get new IDs.",
+   "interaction": "Gate game then spot-the-bug. Part 1: a conveyor brings events e1, e2, e1, e3, e2, e4, e3; a 'Seen IDs' panel starts empty. For each, learner taps SEND or DROP; correct SEND adds the ID to the panel. 7 events, hearts on mistakes. Part 2: show the dedupe code as 4 lines — 'if not seen.contains(id):' / 'send(n)' / 'seen.add(id)' — with two workers running it side by side in slow motion on the same e5; both pass the check and the phone buzzes twice. Learner taps the buggy line pair (check-then-add not atomic) and chooses the fix from 3 options: 'atomic set-if-absent before sending' (correct), 'add a sleep', 'use a bigger cache'.",
+   "check": "Q.quiz: 'Where should the event ID used for dedupe come from?' Correct: 'The calling service, once per logical notification, so retries carry the same ID'. Distractors: 'A fresh UUID generated by each worker attempt', 'The APNs response', 'The queue's message offset after redelivery'."
+  },
+  {
+   "title": "Retry, then raise the alarm",
+   "sub": "What to retry and what to drop",
+   "teaches": "Book: when a third-party service fails to send, the notification is put back on the message queue for retrying; if the problem persists, an alert goes out to developers. Updated design: workers retry a predefined number of times. Beyond the book: retry only transient failures (timeouts, 5xx, 429 Too Many Requests) and use exponential backoff with jitter so retries don't stampede a recovering provider; don't retry permanent failures (invalid/unregistered device token, malformed phone number) — clean up the data instead; after N attempts move the message to a dead-letter queue (DLQ) for inspection rather than looping forever.",
+   "interaction": "Triage sim. Failure cards drop from a provider box one at a time: 'APNs timeout', 'FCM 503', 'Twilio 429 Too Many Requests', 'APNs 410 Unregistered', 'SMS: invalid number', 'SendGrid 500 (third time in a row)', 'Email: hard bounce, mailbox doesn't exist'. For each, learner drags it to one of: Retry (back on queue with backoff), Drop + clean up data, Dead-letter + alert devs. Then a backoff mini-sim: slider for base delay and a 'jitter' toggle; 1,000 failed messages retry against a provider that just recovered — without jitter, spikes at 1s/2s/4s knock it over again; with jitter the retries smear into a gentle curve.",
+   "check": "Q.quiz: 'APNs returns 410 Unregistered for a device token. What should the worker do?' Correct: 'Don't retry; remove or mark the stale token'. Distractors: 'Retry with exponential backoff', 'Send the same push by SMS', 'Alert developers immediately'."
+  },
+  {
+   "title": "Watch the queue",
+   "sub": "The one graph that says 'add workers'",
+   "teaches": "Book: a key metric to monitor is the total number of queued notifications. If it's large, workers aren't processing events fast enough, so add more workers to avoid delay. Rule of thumb: if arrival rate > processing rate, depth grows without bound. Beyond the book: the age of the oldest message (consumer lag) is often a better signal of user-facing delay than raw count; and a growing queue might mean a SLOW provider, not too few workers — more workers won't help if APNs is throttling you.",
+   "interaction": "Read-the-chart game. A live line chart of queue depth over a simulated day for the email queue, with controls: worker count (1–20, each worker sends 20/s) and an incoming-rate curve (quiet night, 9am campaign spike, afternoon plateau of 300/s). Learner's task: keep the 'oldest message age' under 60 s by setting worker count before each phase (predict: how many workers for 300/s? answer 15+). A final twist phase: depth climbs but the provider panel shows 429s; adding workers makes it worse — learner must pick 'back off / raise provider quota' instead.",
+   "check": "Q.quiz: 'Queue depth keeps rising while the provider is healthy. What's the book's response?' Correct: 'Add more workers — they aren't keeping up'. Distractors: 'Delete old messages', 'Add more notification servers', 'Switch to a single shared queue'."
+  },
+  {
+   "title": "Boss: The Duplicate Doppelgänger",
+   "sub": "Lost, duplicated, or fine?",
+   "teaches": "Diagnosing reliability scenarios using the book's guarantees: never lost, possibly duplicated, possibly delayed/reordered.",
+   "interaction": "Q.boss named '👯 Duplicate Doppelgänger', choices: 'Lost', 'Duplicate', 'Delivered once (maybe late)'. Assume the book's design (notification log, retries, dedupe by event ID, ack after send) unless the scenario says otherwise. Scenarios: (1) 'Worker crashes after pulling the event but before calling FCM' → Delivered once (maybe late). (2) 'FCM delivers, then the worker crashes before recording the event ID' → Duplicate. (3) 'Team disabled the notification log and acks messages on pull to go faster; worker crashes mid-send' → Lost. (4) 'Billing service retries its API call after a timeout, but with the SAME event ID' → Delivered once. (5) 'Billing service retries after a timeout and generates a NEW event ID' → Duplicate. (6) 'SendGrid is down for 10 minutes; messages retry with backoff' → Delivered once (maybe late).",
+   "check": "Boss clears when all 6 are answered."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "'Will users ever get it twice?'",
+   "teaches": "Interview answer on delivery guarantees.",
+   "interaction": "Q.drill. Prompt: 'How do you make sure notifications aren't lost — and will a user ever get the same one twice?' Model: 'The rule is: delayed or reordered is fine, lost is not. Workers persist each notification to a notification log and only acknowledge the queue after the provider accepts, so a crash means a retry, not a loss. Failed sends go back on the queue with exponential backoff and jitter, up to a limit, then to a dead-letter queue with an alert; permanent errors like an unregistered token we drop and clean up. Exactly-once isn't possible, because we can't tell a lost acknowledgement from a failed send, so we're at-least-once and dedupe: every event carries an ID from the calling service, and the worker does an atomic set-if-absent on that ID before sending. That makes duplicates rare, not impossible. And I'd alert on queue depth and the age of the oldest message to know when to add workers.' Checks: 'I said never lost (log + retry) and accepted delay/reorder', 'I said exactly-once is impossible and explained dedupe by event ID', 'I mentioned retry limits/backoff and monitoring queue depth'.",
+   "check": "Self-grade against 3 checks."
+  }
+ ],
+ "caveats": [
+  "The book's notification log alone doesn't prevent loss; you also need to acknowledge the queue only after a successful send (at-least-once).",
+  "Dedupe by event ID is only as good as its implementation: check-then-set races, crashes between send and record, and IDs regenerated on retry all leak duplicates.",
+  "Backoff with jitter, retryable vs permanent error classes, and dead-letter queues are standard practice the book doesn't spell out.",
+  "Queue depth alone can mislead: a throttled or slow provider also grows the queue, and more workers make throttling worse."
+ ],
+ "sources": [
+  {
+   "label": "Alex Xu, System Design Interview Vol. 1, Ch. 10: Design a Notification System (ByteByteGo)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-notification-system"
+  },
+  {
+   "label": "Tyler Treat: You Cannot Have Exactly-Once Delivery (book ref [5])",
+   "url": "https://bravenewgeek.com/you-cannot-have-exactly-once-delivery/"
+  },
+  {
+   "label": "Two Generals' Problem (Wikipedia)",
+   "url": "https://en.wikipedia.org/wiki/Two_Generals%27_Problem"
+  },
+  {
+   "label": "AWS Builders' Library: Timeouts, retries and backoff with jitter",
+   "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+  },
+  {
+   "label": "AWS Architecture Blog: Exponential Backoff and Jitter",
+   "url": "https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/"
+  },
+  {
+   "label": "Amazon SQS dead-letter queues",
+   "url": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html"
+  },
+  {
+   "label": "Redis SET command (NX / EX options)",
+   "url": "https://redis.io/docs/latest/commands/set/"
+  },
+  {
+   "label": "Datadog: Key metrics for RabbitMQ monitoring (book ref [7])",
+   "url": "https://www.datadoghq.com/blog/rabbitmq-monitoring/"
+  },
+  {
+   "label": "Apple: Handling notification responses from APNs (status codes, 410 Unregistered)",
+   "url": "https://developer.apple.com/documentation/usernotifications/handling-notification-responses-from-apns"
+  }
+ ],
+ "id": "1003",
+ "file": "1003-notification-reliability.html",
+ "world": 10,
+ "chapterTitle": "Design a Notification System",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-notification-system",
+ "cheatsheet": "../reference/ch10-notification-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "1001",
+   "n": "10.1",
+   "t": "Three Roads to the Lock Screen",
+   "d": "Push (APNs/FCM), SMS and email: who delivers what, and the contact info you need"
+  },
+  {
+   "id": "1002",
+   "n": "10.2",
+   "t": "Shatter the Single Server",
+   "d": "From one notification box to servers, per-channel queues and workers"
+  },
+  {
+   "id": "1003",
+   "n": "10.3",
+   "t": "Never Lose a Ping",
+   "d": "Notification log, at-least-once, dedupe, retries and watching the queue"
+  },
+  {
+   "id": "1004",
+   "n": "10.4",
+   "t": "Respect the Inbox",
+   "d": "Templates, opt-in settings, rate limits, auth, event tracking and the final design"
+  },
+  {
+   "id": "1005",
+   "n": "BOSS",
+   "t": "Ping the Planet — Live",
+   "d": "Full mock interview: design a notification system"
+  }
+ ]
+}

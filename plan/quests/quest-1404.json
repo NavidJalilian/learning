@@ -1,0 +1,128 @@
+{
+ "n": "14.4",
+ "slug": "youtube-transcoding-architecture",
+ "t": "The Transcoding Factory",
+ "d": "Preprocessor, DAG scheduler, resource manager, task workers, temporary storage",
+ "boss": false,
+ "badge": "🏭 Badge: Factory Foreman",
+ "winTitle": "The factory runs itself",
+ "goal": "Your win today: you can name the six parts of the book's video transcoding architecture, explain GOP splitting, and run the resource manager's three queues step by step, including what happens when a worker dies mid-task.",
+ "bookSections": "Step 3 deep dive: Video transcoding architecture: Preprocessor, DAG scheduler, Resource manager, Task workers, Temporary storage, Encoded video",
+ "stages": [
+  {
+   "title": "Factory floor tour",
+   "sub": "Six stations, six jobs",
+   "teaches": "The book's transcoding architecture, left to right: Preprocessor -> DAG scheduler -> Resource manager -> Task workers -> Encoded video, with Temporary storage used along the way. Preprocessor: splits the video, generates the DAG, caches data. DAG scheduler: splits the DAG into stages of tasks and puts them in the resource manager's task queue. Resource manager: allocates tasks to workers efficiently. Task workers: run the tasks defined in the DAG (different worker types: watermark, encoder, thumbnail, merger). Temporary storage: holds intermediate data (GOPs, metadata) while processing. Encoded video: the final output, e.g. funny_720p.mp4.",
+   "interaction": "Tap-to-match. Six station silhouettes on a conveyor; six job cards ('turns a config into a task graph and chops the video', 'splits the graph into stages', 'picks which worker runs which task', 'actually encodes/watermarks/merges', 'holds GOPs and metadata mid-process', 'the finished funny_720p.mp4'). Learner taps a card then a station; correct pairs light the station up and start a small conveyor animation. When all six are lit, a demo video box travels the full line.",
+   "check": "Q.quiz (2 Qs): (1) Which component turns client-written config files into a DAG? -> the preprocessor. (2) Which component actually executes the encoding? -> task workers."
+  },
+  {
+   "title": "Chop by GOP",
+   "sub": "Cut the film where it's safe",
+   "teaches": "Preprocessor duties (book): (1) Video splitting: the video stream is split, or further split, into smaller Group of Pictures (GOP) alignment. A GOP is a group/chunk of frames arranged in a specific order; each chunk is an independently playable unit, usually a few seconds long. (2) Some old mobile devices or browsers can't split by GOP, so the preprocessor does it on the server for them. (3) DAG generation: generates the DAG from configuration files that client programmers write (book example: two tasks, 'download-input' then 'transcode'). (4) Cache data: the preprocessor is a cache for segmented videos; for reliability it stores GOPs and metadata in temporary storage, so if encoding fails the system can retry from the persisted data instead of starting over. Why GOPs are independent: a GOP starts with a keyframe (I-frame, a full picture); the following P/B frames only store changes relative to other frames, so you can only cut safely at a keyframe.",
+   "interaction": "Filmstrip cutter. A strip of 48 frames labelled I, P or B (an I every 12 frames). The learner clicks gaps between frames to place up to 3 cuts. A cut placed right before an I-frame turns green; a cut elsewhere makes the next chunk start with a P-frame, and its preview shows a smeared, glitchy thumbnail ('this chunk refers to a frame it doesn't have'). After valid cuts, a 'Encode' button runs: 1 worker encoding the whole strip sequentially (bar takes 8 s) vs 4 workers each encoding one GOP chunk in parallel (2 s), then a merger worker stitches them. Then a 'crash' button kills one worker mid-chunk: with temporary storage ON only that chunk is re-encoded; with it OFF the whole video restarts. Learner predicts the retry cost before each toggle.",
+   "check": "Q.quiz (2 Qs): (1) Why split at GOP boundaries? -> each GOP starts with a keyframe and decodes on its own, so chunks can be encoded in parallel and played independently. (2) Why does the preprocessor persist GOPs in temporary storage? -> a failed encode can retry just the failed piece from saved data."
+  },
+  {
+   "title": "Stage the DAG",
+   "sub": "Turn a graph into waves of work",
+   "teaches": "DAG scheduler: splits the DAG into stages of tasks and puts them in the task queue of the resource manager. Book example: Stage 1 splits the original video into video, audio and metadata; Stage 2 runs video encoding and thumbnail on the video, and audio encoding on the audio. Tasks in the same stage don't depend on each other, so they can run in parallel; a stage starts when its inputs are ready.",
+   "interaction": "Stage sorter. The DAG from 14.3 is shown (simplified to: Split; Video encoding; Thumbnail; Audio encoding; Assemble). Three stage columns. The learner drags each task into Stage 1, 2 or 3. Correct: Split in 1; Video encoding, Thumbnail, Audio encoding in 2; Assemble in 3. A wrong placement draws the violated arrow in red ('Thumbnail needs the video stream, which Split produces in Stage 1'). Then a 'push to queue' animation drops Stage-1 tasks into the resource manager's task queue (linking to the next stage).",
+   "check": "Q.quiz (1-2 Qs): (1) Can two tasks in the same stage depend on each other? -> no, then they'd need to be in different stages. (2) Where does the DAG scheduler put ready tasks? -> the resource manager's task queue."
+  },
+  {
+   "title": "Run the resource manager",
+   "sub": "You are the task scheduler",
+   "teaches": "Resource manager = 3 queues + a task scheduler. Task queue: a priority queue of tasks to be executed. Worker queue: a priority queue of worker utilisation info. Running queue: info about the tasks currently running and the workers running them. Task scheduler loop (book): (1) get the highest-priority task from the task queue; (2) get the optimal task worker to run it from the worker queue; (3) instruct the chosen worker to run the task; (4) bind the task/worker info and put it in the running queue; (5) remove the job from the running queue once it is done. Priority queue = a queue that always hands out the most important item first, not the oldest.",
+   "interaction": "Hands-on scheduler game. Screen: task queue (cards with priority 1-5 and a type: encode / thumbnail / watermark / merge), worker queue (8 worker cards with type and a load bar), running queue (empty table), and a scheduler 'hand'. Each tick the learner must: tap the top task, tap a suitable worker, press Run. The engine checks: wrong task picked (not highest priority) -> -1 XP and hint; wrong worker type (encode task to a thumbnail worker) -> heart lost; busy worker when an idle one of the right type exists -> -1 XP ('not optimal'). Correct picks move a task<->worker pair into the running queue; it disappears after its duration (step 5). After 6 manual ticks, 'Autopilot' runs the loop quickly. Final twist: an encoder worker turns red (dies) mid-task; the learner must choose what happens: drop the task / put it back on the task queue to retry on another worker / wait for the worker (correct: re-queue and retry on a new worker, book error-handling rule 'task worker down').",
+   "check": "Q.quiz (2 Qs): (1) What does the running queue let you do when a worker dies? -> see which task it held so you can re-queue it. (2) Why a priority queue for workers? -> to always pick the least-loaded/most suitable worker quickly."
+  },
+  {
+   "title": "Where does it live?",
+   "sub": "Temporary storage and the final output",
+   "teaches": "Temporary storage: the book uses multiple storage systems; the choice depends on data type, data size, access frequency and data life span. Metadata is small and frequently accessed by workers -> cache it in memory. Video and audio data -> put in blob storage. Data in temporary storage is freed once the video processing is complete. Encoded video: the final output of the pipeline, e.g. funny_720p.mp4, which goes to transcoded storage and the CDN (back in the 14.2 diagram).",
+   "interaction": "Sort-and-clean. 6 data items appear with tags for size and how often they're read: 'task metadata (2 KB, read 100x/min)', 'GOP chunk 12 (40 MB, read twice)', 'audio track (20 MB)', 'DAG config (1 KB)', 'thumbnail draft (200 KB)', 'funny_720p.mp4 (final)'. The learner drops each into Memory cache / Blob storage (temporary) / Transcoded storage (permanent). Then a 'video finished' bell rings and the learner must click 'free' on everything that should be deleted from temporary storage (everything except the final output). Leaving junk shows a growing storage bill counter.",
+   "check": "Q.quiz (1 Q): Which four factors decide where temporary data lives? -> type, size, access frequency, life span."
+  },
+  {
+   "title": "Boss: The Backlog Golem",
+   "sub": "The factory under pressure",
+   "teaches": "Applying the architecture to load and failure.",
+   "interaction": "Q.boss() with 5 cards. (1) 'A popular creator uploads; 10,000 viewers are waiting, but the task queue is full of 3-hour lecture uploads.' -> priority in the task queue (e.g. boost the popular/short job), not FIFO. (2) 'Encoding of chunk 37 of 400 fails.' -> retry just that chunk from GOPs in temporary storage; don't restart the whole video. (3) 'An old Android client uploads one huge file without GOP splitting.' -> the preprocessor splits on the server. (4) 'A new creator feature needs a different processing step.' -> change the DAG config the preprocessor reads; the scheduler and workers stay the same. (5) 'Temporary storage keeps growing forever.' -> free intermediate data once processing completes.",
+   "check": "Pass at 4/5."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "Tour the factory out loud",
+   "teaches": "Recall.",
+   "interaction": "Q.drill(): prompt 'Draw and narrate the video transcoding architecture.' Checklist: preprocessor (GOP splitting incl. for old clients, DAG generation from config, caching GOPs/metadata in temp storage for retries); DAG scheduler (stages -> task queue); resource manager (task queue, worker queue, running queue, the 5-step scheduler loop); task workers by type (encoder, thumbnail, watermark, merger); temporary storage chosen by type/size/frequency/life span, freed after; encoded output e.g. funny_720p.mp4.",
+   "check": "Self-grade per checklist line."
+  }
+ ],
+ "caveats": [
+  "Chunked parallel encoding is real (Facebook's SVE does it), but chunk boundaries can cost a little quality and need closed GOPs (chunks that don't reference frames outside themselves). Encoders often re-insert keyframes on purpose to make clean cut points.",
+  "The book's resource manager is an illustrative design (inspired by SVE and a Weibo talk). Real systems often use a general-purpose job scheduler or a cloud batch/queue service instead of a custom three-queue scheduler.",
+  "Priorities in the task queue are the book's idea; the book doesn't say what decides them. Popularity, creator tier and video length are plausible examples, not the book's rules.",
+  "Retrying a task on a new worker is only safe if tasks are idempotent: running the same encode twice must produce the same output, not a duplicate."
+ ],
+ "sources": [
+  {
+   "label": "System Design Interview Vol. 1, Ch. 14: Design YouTube (ByteByteGo)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-youtube"
+  },
+  {
+   "label": "Huang et al., SVE: Distributed Video Processing at Facebook Scale (SOSP 2017), the source of the DAG model",
+   "url": "https://www.cs.princeton.edu/~wlloyd/papers/sve-sosp17.pdf"
+  },
+  {
+   "label": "Wikipedia: Group of pictures",
+   "url": "https://en.wikipedia.org/wiki/Group_of_pictures"
+  }
+ ],
+ "id": "1404",
+ "file": "1404-youtube-transcoding-architecture.html",
+ "world": 14,
+ "chapterTitle": "Design YouTube",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-youtube",
+ "cheatsheet": "../reference/ch14-youtube-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "1401",
+   "n": "14.1",
+   "t": "Size Up the Tube",
+   "d": "Scope a YouTube clone and do the napkin maths for storage and CDN cost"
+  },
+  {
+   "id": "1402",
+   "n": "14.2",
+   "t": "Upload Lane, Watch Lane",
+   "d": "The high-level design: CDN, API servers, the video upload flow and the streaming flow"
+  },
+  {
+   "id": "1403",
+   "n": "14.3",
+   "t": "The Format Forge",
+   "d": "Why videos are transcoded, containers vs codecs, adaptive bitrate, and the DAG model"
+  },
+  {
+   "id": "1404",
+   "n": "14.4",
+   "t": "The Transcoding Factory",
+   "d": "Preprocessor, DAG scheduler, resource manager, task workers, temporary storage"
+  },
+  {
+   "id": "1405",
+   "n": "14.5",
+   "t": "Faster, Safer, Cheaper",
+   "d": "Speed, safety and cost optimisations, plus the book's error-handling playbook"
+  },
+  {
+   "id": "1406",
+   "n": "BOSS",
+   "t": "Design YouTube Live",
+   "d": "Full mock interview: design a video upload and streaming service"
+  }
+ ]
+}

@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Open the Pipe</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: chat bubbles, the three-box pipe (stage 1), timelines (stages 2 + 4), long-polling scenes (stage 3) */
+:root { --bubble: #2f7fd8; --bubble-ink: #ffffff; --wire: #b9b3a6; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bubble: #5aa9ff; --bubble-ink: #0e0f1d; --wire: #4a4e74; }
+}
+:root[data-theme="dark"] { --bubble: #5aa9ff; --bubble-ink: #0e0f1d; --wire: #4a4e74; }
+
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.bignum { font-family: var(--mono); font-weight: 700; }
+.svg-t { fill: var(--ink); font: 600 14px var(--font); text-anchor: middle; dominant-baseline: central; }
+.svg-s { fill: var(--muted); font: 600 11.5px var(--font); text-anchor: middle; dominant-baseline: central; }
+.svg-m { fill: var(--muted); font: 600 11px var(--mono); text-anchor: middle; }
+.wire { stroke: var(--wire); stroke-width: 3; fill: none; stroke-linecap: round; }
+.box { fill: var(--panel); stroke: var(--line); stroke-width: 2; }
+.phone { fill: var(--panel); stroke: var(--ink); stroke-width: 2.2; }
+.bub rect { fill: var(--bubble); }
+.bub text { fill: var(--bubble-ink); font: 700 12px var(--font); text-anchor: middle; dominant-baseline: central; }
+
+/* scope card */
+.scope { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin: 14px 0; }
+.scope div { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 9px 11px; font-size: 14px; line-height: 1.35; }
+.scope b { display: block; font-size: 15px; }
+.scope .no { background: var(--bg-2); color: var(--muted); }
+
+/* stage 1: pipe */
+#pipe1 { max-width: 520px; margin: 0 auto; }
+#pipe1 .svc { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2.2; }
+#pipe1 .tray { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 2; stroke-dasharray: 5 4; }
+#pipe1 .trayN { fill: var(--warn); font: 700 17px var(--mono); text-anchor: middle; dominant-baseline: central; }
+#pipe1 .direct { stroke: var(--bad); stroke-width: 2; fill: none; stroke-dasharray: 3 6; opacity: .55; }
+#pipe1 .directx { fill: var(--bad); font: 700 18px var(--font); text-anchor: middle; dominant-baseline: central; opacity: .8; }
+#pipe1 .bphone { transition: opacity .35s; }
+#pipe1 .bphone.off { opacity: .35; }
+#pipe1 .leg { cursor: default; }
+#pipe1 .leg .hit { fill: transparent; }
+#pipe1 .leg line { stroke: var(--wire); stroke-width: 4; stroke-linecap: round; transition: stroke .2s; }
+#pipe1.ask .leg { cursor: pointer; }
+#pipe1.ask .leg line { stroke: var(--accent); animation: legpulse 1.2s infinite; }
+#pipe1.ask .leg:hover line, #pipe1.ask .leg:focus line { stroke: var(--ink); }
+#pipe1 .leg:focus { outline: none; }
+#pipe1 .leg.right line { stroke: var(--good); animation: none; }
+#pipe1 .leg.wrong line { stroke: var(--bad); animation: none; }
+@keyframes legpulse { 50% { opacity: .35; } }
+#pipe1 .arrowhead { fill: var(--wire); }
+.composer { display: flex; gap: 8px; flex: 1; min-width: 220px; }
+.composer input { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 10px; padding: 8px 10px; font: inherit; font-size: 15px; }
+.tgl { padding: 8px 12px; font-size: 14px; min-height: 40px; }
+.tgl[aria-pressed="false"] { background: var(--bg-2); color: var(--muted); }
+.tgl.fake { opacity: .55; text-decoration: line-through; text-decoration-color: var(--bad); }
+.legq { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+@media (max-width: 480px) { .legq { grid-template-columns: 1fr; } }
+
+/* timelines (stages 2 + 4) */
+.tl svg { max-width: 520px; margin: 0 auto; }
+.tl .axis { stroke: var(--line); stroke-width: 2; }
+.tl .rowline { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.tl .star { fill: var(--xp); stroke: var(--ink); stroke-width: .8; }
+.tl .wait { fill: var(--warn); opacity: .75; }
+.tl .tick { stroke: var(--muted); stroke-width: 1.6; opacity: .55; }
+.tl .tick.hit { stroke: var(--good); stroke-width: 2.6; opacity: 1; }
+.tl .tickdot { fill: var(--muted); opacity: .6; }
+.tl .tickdot.hit { fill: var(--good); opacity: 1; }
+.tl .head { stroke: var(--accent); stroke-width: 2; }
+.tl .held { fill: var(--good); opacity: .35; }
+.tl .held.empty { fill: var(--muted); opacity: .35; }
+.tl .held.pending { fill: var(--accent); opacity: .25; }
+.tl .held-end { fill: var(--good); }
+.tl .held-end.empty { fill: var(--muted); }
+.tl .pipe { fill: var(--teal); opacity: .28; }
+.tl .push { stroke: var(--teal); stroke-width: 2.6; }
+.tl .pushdot { fill: var(--teal); }
+.tl .lane-t { fill: var(--ink); font: 700 12.5px var(--font); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.tl .lane-c { fill: var(--muted); font: 600 11.5px var(--mono); text-anchor: end; }
+.stats { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+.stats b { font-family: var(--mono); font-size: 16px; }
+.rtab { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; }
+.rtab th, .rtab td { text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.rtab th:first-child, .rtab td:first-child { text-align: left; }
+.rtab th { font-size: 12px; color: var(--muted); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.rtab td { font-family: var(--mono); }
+.rtab tr.new td { animation: rise .35s; }
+.seg button { min-height: 40px; min-width: 44px; }
+.seg button[disabled] { opacity: .45; cursor: not-allowed; }
+
+/* stage 3: long-polling scenes */
+.lpflow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 12px 0; font-size: 14px; }
+.lpflow span { background: var(--bg-2); border: 1px solid var(--line); border-radius: 99px; padding: 4px 10px; }
+.lpflow i { font-style: normal; color: var(--muted); }
+.scenes { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; margin-top: 14px; }
+.scene { display: block; width: 100%; text-align: left; border: 2px solid var(--line); background: var(--bg); border-radius: 16px; padding: 8px 8px 10px; transition: border-color .2s, background .2s; }
+.scene:hover { border-color: var(--accent); }
+.scene.sel { border-color: var(--accent); background: var(--accent-soft); }
+.scene.done { border-color: var(--good); cursor: default; }
+.scene.nope { animation: shake .4s; border-color: var(--bad); }
+.scene svg { display: block; width: 100%; height: auto; }
+.scene .cap { display: block; font-size: 13px; padding: 4px 4px 0; color: var(--muted); }
+.scene .cap b { color: var(--ink); }
+.scene.done .cap b { color: var(--good); }
+.dcards { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.dcard { border: 2px solid var(--line); background: var(--panel); border-radius: 12px; padding: 9px 14px; font-weight: 700; min-height: 44px; }
+.dcard:hover:not([disabled]) { border-color: var(--accent); }
+.dcard.sel { border-color: var(--accent); background: var(--accent-soft); }
+.dcard.nope { animation: shake .4s; border-color: var(--bad); }
+.dcard[disabled] { border-color: var(--good); background: var(--good-soft); color: var(--good); cursor: default; }
+.scene .sbox { fill: var(--panel); stroke: var(--line); stroke-width: 2; }
+.scene .sph { fill: var(--panel); stroke: var(--ink); stroke-width: 2; }
+.scene .held { stroke: var(--teal); stroke-width: 2.4; stroke-dasharray: 5 5; fill: none; animation: dash 1s linear infinite; }
+@keyframes dash { to { stroke-dashoffset: -20; } }
+.scene .mdot { fill: var(--bubble); }
+.scene .qmark { fill: var(--bad); font: 700 13px var(--font); text-anchor: middle; }
+.scene .zz { fill: var(--muted); font: 700 13px var(--font); }
+.scene .bar-bg { fill: var(--bg-2); stroke: var(--line); }
+.scene .bar { fill: var(--warn); transform-box: fill-box; transform-origin: left center; }
+/* scene 1: message goes LB -> Server 1 while B waits on Server 2 */
+.sc-lb .mdot { transform: translate(190px, 39px); animation: scLB 4s ease-in-out infinite; }
+.sc-lb .qmark { animation: scLBq 4s infinite; }
+@keyframes scLB { 0% { transform: translate(44px, 88px); opacity: 0; } 6% { opacity: 1; } 30% { transform: translate(120px, 88px); } 55%, 100% { transform: translate(190px, 39px); opacity: 1; } }
+@keyframes scLBq { 0%, 55% { opacity: 0; } 62%, 100% { opacity: 1; } }
+/* scene 2: B's phone quietly vanishes, server keeps holding */
+.sc-gone .bph { opacity: .2; animation: scGone 4s infinite; }
+.sc-gone .qmark { animation: scLBq 4s infinite; }
+@keyframes scGone { 0%, 30% { opacity: 1; } 45%, 100% { opacity: .2; } }
+/* scene 3: idle user, timeout, reconnect, forever */
+.sc-zzz .mdot { transform: translate(196px, 86px); animation: scZ 3s linear infinite; }
+.sc-zzz .bar { animation: scZbar 3s linear infinite; }
+.sc-zzz .empty { animation: scZe 3s infinite; }
+@keyframes scZ { 0% { transform: translate(60px, 86px); opacity: 1; } 15% { transform: translate(196px, 86px); opacity: 1; } 80% { transform: translate(196px, 86px); opacity: 1; } 95% { transform: translate(60px, 86px); opacity: .4; } 100% { transform: translate(60px, 86px); opacity: 1; } }
+@keyframes scZbar { 0%, 15% { transform: scaleX(0); } 80%, 100% { transform: scaleX(1); } }
+@keyframes scZe { 0%, 78% { opacity: 0; } 82%, 96% { opacity: 1; } 100% { opacity: 0; } }
+
+/* stage 4: handshake order */
+.order-pool { display: grid; gap: 8px; margin-top: 10px; }
+.order-pool .opt { min-height: 44px; }
+.order-done { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; counter-reset: st; }
+.order-done li { counter-increment: st; display: flex; gap: 10px; align-items: flex-start; background: var(--good-soft); border-radius: 12px; padding: 8px 12px; font-size: 15px; animation: rise .3s; }
+.order-done li::before { content: counter(st); font: 700 13px var(--mono); background: var(--good); color: #fff; border-radius: 7px; min-width: 22px; height: 22px; display: grid; place-items: center; flex: none; margin-top: 1px; }
+.wire-term { background: var(--code-bg); color: var(--code-ink); border-radius: 12px; padding: 12px 14px; font: 13px/1.55 var(--mono); white-space: pre-wrap; word-break: break-word; margin-top: 12px; }
+.wire-term .c { color: #9fa8ff; }
+.wire-term .s { color: #6ee7a8; }
+.calc { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+.calc input { width: 170px; max-width: 100%; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 10px; padding: 9px 10px; font: 600 16px var(--mono); }
+.calc .unit { font-size: 14px; color: var(--muted); }
+.cmsg { margin-top: 8px; font-size: 15px; min-height: 22px; }
+.cmsg.good { color: var(--good); font-weight: 600; }
+.cmsg.bad { color: var(--bad); font-weight: 600; }
+.part { margin-top: 18px; }
+.part-h { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.part h3 { margin: 4px 0 8px; font-size: 18px; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 12.1 · Design a Chat System</div>
+    <h1>Open the Pipe</h1>
+    <p class="lede">Sending a chat message is easy. Getting it <i>to</i> the other person is the hard part. Build the chat service's three jobs, then race polling, long polling and WebSocket against each other.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can explain why the <b>server</b>, not the client, is the hard side of chat, walk through <b>polling</b>, <b>long polling</b> and <b>WebSocket</b> with each one's weakness, and defend WebSocket for both sending and receiving.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Clients never talk directly</h2><div class="sub">The chat service has three jobs</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>First, the scope. The book's interviewer settles on this list before any boxes get drawn.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener">[1]</a> <b>DAU</b> means <i>daily active users</i>: people who open the app at least once a day.</p>
+      <div class="scope">
+        <div><b>1-on-1 + group</b>both kinds of chat</div>
+        <div><b>≤ 100 people</b>per group</div>
+        <div><b>Mobile + web</b>apps on both</div>
+        <div><b>50 million DAU</b>daily active users</div>
+        <div><b>Text only</b>under 100,000 characters</div>
+        <div><b>Online dot</b>who's online right now</div>
+        <div><b>Many devices</b>one account, several phones/laptops</div>
+        <div><b>Push alerts</b>when the app is closed</div>
+        <div><b>History forever</b>messages are never deleted</div>
+        <div class="no"><b>No E2E encryption</b>not needed for now</div>
+      </div>
+      <p>Now the core idea. Phone A never connects to phone B. A doesn't know where B is, and B might be switched off. Every message goes through a <b>chat service</b> in the middle, and it has three jobs:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener">[1]</a></p>
+      <ol>
+        <li><b>Receive</b> messages from the people sending them.</li>
+        <li><b>Find</b> the right recipients and <b>relay</b> the message to them.</li>
+        <li><b>Hold</b> the message on the server if a recipient is offline, and deliver it when they come back.</li>
+      </ol>
+      <p>Try it. Send a message, switch B off, send again, then switch B back on.</p>
+
+      <div class="sim">
+        <svg id="pipe1" viewBox="0 0 400 250" role="img" aria-label="Phone A, the chat service, and phone B, with a tray for held messages">
+          <defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path class="arrowhead" d="M0 0L10 5L0 10z"/></marker></defs>
+          <path class="direct" d="M41 58 Q200 -18 359 58"/>
+          <text class="directx" x="200" y="20">✕</text>
+          <g><rect class="phone" x="14" y="62" width="54" height="92" rx="11"/><text class="svg-t" x="41" y="100">A</text><text class="svg-s" x="41" y="128">online</text></g>
+          <g class="bphone" id="phB"><rect class="phone" x="332" y="62" width="54" height="92" rx="11"/><text class="svg-t" x="359" y="100">B</text><text class="svg-s" id="bState" x="359" y="128">online</text></g>
+          <rect class="svc" x="138" y="72" width="124" height="72" rx="14"/>
+          <text class="svg-t" x="200" y="99">Chat</text><text class="svg-t" x="200" y="119">service</text>
+          <line class="wire" x1="200" y1="146" x2="200" y2="176" stroke-dasharray="3 5"/>
+          <rect class="tray" x="146" y="178" width="108" height="56" rx="12"/>
+          <text class="svg-s" x="200" y="194">held for B</text>
+          <text class="trayN" id="trayN" x="200" y="217">0</text>
+          <g class="leg" id="legA" data-leg="A" aria-label="The leg from A to the chat service"><rect class="hit" x="68" y="84" width="70" height="48"/><line x1="74" y1="108" x2="130" y2="108" marker-end="url(#ah)"/></g>
+          <g class="leg" id="legB" data-leg="B" aria-label="The leg from the chat service to B"><rect class="hit" x="262" y="84" width="70" height="48"/><line x1="268" y1="108" x2="324" y2="108" marker-end="url(#ah)"/></g>
+          <g id="bubs"></g>
+        </svg>
+        <div class="sim-bar">
+          <div class="composer"><input id="msgIn" type="text" maxlength="40" value="lunch at 1?" aria-label="Message from A"><button class="btn primary tgl" id="sendBtn">Send from A</button></div>
+        </div>
+        <div class="sim-bar">
+          <button class="btn tgl" id="bToggle" aria-pressed="true">📶 B is online</button>
+          <button class="btn tgl fake" id="directBtn" aria-disabled="true" title="Not in this design: clients don't know each other's addresses, and B may be offline">Let A connect straight to B</button>
+        </div>
+        <div class="simlog" id="log1"><div>A and B are both online. Type something and press Send.</div></div>
+      </div>
+      <ul class="checklist" id="s1goals">
+        <li data-g="send"><span class="box">✓</span><span>Send a message to B while B is online (jobs 1 and 2)</span></li>
+        <li data-g="hold"><span class="box">✓</span><span>Switch B off and send again: where does it go? (job 3)</span></li>
+        <li data-g="drain"><span class="box">✓</span><span>Bring B back online and watch the tray empty</span></li>
+      </ul>
+      <div class="challenge boxed" id="legQ" style="display:none">
+        <div class="step">Your call</div>
+        <h3>Which leg is the hard one to build with plain HTTP?</h3>
+        <p class="small muted" style="margin-top:-6px">Tap an arrow in the diagram, or a button.</p>
+        <div class="legq"><button class="opt" data-leg="A">A → chat service</button><button class="opt" data-leg="B">chat service → B</button></div>
+        <div class="explain" id="legEx"></div>
+      </div>
+      <div class="callout" id="httpNote" style="display:none"><b>Why sending is easy.</b> HTTP is <i>client-initiated</i>: the client always speaks first. That's perfect for the sender. A opens a connection and posts the message. With the <code>keep-alive</code> header, the same TCP connection is reused for the next message, so A doesn't repeat the connection setup (the TCP <i>handshake</i>) every time. The book notes that Facebook's chat sent messages over plain HTTP in its early days.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener">[1]</a> The receiving side is the problem: the server has news for B, but HTTP gives the server no way to speak first.</div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Polling</h2><div class="sub">Are we there yet? Are we there yet?</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The simplest fix: B's phone asks the server <b>"anything new for me?"</b> on a fixed timer. That's <b>polling</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener">[1]</a> It works, but most of the time the answer is "no". Every "no" still costs a request, server work and phone battery. And a message can sit on the server for up to one whole interval before B's next ask.</p>
+      <p>Below is one minute. Four messages for B arrive at the server (⭐). B's phone polls on the bottom row. The orange bar under each star is how long that message waited. The same 4 messages arrive on every run, so you can compare.</p>
+      <div class="sim tl">
+        <svg id="tl2" viewBox="0 0 360 178" role="img" aria-label="One-minute timeline of polling"></svg>
+        <div class="sim-bar">
+          <span class="row" style="gap:8px"><span class="small">Poll every</span><span class="seg" id="ivSeg"><button data-iv="1" disabled>1 s</button><button data-iv="5" class="on" disabled>5 s</button><button data-iv="15" disabled>15 s</button><button data-iv="30" disabled>30 s</button></span></span>
+          <button class="btn primary tgl" id="run2" disabled>▶ Run 60 s</button>
+        </div>
+        <div class="sim-bar stats"><span>Requests <b id="c2req">0</b></span><span>Empty <b id="c2empty">0</b></span><span>Avg wait <b id="c2wait">—</b></span></div>
+      </div>
+      <div class="challenge boxed" id="pred2"></div>
+      <table class="rtab" id="rtab2" style="display:none"><thead><tr><th>Interval</th><th>Requests</th><th>Empty</th><th>Avg wait</th></tr></thead><tbody></tbody></table>
+      <ul class="checklist" id="s2goals">
+        <li data-g="fast"><span class="box">✓</span><span>Run it at <b>1 s</b>: fast, but count the empty answers</span></li>
+        <li data-g="slow"><span class="box">✓</span><span>Run it at <b>30 s</b>: cheap, but how long do messages wait?</span></li>
+      </ul>
+      <div class="callout" id="pollNote" style="display:none"><b>You can't win both.</b> A shorter interval cuts the wait but multiplies the empty requests. A longer one saves requests but makes messages sit on the server. For chat, where people expect replies in about a second, polling is a bad deal. <span class="muted">These timings are this sim's numbers, not the book's.</span></div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Long polling</h2><div class="sub">Hold the line, but it still leaks</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p><b>Long polling</b> makes the server wait before it answers. B sends a request, and the server <b>holds it open</b> until a message shows up or a <b>timeout</b> (a time limit) runs out. Then B sends a new request straight away.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener">[1]</a> Far fewer empty answers, and messages go out as soon as they arrive.</p>
+      <div class="lpflow" aria-label="Long polling loop"><span>B asks</span><i>→</i><span>server holds…</span><i>→</i><span>message or timeout</span><i>→</i><span>server answers</span><i>→</i><span>B asks again</span></div>
+      <p>The book still lists three drawbacks.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener">[1]</a> Each scene below shows one going wrong. <b>Tap a drawback card, then the scene that shows it.</b> One jargon word: a <b>round-robin load balancer</b> hands each new request to the next server in turn, without caring who the request is for.</p>
+      <div class="dcards" id="dcards"></div>
+      <div class="scenes" id="scenes">
+        <button class="scene sc-lb" data-k="lb" aria-label="Scene 1">
+          <svg viewBox="0 0 300 172" aria-hidden="true">
+            <line class="wire" x1="44" y1="88" x2="92" y2="88"/>
+            <line class="wire" x1="148" y1="82" x2="196" y2="40"/>
+            <line class="wire" x1="148" y1="96" x2="196" y2="132" opacity=".5"/>
+            <path class="held" d="M132 146 L196 140"/>
+            <rect class="sph" x="10" y="60" width="34" height="56" rx="7"/><text class="svg-t" x="27" y="88">A</text>
+            <rect class="sbox" x="92" y="68" width="56" height="40" rx="8"/><text class="svg-t" x="120" y="88">LB</text>
+            <rect class="sbox" x="196" y="18" width="88" height="36" rx="8"/><text class="svg-s" x="240" y="36">Server 1</text>
+            <rect class="sbox" x="196" y="122" width="88" height="36" rx="8"/><text class="svg-s" x="240" y="140">Server 2</text>
+            <rect class="sph" x="98" y="122" width="34" height="46" rx="7"/><text class="svg-t" x="115" y="145">B</text>
+            <text class="qmark" x="240" y="72">B isn't here?</text>
+            <circle class="mdot" r="7" cx="0" cy="0"/>
+          </svg>
+          <span class="cap"><b>Scene 1</b></span>
+        </button>
+        <button class="scene sc-gone" data-k="gone" aria-label="Scene 2">
+          <svg viewBox="0 0 300 172" aria-hidden="true">
+            <path class="held" d="M126 88 L222 88"/>
+            <rect class="sbox" x="22" y="64" width="104" height="48" rx="9"/><text class="svg-s" x="74" y="81">Server 2</text><text class="svg-m" x="74" y="101">holding B's req</text>
+            <g class="bph"><rect class="sph" x="222" y="58" width="38" height="62" rx="8"/><text class="svg-t" x="241" y="89">B</text></g>
+            <text class="svg-s" x="241" y="140">signal lost</text>
+            <text class="qmark" x="74" y="44">still there?</text>
+          </svg>
+          <span class="cap"><b>Scene 2</b></span>
+        </button>
+        <button class="scene sc-zzz" data-k="zzz" aria-label="Scene 3">
+          <svg viewBox="0 0 300 172" aria-hidden="true">
+            <line class="wire" x1="54" y1="86" x2="196" y2="86"/>
+            <rect class="sph" x="20" y="56" width="34" height="60" rx="7"/><text class="svg-t" x="37" y="86">B</text>
+            <text class="zz" x="58" y="50">z z z</text>
+            <rect class="sbox" x="196" y="62" width="88" height="48" rx="9"/><text class="svg-s" x="240" y="86">Server</text>
+            <rect class="bar-bg" x="196" y="122" width="88" height="10" rx="5"/><rect class="bar" x="196" y="122" width="88" height="10" rx="5"/>
+            <text class="svg-m" x="240" y="150">timeout</text>
+            <text class="svg-m empty" x="125" y="72">empty · reconnect</text>
+            <text class="svg-m" id="zzzN" x="110" y="160">reconnects: 0</text>
+            <circle class="mdot" r="7" cx="0" cy="0"/>
+          </svg>
+          <span class="cap"><b>Scene 3</b></span>
+        </button>
+      </div>
+      <div class="callout warn" id="lpNote" style="display:none"><b>Honest caveat.</b> "The server can't tell if the client left" is a little strong. A server does notice a clean close, or a write that fails. The real trap is a <i>quietly</i> dead connection: the phone lost signal and never said goodbye, so the request looks alive for a long time. WebSocket has the same trap. That's why real systems add <b>heartbeats</b>, small "I'm still here" pings. You'll build them in Quest 12.5.</div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>WebSocket</h2><div class="sub">One pipe, both directions</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p><b>WebSocket</b> is the book's pick for pushing messages from server to client.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener">[1]</a> The client opens it with an ordinary HTTP request that asks to <b>upgrade</b> the connection. The server agrees, and from then on the same connection stays open and is <b>bi-directional</b>: either side can send at any moment.<a class="cite" href="https://datatracker.ietf.org/doc/html/rfc6455" target="_blank" rel="noopener">[2]</a> It runs on the normal web ports, 80 and 443, so it usually gets through firewalls.</p>
+
+      <div class="part">
+        <div class="part-h">Part 1 of 3</div>
+        <h3>Tap the handshake in order</h3>
+        <ol class="order-done" id="ordDone"></ol>
+        <div class="order-pool" id="ordPool"></div>
+        <div class="explain" id="ordEx"></div>
+        <div class="wire-term" id="ordTerm" style="display:none"><span class="c">// 1. client → server (plain HTTP)</span>
+GET /chat HTTP/1.1
+Host: chat.example.com
+Upgrade: websocket
+Connection: Upgrade
+
+<span class="c">// 2. server → client</span>
+<span class="s">HTTP/1.1 101 Switching Protocols</span>
+Upgrade: websocket
+Connection: Upgrade
+
+<span class="c">// 3+. same TCP connection, now WebSocket frames, both ways</span></div>
+      </div>
+
+      <div class="part">
+        <div class="part-h">Part 2 of 3</div>
+        <h3>Napkin math: what does polling cost?</h3>
+        <p style="margin:0">One million users are online. Each phone polls every <b>5 seconds</b>. How many requests per second hit your servers?</p>
+        <div class="calc"><input id="calcIn" type="text" inputmode="numeric" placeholder="e.g. 50000" aria-label="Requests per second"><span class="unit">requests / s</span><button class="btn primary tgl" id="calcBtn">Check</button></div>
+        <div class="cmsg" id="calcMsg"></div>
+      </div>
+
+      <div class="part">
+        <div class="part-h">Part 3 of 3</div>
+        <h3>The race: same minute, three ways</h3>
+        <p style="margin:0">The 4 messages from stage 2, replayed side by side. Watch the request counters.</p>
+        <div class="sim tl">
+          <svg id="tl4" viewBox="0 0 360 252" role="img" aria-label="Three timelines: polling, long polling and WebSocket"></svg>
+          <div class="sim-bar"><span class="small muted">Polling every 5 s · long polling with a 30 s timeout</span><button class="btn primary tgl" id="race">▶ Run the race</button></div>
+        </div>
+        <div class="callout tip" id="raceNote" style="display:none"><b>Scale it up.</b> At 5 s polling, 1 million online users means 200,000 requests a second, nearly all of them "nothing new". With WebSocket it's 1 million open connections that stay quiet until there's a message. <span class="muted">The 200,000/s figure is our worked example using the book's 1 million online users, not a number from the book.</span></div>
+      </div>
+      <ul class="checklist" id="s4goals">
+        <li data-g="order"><span class="box">✓</span><span>Put the handshake in order</span></li>
+        <li data-g="calc"><span class="box">✓</span><span>Work out the polling load</span></li>
+        <li data-g="race"><span class="box">✓</span><span>Run the race</span></li>
+      </ul>
+      <div class="callout" id="wsCost" style="display:none"><b>The book goes one step further: WebSocket for sending too.</b> HTTP would work for sending, but one connection that carries both directions makes the design and the code simpler on both the phone and the server.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener">[1]</a> The price: every online user now holds a <b>long-lived connection</b> to one particular server. That server has to remember it, so managing connections on the server side becomes the critical problem. That is exactly where Quest 12.2 picks up.</div>
+      <div class="callout warn"><b>Honest caveat: keep a fallback.</b> Port 443 usually gets through, but some corporate proxies still break WebSocket. Libraries such as Socket.IO start on HTTP long polling and upgrade to WebSocket only when it works,<a class="cite" href="https://socket.io/docs/v4/how-it-works/" target="_blank" rel="noopener">[5]</a> and production chat apps keep a fallback like that.</div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Lag Wraith</h2><div class="sub">Pick the right connection style</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Picking a transport is a trade-off, not a reflex. <b>Polling</b> is fine for rare updates nobody is waiting on. <b>Long polling</b> is the fallback when WebSockets are blocked. <b>WebSocket</b> fits real-time, two-way traffic. Six situations: pick one for each.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">The interview answer, in your words</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> WebSocket made your chat servers <i>stateful</i>: each one holds live connections to particular users. So how does a message from a user on server 1 find a user on server 7, and how does a phone pick a server in the first place? That's <a href="1202-chat-high-level-design.html">Quest 12.2, <i>The Switchboard</i></a>.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-chat-system" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 12 "Design a Chat System"</a>: Step 1 and the start of Step 2 (polling, long polling, WebSocket). Then skim sections 1 and 4 of <a href="https://datatracker.ietf.org/doc/html/rfc6455" target="_blank" rel="noopener">RFC 6455</a> to see the real handshake, and <a href="https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API" target="_blank" rel="noopener">MDN's WebSocket API page</a> for the browser side.<a class="cite" href="https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API" target="_blank" rel="noopener">[3]</a> You met long polling before in <a href="1504-drive-upload-download-notify.html">Quest 15.4</a>, where Drive picked it on purpose.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <ul style="margin:0;padding-left:20px">
+        <li><b>There's a fourth option: Server-Sent Events (SSE).</b> The server pushes a stream of events to the browser over plain HTTP.<a class="cite" href="https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events" target="_blank" rel="noopener">[6]</a> The book skips it. It's great for one-way feeds such as live scores. Chat needs two-way traffic, so WebSocket stays the natural pick.</li>
+        <li><b>Long polling did run at huge scale.</b> Facebook's chat delivered messages to browsers over HTTP long polling, with Erlang "channel" servers holding the open requests.<a class="cite" href="https://www.erlang-factory.com/upload/presentations/31/EugeneLetuchy-ErlangatFacebook.pdf" target="_blank" rel="noopener">[4]</a> The drawbacks are real costs, not deal-breakers.</li>
+        <li><b>Dead connections need heartbeats either way.</b> A phone that loses signal sends no goodbye. Long polling and WebSocket both need periodic pings to notice (Quest 12.5).</li>
+      </ul>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"if WebSocket is so good, why does Drive use long polling?"</i> or <i>"what happens to an open WebSocket when the phone switches from Wi-Fi to 4G?"</i>
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 12 "Design a Chat System" (ByteByteGo).</li>
+        <li>I. Fette, A. Melnikov, RFC 6455 "The WebSocket Protocol", IETF, 2011.</li>
+        <li>MDN Web Docs, "The WebSocket API (WebSockets)".</li>
+        <li>Eugene Letuchy, "Erlang at Facebook" (Facebook Chat), Erlang Factory 2009.</li>
+        <li>Socket.IO docs, "How it works".</li>
+        <li>MDN Web Docs, "Server-sent events".</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '1201',
+  winTitle: 'The pipe is open',
+  badge: '🔌 Badge: Pipe Fitter',
+  cheatsheet: '../reference/ch12-chat-cheatsheet.html',
+});
+const { sleep, shuffle } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function anim(dur, f) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 1) { f(1); return res(); }
+    const t0 = performance.now();
+    const fr = now => { const p = Math.min(1, (now - t0) / dur); f(p); p < 1 ? requestAnimationFrame(fr) : res(); };
+    requestAnimationFrame(fr);
+  });
+}
+const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); if (xp !== 0) Q.addXP(xp || 10, li);
+  return true;
+}
+function keyActivate(el, fn) {
+  el.addEventListener('click', fn);
+  el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(e); } });
+}
+function shake(el) { el.classList.remove('nope'); void el.offsetWidth; el.classList.add('nope'); setTimeout(() => el.classList.remove('nope'), 450); }
+// Run a chain of quizzes one after another, then call done.
+function quizChain(mount, list, done) {
+  let i = 0;
+  const next = () => {
+    if (i >= list.length) return done && done();
+    const q = list[i++];
+    Q.quiz(mount, { ...q, onDone: () => setTimeout(next, 700) });
+  };
+  next();
+}
+
+/* the same minute of traffic for stages 2 and 4: 4 messages for B (seconds) */
+const MSGS = [2.6, 11.4, 17.9, 53.2];
+const X0 = 20, X1 = 340, xOf = t => X0 + (X1 - X0) * t / 60;
+function pollStats(iv) {
+  const polls = []; for (let k = 1; k * iv <= 60; k++) polls.push(k * iv);
+  const deliver = MSGS.map(m => polls.find(p => p > m));
+  const carried = new Set(deliver);
+  const empty = polls.filter(p => !carried.has(p)).length;
+  const avg = MSGS.reduce((s, m, i) => s + (deliver[i] - m), 0) / MSGS.length;
+  return { polls, deliver, carried, empty, avg };
+}
+function longPollStats(timeout) {
+  const reqs = []; let open = 0;
+  while (open < 60) {
+    const next = MSGS.find(m => m > open + 1e-9);
+    const carried = next !== undefined && next - open <= timeout;
+    const end = carried ? next : open + timeout;
+    reqs.push({ open, end, carried, pending: end > 60 });
+    open = end;
+  }
+  return reqs;
+}
+function drawAxis(svg, y) {
+  S('line', { class: 'axis', x1: X0, y1: y, x2: X1, y2: y }, svg);
+  [0, 15, 30, 45, 60].forEach(t => { S('line', { class: 'axis', x1: xOf(t), y1: y, x2: xOf(t), y2: y + 5 }, svg); S('text', { class: 'svg-m', x: xOf(t), y: y + 17 }, svg).textContent = t + ' s'; });
+}
+function star(svg, t, y) {
+  const x = xOf(t), r1 = 7, r2 = 3;
+  const pts = Array.from({ length: 10 }, (_, i) => { const a = Math.PI / 5 * i - Math.PI / 2, r = i % 2 ? r2 : r1; return `${(x + r * Math.cos(a)).toFixed(1)},${(y + r * Math.sin(a)).toFixed(1)}`; }).join(' ');
+  return S('polygon', { class: 'star', points: pts }, svg);
+}
+
+/* ================= STAGE 1: three jobs ================= */
+Q.onStage(1, () => {
+  const svg = $('#pipe1'), bubs = $('#bubs');
+  const goals = new Set();
+  let bOnline = true, held = [], busy = false, legAsked = false, legDone = false, quizShown = false;
+  const P = { A: [74, 108], S: [200, 108], B: [326, 108], T: [200, 206] };
+  function makeBub(at) {
+    const g = S('g', { class: 'bub' }, bubs);
+    S('rect', { x: -21, y: -11, width: 42, height: 22, rx: 11 }, g);
+    S('text', { x: 0, y: 0 }, g).textContent = '•••';
+    g.setAttribute('transform', `translate(${at[0]} ${at[1]})`);
+    return g;
+  }
+  async function move(g, from, to, ms) {
+    await anim(ms, p => { const e = ease(p); g.setAttribute('transform', `translate(${(from[0] + (to[0] - from[0]) * e).toFixed(1)} ${(from[1] + (to[1] - from[1]) * e).toFixed(1)})`); });
+  }
+  const setTray = () => { $('#trayN').textContent = held.length; };
+  const esc = Q.esc;
+
+  async function send() {
+    if (busy) return;
+    const txt = ($('#msgIn').value || '').trim() || '(empty)';
+    busy = true; $('#sendBtn').disabled = true;
+    const g = makeBub(P.A);
+    logTo('log1', `A → chat service: “${esc(txt)}” (job 1: receive)`);
+    await move(g, P.A, P.S, 500);
+    if (bOnline) {
+      await move(g, P.S, P.B, 500);
+      g.remove();
+      logTo('log1', `chat service → B: delivered “${esc(txt)}” (job 2: find + relay)`, 'g');
+      checkGoal('#s1goals', 'send', goals);
+    } else {
+      await move(g, P.S, P.T, 400);
+      g.remove(); held.push(txt); setTray();
+      logTo('log1', `B is offline → the service keeps “${esc(txt)}” in B's tray (job 3: hold)`, 'w');
+      checkGoal('#s1goals', 'hold', goals);
+    }
+    busy = false; $('#sendBtn').disabled = false;
+    maybeLeg();
+  }
+  async function setB(on) {
+    if (busy) return;
+    bOnline = on;
+    $('#bToggle').setAttribute('aria-pressed', on ? 'true' : 'false');
+    $('#bToggle').textContent = on ? '📶 B is online' : '📵 B is offline';
+    $('#phB').classList.toggle('off', !on);
+    $('#bState').textContent = on ? 'online' : 'offline';
+    if (!on) { logTo('log1', 'B switched off. A can still send.'); return; }
+    if (!held.length) { logTo('log1', 'B is back online. Nothing was waiting.'); return; }
+    busy = true; $('#sendBtn').disabled = true;
+    logTo('log1', `B is back online → the service sends the ${held.length} held message${held.length > 1 ? 's' : ''}`);
+    const n = held.length;
+    while (held.length) {
+      const txt = held.shift(); setTray();
+      const g = makeBub(P.T);
+      await move(g, P.T, P.S, 300);
+      await move(g, P.S, P.B, 400);
+      g.remove();
+      logTo('log1', `chat service → B: delivered “${esc(txt)}” (late, but not lost)`, 'g');
+    }
+    busy = false; $('#sendBtn').disabled = false;
+    if (n) checkGoal('#s1goals', 'drain', goals);
+    maybeLeg();
+  }
+  $('#sendBtn').onclick = send;
+  $('#msgIn').addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+  $('#bToggle').onclick = () => setB(!bOnline);
+  $('#directBtn').onclick = e => {
+    logTo('log1', '🚫 Not in this design: A doesn’t know B’s address, and B may be offline. Everything goes through the service.', 'e');
+    Q.toast('not in this design', e.currentTarget, 'practice');
+  };
+
+  function maybeLeg() {
+    if (legAsked || goals.size < 3) return;
+    legAsked = true;
+    $('#legQ').style.display = 'block';
+    svg.classList.add('ask');
+    $$('.leg', svg).forEach(g => { g.setAttribute('role', 'button'); g.setAttribute('tabindex', '0'); });
+  }
+  function answerLeg(leg) {
+    if (!legAsked || legDone) return;
+    legDone = true;
+    svg.classList.remove('ask');
+    $$('.leg', svg).forEach(g => { g.removeAttribute('tabindex'); g.removeAttribute('role'); });
+    const ok = leg === 'B';
+    const btn = $(`#legQ .opt[data-leg="${leg}"]`);
+    $$('#legQ .opt').forEach(b => b.disabled = true);
+    btn.classList.add(ok ? 'right' : 'wrong');
+    if (!ok) $('#legQ .opt[data-leg="B"]').classList.add('right');
+    $('#legB').classList.add('right'); if (!ok) $('#legA').classList.add('wrong');
+    const ex = $('#legEx'); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+    ex.innerHTML = (ok ? '<b>Right.</b> ' : '<b>Other way round.</b> ') + 'A starts its own request, which is exactly how HTTP works. But for B, the <b>server</b> has the news and has to speak first. Plain HTTP only lets the client start a conversation.';
+    ok ? Q.addXP(15, btn) : Q.loseHeart(btn);
+    $('#httpNote').style.display = 'block';
+    showQuiz();
+  }
+  $$('#legQ .opt').forEach(b => b.onclick = () => answerLeg(b.dataset.leg));
+  $$('.leg', svg).forEach(g => keyActivate(g, () => answerLeg(g.dataset.leg)));
+
+  function showQuiz() {
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => quizChain($('#s1quiz'), [
+      { tag: 'Check 1 of 3', q: 'B’s phone is switched off when A’s message arrives. Which of the chat service’s three jobs covers this?',
+        options: ['Receive the message from the sender', 'Find the recipient and relay it on', 'Hold it until the recipient is back'], correct: 2,
+        good: 'Job 3. The server keeps the message and delivers it when B reconnects. That’s why chat needs storage, not just a relay.',
+        bad: 'It’s job 3: the server <b>holds</b> the message until B comes back online. Jobs 1 and 2 only work if B is reachable right now.' },
+      { tag: 'Check 2 of 3', q: 'Why is plain HTTP fine for the <b>sending</b> side?',
+        options: ['The client starts it; keep-alive reuses the line', 'HTTP requests are smaller than WebSocket frames', 'The server batches sends into one big reply'], correct: 0,
+        good: 'HTTP is client-initiated, and the sender is the client. Keep-alive keeps the TCP connection open, so the next message skips the handshake.',
+        bad: 'The sender is the one starting the conversation, which is what HTTP is built for. Keep-alive reuses the TCP connection so each message skips the handshake.' },
+      { tag: 'Check 3 of 3', q: 'So what is the genuinely hard part of a chat service’s connections?',
+        options: ['Letting the server start delivery to B', 'Fitting 100,000 characters in one request', 'Doing a TCP handshake for every message'], correct: 0,
+        good: 'The server has to push to the receiver, and HTTP has no built-in way for the server to speak first. Polling, long polling and WebSocket are three answers to that.',
+        bad: 'Message size and handshakes are solved problems (keep-alive fixes the handshake). The hard part is the server pushing to the receiver, which HTTP doesn’t support by itself.' },
+    ], () => setTimeout(() => Q.clearStage(1), 400)), 500);
+  }
+});
+
+/* ================= STAGE 2: polling ================= */
+Q.onStage(2, () => {
+  const svg = $('#tl2');
+  const goals = new Set();
+  let iv = 5, predicted = false, running = false, quizShown = false;
+  const Y_SRV = 46, Y_CLI = 124;
+  function frame() {
+    svg.innerHTML = '';
+    S('text', { class: 'lane-t', x: X0, y: 20 }, svg).textContent = 'Server: messages for B arrive';
+    S('line', { class: 'rowline', x1: X0, y1: Y_SRV, x2: X1, y2: Y_SRV }, svg);
+    S('text', { class: 'lane-t', x: X0, y: Y_CLI - 22 }, svg).textContent = 'B’s phone: polls';
+    S('line', { class: 'rowline', x1: X0, y1: Y_CLI, x2: X1, y2: Y_CLI }, svg);
+    drawAxis(svg, 146);
+  }
+  frame();
+  const setCounts = (r, e, w) => { $('#c2req').textContent = r; $('#c2empty').textContent = e; $('#c2wait').textContent = w; };
+  async function run(interval) {
+    if (running) return null;
+    running = true; $('#run2').disabled = true; $$('#ivSeg button').forEach(b => b.disabled = true);
+    frame();
+    const st = pollStats(interval);
+    const gTicks = S('g', {}, svg), gWait = S('g', {}, svg), gStar = S('g', {}, svg);
+    const head = S('line', { class: 'head', x1: X0, y1: 30, x2: X0, y2: 140 }, svg);
+    const waits = MSGS.map(m => S('rect', { class: 'wait', x: xOf(m), y: Y_SRV + 8, width: 0, height: 7, rx: 3 }, gWait));
+    $$('.lane-t', svg).forEach(l => svg.appendChild(l));
+    const starred = new Set(), ticked = new Set();
+    let req = 0, empty = 0;
+    await anim(6000, p => {
+      const t = 60 * p;
+      head.setAttribute('x1', xOf(t)); head.setAttribute('x2', xOf(t));
+      MSGS.forEach((m, i) => {
+        if (m <= t && !starred.has(i)) { starred.add(i); star(gStar, m, Y_SRV); }
+        if (m <= t) waits[i].setAttribute('width', Math.max(0, xOf(Math.min(t, st.deliver[i])) - xOf(m)).toFixed(1));
+      });
+      st.polls.forEach(pt => {
+        if (pt <= t + 1e-9 && !ticked.has(pt)) {
+          ticked.add(pt); req++;
+          const hit = st.carried.has(pt); if (!hit) empty++;
+          S('line', { class: 'tick' + (hit ? ' hit' : ''), x1: xOf(pt), y1: Y_CLI, x2: xOf(pt), y2: Y_SRV + (hit ? 0 : 20) }, gTicks);
+          S('circle', { class: 'tickdot' + (hit ? ' hit' : ''), cx: xOf(pt), cy: Y_CLI, r: hit ? 4 : 2.6 }, gTicks);
+        }
+      });
+      const done = MSGS.filter((m, i) => st.deliver[i] <= t);
+      const w = done.length ? (MSGS.reduce((s, m, i) => s + (st.deliver[i] <= t ? st.deliver[i] - m : 0), 0) / done.length).toFixed(1) + ' s' : '—';
+      setCounts(req, empty, w);
+    });
+    head.remove();
+    setCounts(st.polls.length, st.empty, st.avg.toFixed(1) + ' s');
+    const tb = $('#rtab2 tbody'); $('#rtab2').style.display = '';
+    const old = $(`tr[data-iv="${interval}"]`, tb); if (old) old.remove();
+    const tr = document.createElement('tr'); tr.className = 'new'; tr.dataset.iv = interval;
+    tr.innerHTML = `<td>${interval} s</td><td>${st.polls.length}</td><td>${st.empty}</td><td>${st.avg.toFixed(1)} s</td>`;
+    const rows = [...tb.children]; const after = rows.find(r => +r.dataset.iv > interval); tb.insertBefore(tr, after || null);
+    running = false;
+    if (predicted) { $('#run2').disabled = false; $$('#ivSeg button').forEach(b => b.disabled = false); }
+    return st;
+  }
+  $$('#ivSeg button').forEach(b => b.onclick = () => {
+    if (running) return;
+    iv = +b.dataset.iv; $$('#ivSeg button').forEach(x => x.classList.toggle('on', x === b));
+  });
+  $('#run2').onclick = async () => {
+    const st = await run(iv);
+    if (!st) return;
+    if (iv === 1) checkGoal('#s2goals', 'fast', goals);
+    if (iv === 30) checkGoal('#s2goals', 'slow', goals);
+    if (iv === 1 || iv === 30) $('#pollNote').style.display = 'block';
+    maybeQuiz();
+  };
+  function predict() {
+    const box = $('#pred2');
+    box.innerHTML = `<div class="step">Predict first</div><h3>B polls every <b>5 s</b> for one minute. About how many of those polls come back <b>empty</b> (“nothing new”)?</h3><div class="opts"></div><div class="explain"></div>`;
+    const opts = $('.opts', box);
+    const OPTS = ['About 2 of them', 'About 8 of them', 'About 50 of them'];
+    shuffle(OPTS.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o;
+      b.onclick = async () => {
+        $$('.opt', opts).forEach(x => x.disabled = true); b.classList.add('picked');
+        iv = 5; $$('#ivSeg button').forEach(x => x.classList.toggle('on', x.dataset.iv === '5'));
+        predicted = true;
+        const st = await run(5);
+        const ok = i === 1;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $$('.opt', opts).find(x => x.textContent === OPTS[1]).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + `${st.polls.length} polls in 60 s, and only 4 messages to pick up, so <b>${st.empty} came back empty</b>. Each message waited ${st.avg.toFixed(1)} s on average, about half the interval. Now try 1 s and 30 s.`;
+        ok ? Q.addXP(25, b) : Q.loseHeart(b);
+        if (!running) { $('#run2').disabled = false; $$('#ivSeg button').forEach(x => x.disabled = false); }
+        maybeQuiz();
+      };
+      opts.appendChild(b);
+    });
+  }
+  predict();
+  function maybeQuiz() {
+    if (quizShown || !predicted || goals.size < 2) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s2quiz'), {
+      q: 'You halve the poll interval, from 10 s to 5 s. What happens?',
+      options: ['About twice the requests, about half the wait', 'Same number of requests, but half the wait', 'Half the requests, and about twice the wait'],
+      correct: 0,
+      good: 'Requests per minute go from 6 to 12, and the average wait roughly halves (about half the interval). You pay for every second of latency you save, mostly in empty answers.',
+      bad: 'Polling twice as often means twice the requests. The average wait is about half the interval, so it halves too. Speed costs requests, and most of them come back empty.',
+      onDone: () => setTimeout(() => Q.clearStage(2), 900),
+    }), 500);
+  }
+});
+
+/* ================= STAGE 3: long polling drawbacks ================= */
+Q.onStage(3, () => {
+  const CARDS = [
+    { k: 'lb', t: 'Wrong server', why: '<b>Wrong server.</b> HTTP servers are usually stateless, and a round-robin load balancer can send A’s message to Server 1, while B’s held request sits on Server 2. Server 1 has no line to B.' },
+    { k: 'gone', t: 'Can’t tell you left', why: '<b>Can’t tell you left.</b> B’s phone lost signal and never said goodbye. The server keeps holding a request nobody will ever read.' },
+    { k: 'zzz', t: 'Wasted reconnects', why: '<b>Wasted reconnects.</b> A user who rarely chats still times out and reconnects again and again, all for nothing.' },
+  ];
+  let selCard = null, selScene = null, matched = 0, quizShown = false;
+  const wrap = $('#dcards');
+  wrap.innerHTML = shuffle(CARDS).map(c => `<button class="dcard" data-k="${c.k}" aria-pressed="false">${c.t}</button>`).join('');
+  const cards = $$('.dcard', wrap), scenes = $$('#scenes .scene');
+  // scene 3 counter follows its CSS loop
+  let zn = 0; const bar = $('.sc-zzz .bar');
+  bar.addEventListener('animationiteration', () => { zn++; $('#zzzN').textContent = 'reconnects: ' + zn; });
+  if (Q.reduced) $('#zzzN').textContent = 'reconnects: 1, 2, 3…';
+  function mark() {
+    cards.forEach(c => { c.classList.toggle('sel', c === selCard); c.setAttribute('aria-pressed', c === selCard ? 'true' : 'false'); });
+    scenes.forEach(s => s.classList.toggle('sel', s === selScene));
+  }
+  function tryMatch() {
+    if (!selCard || !selScene) return mark();
+    const c = selCard, s = selScene; selCard = selScene = null; mark();
+    if (c.dataset.k === s.dataset.k) {
+      const info = CARDS.find(x => x.k === c.dataset.k);
+      c.disabled = true; s.classList.add('done'); s.setAttribute('aria-disabled', 'true');
+      $('.cap', s).innerHTML = `<b>✓ ${info.t}</b><br>${info.why.replace(/^<b>[^<]*<\/b>\s*/, '')}`;
+      Q.addXP(15, s);
+      if (++matched === CARDS.length) done();
+    } else {
+      shake(c); shake(s); Q.loseHeart(s);
+    }
+  }
+  cards.forEach(c => c.onclick = () => { if (c.disabled) return; selCard = selCard === c ? null : c; tryMatch(); });
+  scenes.forEach(s => s.onclick = () => { if (s.classList.contains('done')) return; selScene = selScene === s ? null : s; tryMatch(); });
+  function done() {
+    $('#lpNote').style.display = 'block';
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => Q.quiz($('#s3quiz'), {
+      q: 'Why does a stateless, round-robin load balancer hurt long polling?',
+      options: ['A’s message may reach a server not holding B’s request', 'Round-robin closes every held request after a second', 'Stateless servers are not allowed to hold requests open'],
+      correct: 0,
+      good: 'The load balancer picks servers in turn, not by user. So the request carrying A’s message can land on a server that has no open request from B, and it can’t deliver it.',
+      bad: 'Servers can hold requests fine. The problem is routing: round-robin ignores who a request is for, so A’s message can land on a server that isn’t holding B’s request.',
+      onDone: () => setTimeout(() => Q.clearStage(3), 900),
+    }), 500);
+  }
+});
+
+/* ================= STAGE 4: WebSocket ================= */
+Q.onStage(4, () => {
+  const goals = new Set();
+  let quizShown = false;
+  const done = g => { if (checkGoal('#s4goals', g, goals, 0)) maybeQuiz(); };
+
+  /* part 1: handshake order (the last two can come in either order) */
+  const STEPS = [
+    'Client sends a normal HTTP GET with “Upgrade: websocket”',
+    'Server replies “101 Switching Protocols”',
+    'The same TCP connection stays open',
+    'Server pushes a message whenever it has one',
+    'Client sends its messages on the same connection',
+  ];
+  let placed = [], ordMissed = false;
+  function buildOrder() {
+    placed = [];
+    $('#ordDone').innerHTML = '';
+    const pool = $('#ordPool');
+    pool.innerHTML = shuffle(STEPS.map((t, i) => ({ t, i }))).map(({ t, i }) => `<button class="opt" data-i="${i}">${t}</button>`).join('');
+    $$('.opt', pool).forEach(b => b.onclick = () => {
+      const i = +b.dataset.i, n = placed.length;
+      const ok = n < 3 ? i === n : i >= 3;
+      if (!ok) {
+        shake(b); b.classList.add('wrong'); setTimeout(() => b.classList.remove('wrong'), 450);
+        const hint = n === 0 ? 'Every WebSocket starts life as plain HTTP. What does the client send first?' : n === 1 ? 'The client asked to upgrade. What does the server answer?' : 'After the 101, what happens to the connection itself?';
+        const ex = $('#ordEx'); ex.className = 'explain show bad'; ex.innerHTML = '<b>Not yet.</b> ' + hint;
+        if (!ordMissed) { ordMissed = true; Q.loseHeart(b); }
+        return;
+      }
+      placed.push(i); b.remove();
+      $('#ordDone').insertAdjacentHTML('beforeend', `<li>${STEPS[i]}</li>`);
+      $('#ordEx').className = 'explain';
+      if (placed.length === STEPS.length) {
+        const ex = $('#ordEx'); ex.className = 'explain show good';
+        ex.innerHTML = '<b>Handshake done.</b> It starts as HTTP, so it passes through the same ports and proxies as normal web traffic. After the <code>101</code>, it isn’t HTTP any more: it’s one long-lived, two-way connection, and the server can push the moment a message arrives. (The last two can happen in either order.)';
+        $('#ordTerm').style.display = 'block';
+        if (!goals.has('order')) Q.addXP(25, $('#ordDone'));
+        done('order');
+      }
+    });
+  }
+  buildOrder();
+
+  /* part 2: napkin math */
+  let calcMissed = false;
+  function parseNum(s) {
+    s = String(s).trim().toLowerCase().replace(/[,\s_]/g, '').replace(/(req(uests)?\/?s?|\/s)$/, '');
+    let m = 1;
+    if (/k$/.test(s)) { m = 1e3; s = s.slice(0, -1); } else if (/m$/.test(s)) { m = 1e6; s = s.slice(0, -1); }
+    const v = Number(s); return Number.isFinite(v) && s !== '' ? v * m : NaN;
+  }
+  function check() {
+    if (goals.has('calc')) return;
+    const v = parseNum($('#calcIn').value), msg = $('#calcMsg'), btn = $('#calcBtn');
+    if (Number.isNaN(v)) { msg.className = 'cmsg bad'; msg.textContent = 'Type a number, like 50000 or 50k.'; return; }
+    if (Math.abs(v - 200000) <= 10000) {
+      msg.className = 'cmsg good';
+      msg.innerHTML = '1,000,000 users ÷ 5 s = <b>200,000 requests per second</b>, and nearly all of them come back empty.';
+      Q.addXP(25, btn); btn.disabled = true; $('#calcIn').readOnly = true;
+      $('#raceNote').style.display = 'block';
+      done('calc');
+    } else {
+      msg.className = 'cmsg bad';
+      msg.innerHTML = v === 1e6 * 5 ? 'That’s users × 5. Each user sends <i>one</i> request every 5 s, so divide.' : 'Not quite. Each user sends 1 request every 5 seconds, so per second that’s users ÷ 5.';
+      if (!calcMissed) { calcMissed = true; Q.loseHeart(btn); }
+    }
+  }
+  $('#calcBtn').onclick = check;
+  $('#calcIn').addEventListener('keydown', e => { if (e.key === 'Enter') check(); });
+
+  /* part 3: three-lane race */
+  const svg = $('#tl4');
+  const LANES = [{ k: 'poll', t: 'Polling', y: 8 }, { k: 'lp', t: 'Long polling', y: 80 }, { k: 'ws', t: 'WebSocket', y: 152 }];
+  const ps = pollStats(5), lps = longPollStats(30);
+  let racing = false;
+  function frame() {
+    svg.innerHTML = '';
+    const out = {};
+    LANES.forEach(L => {
+      S('text', { class: 'lane-t', x: X0, y: L.y + 12 }, svg).textContent = L.t;
+      out[L.k] = { c: S('text', { class: 'lane-c', x: X1, y: L.y + 12 }, svg), g: S('g', {}, svg), sg: S('g', {}, svg) };
+      S('line', { class: 'rowline', x1: X0, y1: L.y + 30, x2: X1, y2: L.y + 30 }, svg);
+      S('line', { class: 'rowline', x1: X0, y1: L.y + 52, x2: X1, y2: L.y + 52 }, svg);
+    });
+    drawAxis(svg, 222);
+    return out;
+  }
+  let lanes = frame();
+  LANES.forEach(L => { lanes[L.k].c.textContent = '—'; });
+  async function race() {
+    if (racing) return; racing = true; $('#race').disabled = true;
+    lanes = frame();
+    const head = S('line', { class: 'head', x1: X0, y1: 0, x2: X0, y2: 222 }, svg);
+    const seen = { poll: new Set(), lp: new Set(), ws: new Set(), st: new Set() };
+    const lpRects = lps.map((r, i) => { const L = LANES[1]; return S('rect', { class: 'held pending', x: xOf(r.open), y: L.y + 45, width: 0, height: 14, rx: 4 }, lanes.lp.g); });
+    const pipe = S('rect', { class: 'pipe', x: X0, y: LANES[2].y + 45, width: 0, height: 14, rx: 4 }, lanes.ws.g);
+    let pr = 0, pe = 0, lr = 0, le = 0, pushes = 0;
+    await anim(7000, p => {
+      const t = 60 * p;
+      head.setAttribute('x1', xOf(t)); head.setAttribute('x2', xOf(t));
+      MSGS.forEach((m, i) => { if (m <= t && !seen.st.has(i)) { seen.st.add(i); LANES.forEach(L => star(lanes[L.k].sg, m, L.y + 30)); } });
+      // polling
+      ps.polls.forEach(pt => {
+        if (pt <= t + 1e-9 && !seen.poll.has(pt)) {
+          seen.poll.add(pt); pr++; const hit = ps.carried.has(pt); if (!hit) pe++;
+          const y = LANES[0].y;
+          S('line', { class: 'tick' + (hit ? ' hit' : ''), x1: xOf(pt), y1: y + 52, x2: xOf(pt), y2: y + (hit ? 30 : 42) }, lanes.poll.g);
+          S('circle', { class: 'tickdot' + (hit ? ' hit' : ''), cx: xOf(pt), cy: y + 52, r: hit ? 4 : 2.6 }, lanes.poll.g);
+        }
+      });
+      lanes.poll.c.textContent = `${pr} requests · ${pe} empty`;
+      // long polling
+      lps.forEach((r, i) => {
+        if (r.open <= t + 1e-9) {
+          if (!seen.lp.has('o' + i)) { seen.lp.add('o' + i); lr++; }
+          const end = Math.min(t, r.end, 60);
+          lpRects[i].setAttribute('width', Math.max(2, xOf(end) - xOf(r.open)).toFixed(1));
+          if (r.end <= t + 1e-9 && !seen.lp.has('e' + i)) {
+            seen.lp.add('e' + i);
+            lpRects[i].setAttribute('class', 'held' + (r.carried ? '' : ' empty'));
+            if (!r.carried) le++;
+            S('circle', { class: 'held-end' + (r.carried ? '' : ' empty'), cx: xOf(r.end), cy: LANES[1].y + 52, r: 4 }, lanes.lp.g);
+          }
+        }
+      });
+      lanes.lp.c.textContent = `${lr} requests · ${le} empty`;
+      // websocket
+      pipe.setAttribute('width', Math.max(2, xOf(t) - X0).toFixed(1));
+      MSGS.forEach((m, i) => {
+        if (m <= t && !seen.ws.has(i)) {
+          seen.ws.add(i); pushes++;
+          const y = LANES[2].y;
+          S('line', { class: 'push', x1: xOf(m), y1: y + 30, x2: xOf(m), y2: y + 50 }, lanes.ws.g);
+          S('circle', { class: 'pushdot', cx: xOf(m), cy: y + 52, r: 4 }, lanes.ws.g);
+        }
+      });
+      lanes.ws.c.textContent = `1 connection · ${pushes} pushes`;
+    });
+    head.remove();
+    racing = false; $('#race').disabled = false; $('#race').textContent = '↻ Run it again';
+    if (!goals.has('race')) Q.addXP(15, $('#race'));
+    done('race');
+  }
+  $('#race').onclick = race;
+
+  function maybeQuiz() {
+    if (quizShown || goals.size < 3) return;
+    quizShown = true;
+    $('#wsCost').style.display = 'block';
+    setTimeout(() => Q.quiz($('#s4quiz'), {
+      q: 'HTTP works fine for sending. Why does the book use WebSocket for <b>sending</b> too?',
+      options: ['One two-way connection keeps the design simpler', 'HTTP can’t carry messages of 100,000 characters', 'WebSocket messages skip the chat servers entirely'],
+      correct: 0,
+      good: 'The phone already holds an open WebSocket to receive. Sending on the same connection means one mechanism on the client and the server instead of two.',
+      bad: 'HTTP handles big messages fine, and everything still goes through the chat servers. The reason is simplicity: one two-way connection for both directions instead of two mechanisms.',
+      onDone: () => setTimeout(() => Q.clearStage(4), 900),
+    }), 500);
+  }
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss'), {
+  name: '👻 The Lag Wraith',
+  xp: 15,
+  choices: [
+    { k: 'poll', label: 'Polling', sub: 'ask on a timer' },
+    { k: 'long', label: 'Long polling', sub: 'server holds the ask' },
+    { k: 'ws', label: 'WebSocket', sub: 'one open two-way pipe' },
+  ],
+  scenarios: [
+    { e: '💬', t: 'Real-time chat between friends', d: 'People type back and forth and expect each message to show up instantly, in both directions.', a: 'ws', why: 'Two-way, real-time, frequent: exactly what WebSocket is for. One open connection carries sends and receives, and the server pushes the moment a message lands.' },
+    { e: '📊', t: 'An hourly admin counter', d: 'An internal dashboard shows a number that changes about once an hour. Nobody stares at it.', a: 'poll', why: 'At once an hour, polling every minute or so is cheap and dead simple. Holding a connection open for each viewer would be overkill.' },
+    { e: '🧱', t: 'The firewall eats Upgrade headers', d: 'Some corporate proxies strip the Upgrade header, so WebSockets fail there. You still want near-real-time messages.', a: 'long', why: 'Long polling is plain HTTP, so it gets through proxies that break WebSocket, and messages still arrive within moments. That’s why libraries like Socket.IO fall back to it.' },
+    { e: '🔥', t: 'Drowning in empty answers', d: 'You measure 1 million users polling every 2 s. That’s 500,000 requests a second, and 99% of the answers are “nothing new”.', a: 'ws', why: 'Polling burns requests for nothing. With WebSocket each user holds one quiet connection, and traffic flows only when there’s a message.' },
+    { e: '🌦️', t: 'A weather widget', d: 'A sidebar widget refreshes the forecast every 10 minutes.', a: 'poll', why: 'The data only changes on a slow schedule and nobody needs it to the second. A timer and a plain GET are all it takes.' },
+    { e: '⚡', t: 'Instant, and know when they drop', d: 'The receiver must get a message the moment it’s sent, and the server should notice quickly when a phone falls off the network.', a: 'ws', why: 'A persistent connection lets the server push instantly, and a close or missed heartbeat on it shows the phone has gone. (A quietly dead link still needs heartbeats to spot. More in 12.5.)' },
+  ],
+  outro: 'The rule of thumb: real-time and two-way, use WebSocket. Blocked, fall back to long polling. Rare and nobody waiting, polling is fine.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: interview drill ================= */
+Q.onStage(6, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"A sends B a message. How does the server get it to B?"</i>',
+  placeholder: 'Sending is the easy part, because…',
+  model: '"Sending is easy: the client starts an HTTP request, and keep-alive reuses the connection. Receiving is the hard part, because the server has to start the conversation. Polling wastes requests and adds up to a full interval of delay. Long polling helps, but with a stateless round-robin load balancer the sender can land on a different server than the one holding the receiver\'s request. The server also can\'t easily tell when a client has gone, and idle users keep reconnecting. So I\'d use WebSocket. It starts as HTTP, upgrades, and stays open in both directions over port 80 or 443. I\'d use it for sending too, to keep one mechanism. The cost is that chat servers become stateful, so connection management becomes the key problem."',
+  checks: ['I said why receiving is the hard side (the server has to speak first)', 'I named at least two long-polling drawbacks', 'I picked WebSocket for both directions and named the cost: stateful servers'],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

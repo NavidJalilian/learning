@@ -1,0 +1,1074 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Every Keystroke Counts</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: s1 search box + question cards + requirements board, s2 latency timeline + quality matcher,
+   s3 envelope worksheet, s4 frequency tables + DB load gauge */
+:root { --gold: #c98a00; --gold-soft: #fff4d6; --stale: #d4423f; --wire: #b9b3a6; --pinbg: #fffbe8; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --gold: #ffd23f; --gold-soft: #3a3010; --stale: #ff6d6a; --wire: #3d4170; --pinbg: #24223a; }
+}
+:root[data-theme="dark"] { --gold: #ffd23f; --gold-soft: #3a3010; --stale: #ff6d6a; --wire: #3d4170; --pinbg: #24223a; }
+
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+h3.mini-h { font-size: 16px; margin: 22px 0 6px; }
+
+/* ---------- fake search box (s1, s2) ---------- */
+.sbox { position: relative; max-width: 460px; margin: 14px auto 0; }
+.sinput { display: flex; align-items: center; gap: 10px; min-height: 50px; border: 2px solid var(--line); border-radius: 26px; padding: 6px 18px; background: var(--panel); box-shadow: var(--shadow); transition: border-color .2s; }
+.sinput:focus-within { border-color: var(--accent); }
+.sinput .mag { font-size: 16px; opacity: .7; }
+.sinput input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font: 500 17px var(--font); outline: none; min-height: 36px; }
+.sinput input:disabled { cursor: not-allowed; }
+.sinput .gtext { flex: 1; font: 500 17px var(--font); min-height: 26px; white-space: pre; }
+.sinput .caret { width: 2px; height: 20px; background: var(--accent); animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.sdrop { list-style: none; margin: 6px 0 0; padding: 6px 0; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); box-shadow: var(--shadow); min-height: 44px; position: relative; }
+.sdrop:empty::before { content: attr(data-empty); display: block; padding: 6px 18px; color: var(--muted); font-size: 14px; }
+.sdrop li { padding: 6px 18px; font-size: 15px; display: flex; gap: 10px; align-items: center; }
+.sdrop li::before { content: "🔍"; font-size: 12px; opacity: .5; }
+.sdrop li b { font-weight: 700; }
+.sdrop li span { color: var(--muted); }
+.sdrop.stale { border-color: var(--stale); }
+.dropwrap { position: relative; }
+.stag { position: absolute; top: -10px; right: 12px; font: 700 11px var(--mono); padding: 2px 8px; border-radius: 99px; background: var(--stale); color: #fff; letter-spacing: .04em; }
+.reqlog { margin-top: 10px; background: var(--code-bg); color: var(--code-ink); border-radius: 14px; padding: 10px 14px; font: 12.5px/1.6 var(--mono); min-height: 64px; max-height: 150px; overflow-y: auto; overflow-wrap: anywhere; }
+.reqlog .m { color: #6ee7a8; font-weight: 700; }
+.reqlog .c { color: #9a98b4; }
+.reqlog .r { color: #ffb36b; }
+.reqlog div { animation: rise .25s; }
+
+/* ---------- s1: interviewer + questions + board ---------- */
+.interviewer { display: flex; gap: 12px; align-items: flex-start; margin: 16px 0 10px; }
+.interviewer .face { font-size: 34px; line-height: 1; width: 48px; height: 48px; flex: none; display: grid; place-items: center; border-radius: 14px; background: var(--bg-2); transition: transform .3s; }
+.interviewer .face.raise { animation: eyebrow .6s; }
+@keyframes eyebrow { 30% { transform: rotate(-8deg) scale(1.12); } 70% { transform: rotate(6deg); } }
+.bubble { flex: 1; background: var(--bg-2); border-radius: 4px 16px 16px 16px; padding: 10px 14px; font-size: 15px; min-height: 48px; }
+.bubble.good { background: var(--good-soft); }
+.bubble.bad { background: var(--bad-soft); }
+.bubble.say { animation: rise .3s; }
+.qcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+.qcard { text-align: left; min-height: 56px; border: 2px solid var(--line); background: var(--panel); border-radius: 14px; padding: 10px 12px; font-size: 14.5px; font-weight: 500; line-height: 1.35; transition: border-color .2s, background .2s, transform .1s; }
+.qcard:hover:not([disabled]) { border-color: var(--accent); transform: translateY(-1px); }
+.qcard.asked { border-color: color-mix(in srgb, var(--good) 55%, var(--line)); background: var(--good-soft); }
+.qcard.waste { border-color: var(--bad); background: var(--bad-soft); opacity: .7; animation: shake .4s; }
+.qcard[disabled] { cursor: default; }
+.board { margin-top: 16px; border-radius: 18px; padding: 14px; background: var(--bg-2); border: 1px solid var(--line); }
+.board-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; margin-bottom: 10px; }
+.board-top span { font: 700 13px var(--mono); color: var(--muted); }
+.pins { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.pin { min-height: 62px; border-radius: 10px; padding: 8px 10px; background: var(--panel); border: 2px dashed var(--line); font-size: 13.5px; line-height: 1.3; display: flex; gap: 8px; align-items: center; color: var(--muted); }
+.pin .ico { font-size: 18px; width: 22px; text-align: center; flex: none; }
+.pin.on { border-style: solid; border-color: var(--gold); background: var(--pinbg); color: var(--ink); font-weight: 600; animation: pinin .45s cubic-bezier(.3,1.5,.5,1); box-shadow: 0 2px 0 color-mix(in srgb, var(--gold) 40%, transparent); }
+@keyframes pinin { from { transform: rotate(-6deg) scale(.7); opacity: 0; } }
+.lockedbox { text-align: center; font-size: 13px; color: var(--muted); margin-top: 8px; }
+
+/* ---------- s2: latency timeline ---------- */
+.lat .ghost { padding: 16px 14px 6px; }
+.lat .ghost .sbox { margin-top: 0; }
+.tl svg { max-width: 640px; margin: 0 auto; }
+.tl .klab { fill: var(--ink); font: 700 16px var(--mono); text-anchor: middle; }
+.tl .kline { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 4; opacity: .6; }
+.tl .kline.on { stroke: var(--accent); opacity: 1; stroke-dasharray: none; }
+.tl .rlab { fill: var(--muted); font: 600 13px var(--mono); }
+.tl .bar { fill: var(--teal); opacity: .8; }
+.tl .bar.ok { fill: var(--good); opacity: 1; }
+.tl .bar.late { fill: var(--stale); opacity: 1; }
+.tl .btxt { fill: #fff; font: 700 11.5px var(--mono); }
+.tl .otxt { font: 700 13px var(--mono); }
+.tl .otxt.ok { fill: var(--good); }
+.tl .otxt.late { fill: var(--stale); }
+.tl .axis { stroke: var(--line); stroke-width: 1.5; }
+.tl .tick { fill: var(--muted); font: 600 13px var(--mono); text-anchor: middle; }
+.tl .now { stroke: var(--ink); stroke-width: 1.5; opacity: .5; }
+.slider { padding: 12px 14px 4px; display: grid; gap: 4px; }
+.slider label { display: flex; justify-content: space-between; font-weight: 600; font-size: 14px; gap: 8px; flex-wrap: wrap; }
+.slider input { width: 100%; accent-color: var(--accent); height: 30px; }
+.slider input:disabled { opacity: .4; }
+.slider .marks { display: flex; justify-content: space-between; font: 600 11px var(--mono); color: var(--muted); }
+.bignum { font-family: var(--mono); font-weight: 700; }
+.feel.good { color: var(--good); font-weight: 700; }
+.feel.warn { color: var(--warn); font-weight: 700; }
+.feel.bad { color: var(--bad); font-weight: 700; }
+
+/* s2: quality matcher */
+.qchips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; min-height: 46px; }
+.qchip { min-height: 42px; padding: 8px 14px; border-radius: 99px; border: 2px solid var(--accent); background: var(--accent-soft); color: var(--ink); font-weight: 700; font-size: 14.5px; touch-action: manipulation; }
+.qchip[aria-pressed="true"] { background: var(--accent); color: #fff; box-shadow: 0 3px 0 color-mix(in srgb, var(--accent) 60%, #000); transform: translateY(-2px); }
+.qchip.bounce { animation: shake .4s; border-color: var(--bad); }
+.defs2 { display: grid; gap: 8px; }
+.defrow { display: grid; grid-template-columns: 150px 1fr; gap: 10px; align-items: center; border: 1px solid var(--line); border-radius: 14px; padding: 8px 10px; background: var(--bg); transition: border-color .2s, background .2s; }
+@media (max-width: 520px) { .defrow { grid-template-columns: 1fr; gap: 6px; } }
+.defrow .slot { min-height: 42px; border: 2px dashed var(--line); border-radius: 12px; background: var(--panel); font-weight: 700; font-size: 14px; color: var(--muted); padding: 4px 8px; }
+.defrow .slot:hover:not([disabled]) { border-color: var(--accent); color: var(--accent); }
+.defrow .slot.over { border-color: var(--accent); background: var(--accent-soft); }
+.defrow span { font-size: 14.5px; }
+.defrow.done { border-color: color-mix(in srgb, var(--good) 55%, var(--line)); background: var(--good-soft); }
+.defrow.done .slot { border-style: solid; border-color: var(--good); color: var(--good); background: var(--panel); }
+.defrow.nope { animation: shake .4s; border-color: var(--bad); }
+
+/* ---------- s3: envelope worksheet ---------- */
+.givens { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 4px; }
+.givens span { font: 600 12.5px var(--mono); padding: 5px 9px; border-radius: 8px; background: var(--bg-2); border: 1px solid var(--line); }
+.din svg { max-width: 560px; margin: 0 auto; }
+.din .tbox { fill: var(--panel); stroke: var(--accent); stroke-width: 2; }
+.din .ttext { fill: var(--ink); font: 600 17px var(--font); }
+.din .srv { fill: var(--teal-soft); stroke: var(--teal); stroke-width: 2; }
+.din .srvt { fill: var(--teal); font: 700 13px var(--font); text-anchor: middle; }
+.din .pipe { stroke: var(--wire); stroke-width: 2; stroke-dasharray: 4 5; }
+.din .bub rect { fill: var(--accent); }
+.din .bub text { fill: #fff; font: 700 11px var(--mono); text-anchor: middle; dominant-baseline: central; }
+.din .cnt { fill: var(--ink); font: 700 26px var(--mono); text-anchor: middle; }
+.din .cntl { fill: var(--muted); font: 600 11px var(--font); text-anchor: middle; }
+.sheet { display: grid; gap: 10px; margin-top: 16px; }
+.crow { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--bg); transition: border-color .3s; }
+.crow.ok { border-color: color-mix(in srgb, var(--good) 55%, var(--line)); }
+.crow .lab { font-weight: 700; font-size: 15px; }
+.crow .lab small { display: block; font-weight: 500; color: var(--muted); font-size: 13.5px; }
+.crow .in { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.crow input[type=text] { width: 150px; min-height: 44px; border-radius: 10px; border: 2px solid var(--line); background: var(--panel); color: var(--ink); font: 600 16px var(--mono); padding: 6px 10px; }
+.crow input.wrongi { border-color: var(--bad); animation: shake .4s; }
+.crow.ok input[type=text] { border-color: var(--good); }
+.crow .unit { font-weight: 600; color: var(--muted); font-size: 14px; }
+.crow .btn { min-height: 44px; padding: 8px 14px; font-size: 14px; }
+.crow .fb { font-size: 14px; margin-top: 8px; }
+.crow .fb:empty { display: none; }
+.crow .fb.good { color: var(--good); }
+.crow .fb.bad { color: var(--bad); }
+.crow .hint { display: none; margin-top: 8px; font: 13.5px/1.5 var(--mono); padding: 8px 12px; border-left: 4px solid var(--teal); background: var(--teal-soft); border-radius: 0 10px 10px 0; overflow-wrap: anywhere; }
+.crow .hint.on { display: block; animation: rise .3s; }
+.sumcard { display: none; margin-top: 16px; border-radius: 18px; padding: 16px; background: linear-gradient(160deg, var(--accent-soft), var(--teal-soft)); }
+.sumcard.on { display: block; animation: rise .4s; }
+.sumcard h3 { margin: 0 0 10px; font-size: 15px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.sumgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+@media (max-width: 600px) { .sumgrid { grid-template-columns: 1fr 1fr; } }
+.sumgrid div { background: var(--panel); border-radius: 14px; padding: 10px 12px; }
+.sumgrid b { display: block; font: 700 clamp(22px, 5vw, 30px)/1.1 var(--mono); color: var(--accent); }
+.sumgrid span { font-size: 13px; color: var(--muted); }
+
+/* ---------- s4: tables, SQL, load ---------- */
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+@media (max-width: 700px) { .two { grid-template-columns: 1fr; } }
+.panel { border: 1px solid var(--line); border-radius: 18px; padding: 14px; background: var(--bg); min-width: 0; }
+.panel h3 { margin: 0 0 4px; font-size: 16px; }
+.panel > p { margin: 0 0 10px; font-size: 14px; color: var(--muted); }
+.stream { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.stream span { font: 600 12.5px var(--mono); padding: 5px 9px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); }
+.stream span.sent { opacity: .35; text-decoration: line-through; }
+.stream span.nxt { border-color: var(--accent); color: var(--accent); }
+.ftab { width: 100%; border-collapse: collapse; font: 13.5px var(--mono); margin-top: 8px; }
+.ftab th { text-align: left; font: 700 11px var(--font); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding: 4px 8px; border-bottom: 2px solid var(--line); }
+.ftab th:last-child, .ftab td:last-child { text-align: right; }
+.ftab td { padding: 6px 8px; border-bottom: 1px solid var(--line); transition: background .3s, opacity .3s; }
+.ftab tr { position: relative; }
+.ftab tr.hit td { background: var(--teal-soft); }
+.ftab tr.dim td { opacity: .35; }
+.ftab tr.top td { background: var(--gold-soft); font-weight: 700; }
+.ftab tr.top td:first-child { box-shadow: inset 4px 0 0 var(--gold); }
+.ftab tr.bump td { animation: bump .6s; }
+.ftab tr.cut td { border-bottom: 2px dashed var(--gold); }
+.ftab .emptyrow td { color: var(--muted); font-family: var(--font); text-align: center; }
+@keyframes bump { 30% { background: var(--accent-soft); } }
+.qrun { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.qrun label { font-weight: 600; font-size: 14px; }
+.qrun input { width: 130px; min-height: 44px; border-radius: 10px; border: 2px solid var(--line); background: var(--panel); color: var(--ink); font: 600 16px var(--mono); padding: 6px 10px; }
+.qrun .btn { min-height: 44px; }
+.sql { margin: 10px 0 0; background: var(--code-bg); color: var(--code-ink); border-radius: 12px; padding: 10px 12px; font: 12.5px/1.55 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.sql .k { color: #9fa8ff; font-weight: 700; }
+.sql .p { color: #ffb36b; font-weight: 700; }
+.qres { margin-top: 8px; font-size: 14px; min-height: 22px; }
+.scale .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+@media (max-width: 600px) { .scale .row2 { grid-template-columns: 1fr; } }
+.loadwrap { display: grid; grid-template-columns: 220px 1fr; gap: 14px; align-items: center; padding: 6px 14px 14px; }
+@media (max-width: 600px) { .loadwrap { grid-template-columns: 1fr; } }
+.gauge svg { max-width: 240px; margin: 0 auto; }
+.gauge .bg { fill: none; stroke: var(--bg-2); stroke-width: 22; }
+.gauge .zone { fill: none; stroke-width: 22; opacity: .35; }
+.gauge .needle { stroke: var(--ink); stroke-width: 4; stroke-linecap: round; transition: transform .6s cubic-bezier(.2,.8,.2,1); transform-origin: 120px 120px; }
+.gauge .hub { fill: var(--ink); }
+.gauge .pct { fill: var(--ink); font: 700 24px var(--mono); text-anchor: middle; }
+.gauge .lbl { fill: var(--muted); font: 600 11px var(--font); text-anchor: middle; }
+.meter { font-size: 14px; }
+.meter .mh { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; flex-wrap: wrap; }
+.track { position: relative; height: 18px; border-radius: 6px; background: var(--bg-2); border: 1px solid var(--line); margin-top: 6px; }
+.track .fill { position: absolute; inset: 0 auto 0 0; border-radius: 5px; transition: width .6s cubic-bezier(.2,.8,.2,1), background .3s; }
+.track .budget { position: absolute; top: -5px; bottom: -5px; width: 3px; margin-left: -1px; background: var(--ink); border-radius: 2px; }
+.tmarks { position: relative; height: 16px; font: 600 10.5px var(--mono); color: var(--muted); margin-top: 3px; }
+.tmarks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.tmarks span:first-child { transform: none; }
+.tmarks span:last-child { transform: translateX(-100%); }
+.queue { display: flex; flex-wrap: wrap; gap: 3px; min-height: 16px; margin-top: 10px; }
+.queue i { width: 12px; height: 12px; border-radius: 3px; background: var(--bad); animation: rise .3s; }
+.status4 { margin-top: 10px; font-size: 14.5px; font-weight: 600; min-height: 44px; }
+.status4.good { color: var(--good); }
+.status4.warn { color: var(--warn); }
+.status4.bad { color: var(--bad); }
+.checklist .hintx { display: block; font-size: 13px; color: var(--muted); font-weight: 400; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 13.1 · Design a Search Autocomplete System</div>
+    <h1>Every Keystroke Counts</h1>
+    <p class="lede">You type "tw" and a box already guesses "twitter". Before you design the machine behind it, find out what it must do and how hard it gets hit. Every letter you type is a request.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> in the first 5 minutes you can pin down what autocomplete must do (<b>prefix match, top 5, ranked by popularity, under 100 ms</b>), work out <b>~24,000 QPS / ~48,000 peak / 0.4 GB a day</b> out loud, and explain why a frequency table queried with <code>LIKE 'prefix%'</code> collapses at that scale.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Ask before you build</h2><div class="sub">The requirements interview</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p><b>Autocomplete</b> goes by many names: <i>typeahead</i>, <i>search-as-you-type</i>, <i>incremental search</i>. As you type, a dropdown suggests the full queries you most likely mean.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system" target="_blank" rel="noopener">[1]</a></p>
+      <p>The interviewer has just said: <i>"Design search autocomplete."</i> That's all you get. Below are nine questions you could ask. <b>Seven</b> change the design. <b>Two</b> waste the interviewer's time and cost a heart. Each useful answer gets pinned to your board.</p>
+
+      <div class="interviewer"><div class="face" id="s1face" aria-hidden="true">🧑‍💼</div><div class="bubble" id="s1say">"Go ahead, ask me anything."</div></div>
+      <div class="qcards" id="s1cards"></div>
+
+      <div class="board" aria-live="polite">
+        <div class="board-top">📌 Requirements board <span id="s1count">0 / 7</span></div>
+        <div class="pins" id="s1pins"></div>
+      </div>
+
+      <h3 class="mini-h">The box, live</h3>
+      <p class="small muted" style="margin:0">Once the board is full, this box comes alive. Type <b>t</b>, then <b>w</b>, and watch the request log underneath.</p>
+      <div class="sbox">
+        <div class="sinput"><span class="mag" aria-hidden="true">🔍</span><input id="s1q" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Search box demo" placeholder="Fill the board first…" disabled></div>
+        <ul class="sdrop" id="s1drop" data-empty="Suggestions appear here"></ul>
+        <div class="reqlog" id="s1log" aria-live="polite"><div class="c"># one line per request sent to the server</div></div>
+      </div>
+
+      <ul class="checklist" id="s1goals">
+        <li data-g="board"><span class="box">✓</span><span>Pin all 7 useful answers to the board</span></li>
+        <li data-g="type"><span class="box">✓</span><span>Type <code>t</code> then <code>tw</code> and count the requests</span></li>
+      </ul>
+      <div class="callout tip"><b>Why ask first?</b> Each answer cuts work. "Prefix only" rules out search-anywhere indexes. "No spell check" removes a whole subsystem. "Lowercase a–z" shrinks the alphabet to 26 letters, which the next quest's data structure depends on.</div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>What "fast" means</h2><div class="sub">Non-functional requirements</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Stage 1 covered <i>what</i> the box does. <b>Non-functional requirements</b> say <i>how well</i> it must do it. The first one is speed. Suggestions have to keep up with typing. The book borrows a target from Facebook's write-up on its typeahead: answer within about <b>100 milliseconds</b>, or the box starts to stutter.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system" target="_blank" rel="noopener">[1]</a><a class="cite" href="https://www.facebook.com/notes/facebook-engineering/the-life-of-a-typeahead-query/389105248919/" target="_blank" rel="noopener">[2]</a></p>
+      <p>Test it. A ghost typist types <b>dinner</b>, one key every <b>150 ms</b>. Each key sends a request. Each bar below is one request, from the moment it's sent until its answer comes back. If an answer arrives <i>after</i> the next key, it's out of date: <b>stale</b>.</p>
+
+      <div class="sim lat">
+        <div class="ghost">
+          <div class="sbox">
+            <div class="sinput"><span class="mag" aria-hidden="true">🔍</span><span class="gtext" id="g2text"></span><span class="caret" aria-hidden="true"></span></div>
+            <div class="dropwrap" id="g2wrap"><ul class="sdrop" id="g2drop" data-empty="waiting for an answer…"></ul></div>
+          </div>
+        </div>
+        <div class="tl"><svg id="tl2" viewBox="0 0 420 240" role="img" aria-label="Timeline of six requests, one per keystroke"></svg></div>
+        <div class="slider"><label for="lat2"><span>Server response time: <span class="bignum" id="lat2v">100 ms</span></span><span class="muted small">played at ⅓ speed</span></label>
+          <input type="range" id="lat2" min="0" max="5" step="1" value="2" aria-label="Server response time">
+          <div class="marks"><span>20</span><span>50</span><span>100</span><span>200</span><span>300</span><span>600 ms</span></div></div>
+        <div class="sim-bar"><button class="btn primary" id="play2" disabled>▶ Type "dinner"</button><span>Feels: <span class="feel" id="feel2">—</span></span></div>
+        <div class="simlog" id="log2"><div>Make your prediction below, then press play.</div></div>
+      </div>
+      <div class="challenge boxed" id="pred2"></div>
+
+      <h3 class="mini-h">Five qualities, one line each</h3>
+      <p class="small" style="margin:0">The book lists five non-functional requirements.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system" target="_blank" rel="noopener">[1]</a> Tap a word (or drag it), then tap the line it belongs to. A wrong match bounces back.</p>
+      <div class="qchips" id="qchips2" aria-label="Qualities to place"></div>
+      <div class="defs2" id="defs2"></div>
+
+      <ul class="checklist" id="s2goals">
+        <li data-g="fast"><span class="box">✓</span><span>Play at 100 ms or faster: every answer beats the next key</span></li>
+        <li data-g="slow"><span class="box">✓</span><span>Play above 100 ms and catch a stale answer</span></li>
+        <li data-g="sort"><span class="box">✓</span><span>Match all five qualities to their meaning</span></li>
+      </ul>
+      <div class="callout warn"><b>Honest caveat.</b> 100 ms is a rule of thumb from Facebook's article, not a standard. It lines up with long-standing usability research that about 0.1 s is the limit for a response to feel instant.<a class="cite" href="https://www.nngroup.com/articles/response-times-3-important-limits/" target="_blank" rel="noopener">[3]</a> Real typists aren't metronomes, and fast ones type faster than 150 ms per key.</div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Envelope math</h2><div class="sub">Calculate, then check</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p><b>Back-of-the-envelope estimation</b> means rough maths to get the size of the system right, not the exact digits.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/back-of-the-envelope-estimation" target="_blank" rel="noopener">[4]</a> The book's assumptions:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system" target="_blank" rel="noopener">[1]</a></p>
+      <div class="givens"><span>10,000,000 DAU</span><span>10 searches / person / day</span><span>20 bytes / query</span><span>1 request / character typed</span><span>20% of queries are new</span><span>86,400 s / day</span></div>
+      <p class="small">Why 20 bytes? An average query is about 4 words of about 5 characters each, so roughly 20 characters. Plain ASCII text uses 1 byte per character. And the box sends a request for <b>every character</b>. Watch "dinner":</p>
+      <div class="sim din">
+        <svg id="din3" viewBox="0 0 420 170" role="img" aria-label="Typing dinner sends one request per letter"></svg>
+        <div class="sim-bar"><button class="btn" id="din3play">▶ Replay "dinner"</button><span>Requests sent: <span class="bignum" id="din3n">0</span></span></div>
+      </div>
+      <p class="small muted" style="margin-top:12px">Fill in each row. Answers within about 10% count: this is envelope math. Use <b>Hint</b> if you're stuck. It shows the formula, never the answer. A first wrong answer on a row costs a heart; after that, retries are free.</p>
+      <div class="sheet" id="sheet3"></div>
+      <div class="sumcard" id="sum3">
+        <h3>📄 For the cheat sheet</h3>
+        <div class="sumgrid">
+          <div><b>~20</b><span>requests per search</span></div>
+          <div><b>~24k</b><span>QPS on average</span></div>
+          <div><b>~48k</b><span>QPS at peak</span></div>
+          <div><b>0.4 GB</b><span>new data per day</span></div>
+        </div>
+      </div>
+      <div class="callout warn"><b>Honest caveats.</b> (1) Real clients usually <b>debounce</b>: they wait until the user pauses for a few tens of milliseconds before sending, so real request counts are lower. The book's one-request-per-character is a deliberately pessimistic upper bound. (2) 0.4 GB counts only the new query strings. It leaves out the counters, raw logs and the lookup structures added in later quests, which are much bigger.</div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Two boxes and a table</h2><div class="sub">The high-level design, and where it breaks</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book's first sketch has just two services.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system" target="_blank" rel="noopener">[1]</a> The <b>data gathering service</b> collects the queries people type and keeps a running count for each one in a <b>frequency table</b> (two columns: query, frequency). The <b>query service</b> takes a prefix and returns the 5 most frequent queries that start with it.</p>
+      <div class="two">
+        <div class="panel">
+          <h3>① Data gathering service</h3>
+          <p>Four searches come in. Send them one at a time.</p>
+          <div class="stream" id="g4stream"></div>
+          <div class="row"><button class="btn primary" id="g4send">Send next search ▸</button><button class="btn" id="g4reset">↻ Reset</button></div>
+          <table class="ftab" id="g4tab"><thead><tr><th>query</th><th>frequency</th></tr></thead><tbody></tbody></table>
+        </div>
+        <div class="panel">
+          <h3>② Query service</h3>
+          <p>The same table, a while later. Type a prefix and run the query.</p>
+          <div class="qrun"><label for="q4">Prefix</label><input id="q4" type="text" value="tw" autocomplete="off" autocapitalize="off" spellcheck="false"><button class="btn primary" id="q4run">Run ▸</button></div>
+          <pre class="sql" id="q4sql"></pre>
+          <table class="ftab" id="q4tab"><thead><tr><th>query</th><th>frequency</th></tr></thead><tbody></tbody></table>
+          <div class="qres" id="q4res"></div>
+        </div>
+      </div>
+      <p class="small muted" style="margin-top:8px">The <code>tw…</code> rows and their counts are the book's example. We added three non-<code>tw</code> rows so you can see the filter work.</p>
+
+      <h3 class="mini-h">Now scale it</h3>
+      <p class="small" style="margin:0">This works fine on a small table. The real system has a huge table and tens of thousands of requests a second. Each keystroke runs that query: find every matching row, sort them all by frequency, keep 5.</p>
+      <div class="challenge boxed" id="pred4" style="margin-top:12px"></div>
+      <div class="sim scale">
+        <div class="row2">
+          <div class="slider"><label for="rows4"><span>Rows in the table: <span class="bignum" id="rows4v">1K</span></span></label><input type="range" id="rows4" min="0" max="4" step="1" value="0" disabled aria-label="Rows in the table"><div class="marks"><span>1K</span><span>1M</span><span>10M</span><span>100M</span><span>1B</span></div></div>
+          <div class="slider"><label for="qps4"><span>Requests / second: <span class="bignum" id="qps4v">10</span></span></label><input type="range" id="qps4" min="0" max="4" step="1" value="0" disabled aria-label="Requests per second"><div class="marks"><span>10</span><span>1K</span><span>10K</span><span>24K</span><span>48K</span></div></div>
+        </div>
+        <div class="loadwrap">
+          <div class="gauge"><svg id="gauge4" viewBox="0 0 240 150" role="img" aria-label="Database load gauge"></svg></div>
+          <div>
+            <div class="meter">
+              <div class="mh"><span>Time per request</span><span class="bignum" id="t4v">—</span></div>
+              <div class="track"><div class="fill" id="t4fill"></div><div class="budget" id="t4budget" title="100 ms budget"></div></div>
+              <div class="tmarks"><span style="left:0">0.1 ms</span><span style="left:60%">100 ms budget</span><span style="left:100%">10 s</span></div>
+            </div>
+            <div class="small muted" id="m4">rows to sort per request: —</div>
+            <div class="queue" id="queue4" aria-hidden="true"></div>
+            <div class="status4" id="status4" aria-live="polite">Make your prediction first.</div>
+          </div>
+        </div>
+        <div class="sim-bar small"><span>✍️ Meanwhile, about <b>1,160 finished searches a second</b> (100M a day ÷ 86,400) each want to bump a counter in this same table.</span></div>
+      </div>
+      <ul class="checklist" id="s4goals">
+        <li data-g="log"><span class="box">✓</span><span>Send the four searches through the data gathering service</span></li>
+        <li data-g="query"><span class="box">✓</span><span>Run the query for <code>tw</code> and get the top 5</span></li>
+        <li data-g="rows"><span class="box">✓</span><span>Find a setting where the <b>table size alone</b> breaks the 100 ms budget<span class="hintx">The database isn't overloaded, but each request is too slow.</span></span></li>
+        <li data-g="traffic"><span class="box">✓</span><span>Find a setting where <b>traffic alone</b> overloads the database<span class="hintx">Each request is quick enough, but there are too many of them.</span></span></li>
+      </ul>
+      <div class="callout"><b>Toy model, real shape.</b> The costs in this sim are made up so the effect is visible. The shape is real: the work per request grows with the rows that match, and total load is that work times the request rate. With an index (a sorted lookup structure) on <code>query</code>, <code>LIKE 'tw%'</code> can jump straight to the <code>tw</code> rows. <code>'%tw%'</code> can't. But the database still has to sort every match by frequency on every keystroke. The book's verdict: fine while the data is small, a bottleneck once it's large.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system" target="_blank" rel="noopener">[1]</a></div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Scope Creeper</h2><div class="sub">Interviewer scenarios</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The interviewer pokes at your scope and your numbers. Five challenges. Pick the answer a calm senior engineer would give.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">The first five minutes, in your words</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> The fix for the slow table is a tree of letters where every path spells a prefix, and each node already knows its top 5. That's Quest 13.2, <a href="1302-trie-top-k.html"><i>Grow the Trie</i></a>.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 13: "Design a Search Autocomplete System"</a>, Step 1 (scope and estimation) and the first half of Step 2 (data gathering service, query service). Then skim Facebook's <a href="https://www.facebook.com/notes/facebook-engineering/the-life-of-a-typeahead-query/389105248919/" target="_blank" rel="noopener">"The Life of a Typeahead Query"</a>, the source of the 100 ms target. Want more envelope-math practice? Replay Quest 2.4, <a href="0204-twitter-qps-storage.html">the Twitter QPS and storage drill</a>.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <ul style="margin:0;padding-left:20px">
+        <li><b>Rounding.</b> 10,000,000 × 10 × 20 ÷ 86,400 is about 23,150. The book says ~24,000. Rounding up is normal in envelope math, so say so out loud: "about 23 thousand, call it 24."</li>
+        <li><b>Debouncing.</b> The 20-requests-per-search figure assumes a request on every keystroke. Real clients usually wait for a short pause in typing before sending, so the real count is lower. The book's number is a safe upper bound.</li>
+        <li><b>Storage.</b> The 0.4 GB a day counts only new query strings. Frequency counters, raw query logs and the per-node top-5 lists you'll add later are much bigger.</li>
+        <li><b>100 ms.</b> It comes from Facebook's typeahead article. It's a good rule of thumb, not a universal standard.</li>
+      </ul>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"why is peak exactly 2× and not 3×?"</i> or <i>"would an index on the query column save the SQL design?"</i> Follow-up questions are part of the quest.
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 13 "Design a Search Autocomplete System" (ByteByteGo).</li>
+        <li>Facebook Engineering, "The Life of a Typeahead Query", 2010.</li>
+        <li>Jakob Nielsen, "Response Times: The 3 Important Limits", Nielsen Norman Group.</li>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 2 "Back-of-the-envelope Estimation" (ByteByteGo).</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '1301',
+  winTitle: 'Problem scoped, numbers crunched',
+  badge: '⌨️ Badge: Keystroke Counter',
+  cheatsheet: '../reference/ch13-autocomplete-cheatsheet.html',
+});
+const { sleep, shuffle, esc } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+const fmt = n => Math.round(n).toLocaleString('en-US');
+function anim(dur, f) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 1) { f(1); return res(); }
+    const t0 = performance.now();
+    const fr = now => { const p = Math.min(1, (now - t0) / dur); f(p); p < 1 ? requestAnimationFrame(fr) : res(); };
+    requestAnimationFrame(fr);
+  });
+}
+function logTo(el, html, cls) { el.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); el.scrollTop = el.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); Q.addXP(xp || 10, li);
+  return true;
+}
+// Predict-then-watch: the learner picks, act(i) plays the sim, then we grade.
+function predict(box, { step, title, options, correct, act, explain, xp = 20 }) {
+  box.innerHTML = `${step ? `<div class="step">${step}</div>` : ''}<h3>${title}</h3><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+  const opts = $('.opts', box);
+  let busy = false;
+  return new Promise(resolve => {
+    options.forEach((o, i) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = async () => {
+        if (busy) return; busy = true;
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        b.classList.add('picked');
+        await act(i);
+        const ok = i === correct;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-i="${correct}"]`, opts).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Not quite.</b> ') + explain;
+        ok ? Q.addXP(xp, b) : Q.loseHeart(b);
+        resolve({ ok, row: $('.row', box) });
+      };
+      opts.appendChild(b);
+    });
+  });
+}
+// Several Q.quiz() cards in a row, then done().
+function quizChain(mount, list, done) {
+  let i = 0;
+  const next = () => {
+    if (i >= list.length) return done();
+    const cfg = list[i++];
+    const box = Q.quiz(mount, { ...cfg, onDone: () => setTimeout(next, 450) });
+    if (i > 1) setTimeout(() => box.scrollIntoView({ behavior: Q.reduced ? 'auto' : 'smooth', block: 'nearest' }), 50);
+  };
+  next();
+}
+const onKey = (el, fn) => el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(e); } });
+
+// Popularity data for the demo boxes. The tw… rows and counts are the book's example (Ch. 13); the rest is made up.
+const POP = {
+  'twitter': 35, 'twitch': 29, 'twilight': 25, 'twin peak': 21, 'twitch prime': 18, 'twitter search': 14, 'twillo': 10, 'twin peak sf': 8,
+  'target': 33, 'translate': 31, 'tiktok': 30, 'tesla': 16, 'thesaurus': 12, 'tea recipes': 6,
+  'disney plus': 26, 'dictionary': 20, 'doordash': 19, 'dominos': 17, 'dinner ideas': 15, 'dinner recipes': 11, 'dinner near me': 9,
+  'dinosaur': 7, 'dining table': 6, 'dinnerware': 5, 'dinner rolls': 4,
+  'weather': 40, 'wikipedia': 27, 'walmart': 22, 'world cup': 13,
+};
+const top5 = p => p ? Object.entries(POP).filter(([q]) => q.startsWith(p)).sort((a, b) => b[1] - a[1]).slice(0, 5).map(e => e[0]) : [];
+function renderDrop(ul, prefix, list) {
+  ul.innerHTML = list.map(q => `<li><b>${esc(q.slice(0, prefix.length))}</b><span>${esc(q.slice(prefix.length))}</span></li>`).join('');
+}
+
+/* ================= STAGE 1: ask before you build ================= */
+Q.onStage(1, () => {
+  const QS = [
+    { k: 'match', q: 'Should a match start at the beginning of the query, or anywhere inside it?', a: 'Only at the beginning. Typing <i>peak</i> should not suggest <i>twin peak</i>.', pin: 'Prefix match only (start of query)', ico: '🔤' },
+    { k: 'count', q: 'How many suggestions should the dropdown show?', a: 'Five.', pin: 'Return 5 suggestions', ico: '5️⃣' },
+    { k: 'rank', q: 'How do we pick which five, and in what order?', a: 'By popularity: how often each query was searched in the past.', pin: 'Ranked by historical query frequency', ico: '📊' },
+    { k: 'spell', q: 'Should it fix typos, with spell check or autocorrect?', a: 'No. Leave spell check and autocorrect out.', pin: 'No spell check or autocorrect', ico: '🚫' },
+    { k: 'lang', q: 'Which languages will people search in?', a: 'English. If there\'s time at the end, we can talk about other languages.', pin: 'English only (more languages later)', ico: '🌐' },
+    { k: 'chars', q: 'Can queries contain capital letters or special characters?', a: 'No. Assume every query is lowercase letters a–z.', pin: 'Lowercase a–z only', ico: '🔡' },
+    { k: 'users', q: 'How many people use it each day?', a: '10 million daily active users. (DAU: distinct people who use it on a given day.)', pin: '10 million DAU', ico: '👥' },
+    { k: 'font', waste: true, q: 'What font and colours should the dropdown use?', a: 'Hmm. That\'s a styling detail. What does the <i>system</i> need to do?' },
+    { k: 'cloud', waste: true, q: 'Which cloud provider are we deploying on?', a: 'That won\'t change the design. Ask me about behaviour and scale.' },
+  ];
+  const USEFUL = QS.filter(q => !q.waste);
+  const ORDER = ['match', 'users', 'font', 'count', 'spell', 'rank', 'cloud', 'chars', 'lang'];
+  const asked = new Set(), goals = new Set(), seen = new Set();
+  let quizStarted = false, last = '';
+  const face = $('#s1face'), say = $('#s1say'), inp = $('#s1q'), drop = $('#s1drop'), log = $('#s1log');
+
+  $('#s1pins').innerHTML = USEFUL.map(q => `<div class="pin" data-k="${q.k}"><span class="ico">?</span><span>…</span></div>`).join('');
+  $('#s1cards').innerHTML = ORDER.map(k => { const q = QS.find(x => x.k === k); return `<button class="qcard" data-k="${k}">${q.q}</button>`; }).join('');
+  function speak(html, kind, emoji) {
+    face.textContent = emoji; say.className = 'bubble say ' + (kind || ''); say.innerHTML = html;
+    if (kind === 'bad') { face.classList.remove('raise'); void face.offsetWidth; face.classList.add('raise'); }
+  }
+  $$('#s1cards .qcard').forEach(b => b.onclick = () => {
+    const q = QS.find(x => x.k === b.dataset.k);
+    if (q.waste) {
+      b.classList.add('waste'); b.disabled = true;
+      speak(`"${q.a}"`, 'bad', '🤨');
+      Q.loseHeart(b);
+      return;
+    }
+    speak(`"${q.a}"`, 'good', '🙂');
+    if (asked.has(q.k)) return;
+    asked.add(q.k); b.classList.add('asked');
+    const pin = $(`#s1pins .pin[data-k="${q.k}"]`);
+    pin.classList.add('on'); pin.innerHTML = `<span class="ico">${q.ico}</span><span>${q.pin}</span>`;
+    $('#s1count').textContent = `${asked.size} / ${USEFUL.length}`;
+    Q.addXP(5, b);
+    if (asked.size === USEFUL.length) {
+      checkGoal('#s1goals', 'board', goals, 5);
+      inp.disabled = false; inp.placeholder = 'Type t, then w…';
+      setTimeout(() => speak('"Good. That\'s a clear scope. Now show me the box."', 'good', '🧑‍💼'), 1400);
+      maybeQuiz();
+    }
+  });
+
+  inp.addEventListener('input', () => {
+    const raw = inp.value, v = raw.toLowerCase().replace(/[^a-z ]/g, '').replace(/^ +/, '').replace(/ {2,}/g, ' ');
+    if (v !== raw) { inp.value = v; logTo(log, '# lowercase a–z only: we agreed on that in the scope', 'c'); }
+    if (v === last) return;
+    last = v;
+    const list = top5(v.trimEnd());
+    renderDrop(drop, v, list);
+    if (!v) return;
+    logTo(log, `<span class="m">GET</span> /search?q=${esc(encodeURIComponent(v))} <span class="r">→ ${list.length} suggestion${list.length === 1 ? '' : 's'}</span>`);
+    seen.add(v);
+    if (seen.has('t') && seen.has('tw') && checkGoal('#s1goals', 'type', goals)) {
+      logTo(log, `# ${seen.size} keystrokes, ${seen.size} requests. One per character.`, 'c');
+      maybeQuiz();
+    }
+  });
+
+  function maybeQuiz() {
+    if (quizStarted || goals.size < 2) return;
+    quizStarted = true;
+    setTimeout(() => quizChain($('#s1quiz'), [
+      { tag: 'Check 1 of 3', xp: 15,
+        q: 'A user types <code>peak</code>. Under the scope you just agreed, should <i>twin peak</i> be suggested?',
+        options: ['No, a match must start at the beginning', 'Yes, the query contains the word peak', 'Yes, if it is popular enough overall'],
+        correct: 0,
+        good: 'Prefix only. <i>twin peak</i> starts with <code>t</code>, so it can show up for <code>t</code>, <code>tw</code> or <code>twin</code>, never for <code>peak</code>.',
+        bad: 'The interviewer said matching happens <b>only at the beginning</b> of a query. <i>twin peak</i> starts with <code>t</code>, so <code>peak</code> doesn\'t match it, however popular it is.' },
+      { tag: 'Check 2 of 3', xp: 15,
+        q: 'What decides the order of the 5 suggestions?',
+        options: ['How often each query was searched before', 'Alphabetical order of the matching queries', 'How recently each query was last typed'],
+        correct: 0,
+        good: 'Popularity = historical query frequency. The most-searched match goes first.',
+        bad: 'The scope says popularity, measured as <b>historical query frequency</b>: how many times each query has been searched.' },
+      { tag: 'Check 3 of 3', xp: 15,
+        q: 'A user types <code>twiter</code> (one t missing). What does your system do?',
+        options: ['Treats it as a prefix, with no typo fixing', 'Corrects it to twitter, then suggests', 'Rejects it as an invalid search query'],
+        correct: 0,
+        good: 'Spell check and autocorrect are out of scope. <code>twiter</code> is just another prefix. Here nothing starts with it, so the dropdown is empty.',
+        bad: 'Spell check and autocorrect are <b>out of scope</b>. The system treats <code>twiter</code> as a prefix like any other and returns whatever starts with it (here, nothing).' },
+    ], () => setTimeout(() => Q.clearStage(1), 600)), 500);
+  }
+});
+
+/* ================= STAGE 2: what fast means ================= */
+Q.onStage(2, () => {
+  const WORD = 'dinner', GAP = 150, LATS = [20, 50, 100, 200, 300, 600], SLOW = 3;
+  const X0 = 76, X1 = 410, TMAX = 1400, tx = t => X0 + t * (X1 - X0) / TMAX, ROWY = i => 40 + i * 28;
+  const svg = $('#tl2'), sl = $('#lat2'), playB = $('#play2'), feel = $('#feel2'), log = $('#log2');
+  const gtext = $('#g2text'), gdrop = $('#g2drop'), gwrap = $('#g2wrap');
+  const goals = new Set();
+  let predicted = false, busy = false, sorted = false;
+  const L = () => LATS[+sl.value];
+  sl.oninput = () => { $('#lat2v').textContent = L() + ' ms'; };
+
+  // static frame
+  const keyG = S('g', {}, svg), rowG = S('g', {}, svg);
+  const klines = [...WORD].map((ch, i) => {
+    S('text', { class: 'klab', x: tx(i * GAP), y: 18 }, keyG).textContent = ch;
+    return S('line', { class: 'kline', x1: tx(i * GAP), y1: 25, x2: tx(i * GAP), y2: 208 }, keyG);
+  });
+  S('line', { class: 'axis', x1: X0, y1: 212, x2: X1, y2: 212 }, svg);
+  [0, 500, 1000].forEach(t => { S('text', { class: 'tick', x: tx(t), y: 230 }, svg).textContent = t + ' ms'; });
+  const rows = [...WORD].map((_, i) => {
+    const y = ROWY(i);
+    S('text', { class: 'rlab', x: 4, y: y + 12 }, rowG).textContent = 'q=' + WORD.slice(0, i + 1);
+    const bar = S('rect', { class: 'bar', x: tx(i * GAP), y, width: 0, height: 16, rx: 4 }, rowG);
+    const t = S('text', { class: 'btxt', x: 0, y: y + 12 }, rowG);
+    return { bar, t };
+  });
+  const nowL = S('line', { class: 'now', x1: X0, y1: 25, x2: X0, y2: 212, visibility: 'hidden' }, svg);
+
+  function frame(Lm, tNow, arrivedLog) {
+    const typed = Math.min(WORD.length, Math.floor(tNow / GAP) + 1);
+    gtext.textContent = WORD.slice(0, typed);
+    klines.forEach((l, i) => l.classList.toggle('on', i < typed));
+    let shown = -1;
+    rows.forEach((r, i) => {
+      const send = i * GAP, arr = send + Lm;
+      if (tNow < send) { r.bar.setAttribute('width', 0); r.t.textContent = ''; return; }
+      const end = Math.min(tNow, arr);
+      r.bar.setAttribute('width', Math.max(1.5, tx(end) - tx(send)));
+      if (tNow >= arr) {
+        shown = i;
+        const late = i < WORD.length - 1 && arr > (i + 1) * GAP;
+        r.bar.setAttribute('class', 'bar ' + (late ? 'late' : 'ok'));
+        const w = tx(arr) - tx(send);
+        if (late && w > 46) { r.t.setAttribute('class', 'btxt'); r.t.setAttribute('x', tx(send) + 5); r.t.textContent = 'stale'; }
+        else { r.t.setAttribute('class', 'otxt ' + (late ? 'late' : 'ok')); r.t.setAttribute('x', tx(arr) + 4); r.t.textContent = late ? 'stale' : '✓'; }
+        if (arrivedLog && !arrivedLog.has(i)) {
+          arrivedLog.add(i);
+          const box = WORD.slice(0, Math.min(WORD.length, Math.floor(arr / GAP) + 1)), pref = WORD.slice(0, i + 1);
+          logTo(log, late ? `${arr} ms: answer for "${pref}" lands, but the box already says "${box}" → <b>stale</b>` : `${arr} ms: answer for "${pref}" lands before the next key ✓`, late ? 'e' : 'g');
+        }
+      } else { r.bar.setAttribute('class', 'bar'); r.t.textContent = ''; }
+    });
+    nowL.setAttribute('x1', tx(tNow)); nowL.setAttribute('x2', tx(tNow));
+    // dropdown shows the newest answer that has arrived
+    const cur = WORD.slice(0, typed);
+    $$('.stag', gwrap).forEach(x => x.remove());
+    if (shown < 0) { gdrop.innerHTML = ''; gdrop.classList.remove('stale'); return; }
+    const pref = WORD.slice(0, shown + 1);
+    renderDrop(gdrop, pref, top5(pref));
+    const stale = pref !== cur;
+    gdrop.classList.toggle('stale', stale);
+    if (stale) { const t = document.createElement('span'); t.className = 'stag'; t.textContent = `stale: for "${pref}"`; gwrap.appendChild(t); }
+  }
+  function reset() { rows.forEach(r => { r.bar.setAttribute('width', 0); r.bar.setAttribute('class', 'bar'); r.t.textContent = ''; }); gtext.textContent = ''; gdrop.innerHTML = ''; gdrop.classList.remove('stale'); $$('.stag', gwrap).forEach(x => x.remove()); klines.forEach(l => l.classList.remove('on')); }
+  async function play(Lm) {
+    busy = true; playB.disabled = true; sl.disabled = true;
+    reset(); feel.textContent = 'typing…'; feel.className = 'feel';
+    logTo(log, `▶ server answers in ${Lm} ms, keys every ${GAP} ms`);
+    const T = (WORD.length - 1) * GAP + Lm + 40, seenA = new Set();
+    nowL.setAttribute('visibility', Q.reduced ? 'hidden' : 'visible');
+    await anim(T * SLOW, p => frame(Lm, p * T, seenA));
+    nowL.setAttribute('visibility', 'hidden');
+    const stale = Lm > GAP ? WORD.length - 1 : 0;
+    if (Lm <= 100) { feel.textContent = 'instant ✓'; feel.className = 'feel good'; }
+    else if (Lm < 300) { feel.textContent = 'laggy: answers trail your typing'; feel.className = 'feel warn'; }
+    else { feel.textContent = 'broken: suggestions for old prefixes'; feel.className = 'feel bad'; }
+    logTo(log, stale ? `${stale} of 6 answers arrived stale.` : 'No stale answers. Every suggestion matched what was on screen.', stale ? 'w' : 'g');
+    busy = false; sl.disabled = false; playB.disabled = !predicted;
+    if (Lm <= 100) checkGoal('#s2goals', 'fast', goals); else checkGoal('#s2goals', 'slow', goals);
+    maybeClear();
+    return stale;
+  }
+  playB.onclick = () => { if (!busy) play(L()); };
+
+  predict($('#pred2'), {
+    step: 'Predict first',
+    title: 'The typist hits a key every 150 ms. Of these, what is the <b>slowest</b> server response that still feels instant?',
+    options: ['50 ms', '100 ms', '300 ms', '600 ms'],
+    correct: 1,
+    act: async i => { sl.value = [1, 2, 4, 5][i]; sl.oninput(); await play(L()); },
+    explain: '100 ms is the book\'s target. At that speed each answer lands before the next key, with room left over for network hiccups. 50 ms also works, but you don\'t need it. At 300 or 600 ms the dropdown keeps showing suggestions for letters the user typed a while ago. Try the slider: play once at 100 ms or less and once above it.',
+  }).then(() => { predicted = true; playB.disabled = busy; maybeClear(); });
+
+  /* quality matcher */
+  const QUAL = [
+    { k: 'fast', w: 'Fast', d: 'Suggestions show up within about 100 ms, before the next keystroke.' },
+    { k: 'rel', w: 'Relevant', d: 'Every suggestion actually relates to the prefix being typed.' },
+    { k: 'sort', w: 'Sorted', d: 'Results come back ranked by the popularity model.' },
+    { k: 'scale', w: 'Scalable', d: 'Keeps up as traffic climbs to tens of thousands of requests a second.' },
+    { k: 'ha', w: 'Highly available', d: 'Keeps answering when part of the system is offline, slow, or hit by network errors.' },
+  ];
+  let picked = null, placed = 0;
+  $('#qchips2').innerHTML = shuffle(QUAL).map(q => `<button class="qchip" data-k="${q.k}" draggable="true" aria-pressed="false">${q.w}</button>`).join('');
+  $('#defs2').innerHTML = QUAL.map(q => `<div class="defrow" data-k="${q.k}"><button class="slot" aria-label="Place the selected word here: ${esc(q.d)}">drop here</button><span>${q.d}</span></div>`).join('');
+  const chips = $$('#qchips2 .qchip');
+  function pick(c) { picked = picked === c ? null : c; chips.forEach(x => x.setAttribute('aria-pressed', x === picked ? 'true' : 'false')); }
+  function place(row, chip) {
+    if (!chip || row.classList.contains('done')) { if (!chip) Q.toast('pick a word first', $('.slot', row), 'practice'); return; }
+    if (chip.dataset.k === row.dataset.k) {
+      row.classList.add('done'); const slot = $('.slot', row); slot.textContent = chip.textContent; slot.disabled = true;
+      chip.remove(); picked = null; placed++;
+      Q.addXP(5, slot);
+      if (placed === QUAL.length) { checkGoal('#s2goals', 'sort', goals, 5); sorted = true; maybeClear(); }
+    } else {
+      row.classList.remove('nope'); chip.classList.remove('bounce'); void row.offsetWidth;
+      row.classList.add('nope'); chip.classList.add('bounce');
+      setTimeout(() => { row.classList.remove('nope'); chip.classList.remove('bounce'); }, 450);
+      Q.loseHeart($('.slot', row));
+      pick(null);
+    }
+  }
+  chips.forEach(c => {
+    c.onclick = () => pick(c);
+    c.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', c.dataset.k); e.dataTransfer.effectAllowed = 'move'; });
+  });
+  $$('#defs2 .defrow').forEach(row => {
+    const slot = $('.slot', row);
+    slot.onclick = () => place(row, picked);
+    row.addEventListener('dragover', e => { if (!row.classList.contains('done')) { e.preventDefault(); slot.classList.add('over'); } });
+    row.addEventListener('dragleave', () => slot.classList.remove('over'));
+    row.addEventListener('drop', e => { e.preventDefault(); slot.classList.remove('over'); const k = e.dataTransfer.getData('text/plain'); place(row, $(`#qchips2 .qchip[data-k="${k}"]`)); });
+  });
+
+  let cleared = false;
+  function maybeClear() {
+    if (cleared || !predicted || !sorted || !goals.has('fast') || !goals.has('slow')) return;
+    cleared = true;
+    setTimeout(() => Q.clearStage(2), 900);
+  }
+});
+
+/* ================= STAGE 3: envelope math ================= */
+Q.onStage(3, () => {
+  /* "dinner" request animation */
+  const svg = $('#din3'), WORD = 'dinner';
+  let playing = false, tt, cnt;
+  function frame0() {
+    svg.innerHTML = '';
+    S('rect', { class: 'tbox', x: 8, y: 62, width: 132, height: 44, rx: 22 }, svg);
+    tt = S('text', { class: 'ttext', x: 26, y: 90 }, svg);
+    S('line', { class: 'pipe', x1: 148, y1: 84, x2: 300, y2: 84 }, svg);
+    S('rect', { class: 'srv', x: 304, y: 34, width: 108, height: 100, rx: 14 }, svg);
+    S('text', { class: 'srvt', x: 358, y: 56 }, svg).textContent = 'server';
+    cnt = S('text', { class: 'cnt', x: 358, y: 100 }, svg); cnt.textContent = '0';
+    S('text', { class: 'cntl', x: 358, y: 120 }, svg).textContent = 'requests';
+    $('#din3n').textContent = '0';
+  }
+  frame0();
+  async function playDinner() {
+    if (playing) return; playing = true;
+    frame0();
+    const n = $('#din3n');
+    let got = 0;
+    const flights = [];
+    for (let i = 0; i < WORD.length; i++) {
+      tt.textContent = WORD.slice(0, i + 1);
+      const g = S('g', { class: 'bub' }, svg), label = 'q=' + WORD.slice(0, i + 1), w = 16 + label.length * 7;
+      S('rect', { x: -w / 2, y: -10, width: w, height: 20, rx: 10 }, g);
+      S('text', { x: 0, y: 0 }, g).textContent = label;
+      const yy = 16 + i * 26;
+      const fl = anim(700, p => {
+        const x = 150 + w / 2 + (300 - w / 2 - 150 - w / 2) * p, y = 84 + (yy - 84) * Math.sin(p * Math.PI) * .9;
+        g.setAttribute('transform', `translate(${x.toFixed(1)},${y.toFixed(1)})`);
+        g.setAttribute('opacity', p > .92 ? (1 - p) / .08 : 1);
+      }).then(() => { g.remove(); got++; cnt.textContent = got; n.textContent = got; });
+      flights.push(fl);
+      if (!Q.reduced) await sleep(330);
+    }
+    await Promise.all(flights);
+    tt.textContent = 'dinner';
+    playing = false;
+  }
+  $('#din3play').onclick = playDinner;
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) { io.disconnect(); playDinner(); } }, { threshold: .4 });
+    io.observe(svg);
+  } else playDinner();
+
+  /* worksheet */
+  const near = (v, t, tol = .1) => Math.abs(v - t) <= t * tol;
+  function parseCount(s) {
+    s = String(s).toLowerCase().replace(/,/g, '').replace(/\s+/g, '').replace(/(qps|requests?|req|\/s|persecond|~|≈)/g, '');
+    const m = s.match(/^(\d*\.?\d+)(k|thousand|m|million|b|billion)?$/); if (!m) return NaN;
+    const mult = { k: 1e3, thousand: 1e3, m: 1e6, million: 1e6, b: 1e9, billion: 1e9 }[m[2]] || 1;
+    return parseFloat(m[1]) * mult;
+  }
+  function parseGB(s) {
+    s = String(s).toLowerCase().replace(/,/g, '').replace(/\s+/g, '').replace(/(\/day|perday|aday|~|≈)/g, '');
+    const m = s.match(/^(\d*\.?\d+(?:e\d+)?)(tb|gb|mb|kb|bytes|byte|b)?$/); if (!m) return NaN;
+    const v = parseFloat(m[1]);
+    if (!m[2]) return v >= 1e5 ? v / 1e9 : v;
+    return v * { tb: 1000, gb: 1, mb: 1e-3, kb: 1e-6, bytes: 1e-9, byte: 1e-9, b: 1e-9 }[m[2]];
+  }
+  const vals = {};
+  const ROWS = [
+    { k: 'a', lab: '(a) Requests per search', sub: 'How many requests does one average search send?', unit: 'requests', parse: parseCount,
+      ok: v => near(v, 20),
+      good: '20. An average query is about 20 characters, and every character sends a request. "dinner" alone sent 6.',
+      diag: v => v === 6 ? 'That\'s "dinner", which has 6 letters. The <i>average</i> query is longer: about 4 words of 5 characters.'
+        : v === 4 ? 'That\'s the number of words. A request goes out for every <b>character</b>, not every word.'
+        : v === 1 ? 'One request would be right if the box waited for Enter. Autocomplete fires on <b>every character</b>.'
+        : v === 5 ? 'That\'s characters per word. How many characters in a ~4-word query?' : null,
+      hint: () => '"dinner" = 6 characters → 6 requests.\nAverage query ≈ 4 words × 5 characters = ? characters → ? requests' },
+    { k: 'b', lab: '(b) Average QPS', sub: 'Queries per second, averaged over a whole day.', unit: 'QPS', parse: parseCount,
+      ok: v => v >= 21000 && v <= 26000,
+      good: 'About 23,150 exactly: 2,000,000,000 requests a day ÷ 86,400 s. The book rounds up to ~24,000. Rounding is normal here; say it out loud.',
+      diag: v => near(v, 1157, .15) ? 'You forgot the <b>× 20 requests per search</b>. That\'s searches per second, not requests.'
+        : near(v, 2315, .15) ? 'Looks like the <b>× 10 searches per person</b> went missing.'
+        : near(v, 555556, .15) ? 'You divided by 3,600 only. A day has 24 × 3,600 = <b>86,400</b> seconds.'
+        : near(v, 83333333, .15) ? 'That\'s requests per <b>hour</b>. Divide by 3,600 again.'
+        : near(v, 2e9, .15) ? 'That\'s requests per <b>day</b>. Divide by 86,400 seconds.'
+        : (near(v, 231500, .15) || near(v, 2315, .15)) ? 'Off by a factor of 10. Recount the zeros in 10,000,000.' : null,
+      hint: () => `10,000,000 users × 10 searches × ${vals.a ? fmt(vals.a) : '(a)'} requests\n÷ 86,400 seconds in a day` },
+    { k: 'c', lab: '(c) Peak QPS', sub: 'The book assumes the busiest moment is twice the average.', unit: 'QPS', parse: parseCount,
+      ok: v => (v >= 43000 && v <= 53000) || (vals.b && near(v, vals.b * 2, .03)),
+      good: '~48,000 QPS. Peak = 2 × average. That\'s the number you size the servers for.',
+      diag: v => (v >= 21000 && v <= 26000) ? 'That\'s the average. Peak is <b>2×</b> the average.'
+        : near(v, 96000, .1) ? 'That\'s 4×. The book uses <b>2×</b> for peak.' : near(v, 72000, .1) ? 'That\'s 3×. The book uses <b>2×</b> for peak.' : null,
+      hint: () => `peak QPS = 2 × ${vals.b ? fmt(vals.b) : 'your (b)'}` },
+    { k: 'd', lab: '(d) New storage per day', sub: 'Only new query strings get stored: 20% of the day\'s queries.', unit: 'GB / day', parse: parseGB,
+      ok: v => near(v, .4),
+      good: '0.4 GB a day: 100,000,000 queries × 20 bytes = 2 GB, and 20% of that is new.',
+      diag: v => near(v, 2) ? 'That\'s every query. Only <b>20%</b> are new.'
+        : near(v, 8) ? 'You multiplied by 20 requests per search. Storage counts each query <b>string</b> once, not each keystroke.'
+        : near(v, 40) ? 'You counted every request, and skipped the 20%. Storage is per query string (20 bytes), and only 20% are new.'
+        : (near(v, .04) || near(v, 4)) ? 'Off by a factor of 10. Recount the zeros.'
+        : near(v, 400) ? 'Check the units: 400 MB = 0.4 GB. Enter it in GB (or type "400 MB").' : null,
+      hint: () => '10,000,000 × 10 searches × 20 bytes × 20% new = ? bytes\n÷ 1,000,000,000 bytes per GB' },
+  ];
+  const done = new Set(), missed = new Set();
+  $('#sheet3').innerHTML = ROWS.map(r => `<div class="crow" data-k="${r.k}">
+      <div class="lab">${r.lab}<small>${r.sub}</small></div>
+      <div class="in"><input type="text" inputmode="decimal" autocomplete="off" aria-label="${esc(r.lab)}"><span class="unit">${r.unit}</span>
+        <button class="btn primary">Check</button><button class="btn hb">Hint</button></div>
+      <div class="hint"></div><div class="fb"></div></div>`).join('');
+  ROWS.forEach(r => {
+    const row = $(`#sheet3 .crow[data-k="${r.k}"]`), inp = $('input', row), chk = $('.btn.primary', row), fb = $('.fb', row), hint = $('.hint', row);
+    $('.hb', row).onclick = () => { hint.textContent = r.hint(); hint.classList.add('on'); };
+    const check = () => {
+      if (done.has(r.k)) return;
+      const v = r.parse(inp.value);
+      if (!isFinite(v)) { fb.className = 'fb bad'; fb.innerHTML = 'Type a number, like <code>1500</code> or <code>1.5k</code>.'; return; }
+      if (r.ok(v)) {
+        done.add(r.k); vals[r.k] = v;
+        row.classList.add('ok'); inp.readOnly = true; chk.disabled = true;
+        fb.className = 'fb good'; fb.innerHTML = '✓ ' + r.good;
+        Q.addXP(15, chk);
+        if (done.size === ROWS.length) finish();
+      } else {
+        inp.classList.remove('wrongi'); void inp.offsetWidth; inp.classList.add('wrongi');
+        fb.className = 'fb bad'; fb.innerHTML = (r.diag(v) || 'Not quite. Try <b>Hint</b> to see the formula.');
+        if (!missed.has(r.k)) { missed.add(r.k); Q.loseHeart(chk); }
+      }
+    };
+    chk.onclick = check;
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') check(); });
+  });
+  function finish() {
+    $('#sum3').classList.add('on');
+    setTimeout(() => Q.clearStage(3), 1200);
+  }
+});
+
+/* ================= STAGE 4: two boxes and a table ================= */
+Q.onStage(4, () => {
+  const goals = new Set();
+  /* --- data gathering --- */
+  const STREAM = ['twitch', 'twitter', 'twitter', 'twillo'];
+  let si = 0;
+  const gtab = $('#g4tab tbody');
+  function drawStream() { $('#g4stream').innerHTML = STREAM.map((q, i) => `<span class="${i < si ? 'sent' : i === si ? 'nxt' : ''}">${q}</span>`).join(''); $('#g4send').disabled = si >= STREAM.length; }
+  function resetG() { si = 0; gtab.innerHTML = '<tr class="emptyrow"><td colspan="2">(empty table)</td></tr>'; drawStream(); }
+  $('#g4send').onclick = () => {
+    if (si >= STREAM.length) return;
+    const q = STREAM[si++];
+    const er = $('.emptyrow', gtab); if (er) er.remove();
+    let tr = $$('tr', gtab).find(r => r.dataset.q === q);
+    if (tr) { const c = $('td:last-child', tr); c.textContent = +c.textContent + 1; }
+    else { tr = document.createElement('tr'); tr.dataset.q = q; tr.innerHTML = `<td>${q}</td><td>1</td>`; gtab.appendChild(tr); }
+    tr.classList.remove('bump'); void tr.offsetWidth; tr.classList.add('bump');
+    drawStream();
+    if (si === STREAM.length && checkGoal('#s4goals', 'log', goals)) maybeQuiz();
+  };
+  $('#g4reset').onclick = resetG;
+  resetG();
+
+  /* --- query service --- */
+  const SNAP = [['twillo', 10], ['weather', 40], ['twin peak', 21], ['twitter', 35], ['twitch prime', 18], ['target', 33], ['twin peak sf', 8], ['twitch', 29], ['tiktok', 30], ['twitter search', 14], ['twilight', 25]];
+  const qtab = $('#q4tab tbody'), qin = $('#q4'), sql = $('#q4sql'), res = $('#q4res');
+  qtab.innerHTML = SNAP.map(([q, f]) => `<tr data-q="${q}" data-f="${f}"><td>${q}</td><td>${f}</td></tr>`).join('');
+  const trs = $$('tr', qtab);
+  function showSQL(p) {
+    sql.innerHTML = `<span class="k">SELECT</span> * <span class="k">FROM</span> frequency_table\n<span class="k">WHERE</span> query <span class="k">LIKE</span> '<span class="p">${esc(p)}</span>%'\n<span class="k">ORDER BY</span> frequency <span class="k">DESC</span>\n<span class="k">LIMIT</span> 5;`;
+  }
+  function flip(order) {
+    const first = new Map(trs.map(r => [r, r.getBoundingClientRect().top]));
+    order.forEach(r => qtab.appendChild(r));
+    if (Q.reduced) return;
+    order.forEach(r => {
+      const dy = first.get(r) - r.getBoundingClientRect().top;
+      if (!dy) return;
+      r.style.transition = 'none'; r.style.transform = `translateY(${dy}px)`;
+      requestAnimationFrame(() => requestAnimationFrame(() => { r.style.transition = 'transform .55s cubic-bezier(.2,.8,.2,1)'; r.style.transform = ''; }));
+    });
+  }
+  let running = false;
+  async function runQuery() {
+    if (running) return;
+    const p = qin.value.toLowerCase().replace(/[^a-z ]/g, '').replace(/^ +/, '');
+    qin.value = p;
+    if (!p) { res.textContent = 'Type a prefix first, like tw.'; return; }
+    running = true; $('#q4run').disabled = true;
+    showSQL(p);
+    trs.forEach(r => r.className = '');
+    const hit = trs.filter(r => r.dataset.q.startsWith(p));
+    res.innerHTML = `<span class="muted">WHERE … LIKE '${esc(p)}%' → ${hit.length} matching row${hit.length === 1 ? '' : 's'}</span>`;
+    trs.forEach(r => r.classList.add(hit.includes(r) ? 'hit' : 'dim'));
+    await sleep(Q.reduced ? 0 : 700);
+    const ordered = hit.slice().sort((a, b) => b.dataset.f - a.dataset.f);
+    flip([...ordered, ...trs.filter(r => !hit.includes(r))]);
+    res.innerHTML = `<span class="muted">ORDER BY frequency DESC → sorted</span>`;
+    await sleep(Q.reduced ? 0 : 750);
+    const top = ordered.slice(0, 5);
+    top.forEach(r => { r.classList.remove('hit'); r.classList.add('top'); });
+    if (ordered.length > 5) top[4].classList.add('cut');
+    res.innerHTML = top.length ? `LIMIT 5 → <b>${top.map(r => r.dataset.q).join(', ')}</b>` : `No rows. <code>LIKE '${esc(p)}%'</code> only matches queries that <b>start</b> with "${esc(p)}".`;
+    running = false; $('#q4run').disabled = false;
+    if (p === 'tw' && checkGoal('#s4goals', 'query', goals)) maybeQuiz();
+  }
+  $('#q4run').onclick = runQuery;
+  qin.addEventListener('keydown', e => { if (e.key === 'Enter') runQuery(); });
+  showSQL('tw');
+
+  /* --- scale it --- */
+  const ROWSN = [1e3, 1e6, 1e7, 1e8, 1e9], ROWL = ['1K', '1M', '10M', '100M', '1B'];
+  const QPS = [10, 1000, 10000, 24000, 48000], QPSL = ['10', '1K', '10K', '24K', '48K'];
+  const CORES = 32;
+  const rs = $('#rows4'), qs = $('#qps4');
+  // gauge
+  const g = $('#gauge4'), CX = 120, CY = 120, R = 92;
+  const P = f => { const a = Math.PI * (1 - f); return [CX + R * Math.cos(a), CY - R * Math.sin(a)]; };
+  const arc = (a, b) => { const [x0, y0] = P(a), [x1, y1] = P(b); return `M${x0.toFixed(1)} ${y0.toFixed(1)}A${R} ${R} 0 0 1 ${x1.toFixed(1)} ${y1.toFixed(1)}`; };
+  S('path', { class: 'bg', d: arc(0, 1) }, g);
+  [[0, .35, 'var(--good)'], [.35, .5, 'var(--warn)'], [.5, 1, 'var(--bad)']].forEach(([a, b, c]) => { const p = S('path', { class: 'zone', d: arc(a, b) }, g); p.style.stroke = c; });
+  const needle = S('line', { class: 'needle', x1: CX, y1: CY, x2: CX - R + 14, y2: CY }, g);
+  S('circle', { class: 'hub', cx: CX, cy: CY, r: 7 }, g);
+  const pct = S('text', { class: 'pct', x: CX, y: CY - 26 }, g);
+  S('text', { class: 'lbl', x: CX, y: CY + 22 }, g).textContent = 'database busy';
+  S('text', { class: 'lbl', x: CX - R, y: CY + 22 }, g).textContent = '0%';
+  S('text', { class: 'lbl', x: CX, y: 12 }, g).textContent = '100%';
+  S('text', { class: 'lbl', x: CX + R, y: CY + 22 }, g).textContent = '200%+';
+  const LOGMIN = Math.log10(.1), LOGMAX = Math.log10(10000), logPos = t => Math.max(0, Math.min(1, (Math.log10(t) - LOGMIN) / (LOGMAX - LOGMIN)));
+  $('#t4budget').style.left = (logPos(100) * 100).toFixed(1) + '%';
+  let predicted = false;
+  function update() {
+    const rows = ROWSN[+rs.value], qps = QPS[+qs.value];
+    $('#rows4v').textContent = ROWL[+rs.value]; $('#qps4v').textContent = QPSL[+qs.value];
+    const t = 0.2 + rows * 2.5e-6;                 // ms per request (toy cost model)
+    const load = qps * t / 1000 / CORES * 100;     // % of the database's capacity
+    const slow = t > 100, over = load > 100;
+    $('#t4v').textContent = t < 10 ? t.toFixed(1) + ' ms' : t < 1000 ? fmt(t) + ' ms' : (t / 1000).toFixed(1) + ' s';
+    const f = $('#t4fill'); f.style.width = (logPos(t) * 100).toFixed(1) + '%'; f.style.background = slow ? 'var(--bad)' : 'var(--good)';
+    $('#m4').textContent = `rows to sort per request: ~${fmt(Math.max(1, rows * .01))} (1% of the table starts with "tw")`;
+    pct.textContent = load > 999 ? '>999%' : (load < 1 ? load.toFixed(1) : fmt(load)) + '%';
+    const ang = Math.min(load, 200) / 200 * 180;
+    needle.style.transform = `rotate(${ang}deg)`;
+    $('#queue4').innerHTML = over ? '<i></i>'.repeat(Math.min(40, Math.ceil(Math.log2(load / 100) * 8) + 2)) : '';
+    const st = $('#status4');
+    if (!predicted) return;
+    if (slow && over) { st.className = 'status4 bad'; st.innerHTML = `💥 Both at once: ${$('#t4v').textContent} per request <i>and</i> the database needs ${pct.textContent} of its capacity. The queue grows without end.`; }
+    else if (slow) { st.className = 'status4 warn'; st.innerHTML = `🐢 Table size alone: traffic is light, but sorting ~${fmt(rows * .01)} matches takes ${$('#t4v').textContent}. Way over the 100 ms budget.`; }
+    else if (over) { st.className = 'status4 bad'; st.innerHTML = `🔥 Traffic alone: each request takes only ${$('#t4v').textContent}, but ${fmt(qps)} of them a second need ${pct.textContent} of the database. Requests pile up in a queue.`; }
+    else { st.className = 'status4 good'; st.innerHTML = `✅ Holds up: ${$('#t4v').textContent} per request, database ${pct.textContent} busy.`; }
+    if (slow && !over && checkGoal('#s4goals', 'rows', goals)) maybeQuiz();
+    if (over && !slow && checkGoal('#s4goals', 'traffic', goals)) maybeQuiz();
+  }
+  rs.oninput = update; qs.oninput = update;
+  update();
+  predict($('#pred4'), {
+    step: 'Predict first',
+    title: 'At the book\'s scale, what makes this design fail?',
+    options: ['Only the number of rows', 'Only the requests per second', 'Both: rows and requests together'],
+    correct: 2,
+    act: async () => {
+      rs.disabled = false; qs.disabled = false; predicted = true;
+      rs.value = 4; qs.value = 4; update();
+      await sleep(Q.reduced ? 0 : 600);
+    },
+    explain: 'Both. More rows means more matches to scan and sort on <i>every</i> request, so each request gets slower. More requests multiply that work. At 1B rows and 48,000 requests a second, the database can\'t come close. On top of that, every finished search also writes to the same table. Now pull the sliders apart: find where each one breaks things <b>on its own</b>.',
+  });
+
+  let quizStarted = false;
+  function maybeQuiz() {
+    if (quizStarted || goals.size < 4) return;
+    quizStarted = true;
+    setTimeout(() => quizChain($('#s4quiz'), [
+      { tag: 'Check 1 of 2', xp: 15,
+        q: 'Which clause makes the query service return exactly the number of suggestions you agreed in scope?',
+        options: ['LIMIT 5', 'LIMIT 10', 'LIMIT 20'],
+        correct: 0,
+        good: 'Five suggestions, agreed in stage 1. <code>ORDER BY frequency DESC LIMIT 5</code> keeps the 5 most popular.',
+        bad: 'The scope said <b>5</b> suggestions, so <code>LIMIT 5</code> after sorting by frequency.' },
+      { tag: 'Check 2 of 2', xp: 15,
+        q: 'Which part of the SQL makes this a <b>prefix</b> match?',
+        options: ["WHERE query LIKE 'tw%'", "WHERE query LIKE '%tw%'", 'ORDER BY frequency DESC'],
+        correct: 0,
+        good: '<code>%</code> means "anything". <code>\'tw%\'</code> = starts with tw. <code>\'%tw%\'</code> would match tw anywhere, which is out of scope and can\'t use an index.',
+        bad: '<code>%</code> means "anything". Only <code>\'tw%\'</code> forces the match to start with tw. <code>\'%tw%\'</code> matches tw anywhere in the query.' },
+    ], () => setTimeout(() => Q.clearStage(4), 600)), 600);
+  }
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss'), {
+  name: '🧲 The Scope Creeper',
+  xp: 15,
+  scenarios: [
+    { e: '🩹', t: '"Should we also autocorrect typos?"', d: 'Halfway through your design, the interviewer tests your scope.', a: 'park',
+      choices: [{ k: 'park', label: 'Park it', sub: 'out of scope; note it as an extension' }, { k: 'add', label: 'Add it now', sub: 'build spell check into the core path' }, { k: 'skip', label: 'Skip it', sub: 'move on without answering' }],
+      why: 'You agreed "no spell check" in the scope. Say so, and offer it as a later extension. Silently adding features burns your time. Ignoring the question looks evasive.' },
+    { e: '🧮', t: '"Your QPS looks high. Why 20 requests per search?"', d: 'The interviewer wants the reasoning, not the number.', a: 'char',
+      choices: [{ k: 'char', label: 'Per keystroke', sub: 'a request per character, ~20 characters' }, { k: 'retry', label: 'Retries', sub: 'each request retried about 20 times' }, { k: 'word', label: 'Per word', sub: 'a request per word, ~20 words' }],
+      why: 'The client sends a request for every character typed, and an average query is about 20 characters (4 words × 5). Mention that debouncing would lower it in practice.' },
+    { e: '📈', t: '"Traffic doubles at peak. What do you size for?"', d: 'Average is about 24,000 QPS.', a: '48',
+      choices: [{ k: '24', label: '~24k QPS', sub: 'the daily average' }, { k: '48', label: '~48k QPS', sub: '2 × the average' }, { k: '240', label: '~240k QPS', sub: '10 × the average' }],
+      why: 'Peak = 2 × average ≈ 48,000 QPS. Size for the peak, or the box stutters at the busiest moment of the day.' },
+    { e: '🗄️', t: '"Why not just keep the SQL frequency table?"', d: 'It already returns the right 5 for "tw".', a: 'slow',
+      choices: [{ k: 'slow', label: 'Too slow', sub: 'scan + sort per keystroke, 48k times a second' }, { k: 'like', label: 'Wrong results', sub: 'LIKE cannot do prefix matching' }, { k: 'disk', label: 'Too big', sub: '0.4 GB a day fills the disk' }],
+      why: 'The results are correct. The problem is cost: every keystroke scans and sorts the matching rows. With a huge table and ~48,000 requests a second at peak, it can\'t stay under 100 ms. 0.4 GB a day is small.' },
+    { e: '💾', t: '"How much new data do we store per day?"', d: '10M users × 10 searches × 20 bytes, and 20% of queries are new.', a: '0.4',
+      choices: [{ k: '0.4', label: '~0.4 GB', sub: '' }, { k: '2', label: '~2 GB', sub: '' }, { k: '8', label: '~8 GB', sub: '' }],
+      why: '10,000,000 × 10 × 20 bytes = 2 GB of queries a day. Only 20% are new: 0.4 GB. (8 GB would wrongly count every keystroke request.)' },
+  ],
+  outro: 'Scope held, numbers defended. That\'s the first five minutes done right.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: say it like a senior ================= */
+Q.onStage(6, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"Design search autocomplete."</i> Give your first five minutes: the requirements you\'d confirm, the numbers, and your first-cut design.',
+  placeholder: 'First I\'d confirm the scope: match only at the start of the query…',
+  model: '"Let me confirm scope first. We match only on the <b>prefix</b>, return the <b>top 5</b>, ranked by <b>historical query frequency</b>. No spell check, English only, lowercase a–z. <b>10 million DAU</b>, and results within about <b>100 ms</b> so the box keeps up with typing. It also needs to be relevant, sorted, scalable and highly available. Numbers: 10 searches per user a day, about 20 characters each, and a request per character. So 10M × 10 × 20 ÷ 86,400 is about <b>24,000 QPS</b>, <b>48,000 at peak</b>. If 20% of queries are new, that\'s <b>0.4 GB</b> of new data a day. First cut: a <b>data gathering service</b> that counts queries in a frequency table, and a <b>query service</b> that runs <code>LIKE \'prefix%\' ORDER BY frequency DESC LIMIT 5</code>. That works for small data, but at this scale every keystroke is a scan and sort on a huge table, so the database becomes the bottleneck. Next I\'d replace it with a trie."',
+  checks: [
+    'Scope: prefix-only matching, top 5, ranked by historical frequency',
+    'Said what\'s out: no spell check, English only, lowercase a–z',
+    'Scale and speed: 10M DAU, results in about 100 ms',
+    'Numbers: ~24k QPS, ~48k peak, ~0.4 GB of new data a day',
+    'Two services: data gathering + query service',
+    'Frequency table + LIKE \'prefix%\' works small, bottlenecks at scale',
+  ],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

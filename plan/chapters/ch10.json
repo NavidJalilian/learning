@@ -1,0 +1,481 @@
+{
+  "world": 10,
+  "chapterTitle": "Design a Notification System",
+  "worldName": "Ping Station",
+  "quests": [
+    {
+      "n": "10.1",
+      "slug": "notification-channels",
+      "t": "Three Roads to the Lock Screen",
+      "d": "Push (APNs/FCM), SMS and email: who delivers what, and the contact info you need",
+      "boss": false,
+      "badge": "📮 Badge: Postmaster",
+      "winTitle": "Every road mapped!",
+      "goal": "Your win today: you can explain how one notification reaches an iPhone, an Android phone, a phone number and an inbox, name the third-party service on each road, and say what data you must have collected first (device token, phone number, email).",
+      "bookSections": "Intro; Step 2 — 'Different types of notifications' (iOS push, Android push, SMS, email) and 'Contact info gathering flow'",
+      "stages": [
+        {
+          "title": "Three roads, one ping",
+          "sub": "Push, SMS, email — and who carries each",
+          "teaches": "A notification alerts a user to something: breaking news, a product update, an event, an offer. The book covers three types: mobile push notifications, SMS messages and email. None of them is delivered by your own servers end to end: you hand the message to a third-party delivery service. iOS push goes through APNs (Apple Push Notification service), Android push through FCM (Firebase Cloud Messaging, Google's service), SMS through commercial SMS services like Twilio or Nexmo (now Vonage), and email through commercial email services like SendGrid or Mailchimp. You COULD run your own email servers, but most companies buy a service because it gets better delivery rates (fewer messages land in spam) and comes with analytics. Shape of every road: Provider (your system) → delivery service → user's device.",
+          "interaction": "Sort-into-bins game. On screen: 4 labelled lanes (iOS push, Android push, SMS, Email), each drawn as Provider → [empty slot] → device icon. Below, a tray of 8 tappable chips: APNs, FCM, Twilio, Nexmo/Vonage, SendGrid, Mailchimp, 'Our own SMTP server', 'Our own cell tower'. Learner taps a chip then taps a lane slot (or drags). Correct placements lock in with a little packet animation flying Provider → service → device. Wrong placement costs a heart and shows a one-line why (e.g. 'APNs only talks to Apple devices'). 'Our own SMTP server' is accepted in Email with a note: 'possible, but most teams buy a service for deliverability + analytics'. 'Our own cell tower' is the joke chip — it bounces off every lane ('SMS goes through carriers; you rent access via a provider').",
+          "check": "Q.quiz: 'Why do most companies use a service like SendGrid instead of running their own email servers?' Correct: 'Better delivery rates and built-in analytics'. Distractors: 'Email servers can't be self-hosted', 'It's required by law', 'SendGrid is faster than SMTP'."
+        },
+        {
+          "title": "Anatomy of an iOS push",
+          "sub": "Build the request APNs needs",
+          "teaches": "To send an iOS push, the provider builds a notification request for APNs containing two things: (1) the device token — a unique identifier APNs gives an app install on a device, which you must have stored; and (2) the payload — a JSON dictionary describing the notification. Book example: {\"aps\":{\"alert\":{\"title\":\"Game Request\",\"body\":\"Bob wants to play chess\",\"action-loc-key\":\"PLAY\"},\"badge\":5}}. APNs is Apple's remote service that propagates the push to the iOS device. Follow-up beyond the book: tokens go stale (app uninstalled, token rotated); APNs answers 410 Unregistered or 400 BadDeviceToken and you should delete that token, not retry.",
+          "interaction": "Request builder. Left: a 'Provider' card with an empty request envelope having two slots. Middle: an APNs cloud. Right: an iPhone lock-screen mock. A tray of 6 data chips: device token (a hex string like 'a1b2…f9'), payload JSON, user's email, user's phone number, user_id, user's password. Learner fills the two slots; only device token + payload are accepted (others shake with a reason, e.g. 'APNs has never heard of your user_id'). Then a payload editor with 3 inputs (title, body, badge number) pre-filled with the book's Game Request / Bob wants to play chess / 5. Pressing 'Send' animates the envelope to APNs then to the phone, rendering a banner with the title/body and a red app-icon badge showing the number. Predict-then-watch round: 'Bob uninstalled the app last week. You send with his old token. What happens?' choices: delivered anyway / APNs rejects it as unregistered / APNs queues it until he reinstalls. Then animate APNs returning '410 Unregistered' and a broom deleting the row from the device table.",
+          "check": "Q.quiz: 'What are the two things a provider must give APNs?' Correct: 'A device token and a JSON payload'. Distractors: 'The user's Apple ID and message text', 'A phone number and an SMS body', 'The user_id and a template name'."
+        },
+        {
+          "title": "Android, and when a road is closed",
+          "sub": "FCM, and keeping providers pluggable",
+          "teaches": "Android follows the same shape: Provider → FCM → Android device. The book stresses extensibility: the system should make it easy to plug in or unplug a third-party service, because a service may be unavailable in a new market or in the future. Example from the book: FCM is unavailable in China, so alternatives such as Jpush or PushY are used there. Design implication: hide each provider behind a common 'send' interface per channel so swapping one is configuration, not a rewrite.",
+          "interaction": "Plug-board sim. A world map strip with region tabs (US, EU, India, China). The Android lane shows Provider → [FCM plug] → device. Learner taps 'China': the FCM plug greys out with a red ✕ and packets bounce. A drawer of adapter plugs (FCM, Jpush, PushY, APNs, SendGrid) appears; learner must drag a valid Android-in-China adapter (Jpush or PushY) into the socket; packets flow again. Dragging APNs or SendGrid is rejected ('wrong channel'). Then a toggle 'Hard-coded FCM calls everywhere' vs 'Provider interface' shows how many code boxes light up red (12 vs 1) when you swap — making the extensibility point visual.",
+          "check": "Q.quiz: 'Your app launches in mainland China and Android pushes stop arriving. What's the book's fix?' Correct: 'Plug in a local push service such as Jpush or PushY behind the same interface'. Distractors: 'Send everything by email instead', 'Route Android through APNs', 'Retry FCM until it works'."
+        },
+        {
+          "title": "Collect the addresses first",
+          "sub": "Contact info gathering flow + spot the bug",
+          "teaches": "You can't send anything without an address: a device token, a phone number or an email. Book flow: when a user installs the app or signs up for the first time, API servers collect the user's contact info and store it in the database (user → load balancer → API servers → DB). Book tables: user table (user_id bigint, email varchar, country_code integer, phone_number integer, created_at timestamp) and device table (id bigint, device_token varchar, user_id bigint, last_logged_in_at timestamp). A user can have multiple devices, so device tokens live in their own table (one-to-many), and a push goes to every device of the user. Caveats beyond the book: phone numbers should be strings in E.164 form (e.g. +447911123456) — integers drop leading zeros and can overflow; last_logged_in_at helps prune stale devices.",
+          "interaction": "Two parts. (a) Animated signup: tap 'Install app' on a phone mock → watch a packet carry {device_token} through LB → API servers → device table; tap 'Sign up' → {email, phone} lands in user table. Then 'Log in on a tablet too' adds a second device row for the same user_id — learner sees why it's a separate table. (b) Spot-the-bug: the two book tables rendered as schema cards; learner taps up to 2 fields they'd challenge. Correct finds: phone_number integer (reveal: leading zeros/'+' lost; store as E.164 string) and country_code integer (minor: fine-ish but usually folded into the E.164 string). Tapping device table's user_id reveals 'Correct — this is the link that lets one user have many devices' (not a bug, no heart lost but no points).",
+          "check": "Q.quiz: 'Why is device_token in its own table instead of a column on the user table?' Correct: 'One user can have many devices, each with its own token'. Distractors: 'Tokens are too long for the user table', 'APNs requires a separate table', 'To keep tokens secret from the API servers'."
+        },
+        {
+          "title": "Boss: The Misrouted Mailbag",
+          "sub": "Pick the right road for each message",
+          "teaches": "Applying the channel map: which third-party service delivers each kind of message, given the user's device and what contact info exists.",
+          "interaction": "Q.boss named '📮 Misrouted Mailbag', choices: APNs, FCM, SMS provider (Twilio), Email service (SendGrid). Six scenarios: (1) 'Bob, on his iPhone, gets a chess game invite' → APNs. (2) 'An order-shipped alert to a Pixel phone with the app installed' → FCM. (3) 'A one-time login code for a user who has no app installed, only a verified phone number' → SMS. (4) 'A monthly invoice with an itemised table and a PDF link' → Email. (5) 'A billing service's payment-due reminder; the user only gave an email address' → Email. (6) 'A breaking-news alert to a Galaxy tablet' → FCM. Each with a one-line why.",
+          "check": "Boss clears when all 6 are answered (hearts lost on misses)."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "How does a ping reach a phone?",
+          "teaches": "Interview-ready summary of the three channels and the contact data behind them.",
+          "interaction": "Q.drill. Prompt: interviewer asks 'Walk me through how a push notification actually gets to a user's iPhone — and what changes for Android, SMS and email.' Model answer: 'Our system is the provider. For iOS we build a request with the device token we stored when the app was installed, plus a JSON payload, and send it to Apple's APNs, which delivers it to the phone. Android is the same shape via Google's FCM. SMS and email go through commercial providers like Twilio and SendGrid, which give us deliverability and analytics. We collect contact info at install and signup: users and their email/phone in one table, device tokens in a separate table because a user can have many devices. I'd keep each provider behind an interface so we can swap it, for example FCM isn't available in China. And when APNs says a token is unregistered, we delete it.' Checks: 'I named APNs/FCM and the SMS/email providers', 'I said a push needs a device token + payload', 'I explained where contact info comes from (install/signup) and one-to-many devices'.",
+          "check": "Self-grade against 3 checks."
+        }
+      ],
+      "caveats": [
+        "The book shows a simplified APNs payload; real requests also carry headers like apns-topic, apns-push-type and apns-priority, and go over HTTP/2.",
+        "Device tokens are not permanent: uninstalls and token rotation make them stale. APNs replies 410 (Unregistered) or 400 (BadDeviceToken); FCM replies UNREGISTERED. Delete those tokens instead of retrying (not covered by the book).",
+        "The book stores phone_number as an integer; in practice store an E.164 string — integers lose the leading '+' and zeros.",
+        "'Nexmo' has since been renamed Vonage; the book's provider names are examples, not endorsements."
+      ],
+      "sources": [
+        {
+          "label": "Alex Xu, System Design Interview Vol. 1, Ch. 10: Design a Notification System (ByteByteGo)",
+          "url": "https://bytebytego.com/courses/system-design-interview/design-a-notification-system"
+        },
+        {
+          "label": "Apple: User Notifications / APNs documentation",
+          "url": "https://developer.apple.com/documentation/usernotifications"
+        },
+        {
+          "label": "Apple: Sending notification requests to APNs",
+          "url": "https://developer.apple.com/documentation/usernotifications/sending-notification-requests-to-apns"
+        },
+        {
+          "label": "Apple: Handling notification responses from APNs (status codes, 410 Unregistered)",
+          "url": "https://developer.apple.com/documentation/usernotifications/handling-notification-responses-from-apns"
+        },
+        {
+          "label": "Firebase Cloud Messaging documentation",
+          "url": "https://firebase.google.com/docs/cloud-messaging"
+        },
+        {
+          "label": "Firebase: Best practices for FCM registration token management",
+          "url": "https://firebase.google.com/docs/cloud-messaging/manage-tokens"
+        },
+        {
+          "label": "Twilio SMS (book ref [1])",
+          "url": "https://www.twilio.com/docs/sms"
+        },
+        {
+          "label": "SendGrid (book ref [3])",
+          "url": "https://sendgrid.com/"
+        },
+        {
+          "label": "Mailchimp (book ref [4])",
+          "url": "https://mailchimp.com/"
+        },
+        {
+          "label": "E.164 international phone number format (Wikipedia)",
+          "url": "https://en.wikipedia.org/wiki/E.164"
+        }
+      ]
+    },
+    {
+      "n": "10.2",
+      "slug": "notification-high-level-design",
+      "t": "Shatter the Single Server",
+      "d": "From one notification box to servers, per-channel queues and workers",
+      "boss": false,
+      "badge": "🏗️ Badge: Decoupler",
+      "winTitle": "The monolith is rubble!",
+      "goal": "Your win today: you can draw the book's improved high-level design (services → notification servers + cache/DB → one queue per channel → workers → third parties → devices), name the three problems it fixes, and narrate the 6-step send flow.",
+      "bookSections": "Step 1 scope numbers (used for estimates); Step 2 — 'Notification sending/receiving flow': high-level design, its problems, high-level design (improved), the 6-step flow",
+      "stages": [
+        {
+          "title": "Version 1: one box",
+          "sub": "The naive design and its three cracks",
+          "teaches": "Book's first sketch: Service 1…N → Notification System → APNs / FCM / SMS / Email → devices. 'Services' are anything that triggers a notification: a micro-service, a cron job or a distributed system (e.g. a billing service emailing a payment-due reminder, a shopping site texting 'your package arrives tomorrow'). The notification system starts as ONE notification server that offers APIs to the services and builds payloads for the third parties. Three problems: (1) Single point of failure (SPOF): one server down = no notifications. (2) Hard to scale: everything (DB, cache, processing) lives in one box, so you can't scale the pieces independently. (3) Performance bottleneck: building notifications is resource-heavy (e.g. rendering HTML emails, waiting on slow third-party responses); doing all of it in one system overloads it at peak hours.",
+          "interaction": "Stress-test sim. Diagram of the one-box design with a big 'Notification Server' box that contains mini icons: DB, cache, HTML renderer, sender. Controls: a traffic slider (100 → 5,000 notifications/s), a 'Kill server' button, and a 'Black Friday campaign' button. As traffic rises the box's CPU meter fills; at peak it turns red and packets pile up and drop. 'Kill server' turns every lane dark. After playing, the learner gets 3 hotspot labels to place on the diagram: SPOF, Hard to scale, Performance bottleneck — each must be dropped on the matching symptom (the dark lanes / the crammed box internals / the red CPU meter with slow third-party spinner).",
+          "check": "Q.quiz: 'Rendering HTML emails and waiting on SendGrid slows everything down at peak. Which of the book's three problems is that?' Correct: 'Performance bottleneck'. Distractors: 'Single point of failure', 'Hard to scale', 'Data loss'."
+        },
+        {
+          "title": "How big is big?",
+          "sub": "Back-of-the-envelope on the book's numbers",
+          "teaches": "Scope from the book: 10 million mobile pushes, 1 million SMS and 5 million emails per day (16 million total); soft real-time (as soon as possible, slight delay OK under load); iOS, Android and laptop/desktop; triggered by client apps or scheduled server-side; users can opt out. Average rate = per-day ÷ ~86,400 s (≈10^5 for quick maths): push ≈ 116/s, email ≈ 58/s, SMS ≈ 12/s, total ≈ 185/s. Lesson: the AVERAGE is small; the danger is bursts (a marketing blast or breaking news fires millions within minutes), which is exactly what queues absorb. (Peak multiplier is our assumption; the book doesn't compute these.)",
+          "interaction": "Calculate-and-check. Three input boxes (push/s, SMS/s, email/s) next to the book's daily numbers, plus a hint toggle 'a day ≈ 86,400 s ≈ 10^5'. Accept answers within ±25% (so both 100 and 116 pass for push). After all three are right, a 'Breaking news!' button sends 2,000,000 pushes in 10 minutes: learner computes the burst rate (≈3,300/s, accept 2,500–4,500) and sees it is ~30× the average — a bar chart average vs burst animates.",
+          "check": "Q.quiz: 'Average load is only ~185 notifications/s. Why still design for scale?' Correct: 'Traffic is bursty — a single campaign or news alert can be many times the average'. Distractors: 'Because 185/s already needs 100 servers', 'Third parties require it', 'It doesn't matter; one server is fine'."
+        },
+        {
+          "title": "Three fixes",
+          "sub": "Build the improved design",
+          "teaches": "Book's improvements: (1) move the database and cache out of the notification server; (2) add more notification servers with automatic horizontal scaling; (3) introduce message queues to decouple components. Components: Notification servers (APIs for services, internal or verified clients only to prevent spam; basic validation of emails/phone numbers; fetch data needed to render from cache/DB; put notification data onto queues). Cache: user info, device info, notification templates. DB: users, notifications, settings. Message queues: remove dependencies between components and buffer high volumes; each notification type gets its OWN queue so an outage at one third-party service does not affect other types. Workers: servers that pull events from the queues and send them to the matching third-party service.",
+          "interaction": "Predict-then-watch, two rounds. Round 1 (build): a canvas with the services on the left and devices on the right; learner taps the components in a sensible order into empty slots: cache + DB (outside), notification servers ×3 behind a load balancer, 4 queues (iOS PN, Android PN, SMS, Email), workers, third parties. Round 2 (predict): 'The SMS provider goes down for 15 minutes. With ONE shared queue vs FOUR per-channel queues, what happens to iOS pushes?' Learner predicts (delayed / unaffected) for each layout, then watches: in the shared-queue layout, SMS messages fail and get retried, clogging the single queue so push and email wait behind them; in per-channel layout only the SMS queue swells while the other three stay flat.",
+          "check": "Q.quiz: 'Why does the book give each notification type its own queue?' Correct: 'So an outage at one third-party service doesn't hold up the other channels'. Distractors: 'Queues can only store one message format', 'It's cheaper', 'So workers don't need to know the channel'."
+        },
+        {
+          "title": "Follow the ping",
+          "sub": "The 6-step flow + the send API",
+          "teaches": "Book flow: 1) a service calls the notification servers' API; 2) notification servers fetch metadata (user info, device token, notification settings) from cache or DB; 3) the notification event goes to the matching queue (an iOS push → iOS PN queue); 4) workers pull events from the queues; 5) workers send to third-party services; 6) third-party services deliver to user devices. Book's example API for sending an email: POST https://api.example.com/v/sms/send with body {to:[{user_id:123456}], from:{email:from_address@example.com}, subject:'Hello, World!', content:[{type:'text/plain', value:'Hello, World!'}]}. Note the caller sends a user_id, not an address — the notification server looks up the address itself.",
+          "interaction": "Order-the-steps game: 6 shuffled cards; learner taps them in order (wrong tap shakes and costs a heart). When done, a packet animates through the diagram along the 6 steps, each step highlighting. Then a mini spot-the-bug: the book's API request is shown; learner is asked 'One thing in this request looks off — tap it.' Correct tap: the path '/v/sms/send' (the body is clearly an email; the path should be something like /v1/email/send). Bonus reveal: 'to' carries user_id, not an email address — tap explains why that's GOOD (servers resolve contact info + settings centrally).",
+          "check": "Q.quiz: 'In step 2, what does the notification server fetch before enqueueing?' Correct: 'User info, device tokens and notification settings — from cache, falling back to the DB'. Distractors: 'The rendered HTML from the third party', 'Nothing; workers fetch everything', 'Delivery receipts from APNs'."
+        },
+        {
+          "title": "Boss: The Backlog Hydra",
+          "sub": "Which component saves you?",
+          "teaches": "Mapping symptoms to the component in the improved design that addresses them.",
+          "interaction": "Q.boss named '🐉 Backlog Hydra', choices: Message queue (buffer/isolation), More notification servers (autoscaling), Cache, More workers. Scenarios: (1) 'Marketing schedules a 2M-email blast for 9:00; notification servers must accept it in seconds' → Message queue (absorb the burst, workers drain at their pace). (2) 'One notification server's VM dies at lunchtime' → More notification servers (no SPOF behind a load balancer). (3) 'Every send hits the DB for the same popular device tokens and templates; DB CPU at 90%' → Cache. (4) 'The iOS PN queue depth climbs steadily all afternoon though APNs is healthy' → More workers. (5) 'The SMS provider is down; you must not delay push and email' → Message queue (separate per-channel queues). (6) 'Services call the API faster than one server can validate and look up data' → More notification servers. Each with a why.",
+          "check": "Boss clears when all 6 are answered."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "Sketch the high-level design out loud",
+          "teaches": "The 60-second high-level design pitch.",
+          "interaction": "Q.drill. Prompt: 'Sketch your high-level design for the notification system. Why not just one notification server?' Model: 'A single server is a single point of failure, can't scale its DB, cache and processing separately, and becomes a bottleneck when rendering and waiting on third parties at peak. So: services call an internal, authenticated API on a fleet of stateless notification servers that autoscale. They validate the request, look up user info, device tokens and settings from a cache backed by the DB, and drop an event on a queue — one queue per channel, so an SMS outage doesn't block push or email, and the queues absorb bursts like a 2-million-email campaign. Workers pull from each queue and call APNs, FCM, the SMS provider or the email provider, which deliver to the device. Average load is only around 185 a second for 16 million a day, but it's bursty, which is why the queue matters.' Checks: 'I named the 3 problems of one server', 'I described servers → cache/DB → per-channel queues → workers → third parties', 'I said why per-channel queues (isolation) and why queues at all (bursts/decoupling)'.",
+          "check": "Self-grade against 3 checks."
+        }
+      ],
+      "caveats": [
+        "The per-second numbers and burst example are our own back-of-the-envelope additions; the book only gives the daily totals.",
+        "The book's sample endpoint path is /v/sms/send although the body is an email — treat it as a typo; version and channel your paths clearly (e.g. /v1/email/send).",
+        "The message queues themselves must be replicated (e.g. Kafka replication, RabbitMQ quorum queues) or they become the new single point of failure — the book doesn't say this.",
+        "Real systems often split queues by priority as well as channel (an OTP login code should never wait behind a marketing blast); the book splits by channel only."
+      ],
+      "sources": [
+        {
+          "label": "Alex Xu, System Design Interview Vol. 1, Ch. 10: Design a Notification System (ByteByteGo)",
+          "url": "https://bytebytego.com/courses/system-design-interview/design-a-notification-system"
+        },
+        {
+          "label": "Ch. 3: A Framework for System Design Interviews (ByteByteGo)",
+          "url": "https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews"
+        },
+        {
+          "label": "Datadog: Key metrics for RabbitMQ monitoring (book ref [7])",
+          "url": "https://www.datadoghq.com/blog/rabbitmq-monitoring/"
+        },
+        {
+          "label": "Apple: User Notifications / APNs documentation",
+          "url": "https://developer.apple.com/documentation/usernotifications"
+        },
+        {
+          "label": "Firebase Cloud Messaging documentation",
+          "url": "https://firebase.google.com/docs/cloud-messaging"
+        }
+      ]
+    },
+    {
+      "n": "10.3",
+      "slug": "notification-reliability",
+      "t": "Never Lose a Ping",
+      "d": "Notification log, at-least-once, dedupe, retries and watching the queue",
+      "boss": false,
+      "badge": "🛟 Badge: Lifeguard",
+      "winTitle": "Not one ping lost!",
+      "goal": "Your win today: you can explain why notifications may be delayed or reordered but never lost, why exactly-once delivery is impossible, how dedupe by event ID and retries work (and where they still leak), and which metric tells you to add workers.",
+      "bookSections": "Step 3 — Reliability ('How to prevent data loss?', 'Will recipients receive a notification exactly once?'); Additional components: retry mechanism, monitor queued notifications",
+      "stages": [
+        {
+          "title": "Delayed, reordered — never lost",
+          "sub": "The notification log",
+          "teaches": "Book requirement: notifications can be delayed or re-ordered, but never lost. To meet it, the system persists notification data in a database (the notification log, written by workers) and implements a retry mechanism, so a crash or failed send can be recovered. Plain-language reason: if the only copy of a notification lives in a worker's memory, a crash deletes it forever. Caveat beyond the book: in practice you also only acknowledge (remove) the message from the queue AFTER the send succeeds, so the queue itself redelivers on a crash — that's at-least-once delivery.",
+          "interaction": "Crash sim with predict-then-watch. A worker box pulls message #42 from the iOS PN queue, shows it 'in hand', then heads for APNs. Toggles: 'Notification log: OFF/ON' and 'Ack queue: before send / after send'. Learner presses 'Crash worker mid-send' after predicting 'Will the user get #42?' for the current setting. Outcomes: log OFF + ack before send → #42 vanishes (sad ghost icon, 'lost'); log ON or ack-after-send → a new worker picks up #42 from the log/queue and delivers it. Play 3 combos to complete.",
+          "check": "Q.quiz: 'Which of these does the book say a notification system may NOT do?' Correct: 'Lose a notification'. Distractors: 'Deliver it a bit late', 'Deliver two notifications out of order', 'Hold it in a queue during a spike'."
+        },
+        {
+          "title": "The exactly-once myth",
+          "sub": "Why duplicates happen",
+          "teaches": "Will a recipient receive a notification exactly once? Book's short answer: no. Most of the time it's delivered once, but the distributed nature of the system can cause duplicates. Mechanism: the worker sends to APNs, APNs accepts and delivers, then the worker crashes (or the ack is lost on the network) before recording success; the message is retried and the user gets it twice. You can't tell 'sent but ack lost' from 'never sent' over an unreliable network (the Two Generals problem), so pick at-least-once (maybe duplicates) over at-most-once (maybe lost) — and for notifications, the book picks never-lost.",
+          "interaction": "Predict-then-watch timeline. A horizontal timeline with lanes: Queue, Worker, APNs, Phone. Three runs, each with a different failure injected at a point the learner can see: (A) worker crashes BEFORE calling APNs; (B) APNs's response is lost on the network after it delivered; (C) worker crashes AFTER APNs delivered but BEFORE marking done. For each, learner predicts how many banners appear on the phone (0 / 1 / 2) given at-least-once retries. Answers: A → 1 (retried, delivered once), B → 2, C → 2. Then a switch 'at-most-once mode' replays them: A → 0 (lost!), B → 1, C → 1 — showing the trade: lost vs duplicated.",
+          "check": "Q.quiz: 'Why can't the worker just guarantee exactly-once delivery?' Correct: 'It can't tell a lost acknowledgement from a failed send, so it must either retry (risk a duplicate) or not (risk a loss)'. Distractors: 'APNs doesn't support it but FCM does', 'Exactly-once just needs a faster queue', 'Because workers are stateless'."
+        },
+        {
+          "title": "The dedupe gate",
+          "sub": "Seen this event ID before?",
+          "teaches": "Book's dedupe: when a notification event arrives, check whether its event ID has been seen before; if yes, discard it; otherwise send it. This reduces duplicates, it doesn't eliminate them. Leaks (beyond the book): (1) race — two workers check the same ID at the same time, both see 'new', both send; fix with an atomic 'set if absent' (e.g. Redis SET key NX EX ttl) rather than read-then-write; (2) crash between sending and recording the ID still causes a duplicate; (3) the seen-set must expire (TTL) or it grows forever. The event ID must be created by the calling service (an idempotency key), not by the worker, or retries get new IDs.",
+          "interaction": "Gate game then spot-the-bug. Part 1: a conveyor brings events e1, e2, e1, e3, e2, e4, e3; a 'Seen IDs' panel starts empty. For each, learner taps SEND or DROP; correct SEND adds the ID to the panel. 7 events, hearts on mistakes. Part 2: show the dedupe code as 4 lines — 'if not seen.contains(id):' / 'send(n)' / 'seen.add(id)' — with two workers running it side by side in slow motion on the same e5; both pass the check and the phone buzzes twice. Learner taps the buggy line pair (check-then-add not atomic) and chooses the fix from 3 options: 'atomic set-if-absent before sending' (correct), 'add a sleep', 'use a bigger cache'.",
+          "check": "Q.quiz: 'Where should the event ID used for dedupe come from?' Correct: 'The calling service, once per logical notification, so retries carry the same ID'. Distractors: 'A fresh UUID generated by each worker attempt', 'The APNs response', 'The queue's message offset after redelivery'."
+        },
+        {
+          "title": "Retry, then raise the alarm",
+          "sub": "What to retry and what to drop",
+          "teaches": "Book: when a third-party service fails to send, the notification is put back on the message queue for retrying; if the problem persists, an alert goes out to developers. Updated design: workers retry a predefined number of times. Beyond the book: retry only transient failures (timeouts, 5xx, 429 Too Many Requests) and use exponential backoff with jitter so retries don't stampede a recovering provider; don't retry permanent failures (invalid/unregistered device token, malformed phone number) — clean up the data instead; after N attempts move the message to a dead-letter queue (DLQ) for inspection rather than looping forever.",
+          "interaction": "Triage sim. Failure cards drop from a provider box one at a time: 'APNs timeout', 'FCM 503', 'Twilio 429 Too Many Requests', 'APNs 410 Unregistered', 'SMS: invalid number', 'SendGrid 500 (third time in a row)', 'Email: hard bounce, mailbox doesn't exist'. For each, learner drags it to one of: Retry (back on queue with backoff), Drop + clean up data, Dead-letter + alert devs. Then a backoff mini-sim: slider for base delay and a 'jitter' toggle; 1,000 failed messages retry against a provider that just recovered — without jitter, spikes at 1s/2s/4s knock it over again; with jitter the retries smear into a gentle curve.",
+          "check": "Q.quiz: 'APNs returns 410 Unregistered for a device token. What should the worker do?' Correct: 'Don't retry; remove or mark the stale token'. Distractors: 'Retry with exponential backoff', 'Send the same push by SMS', 'Alert developers immediately'."
+        },
+        {
+          "title": "Watch the queue",
+          "sub": "The one graph that says 'add workers'",
+          "teaches": "Book: a key metric to monitor is the total number of queued notifications. If it's large, workers aren't processing events fast enough, so add more workers to avoid delay. Rule of thumb: if arrival rate > processing rate, depth grows without bound. Beyond the book: the age of the oldest message (consumer lag) is often a better signal of user-facing delay than raw count; and a growing queue might mean a SLOW provider, not too few workers — more workers won't help if APNs is throttling you.",
+          "interaction": "Read-the-chart game. A live line chart of queue depth over a simulated day for the email queue, with controls: worker count (1–20, each worker sends 20/s) and an incoming-rate curve (quiet night, 9am campaign spike, afternoon plateau of 300/s). Learner's task: keep the 'oldest message age' under 60 s by setting worker count before each phase (predict: how many workers for 300/s? answer 15+). A final twist phase: depth climbs but the provider panel shows 429s; adding workers makes it worse — learner must pick 'back off / raise provider quota' instead.",
+          "check": "Q.quiz: 'Queue depth keeps rising while the provider is healthy. What's the book's response?' Correct: 'Add more workers — they aren't keeping up'. Distractors: 'Delete old messages', 'Add more notification servers', 'Switch to a single shared queue'."
+        },
+        {
+          "title": "Boss: The Duplicate Doppelgänger",
+          "sub": "Lost, duplicated, or fine?",
+          "teaches": "Diagnosing reliability scenarios using the book's guarantees: never lost, possibly duplicated, possibly delayed/reordered.",
+          "interaction": "Q.boss named '👯 Duplicate Doppelgänger', choices: 'Lost', 'Duplicate', 'Delivered once (maybe late)'. Assume the book's design (notification log, retries, dedupe by event ID, ack after send) unless the scenario says otherwise. Scenarios: (1) 'Worker crashes after pulling the event but before calling FCM' → Delivered once (maybe late). (2) 'FCM delivers, then the worker crashes before recording the event ID' → Duplicate. (3) 'Team disabled the notification log and acks messages on pull to go faster; worker crashes mid-send' → Lost. (4) 'Billing service retries its API call after a timeout, but with the SAME event ID' → Delivered once. (5) 'Billing service retries after a timeout and generates a NEW event ID' → Duplicate. (6) 'SendGrid is down for 10 minutes; messages retry with backoff' → Delivered once (maybe late).",
+          "check": "Boss clears when all 6 are answered."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "'Will users ever get it twice?'",
+          "teaches": "Interview answer on delivery guarantees.",
+          "interaction": "Q.drill. Prompt: 'How do you make sure notifications aren't lost — and will a user ever get the same one twice?' Model: 'The rule is: delayed or reordered is fine, lost is not. Workers persist each notification to a notification log and only acknowledge the queue after the provider accepts, so a crash means a retry, not a loss. Failed sends go back on the queue with exponential backoff and jitter, up to a limit, then to a dead-letter queue with an alert; permanent errors like an unregistered token we drop and clean up. Exactly-once isn't possible, because we can't tell a lost acknowledgement from a failed send, so we're at-least-once and dedupe: every event carries an ID from the calling service, and the worker does an atomic set-if-absent on that ID before sending. That makes duplicates rare, not impossible. And I'd alert on queue depth and the age of the oldest message to know when to add workers.' Checks: 'I said never lost (log + retry) and accepted delay/reorder', 'I said exactly-once is impossible and explained dedupe by event ID', 'I mentioned retry limits/backoff and monitoring queue depth'.",
+          "check": "Self-grade against 3 checks."
+        }
+      ],
+      "caveats": [
+        "The book's notification log alone doesn't prevent loss; you also need to acknowledge the queue only after a successful send (at-least-once).",
+        "Dedupe by event ID is only as good as its implementation: check-then-set races, crashes between send and record, and IDs regenerated on retry all leak duplicates.",
+        "Backoff with jitter, retryable vs permanent error classes, and dead-letter queues are standard practice the book doesn't spell out.",
+        "Queue depth alone can mislead: a throttled or slow provider also grows the queue, and more workers make throttling worse."
+      ],
+      "sources": [
+        {
+          "label": "Alex Xu, System Design Interview Vol. 1, Ch. 10: Design a Notification System (ByteByteGo)",
+          "url": "https://bytebytego.com/courses/system-design-interview/design-a-notification-system"
+        },
+        {
+          "label": "Tyler Treat: You Cannot Have Exactly-Once Delivery (book ref [5])",
+          "url": "https://bravenewgeek.com/you-cannot-have-exactly-once-delivery/"
+        },
+        {
+          "label": "Two Generals' Problem (Wikipedia)",
+          "url": "https://en.wikipedia.org/wiki/Two_Generals%27_Problem"
+        },
+        {
+          "label": "AWS Builders' Library: Timeouts, retries and backoff with jitter",
+          "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+        },
+        {
+          "label": "AWS Architecture Blog: Exponential Backoff and Jitter",
+          "url": "https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/"
+        },
+        {
+          "label": "Amazon SQS dead-letter queues",
+          "url": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html"
+        },
+        {
+          "label": "Redis SET command (NX / EX options)",
+          "url": "https://redis.io/docs/latest/commands/set/"
+        },
+        {
+          "label": "Datadog: Key metrics for RabbitMQ monitoring (book ref [7])",
+          "url": "https://www.datadoghq.com/blog/rabbitmq-monitoring/"
+        },
+        {
+          "label": "Apple: Handling notification responses from APNs (status codes, 410 Unregistered)",
+          "url": "https://developer.apple.com/documentation/usernotifications/handling-notification-responses-from-apns"
+        }
+      ]
+    },
+    {
+      "n": "10.4",
+      "slug": "notification-guardrails",
+      "t": "Respect the Inbox",
+      "d": "Templates, opt-in settings, rate limits, auth, event tracking and the final design",
+      "boss": false,
+      "badge": "🎩 Badge: Good Manners",
+      "winTitle": "Polite, safe and measured!",
+      "goal": "Your win today: you can list the book's 'additional components' — templates, notification settings, rate limiting, security with appKey/appSecret, event tracking — say what each prevents, and draw the final updated design.",
+      "bookSections": "Step 3 — Additional components and considerations: notification template, notification setting, rate limiting, security in push notifications, events tracking; Updated design",
+      "stages": [
+        {
+          "title": "Templates",
+          "sub": "Don't build every message from scratch",
+          "teaches": "A large system sends millions of notifications a day and many follow the same format. A notification template is a preformatted notification you customise with parameters, styling, tracking links, etc. Book example — BODY: 'You dreamed of it. We dared it. [ITEM NAME] is back — only until [DATE].' CTA: 'Order Now.' or 'Save My [ITEM NAME]'. Benefits: consistent format, fewer errors, time saved. Templates are cached (see the cache in 10.2).",
+          "interaction": "Template workshop. On the left the book's template with highlighted [ITEM NAME] and [DATE] placeholders; on the right a phone + email preview. Learner fills params (pre-suggested: 'Pumpkin Spice Latte', 'Oct 31') and sees both channel previews render. Spot-the-bug round: three generated notifications appear in the outbox, one of which reads '…is back — only until [DATE].' (a missing parameter) and one with the item name in the wrong place. Learner taps the broken ones and picks the guard: 'validate that every placeholder has a value before enqueueing'.",
+          "check": "Q.quiz: 'Which is NOT a benefit the book lists for templates?' Correct: 'They guarantee delivery'. Distractors (the real benefits): 'Consistent format', 'Fewer errors', 'Saves time'."
+        },
+        {
+          "title": "The opt-in gate",
+          "sub": "Notification settings",
+          "teaches": "Users get too many notifications and feel overwhelmed, so apps give fine-grained control. Book's notification setting table: user_id bigint, channel varchar (push, email or SMS), opt_in boolean. Before sending ANY notification, check that the user has opted in to that channel (the notification server fetches settings in step 2 of the flow). Beyond the book: real settings are per category × channel (marketing vs security alerts), transactional messages (password reset, login codes) are often sent regardless of marketing opt-outs, and laws apply (e.g. CAN-SPAM requires a working unsubscribe for commercial email; GDPR needs consent).",
+          "interaction": "Settings-panel sim. A phone settings screen for user 'Ana' with three toggles (Push ON, Email OFF, SMS ON). A stream of 6 notifications arrives at a gate: e.g. 'Push: friend request', 'Email: weekly newsletter', 'SMS: delivery update', 'Email: password reset you just requested', 'Push: flash sale', 'Email: invoice'. Learner predicts PASS/BLOCK per item under the book's rule (channel opt-in only), then watches the gate. Then a toggle 'Real-world rules' adds a category column; the password-reset email now passes as transactional — with a note that the book's table can't express this.",
+          "check": "Q.quiz: 'In the book's design, when is the user's notification setting checked?' Correct: 'Before any notification is sent — the server looks it up before enqueueing'. Distractors: 'After the provider delivers it', 'Only for SMS', 'Once a day in a batch job'."
+        },
+        {
+          "title": "Frequency cap",
+          "sub": "Rate limiting per user",
+          "teaches": "To avoid overwhelming users, limit how many notifications one user can receive. It matters because if you send too often, users may turn notifications off completely — and you lose the channel. Implementation can reuse Chapter 4's rate limiter (e.g. token bucket or sliding window keyed by user_id, per channel). In the updated design, rate limiting sits at the notification servers alongside authentication. Beyond the book: exempt critical/transactional messages (security alerts, OTP codes) from marketing caps; providers also rate-limit YOU (e.g. Twilio, APNs throttling), which is separate.",
+          "interaction": "Annoyance meter sim. Four services (Marketing, Social, Shopping, News) each fire pushes at user 'Ana' over a simulated day (a timeline of ~14 pings). A 'Daily cap per user' slider (1–20) and a 'Critical bypass' toggle. Press Play: delivered pings stack on the lock screen; an annoyance meter rises with each one; past a threshold Ana taps 'Turn off all notifications' and every later ping, even the critical 'New login from unknown device', fails. Goal: find a cap where Ana stays engaged and the security alert still gets through (needs bypass ON and cap ≈3–5).",
+          "check": "Q.quiz: 'What's the main risk the book cites for NOT rate-limiting notifications?' Correct: 'Users may turn notifications off completely'. Distractors: 'APNs will ban your app', 'The database fills up', 'Notifications arrive out of order'."
+        },
+        {
+          "title": "Lock the door, count the clicks",
+          "sub": "appKey/appSecret + events tracking",
+          "teaches": "Security: for iOS and Android apps, an appKey and appSecret secure the push notification APIs — only authenticated or verified clients can send pushes. (The internal send API is also restricted to internal or verified callers, to prevent spam.) Events tracking: metrics like open rate, click rate and engagement show how users respond; an analytics service implements event tracking, so the notification system must integrate with it. Book's event states: start → pending → sent → delivered or error → click → unsubscribe. Beyond the book: APNs/FCM do not give reliable per-device 'delivered' receipts (the app must report back); email 'opens' via tracking pixels are unreliable (e.g. Apple Mail Privacy Protection preloads images); APNs authenticates providers with a token (.p8 key, JWT) or certificate, and FCM HTTP v1 with OAuth 2 service-account tokens.",
+          "interaction": "Two parts. (a) Bouncer: requests arrive at the notification server API — 'billing-service with valid appKey/appSecret', 'unknown script with no credentials', 'shopping-service with an expired secret', 'internal cron job, valid key'. Learner taps ALLOW/REJECT; the spam bot gets in only if they mis-tap, flooding a phone mock. (b) Funnel: shuffled state chips (start, pending, sent, delivered, error, click, unsubscribe) — learner arranges them into the lifecycle diagram (error branches off from sent). Then calculate-and-check with numbers: sent 10,000, delivered 9,500, clicked 380, unsubscribed 25 → delivery rate (95%), click rate of delivered (4%), unsubscribe rate (≈0.26%); accept ±0.5 points.",
+          "check": "Q.quiz: 'What does the appKey/appSecret pair protect?' Correct: 'The push APIs — only verified clients can send notifications'. Distractors: 'Users' email addresses at rest', 'The message queue from overflow', 'Device tokens from expiring'."
+        },
+        {
+          "title": "The updated design",
+          "sub": "Bolt the guardrails on",
+          "teaches": "Book's final design adds to the improved design: (1) authentication and rate limiting at the notification servers; (2) a retry mechanism — failed notifications go back on the queues and workers retry a predefined number of times; (3) notification templates for consistent, efficient creation; (4) monitoring and tracking systems (queue monitoring, analytics service) for health checks and future improvements; plus the notification log for reliability and the settings check before sending. Full path: Services → notification servers (auth, rate limit, settings check, templates; cache + DB) → per-channel queues → workers (notification log, retry back to queue) → APNs/FCM/SMS/Email → devices, with workers and servers emitting events to analytics.",
+          "interaction": "Place-the-part puzzle. The improved design from 10.2 is shown with 6 glowing empty sockets. Tray: Auth (appKey/appSecret), Rate limiter, Template store, Notification log DB, Retry loop arrow, Analytics service. Learner drags each into its socket; each correct placement shows a 1-line 'what it prevents' tooltip (spam, annoyance, inconsistent messages, data loss, transient provider failures, flying blind). Wrong socket (e.g. rate limiter after the workers) explains why that's too late — the work's already done. Completed diagram is the one the cheat sheet reproduces.",
+          "check": "Q.quiz: 'Where does the book put authentication and rate limiting?' Correct: 'On the notification servers, before anything is queued'. Distractors: 'Inside the workers', 'At APNs/FCM', 'In the analytics service'."
+        },
+        {
+          "title": "Boss: The Spam Golem",
+          "sub": "Which guardrail catches it?",
+          "teaches": "Matching problems to the book's additional components.",
+          "interaction": "Q.boss named '🗿 Spam Golem', choices: Template, Opt-in setting check, Rate limit, Auth (appKey/appSecret). Scenarios: (1) 'A leaked internal endpoint lets a random script send pushes to every user' → Auth. (2) 'A bug in the social service fires 40 friend-suggestion pushes to one user in an hour' → Rate limit. (3) 'A user turned off email last month and still gets the weekly digest' → Opt-in check. (4) 'Three teams format the order-shipped SMS differently and one keeps forgetting the tracking link' → Template. (5) 'Users report a promo that literally says [ITEM NAME] is back' → Template (validated parameters). (6) 'An attacker without credentials replays send requests to the push API' → Auth.",
+          "check": "Boss clears when all 6 are answered."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "'What else would you add?'",
+          "teaches": "Interview answer for the deep-dive extras.",
+          "interaction": "Q.drill. Prompt: 'Your queues and workers look good. What else does a production notification system need?' Model: 'Five things. Authentication: only verified clients with an appKey and appSecret can call the send APIs, so it can't be used for spam. User settings: before sending, check the user has opted in to that channel, and in practice that category too. Rate limiting per user, so we don't annoy people into turning notifications off, with critical alerts exempt. Templates, so messages are consistent and we validate parameters before sending. And tracking: every notification moves through pending, sent, delivered or error, clicked, unsubscribed, which feeds an analytics service for open and click rates, while we monitor queue depth for operations. Auth and rate limiting sit on the notification servers so bad traffic is rejected before it's queued.' Checks: 'I covered auth (appKey/appSecret) and opt-in settings', 'I covered rate limiting and why (users turning notifications off)', 'I covered templates and event tracking/analytics'.",
+          "check": "Self-grade against 3 checks."
+        }
+      ],
+      "caveats": [
+        "The book's settings table is per channel only; real products also split by category (marketing vs transactional), and transactional messages usually bypass marketing opt-outs.",
+        "appKey/appSecret is the book's (provider-style) framing. APNs itself authenticates your server with a JWT signed by a .p8 key or a TLS certificate; FCM HTTP v1 uses OAuth 2 service-account tokens; internal callers usually use service-to-service auth (mTLS, signed tokens).",
+        "'Delivered' and 'opened' are softer signals than they look: push providers don't guarantee per-device delivery receipts, and email open pixels are distorted by privacy features like Apple Mail Privacy Protection.",
+        "Commercial email and SMS carry legal duties (CAN-SPAM unsubscribe links, consent rules) the book doesn't mention."
+      ],
+      "sources": [
+        {
+          "label": "Alex Xu, System Design Interview Vol. 1, Ch. 10: Design a Notification System (ByteByteGo)",
+          "url": "https://bytebytego.com/courses/system-design-interview/design-a-notification-system"
+        },
+        {
+          "label": "Ch. 4: Design a Rate Limiter (ByteByteGo)",
+          "url": "https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter"
+        },
+        {
+          "label": "Apple: Establishing a token-based connection to APNs",
+          "url": "https://developer.apple.com/documentation/usernotifications/establishing-a-token-based-connection-to-apns"
+        },
+        {
+          "label": "Firebase: Authorize send requests (HTTP v1 API)",
+          "url": "https://firebase.google.com/docs/cloud-messaging/auth-server"
+        },
+        {
+          "label": "FTC: CAN-SPAM Act compliance guide for business",
+          "url": "https://www.ftc.gov/business-guidance/resources/can-spam-act-compliance-guide-business"
+        },
+        {
+          "label": "SendGrid (book ref [3])",
+          "url": "https://sendgrid.com/"
+        }
+      ]
+    },
+    {
+      "n": "BOSS",
+      "slug": "notification-boss-design-it-live",
+      "t": "Ping the Planet — Live",
+      "d": "Full mock interview: design a notification system",
+      "boss": true,
+      "badge": "👑 Badge: Notification Architect",
+      "winTitle": "Offer letter incoming!",
+      "goal": "Your win today: given 'design a notification system', you can scope it in 5 minutes, sketch the queue-based design, defend reliability/dedupe/retries and the guardrails under 'what if X fails?', and wrap up with the book's five points plus what you'd do next.",
+      "bookSections": "Whole chapter via the 4-step framework: Step 1 scope Q&A, Step 2 high-level design (improved), Step 3 deep dive (reliability, additional components, updated design), Step 4 wrap-up",
+      "stages": [
+        {
+          "title": "Scope it",
+          "sub": "Step 1 · understand the problem (3–10 min)",
+          "teaches": "The book's clarifying Q&A: types → push, SMS and email; real-time → soft real-time (ASAP, slight delay OK under heavy load); devices → iOS, Android, laptop/desktop; triggers → client applications, or scheduled on the server side; opt-out → yes, opted-out users receive nothing; volume → 10M mobile push, 1M SMS, 5M email per day. Good extra questions to earn signal: priority/transactional vs marketing, ordering needs, international markets.",
+          "interaction": "Same mechanic as 0008: interviewer chat bubble says 'Design a notification system.' A game clock (45 min) and a question deck of ~10 cards. Good cards (each reveals the book's answer onto a Requirements board and costs 1 game-minute): notification types, real-time or not, supported devices, what triggers them, can users opt out, daily volume, (bonus) are some messages critical like login codes, (bonus) which countries. Time-wasters (cost 3 minutes and signal): 'Which programming language?', 'What colour is the badge?', 'Should we use Kafka or RabbitMQ?' (premature). Then a lock-in quiz: 'Which is the book's volume?' Correct: '10M push, 1M SMS, 5M email per day'. Distractors: swap the numbers (e.g. '10M email, 5M SMS, 1M push'), '16M per hour', '1B per day'.",
+          "check": "Requirements board must show all 6 book answers; lock-in quiz answered."
+        },
+        {
+          "title": "Sketch it",
+          "sub": "Step 2 · high-level design and buy-in (10–15 min)",
+          "teaches": "Start with the contact-info flow and the four channels (APNs, FCM, SMS provider, email provider), state the naive one-server design's 3 problems in one breath, then draw the improved design: services → notification servers (autoscaled) with cache + DB → per-channel queues → workers → third parties → devices; narrate the 6-step flow. Get interviewer buy-in before diving deeper.",
+          "interaction": "Tap-to-draw like 0008: component palette (Services 1..N, Load balancer, Notification servers, Cache, DB, iOS PN queue, Android PN queue, SMS queue, Email queue, Workers, APNs, FCM, SMS provider, Email provider, plus decoys: 'One big queue', 'Workers call DB for every field', 'Services call APNs directly'). Learner taps components in drawing order; a component whose dependency isn't drawn yet costs 1 minute; a decoy costs a heart with an explanation (e.g. services calling APNs directly = every team re-implements auth, settings, retry). Interviewer then asks 'Why not one queue?' quiz → 'Isolation: an SMS outage must not block push and email'.",
+          "check": "Diagram complete; 'why per-channel queues' quiz answered."
+        },
+        {
+          "title": "The technique map",
+          "sub": "Step 3 · every requirement needs a mechanism",
+          "teaches": "Requirement → mechanism map: never lose a notification → notification log + retry (ack after send); no duplicates (mostly) → dedupe by event ID; one provider outage isolated → per-channel queues; bursts → queue buffering + autoscaling servers; failures persist → alert developers; workers falling behind → monitor queued notifications, add workers; spam/unauthorised senders → auth with appKey/appSecret; user overwhelm → rate limiting + opt-in settings; consistent messages → templates; understanding engagement → events tracking + analytics service.",
+          "interaction": "Match board: 10 requirement cards on the left, 10 mechanism cards on the right (shuffled). Learner taps a requirement then a mechanism to draw a line; correct pairs lock, wrong ones cost a minute. When complete, the mechanisms light up on the Step 2 diagram where they live (log next to workers, auth/rate-limit on servers, etc.) — producing the book's updated design.",
+          "check": "All 10 pairs matched."
+        },
+        {
+          "title": "Boss: the curveball barrage",
+          "sub": "Step 3 · 'what happens when…?'",
+          "teaches": "Failure follow-ups and the senior answers: APNs outage → iOS queue grows, retries with backoff, other channels unaffected, alert if prolonged; worker crash after send → duplicate possible, dedupe reduces it; notification server dies → stateless, LB routes around it; queue broker dies → queues must be replicated (book is silent); DB/cache outage → cache hit keeps sends going, DB replicas, servers may shed or delay low-priority work; stale tokens → delete on 410/UNREGISTERED; 10× campaign spike → queue absorbs, autoscale workers, rate-limit marketing; login-code SMS stuck behind a campaign → separate high-priority queue; one SMS provider down for hours → failover to a second provider (extensibility).",
+          "interaction": "Custom curveball rounds (like 0008, not the fixed-choice Q.boss): 7 interviewer questions, each with its own 3 answer options (one senior, one junior-but-plausible, one wrong). E.g. 'APNs is down for 20 minutes. What happens?' → senior: 'iOS queue backs up and retries with backoff; Android, SMS and email keep flowing because queues are per channel; we alert if it persists' / junior: 'Workers retry immediately in a tight loop until it's back' / wrong: 'We drop iOS notifications during the outage'. Others: worker crash after send; queue broker loses a node; 10× Black Friday spike; login code waiting behind a 5M-email campaign; SMS provider down for hours; thousands of 410 Unregistered responses. Correct = +XP; junior = no hearts lost but no XP plus the senior answer shown; wrong = heart lost.",
+          "check": "All 7 curveballs answered."
+        },
+        {
+          "title": "Wrap it up",
+          "sub": "Step 4 · the last 3–5 minutes",
+          "teaches": "Book's wrap-up: the system is scalable, supports push, SMS and email, and uses message queues to decouple components. Highlights: reliability (robust retry mechanism to minimise failure rate), security (appKey/appSecret so only verified clients send), tracking and monitoring (capture stats at every stage), respecting user settings (check opt-in before sending), rate limiting (frequency cap users appreciate). Good 'next steps' beyond the book: priority queues for transactional messages, multi-provider failover, dead-letter queues, token hygiene, localisation of templates, queue replication.",
+          "interaction": "Pick-your-closer: a grid of 10 talking-point cards; learner has room for 5 'minutes' of wrap-up and picks cards (each costs 1). Scored: the book's 5 points score full signal; 'next steps' cards score bonus signal only after at least 3 book points are chosen; filler cards ('I'd use microservices everywhere', 'Rewrite it in Rust') cost signal. Then a quiz: 'Which of these is NOT in the book's wrap-up list?' Correct: 'Exactly-once delivery guarantee'. Distractors: 'Respect user settings', 'Rate limiting', 'Security with appKey/appSecret'.",
+          "check": "Wrap-up chosen and quiz answered."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "The 60-second version + your scorecard",
+          "teaches": "Full end-to-end pitch from memory.",
+          "interaction": "Q.drill, then a scorecard summarising game-minutes used, signal earned, hearts left per step (stored under a separate key, e.g. 'sdq:v1:<this quest id>-interview', as 0008 does). Prompt: 'Give me the whole design in about a minute.' Model: 'Scope: push, SMS and email; soft real-time; iOS, Android and desktop; triggered by services or schedules; users can opt out; about 10 million pushes, 1 million SMS and 5 million emails a day. We collect device tokens, phones and emails at install and signup. Services call an authenticated, rate-limited API on stateless notification servers, which check the user's opt-in settings, fill a template, look up tokens from cache and DB, and enqueue to one queue per channel. Workers pull, log each notification, and call APNs, FCM, the SMS provider or the email provider. Failed sends are retried with backoff, and persistent failures alert us; nothing is lost, though it may be late. Exactly-once is impossible, so we dedupe by event ID. We monitor queue depth to add workers, and track sent, delivered, clicked and unsubscribed in analytics.' Checks: 'I scoped with the book's numbers and requirements', 'I drew servers → per-channel queues → workers → providers', 'I covered reliability (log, retry, dedupe) and the guardrails (auth, settings, rate limit, templates, tracking)'.",
+          "check": "Self-grade against 3 checks; scorecard saved."
+        }
+      ],
+      "caveats": [
+        "The book never computes QPS for this chapter; quoting ~185/s average and stressing burstiness is our addition and a good way to earn signal.",
+        "The book splits queues by channel only; adding priority (transactional vs marketing) and replicating the queues are senior-level extensions, not book content.",
+        "Exactly-once delivery is impossible end to end; say 'at-least-once with dedupe' rather than promising exactly-once.",
+        "The 45-minute game clock and step timings follow the book's framework chapter; real interview loops vary."
+      ],
+      "sources": [
+        {
+          "label": "Alex Xu, System Design Interview Vol. 1, Ch. 10: Design a Notification System (ByteByteGo)",
+          "url": "https://bytebytego.com/courses/system-design-interview/design-a-notification-system"
+        },
+        {
+          "label": "Ch. 3: A Framework for System Design Interviews (ByteByteGo)",
+          "url": "https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews"
+        },
+        {
+          "label": "Tyler Treat: You Cannot Have Exactly-Once Delivery (book ref [5])",
+          "url": "https://bravenewgeek.com/you-cannot-have-exactly-once-delivery/"
+        },
+        {
+          "label": "Apple: Handling notification responses from APNs (status codes, 410 Unregistered)",
+          "url": "https://developer.apple.com/documentation/usernotifications/handling-notification-responses-from-apns"
+        },
+        {
+          "label": "Firebase: Best practices for FCM registration token management",
+          "url": "https://firebase.google.com/docs/cloud-messaging/manage-tokens"
+        },
+        {
+          "label": "AWS Builders' Library: Timeouts, retries and backoff with jitter",
+          "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+        }
+      ]
+    }
+  ],
+  "cheatsheetOutline": "One page, 'Ping Station — Notification System cheat sheet'. (0) Scope box: push + SMS + email; soft real-time; iOS / Android / desktop; triggered by services or schedules; opt-out supported; 10M push + 1M SMS + 5M email per day (≈116 + 12 + 58 ≈ 185/s average, bursty — our estimate). (10.1 Channels) Table: channel → delivery service → what you need (iOS: APNs, device token + JSON payload; Android: FCM (Jpush/PushY in China); SMS: Twilio/Vonage, E.164 phone; email: SendGrid/Mailchimp, address). Contact-info flow + user and device tables (one-to-many devices). Stale-token rule: 410/UNREGISTERED → delete. (10.2 High-level) One-server problems: SPOF, hard to scale, performance bottleneck. Three fixes: DB/cache out, autoscaled notification servers, message queues. The 6-step flow. Why per-channel queues (isolation) and why queues at all (bursts, decoupling). Sample send API (user_id in, server resolves contacts). (10.3 Reliability) Delayed/reordered OK, never lost: notification log + retry + ack after send. Exactly-once impossible → at-least-once + dedupe by caller-supplied event ID with atomic set-if-absent + TTL. Retry transient (timeout, 5xx, 429) with exponential backoff + jitter, drop permanent, DLQ + alert after N. Monitor queue depth / oldest-message age → add workers (unless provider is throttling). (10.4 Guardrails) Templates (consistent, fewer errors, faster; validate params); opt-in settings table (user_id, channel, opt_in) checked before every send; per-user rate limit (else users turn notifications off; exempt critical); auth with appKey/appSecret on the send APIs; event lifecycle start → pending → sent → delivered/error → click → unsubscribe feeding analytics. (Final design) Diagram: Services → [auth + rate limit] notification servers ⇄ cache/DB/templates/settings → iOS PN | Android PN | SMS | Email queues → workers ⇄ notification log, retry arrow back to queue → APNs | FCM | SMS provider | email provider → devices; analytics + queue monitoring off to the side. (Boss) Wrap-up five: reliability, security, tracking & monitoring, respect user settings, rate limiting — plus next steps: priority queues, multi-provider failover, DLQ, queue replication, token hygiene. Caveats strip: phone as string, ack-after-send, dedupe leaks, delivered/opened signals are soft, auth details for APNs/FCM differ from appKey/appSecret."
+}

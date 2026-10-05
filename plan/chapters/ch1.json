@@ -1,0 +1,418 @@
+{
+  "world": 1,
+  "chapterTitle": "Scale From Zero to Millions of Users",
+  "worldName": "The Launchpad",
+  "quests": [
+    {
+      "n": "1.1",
+      "slug": "scale-one-box-to-load-balancer",
+      "t": "One Box Wonder",
+      "d": "A single server, splitting off the database, SQL vs NoSQL, scaling up vs out, and the load balancer",
+      "boss": false,
+      "badge": "📦 Badge: Box Splitter",
+      "winTitle": "Out of the single box!",
+      "goal": "Your win today: you can trace a request from DNS to JSON, explain why the database moves to its own tier, say when NoSQL beats a relational DB, explain why scaling out beats scaling up past a point, and show how a load balancer adds failover.",
+      "bookSections": "Single server setup; Database (which databases to use); Vertical scaling vs horizontal scaling; Load balancer",
+      "stages": [
+        {
+          "title": "Follow the request",
+          "sub": "Everything on one machine",
+          "teaches": "At the start, one server runs everything: web app, database, cache. A request travels: (1) the user types a domain such as api.mysite.com; (2) DNS (the internet's phone book, usually a paid third-party service, not something you host) returns an IP address, e.g. 15.125.23.214; (3) the browser or app sends HTTP requests straight to that IP; (4) the server answers with an HTML page (web) or JSON (mobile). Traffic comes from two kinds of clients: a web app (server-side code for business logic and storage, plus HTML/CSS/JS in the browser) and a mobile app, which talks HTTP and usually gets JSON back because it is light and simple. Example: GET /users/12 returns the user object with id 12 as JSON.",
+          "interaction": "Tap-in-order with animation. On screen: a phone, a laptop, a DNS cloud and one server box labelled 'web + DB + cache'. Four shuffled step cards: 'Type api.mysite.com', 'DNS answers 15.125.23.214', 'Send HTTP request to that IP', 'Server returns HTML or JSON'. The learner taps them in order; each correct tap animates a packet along the matching arrow. Then a mini-toggle: 'Client: laptop / phone'. With the phone selected, sending GET /users/12 shows a small JSON response card {id: 12, firstName, lastName, address...} (invented field values); with the laptop it shows an HTML page thumbnail.",
+          "check": "Q.quiz, 3 questions: who usually runs DNS (a third-party provider you pay; you don't host it); what DNS gives back (an IP address); what a mobile client typically receives (JSON over HTTP)."
+        },
+        {
+          "title": "Split off the data",
+          "sub": "Web tier, data tier, and which database",
+          "teaches": "Once users grow, one server isn't enough: split into a web/mobile tier (handles requests) and a data tier (the database), so each can scale on its own. Relational databases (RDBMS/SQL: MySQL, Oracle, PostgreSQL) store data in tables and rows and support joins across tables; they've been around for 40+ years and are the sensible default. Non-relational (NoSQL) examples the book names: CouchDB, Neo4j, Cassandra, HBase, Amazon DynamoDB. Four NoSQL families: key-value stores, graph stores, column stores, document stores; joins are usually not supported. NoSQL may be the right pick when: you need super-low latency; your data is unstructured or has no relationships; you only need to serialize/deserialize data (JSON, XML, YAML…); or you store a massive amount of data.",
+          "interaction": "Two-part sort. Part A: drag the single 'web + DB' box apart; it splits into 'Web server' and 'Database' with an arrow between them, and two independent 'scale' knobs appear (just visual reward). Part B: 7 app cards to drop into 'Relational' or 'NoSQL' bins: bank transfers between accounts with reports joining customers and orders → Relational; session lookups by ID in under a millisecond → NoSQL (low latency, key-value); petabytes of clickstream events → NoSQL (massive data); friends-of-friends recommendations → NoSQL (graph); an online shop's orders, products and customers with joins → Relational; storing user preference blobs as JSON, never queried inside → NoSQL (just serialize/deserialize); a small internal HR app → Relational (default). Wrong drops show the book's criterion that applies. Bonus row: match the 4 NoSQL families to an example (key-value → DynamoDB, graph → Neo4j, column → Cassandra/HBase, document → CouchDB).",
+          "check": "All 7 cards sorted (retry allowed) and the 4 families matched. Q.quiz, 2 questions: the main reason to split web and data tiers (scale them independently); which DB type is the default for most developers (relational)."
+        },
+        {
+          "title": "Up or out?",
+          "sub": "Vertical vs horizontal scaling",
+          "teaches": "Vertical scaling (scale up): give the one server more CPU and RAM. Simple, and fine while traffic is low. Two big limits: there's a hardware ceiling (you can't add CPU/RAM forever), and there's no failover or redundancy: if that one server goes down, the whole site or app goes down. Horizontal scaling (scale out): add more servers to the pool. It's the better fit for large-scale applications, but it needs something to spread traffic. Also, with no load balancer, users connect straight to the web server; if it's offline, they can't reach the site, and if too many connect at once it slows down or fails.",
+          "interaction": "Predict-then-watch sim. A traffic dial (users/sec) slowly climbs; one server shows a CPU bar. An 'Upgrade' button bumps it through tiers (small → medium → large → XL → 'max size') with a monthly price tag that climbs faster than capacity (made-up illustrative prices, labelled as such). At 'max size' the button greys out with 'hardware ceiling'. Before pressing 'Pull the plug', the learner predicts what share of users see errors (0% / 50% / 100%); the answer is 100% and the screen flashes a 'site down' banner. Then an 'Add a second server' button appears: a second box shows up, but users still only know one IP, so the new box gets zero traffic, which sets up the next stage ('Who sends users to server 2?').",
+          "check": "Prediction entered and the plug pulled. Q.quiz, 2 questions: name the two big drawbacks of scaling up (hard limit; no failover); why the new server got no traffic (clients only know the first server's IP; you need a load balancer)."
+        },
+        {
+          "title": "Hire a bouncer",
+          "sub": "The load balancer",
+          "teaches": "A load balancer (LB) spreads incoming traffic across the web servers in its pool. Users connect to the LB's public IP (book's figure: 88.88.88.1). Web servers now only have private IPs (e.g. 10.0.0.1, 10.0.0.2), reachable inside the same network but not from the internet, which is better for security; the LB talks to them over private IPs. Wins: if server 1 goes offline, all traffic goes to server 2, so the site stays up, and you add a healthy server to rebalance; if traffic outgrows two servers, just add more to the pool and the LB starts sending them requests. This fixes failover and availability for the web tier only; the database is still a single box (next quest).",
+          "interaction": "Live sim. Dots (users) flow into an LB box labelled with public IP 88.88.88.1, then fan out to Server 1 (10.0.0.1) and Server 2 (10.0.0.2). Controls: 'Kill server 1', 'Revive', 'Add server', and a traffic slider. Predict-then-watch: before killing server 1, the learner predicts 'What happens to users?' (they all get errors / half get errors / they're quietly moved to server 2). Correct: moved (after a brief blip for in-flight requests). Then the learner pushes traffic until both servers turn red and must add a third to turn them green. A hidden 'try it' card: tapping a private IP from a 'user' shows 'unreachable from the internet'.",
+          "check": "Server killed and recovered, a third server added under load. Q.quiz, 3 questions: which IP the user connects to (LB public IP); why web servers get private IPs (not reachable from the internet, safer); what tier is still a single point of failure (the database)."
+        },
+        {
+          "title": "Boss: The Growth Gremlin",
+          "sub": "Pick the right first move",
+          "teaches": "Choosing between the moves from this quest in concrete situations.",
+          "interaction": "Q.boss with choices [{k:'up', label:'Scale up', sub:'bigger machine'}, {k:'out', label:'Scale out + LB', sub:'more machines behind a balancer'}, {k:'split', label:'Split web and data tiers', sub:'own DB server'}, {k:'nosql', label:'Pick a NoSQL store', sub:'for this data'}]. Scenarios (6): (1) app and MySQL share a box and a nightly DB backup makes pages crawl; you want to grow web and DB separately → split. (2) a two-person side project at 40% of a mid-size VM, no uptime promise, traffic growing slowly → up (simplest thing that works; caveat: plan the exit). (3) already on the biggest instance your cloud sells, still pegged at 95% CPU → out. (4) the investor demo died because the only server rebooted for a kernel patch → out (scale-up gives no failover). (5) you store session blobs by ID and need sub-millisecond lookups, no joins → nosql (key-value). (6) terabytes of semi-structured event logs per day, appended and read back as JSON → nosql (massive data, no relations). Each 'why' cites the book's criterion.",
+          "check": "Boss cleared."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "The interview answer, in your words",
+          "teaches": "Summarising the first steps of scaling out loud.",
+          "interaction": "Q.drill. Prompt: 'The interviewer says: we're one server today. Walk me through your first two moves and why.' Model answer (paraphrased): 'Today DNS hands users one IP and that single box does everything. First I'd move the database onto its own server so the web and data tiers can grow independently; I'd default to a relational DB unless we need very low latency, have unstructured data, or store huge volumes, where a NoSQL store fits. Scaling the one box up is fine short-term, but it has a hardware ceiling and no failover. So the next move is scaling out: a load balancer with a public IP in front of several web servers on private IPs. If one dies, traffic shifts to the others; if load grows, I add servers. The database is now the remaining single point of failure.' Checks: ['DNS → IP → HTTP flow', 'Separate web and data tiers + SQL vs NoSQL criteria', 'Scale-up limits: ceiling, no failover', 'LB: public vs private IPs, failover, add servers', 'Names the DB as the next SPOF'].",
+          "check": "Self-grade at least 4 of 5 checks."
+        }
+      ],
+      "caveats": [
+        "Scaling up is underrated: many big sites ran on surprisingly few large machines for years, and a bigger box is often the cheapest first fix. Horizontal scaling adds operational complexity.",
+        "A single load balancer is itself a single point of failure. Real setups run LBs in redundant pairs or use a managed cloud LB, which is redundant under the hood.",
+        "The SQL vs NoSQL line is blurrier today: PostgreSQL stores and indexes JSON, and distributed SQL databases (Spanner, CockroachDB) scale horizontally. Pick on access patterns and consistency needs, not on labels.",
+        "IP addresses in this quest (15.125.23.214, 88.88.88.1, 10.0.0.x) are illustrative, as in the book's diagrams."
+      ],
+      "sources": [
+        { "label": "ByteByteGo: Scale From Zero To Millions Of Users (the chapter)", "url": "https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" },
+        { "label": "Wikipedia: Hypertext Transfer Protocol", "url": "https://en.wikipedia.org/wiki/Hypertext_Transfer_Protocol" },
+        { "label": "Wikipedia: Single point of failure", "url": "https://en.wikipedia.org/wiki/Single_point_of_failure" },
+        { "label": "Wikipedia: Load balancing (computing)", "url": "https://en.wikipedia.org/wiki/Load_balancing_(computing)" }
+      ]
+    },
+    {
+      "n": "1.2",
+      "slug": "scale-database-replication",
+      "t": "Copy the Ledger",
+      "d": "Master/slave database replication: who takes writes, who takes reads, and what happens when one dies",
+      "boss": false,
+      "badge": "📚 Badge: Replica Wrangler",
+      "winTitle": "Your data has backup singers!",
+      "goal": "Your win today: you can explain primary/replica replication, route reads and writes correctly, name its three benefits, and answer 'what if a replica dies?' and 'what if the master dies?' with the honest caveat about lag.",
+      "bookSections": "Database replication (master/slave model, advantages, failure handling); the combined design after load balancer + replication",
+      "stages": [
+        {
+          "title": "One writer, many readers",
+          "sub": "Master/slave in one picture",
+          "teaches": "Database replication usually means a master (primary) and one or more slaves (replicas). The master holds the original and accepts only data-changing operations (insert, update, delete). Each slave receives copies of the master's data and serves only reads. Most apps read far more than they write, so you typically run more slaves than masters. (Modern docs say primary/replica; the book uses master/slave.)",
+          "interaction": "Router game. A stream of query cards falls from the top: SELECT cards (blue) and INSERT/UPDATE/DELETE cards (orange). The learner flicks each one into either the Master DB or one of two Slave DBs. Writes sent to a slave bounce back with a 'read-only replica' stamp (gentle shake, no heart loss on first round). Reads sent to the master are accepted but a 'master load' bar rises, and a coach note says reads should go to replicas. After 12 cards, a read:write ratio slider (1:1 to 50:1) shows how many replicas you'd want to keep each one under 70% load (simple proportional model, labelled illustrative).",
+          "check": "At least 10 of 12 routed correctly. Q.quiz, 2 questions: which node accepts writes (master only); why there are usually more slaves than masters (reads outnumber writes)."
+        },
+        {
+          "title": "Why bother?",
+          "sub": "Three wins of replication",
+          "teaches": "Advantages: (1) Better performance: reads are spread across many replicas and run in parallel, while all writes go to the master. (2) Reliability: if one database server is destroyed (the book's example is a natural disaster such as a typhoon or earthquake), data is still preserved because copies live on servers in several locations. (3) High availability: since data is copied to several places, the site keeps working even if one database goes offline, by reading from another server.",
+          "interaction": "Match-the-benefit. Three benefit tiles (Performance / Reliability / High availability) and six short incident cards to drop on them: 'An earthquake destroys the server room in one city, no data lost' → Reliability; '5 replicas each answer 2,000 reads/s in parallel' → Performance; 'One replica is rebooting but pages still load' → High availability; 'A flood takes out a disk, copy survives elsewhere' → Reliability; 'Reads stop queuing behind writes on one box' → Performance; 'Maintenance on one DB node with no downtime' → High availability.",
+          "check": "All six matched (retry allowed)."
+        },
+        {
+          "title": "Pull the plug",
+          "sub": "When a replica or the master dies",
+          "teaches": "If a slave goes offline: with only one slave, reads go to the master temporarily; a new slave is brought up to replace the old one as soon as the issue is found. With several slaves, reads go to the remaining healthy slaves and a replacement is added. If the master goes offline: a slave is promoted to be the new master, all DB operations temporarily run on it, and a new slave replaces the promoted one for replication. Book's honest note: in production, promotion is harder, because the slave's data may not be up to date; missing data must be patched with data-recovery scripts. Other replication setups such as multi-master and circular replication can help, but they're more complicated. Related trap (not in the book's list, but asked in interviews): replication lag means a user who just wrote something may not see it when the read lands on a lagging replica (read-your-writes).",
+          "interaction": "Predict-then-watch with three scenario buttons. Topology on screen: Master + 1 or 3 slaves (toggle), live read/write arrows, and each slave showing a 'replication lag' counter in writes behind. Scenario A 'Kill the only slave': learner predicts where reads go (master / nowhere / other slave) → master temporarily, then a new slave spins up and copies data. Scenario B 'Kill a slave of three' → reads spread to the other two. Scenario C 'Kill the master': learner picks which slave to promote; each slave shows how many writes it is behind (0, 2, 5). Promoting the one 0 behind is clean; promoting one 2 behind shows two writes 'lost' in red with a 'run recovery script' button that patches them. Bonus card 'Read-your-writes': user posts a comment, read hits a replica 2 writes behind, comment is missing; toggle 'read own writes from master for a few seconds' fixes it.",
+          "check": "All three scenarios run and predictions entered. Q.quiz, 3 questions: with one slave, where do reads go when it dies (master, temporarily); what happens when the master dies (a slave is promoted, a new slave added); why promotion is risky (the promoted slave may be missing recent writes)."
+        },
+        {
+          "title": "Wire it all up",
+          "sub": "Load balancer + replication, end to end",
+          "teaches": "The design so far: (1) the user gets the load balancer's IP from DNS; (2) the user connects to the LB with it; (3) the request is routed to server 1 or server 2; (4) a web server reads user data from a slave DB; (5) a web server sends any data-changing operation (write, update, delete) to the master DB. The web tier and data tier now both have redundancy.",
+          "interaction": "Two parts. Part A: tap-in-order of the 5 steps (shuffled cards), animating a request through the diagram. Part B: spot-the-bug. A diagram with 3 planted mistakes: (a) an arrow labelled 'UPDATE profile' pointing at a slave; (b) a user arrow going directly to a web server's private IP 10.0.0.2, skipping the LB; (c) a 'Read feed' arrow that goes to the master while two idle slaves sit unused. The learner taps each wrong element; tapping reveals the fix. Non-bugs (e.g., two web servers both talking to the same master) give 'that's fine' feedback.",
+          "check": "Order correct and all 3 bugs found."
+        },
+        {
+          "title": "Boss: The Ledger Lich",
+          "sub": "Route it, or fail it over",
+          "teaches": "Applying routing and failover rules under pressure.",
+          "interaction": "Q.boss with choices [{k:'replica', label:'Read from a replica', sub:'spread the reads'}, {k:'master', label:'Send it to the master', sub:'the source of truth'}, {k:'promote', label:'Promote a replica', sub:'new master'}, {k:'add', label:'Add another replica', sub:'more read capacity'}]. Scenarios (7): (1) a shopper opens a product page → replica. (2) a user changes their password → master. (3) the master's disk fails at 3 a.m. → promote (mention checking which replica is most up to date). (4) read:write is 50:1; both replicas sit at 90% CPU while the master idles → add. (5) a user posts a comment and instantly reloads, and the comment must appear → master (read-your-writes; replicas may lag). (6) you run one replica and it dies: where does read traffic go right now? → master (temporarily, while a new replica is built). (7) a nightly report scans the whole orders table → replica (keeps heavy reads off the master).",
+          "check": "Boss cleared."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "The interview answer, in your words",
+          "teaches": "Explaining replication and its failure modes.",
+          "interaction": "Q.drill. Prompt: 'The interviewer asks: how do you remove the database as a single point of failure, and what happens when the master dies?' Model answer (paraphrased): 'I'd add replication: one primary takes all writes, and several read replicas get copies and serve reads. Since we read far more than we write, that spreads load, keeps copies in more than one place in case a server is lost, and keeps us serving if one node goes down. If a replica dies, reads move to the others, or to the primary if it was the only one, and we replace it. If the primary dies, we promote a replica. The catch is replication lag: the promoted node may be missing the last few writes, so we need recovery steps, and right after a user writes, their own reads may need to hit the primary.' Checks: ['Writes to master, reads to replicas, more replicas than masters', 'Three benefits: performance, reliability, availability', 'Replica failure handling', 'Master failure: promote + replace', 'Lag caveat: lost writes / read-your-writes'].",
+          "check": "Self-grade at least 4 of 5 checks."
+        }
+      ],
+      "caveats": [
+        "Real failover needs more than 'promote a slave': you must detect the failure reliably, stop the old master from coming back and accepting writes (split brain / fencing), and repoint every client. Managed services (e.g. Amazon RDS Multi-AZ) or tools like Orchestrator and Patroni automate this.",
+        "With asynchronous replication (the common default), a promoted replica can be missing acknowledged writes. Synchronous or semi-synchronous replication narrows that gap at the cost of slower writes.",
+        "Replication lag also breaks read-your-writes: route a user's reads to the primary briefly after they write, or read from a replica that has caught up.",
+        "The book's master/slave wording is the older term; most current docs say primary/replica or leader/follower."
+      ],
+      "sources": [
+        { "label": "ByteByteGo: Scale From Zero To Millions Of Users", "url": "https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" },
+        { "label": "Wikipedia: Replication (computing)", "url": "https://en.wikipedia.org/wiki/Replication_(computing)" },
+        { "label": "Wikipedia: Multi-master replication", "url": "https://en.wikipedia.org/wiki/Multi-master_replication" },
+        { "label": "MySQL 5.7 docs: NDB Cluster Replication, Multi-Master and Circular Replication", "url": "https://dev.mysql.com/doc/refman/5.7/en/mysql-cluster-replication-multi-master.html" }
+      ]
+    },
+    {
+      "n": "1.3",
+      "slug": "scale-cache-and-cdn",
+      "t": "Hot Memory, Near Edge",
+      "d": "A cache tier for hot data and a CDN for static files: how they work and what can go wrong",
+      "boss": false,
+      "badge": "⚡ Badge: Cache Keeper",
+      "winTitle": "Fast as a cache hit!",
+      "goal": "Your win today: you can walk through the read-through cache loop, name the five cache considerations (when to use, expiry, consistency, failures, eviction), explain how a CDN fetches and serves a file, and fix a stale-asset problem with versioning.",
+      "bookSections": "Cache (cache tier, considerations for using cache); Content delivery network (CDN) and its considerations; the design after adding cache + CDN",
+      "stages": [
+        {
+          "title": "The read-through loop",
+          "sub": "Cache tier basics",
+          "teaches": "A cache is temporary storage that keeps the results of expensive responses or frequently accessed data in memory, so later requests are served faster. Without it, every page load may fire one or more database calls. The cache tier is a separate, much faster layer between the web servers and the database. The book's strategy, which it calls read-through: the web server checks the cache; on a hit it returns the data; on a miss it queries the database, stores the result in the cache, then returns it. Caches usually have a simple API; with Memcached you set a key with a value and a TTL (the book's example uses 3,600 seconds) and later get it by key.",
+          "interaction": "Simulation. On screen: a web server, a cache box with 6 slots, a DB box, plus a hit-rate gauge and a DB-load gauge. Requests for 8 keys arrive, weighted so 2 keys are hot (most traffic) and the rest are rare. The learner first steps manually: for each request they press 'Check cache'; on miss, they must press 'Query DB' then 'Store in cache' then 'Return' in order (wrong order shakes). After 6 manual requests, an 'Autoplay' button runs 200 requests: hit rate climbs past ~80%, DB load gauge falls. Latency labels (cache ~1 ms, DB ~10 ms) are marked 'illustrative'. A side panel shows the Memcached-style calls being made: set('user:12', {...}, ttl=3600) and get('user:12').",
+          "check": "Manual loop done in the right order. Q.quiz, 2 questions: on a miss, what happens before returning (read DB, then store in cache); what the 3,600 in the set call means (TTL: expire after one hour)."
+        },
+        {
+          "title": "Five cache questions",
+          "sub": "When, how long, how fresh, what if it dies, what to evict",
+          "teaches": "Considerations: (1) When to use: data read often and changed rarely. Cache lives in volatile memory, so it's not for persisting data: a restart wipes it, so important data stays in a persistent store. (2) Expiration policy: once data expires it is removed. Too short means the DB is hit too often; too long means data goes stale. (3) Consistency: keep the store and the cache in sync. Writes to the DB and cache aren't one transaction, so they can drift, and keeping them consistent across regions is hard (see Facebook's 'Scaling Memcache at Facebook'). (4) Mitigating failures: a single cache server is a single point of failure (SPOF: a part whose failure stops the whole system). Use several cache servers across data centers, and overprovision memory by some percentage as a buffer as usage grows. (5) Eviction: when the cache is full, adding an item evicts another. LRU (least recently used) is most popular; others are LFU (least frequently used) and FIFO (first in, first out).",
+          "interaction": "Two mini-games. (a) TTL slider: a 'source data changes every 30 s' clock; the learner drags TTL from 1 s to 1 hour. Two meters react: DB load (high when TTL is short) and stale reads % (high when TTL is long). Goal: get both into the green band (TTL roughly 10 to 30 s in this toy model); a note explains there's no universal right TTL. (b) Eviction predictor: a 3-slot cache and a request sequence A, B, C, A, A, D. The learner predicts which key is evicted when D arrives under LRU (B), LFU (B or C, tie broken by oldest: B), and FIFO (A), then presses 'Run' for each to watch it.",
+          "check": "TTL in the green band and all three eviction predictions made (wrong ones show the trace). Q.quiz, 3 questions: why not store your only copy of order data in the cache (volatile memory); what a single cache server is (a SPOF); most popular eviction policy (LRU)."
+        },
+        {
+          "title": "Edge of the map",
+          "sub": "How a CDN serves a file",
+          "teaches": "A CDN (content delivery network) is a set of servers spread around the world that deliver static content: images, videos, CSS, JavaScript. (Dynamic content caching exists too but is out of scope here.) When a user visits, the CDN server closest to them answers, so the farther a user is from the CDN servers, the slower the load. Workflow: (1) User A requests image.png using a CDN URL (providers give their own domain, e.g. a CloudFront or Akamai hostname). (2) If the CDN server doesn't have it, it fetches it from the origin, which can be a web server or online storage such as Amazon S3. (3) The origin returns image.png, optionally with a TTL header saying how long to cache it. (4) The CDN caches it and returns it to User A, where it stays until the TTL runs out. (5) User B requests the same image. (6) It's served straight from the CDN cache while the TTL is valid.",
+          "interaction": "Predict-then-watch on a world map. Origin server in Virginia; CDN edge nodes in London, São Paulo, Tokyo; users appear as pins. The learner taps 'User A (Tokyo) requests image.png'. Before the run, predict: 'Will Tokyo's edge have it?' (no: first request is a miss). Watch: packet goes Tokyo edge → origin → back, with a slow latency label (illustrative ~300 ms). Then 'User B (Tokyo)': predict hit/miss → hit, ~20 ms. Then a 'Fast-forward past TTL' button and User C: predict → miss again, refetch. A side counter shows origin requests (1, 1, 2).",
+          "check": "All three predictions made. Q.quiz, 2 questions: where does the CDN get a file it doesn't have (the origin: web server or S3-style storage); what decides how long it keeps it (the TTL, often from an HTTP header)."
+        },
+        {
+          "title": "CDN gotchas",
+          "sub": "Cost, expiry, fallback, invalidation",
+          "teaches": "Considerations: (1) Cost: CDNs are run by third parties and charge for data moved in and out; caching rarely used assets gives little benefit, so move them out of the CDN. (2) Cache expiry: for time-sensitive content, set the expiry carefully. Too long and content isn't fresh; too short and the CDN keeps re-fetching from the origin. (3) CDN fallback: think about how the site copes if the CDN fails; clients should detect the problem and request from the origin. (4) Invalidating files before they expire: use the vendor's API to invalidate, or use object versioning, serving a different version of the object by adding a parameter to the URL, e.g. image.png?v=2. After adding cache and CDN, the design changes: static assets (JS, CSS, images) are no longer served by web servers but fetched from the CDN, and database load is lighter thanks to the cache.",
+          "interaction": "Incident cards: 4 short incidents, each with 3 fix options. (a) 'You shipped a new logo but users see the old one for a day' → version the URL (logo.png?v=2) or invalidate via vendor API. (b) 'CDN bill tripled; analytics show 70% of stored bytes are old campaign videos nobody watches' → stop serving rarely used assets from the CDN. (c) 'The CDN provider has an outage and your pages have no CSS' → client fallback to the origin. (d) 'Stock-price chart image is cached for 24 hours' → shorter expiry for time-sensitive content. Then a final drag task: move 'JS/CSS/images' off the web server box onto the CDN cloud in the running architecture diagram, and watch the web server's bandwidth bar drop.",
+          "check": "All 4 incidents fixed and the assets moved."
+        },
+        {
+          "title": "Boss: The Stale Specter",
+          "sub": "Cache it, CDN it, or leave it alone",
+          "teaches": "Choosing the right layer for each piece of data.",
+          "interaction": "Q.boss with choices [{k:'cache', label:'Put it in the cache', sub:'hot data in memory'}, {k:'cdn', label:'Serve it from a CDN', sub:'static files near users'}, {k:'origin', label:'Don't cache it', sub:'read the source of truth'}, {k:'expiry', label:'Fix the expiry', sub:'TTL, invalidate or version'}]. Scenarios (7): (1) a user profile is read 1,000 times a second and edited once a week → cache. (2) product photos and the JS bundle for users on five continents → cdn. (3) an account balance right after a transfer must be exact and changes constantly → origin. (4) after a deploy, browsers keep loading the old app.js for hours → expiry (version the filename/URL). (5) a leaderboard recomputed each minute, viewed by millions → cache (with a TTL around a minute). (6) a 4 GB export downloaded once by one admin → origin (caching one-off large files wastes memory/CDN spend). (7) product pages show 'in stock' hours after items sold out because entries live 24 h → expiry.",
+          "check": "Boss cleared."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "The interview answer, in your words",
+          "teaches": "Explaining both caching layers and their trade-offs.",
+          "interaction": "Q.drill. Prompt: 'The DB is overloaded by repeated reads, and users abroad complain images load slowly. What do you add?' Model answer (paraphrased): 'Two layers. First a cache tier like Memcached or Redis between web servers and the DB: check the cache, on a miss read the DB and fill the cache with a TTL. It suits data that's read a lot and changed rarely, and it's not a place to keep the only copy. I'd pick the TTL to balance DB load against staleness, use LRU eviction, and run several cache nodes with some spare memory so one failure doesn't stampede the DB. Second, a CDN for static files: the nearest edge serves images, CSS and JS, fetching from origin on a miss and caching for the TTL. I'd watch the cost, plan a fallback to origin, and version asset URLs so new releases show up immediately.' Checks: ['Read-through loop: check, miss → DB → fill', 'When to cache + volatile memory', 'TTL trade-off + eviction (LRU)', 'Cache SPOF: multiple nodes, overprovision', 'CDN flow (miss → origin, TTL) + versioning/invalidation'].",
+          "check": "Self-grade at least 4 of 5 checks."
+        }
+      ],
+      "caveats": [
+        "What the book calls a read-through cache, where the app itself checks the cache and loads from the DB on a miss, is usually called cache-aside. In a strict read-through setup the cache library does the DB load itself.",
+        "Invalidating on write is the hard part: a common pattern is update the DB, then delete the cache key. Races can still leave stale values, which is why TTLs are kept as a safety net.",
+        "Thundering herd: when a hot key expires or a cache node dies, many requests miss at once and hit the DB together. Mitigations include request coalescing, staggered TTLs and keeping a stale value while refreshing.",
+        "Many CDNs ignore query strings in the cache key by default, so teams usually put a content hash in the filename (app.3f9a1c.js) rather than ?v=2.",
+        "Modern CDNs also cache dynamic responses and run code at the edge; the book scopes CDNs to static files to keep things simple.",
+        "Latency figures in the simulations are illustrative, not measurements."
+      ],
+      "sources": [
+        { "label": "ByteByteGo: Scale From Zero To Millions Of Users", "url": "https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" },
+        { "label": "Nishtala et al., Scaling Memcache at Facebook (NSDI 2013)", "url": "https://www.usenix.org/conference/nsdi13/technical-sessions/presentation/nishtala" },
+        { "label": "CodeAhoy: Caching Strategies and How to Choose the Right One", "url": "https://codeahoy.com/2017/08/11/caching-strategies-and-how-to-choose-the-right-one/" },
+        { "label": "Wikipedia: Cache replacement policies", "url": "https://en.wikipedia.org/wiki/Cache_replacement_policies" },
+        { "label": "Amazon CloudFront: Dynamic content delivery", "url": "https://aws.amazon.com/cloudfront/dynamic-content/" },
+        { "label": "Memcached", "url": "https://memcached.org/" }
+      ]
+    },
+    {
+      "n": "1.4",
+      "slug": "scale-stateless-and-data-centers",
+      "t": "Forget Me, Find Me Anywhere",
+      "d": "Make the web tier stateless, autoscale it, then spread the system across data centers with GeoDNS",
+      "boss": false,
+      "badge": "🌍 Badge: Globe Spanner",
+      "winTitle": "Stateless and worldwide!",
+      "goal": "Your win today: you can explain why stateful servers fight horizontal scaling, why sticky sessions are a workaround, how moving sessions to a shared store enables autoscaling, and how GeoDNS, failover and data sync work across data centers.",
+      "bookSections": "Stateless web tier (stateful architecture, stateless architecture, design with session store + autoscaling); Data centers (GeoDNS routing, failover, technical challenges)",
+      "stages": [
+        {
+          "title": "The sticky problem",
+          "sub": "Stateful servers",
+          "teaches": "A stateful server remembers client data (state) from one request to the next; a stateless server keeps none. In a stateful setup, User A's session data and profile image live on Server 1, so every one of User A's requests must reach Server 1. If one lands on Server 2, authentication fails because Server 2 has no record of A. Load balancers can solve this with sticky sessions (always send a user to the same server), but that adds overhead, makes adding or removing servers harder, and makes handling server failures difficult.",
+          "interaction": "Simulation. Three users (A, B, C) each with a coloured session token living on one of three servers. The LB defaults to round-robin. The learner presses 'Send request' for a user; when it lands on the wrong server, the request turns red ('who are you? log in again'). Toggle 'Sticky sessions': now every request goes to the owning server (green). Then three stress buttons with predict-first prompts: 'Kill Server 1' (predict: what happens to User A? → logged out, session lost); 'Add Server 4' (predict: how much existing traffic will it take? → none of the existing logged-in users, they're stuck to their servers); 'User B becomes very active' (one server overloaded while others idle).",
+          "check": "All three predictions entered. Q.quiz, 2 questions: why A's request to server 2 fails (session lives only on server 1); two costs of sticky sessions (harder to add/remove servers, harder failure handling)."
+        },
+        {
+          "title": "Move the memory out",
+          "sub": "Stateless web tier + autoscaling",
+          "teaches": "Fix: move state (e.g., session data) out of the web tier into persistent shared storage: a relational DB, Memcached/Redis, or NoSQL. Now any web server can handle any request, because it fetches state from the shared store. The book picks a NoSQL store for sessions because it's easy to scale. A stateless system is simpler, more robust and more scalable. With state out of the web tier, autoscaling becomes easy: web servers are added or removed automatically based on traffic load.",
+          "interaction": "Continue the same sim. A new toggle 'Shared session store' adds a store box below the servers; sticky sessions turn off. The learner re-runs the three stress buttons: killing a server no longer logs anyone out, a new server takes traffic immediately. Then an autoscaling panel: a 24-hour traffic curve plays in fast-forward (quiet night, morning peak, evening spike). The learner sets two thresholds (add a server above X% average CPU, remove one below Y%) and min/max server counts. Win condition: get through the day with no red 'overloaded' minutes and fewer than a set number of server-hours. Too-tight thresholds cause visible thrashing (servers flapping on and off), with a note about cooldowns.",
+          "check": "Day survived within the budget. Q.quiz, 2 questions: where session data lives now (a shared store outside the web tier); what autoscaling means (adding/removing web servers automatically with load)."
+        },
+        {
+          "title": "Two continents",
+          "sub": "Data centers and GeoDNS",
+          "teaches": "As the business grows internationally, you add data centers (DCs). In normal operation users are geoDNS-routed (geo-routed) to the closest DC, with traffic split, e.g., x% to US-East and (100 − x)% to US-West. GeoDNS is a DNS service that resolves a domain name to different IP addresses based on where the user is. If a whole data center goes down (the book's example is a significant outage in US-West), all traffic is sent to the healthy one (100% to US-East). Each DC has its own load balancer, web servers, caches and databases.",
+          "interaction": "Map sim. Two DC icons (US-East, US-West) each with mini LB/web/cache/DB stacks; user dots spread across North America with their DNS answer shown as a coloured line to a DC. A slider shows the split x%/(100−x)% as users near the middle move. Predict-then-watch: 'US-West has a major outage. Where do West Coast users go?' (nowhere: errors / US-East / they wait). Correct: US-East; lines re-route with a short blip, and US-East's load bar jumps to 100% of traffic. A follow-up note asks: 'Is US-East sized to take everyone?' and the learner taps 'Add capacity' to clear its red bar.",
+          "check": "Prediction made and outage handled. Q.quiz, 2 questions: what GeoDNS does (returns a different IP based on user location); what happens in a DC outage (all traffic routed to a healthy DC)."
+        },
+        {
+          "title": "The hard parts",
+          "sub": "Redirection, data sync, test and deploy",
+          "teaches": "Multi-DC challenges the book lists: (1) Traffic redirection: you need tools to send traffic to the right DC; GeoDNS sends users to the nearest one. (2) Data synchronization: users in different regions may use different local databases or caches; on failover, traffic may land in a DC whose data doesn't have that user's records. The common fix is replicating data across DCs; the book cites Netflix's asynchronous multi-data-center replication as an example. (3) Test and deployment: test the site/app from different locations, and use automated deployment tools to keep services consistent across all DCs.",
+          "interaction": "Spot-the-failure replay. Three short animated incidents play; after each, the learner picks the challenge it shows from three cards (Traffic redirection / Data synchronization / Test & deployment) and then the fix from two options. (a) After US-East fails over to US-West, a user's last-hour orders are missing → Data sync → replicate data across DCs. (b) A new release went to US-West only, and East users hit an API error the West doesn't have → Test & deployment → automated deployments to all DCs. (c) Users in Seattle are routed to Virginia even though US-West is healthy → Traffic redirection → GeoDNS rules. Bonus: a 'replication lag' meter on the cross-DC link: failing over while it reads 2 s shows the last 2 s of writes missing, tying back to quest 1.2.",
+          "check": "All three incidents classified and fixed."
+        },
+        {
+          "title": "Boss: The Wandering Session",
+          "sub": "Keep users logged in, wherever they land",
+          "teaches": "Applying stateless design and multi-DC routing.",
+          "interaction": "Q.boss with choices [{k:'stateless', label:'Shared session store', sub:'make the web tier stateless'}, {k:'sticky', label:'Sticky sessions', sub:'pin users to a server'}, {k:'geodns', label:'GeoDNS routing', sub:'send users to a DC'}, {k:'replicate', label:'Replicate across DCs', sub:'keep data in sync'}]. Scenarios (7): (1) users get randomly logged out right after a second web server is added → stateless. (2) autoscaling removes servers at night and the users on them lose their carts → stateless. (3) a legacy app keeps carts in process memory, the rewrite is next quarter, and you need a fix tonight → sticky (honest stopgap; plan the move to a shared store). (4) European users see an extra 150 ms because everything is in the US, and you've opened an EU data center → geodns. (5) US-East goes dark: how do its users reach US-West? → geodns (route 100% to the healthy DC). (6) after failover, East users land in West and their recent orders are missing → replicate. (7) web servers must be killable at any time for spot-instance savings → stateless.",
+          "check": "Boss cleared."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "The interview answer, in your words",
+          "teaches": "Explaining statelessness and multi-region design.",
+          "interaction": "Q.drill. Prompt: 'We're going global, and our web servers keep sessions in memory. What changes?' Model answer (paraphrased): 'First, make the web tier stateless. In-memory sessions force every request back to the same server, and sticky sessions only paper over it: adding, removing or losing servers gets painful. I'd move sessions into a shared store, say a NoSQL or Redis cluster, so any server can handle any request, and then autoscale the web tier on load. Then add a second data center. GeoDNS sends each user to the nearest one, and if a DC goes down, all traffic shifts to the healthy one, so each DC needs headroom. The hard parts are keeping data in sync across DCs, usually with asynchronous replication (which means a failover can lose a little recent data), and testing and deploying the same version everywhere with automated tooling.' Checks: ['Stateful problem + why sticky sessions are a workaround', 'Shared session store → any server, autoscaling', 'GeoDNS nearest-DC routing + full failover', 'Data sync across DCs (async replication, lag)', 'Test/deploy consistency via automation'].",
+          "check": "Self-grade at least 4 of 5 checks."
+        }
+      ],
+      "caveats": [
+        "Another stateless option the book doesn't cover: signed tokens such as JWTs carry the session in the client, so no lookup is needed, but they're hard to revoke before they expire.",
+        "Sticky sessions aren't always wrong: long-lived connections (WebSockets) are naturally pinned, and the World 12 chat design uses stateful servers on purpose.",
+        "DNS answers are cached by resolvers and clients for their TTL, so GeoDNS failover isn't instant; some users keep hitting the dead DC until their cached answer expires. Anycast and global load balancers fail over faster.",
+        "Active-active multi-region with writes in both regions brings write conflicts; many teams run active-passive for the database or partition users by home region.",
+        "The book's percentages (x% / 100−x%) and DC names are illustrative."
+      ],
+      "sources": [
+        { "label": "ByteByteGo: Scale From Zero To Millions Of Users", "url": "https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" },
+        { "label": "AWS docs: Configure sticky sessions for your Classic Load Balancer", "url": "https://docs.aws.amazon.com/elasticloadbalancing/latest/classic/elb-sticky-sessions.html" },
+        { "label": "Netflix Tech Blog: Active-Active for Multi-Regional Resiliency", "url": "https://netflixtechblog.com/active-active-for-multi-regional-resiliency-c47719f6685b" },
+        { "label": "The Twelve-Factor App: Processes (stateless processes)", "url": "https://12factor.net/processes" }
+      ]
+    },
+    {
+      "n": "1.5",
+      "slug": "scale-queues-observability-sharding",
+      "t": "Queues, Gauges & Shards",
+      "d": "Message queues to decouple work, logging/metrics/automation, and sharding the database",
+      "boss": false,
+      "badge": "🧩 Badge: Shard Smith",
+      "winTitle": "Decoupled, observed, sharded!",
+      "goal": "Your win today: you can explain how a message queue decouples producers and consumers, name the three levels of metrics, say why scaling the DB up runs out, and shard by a key while naming the three sharding headaches: resharding, celebrities, joins.",
+      "bookSections": "Message queue; Logging, metrics, automation; Adding message queues and different tools; Database scaling (vertical scaling, horizontal scaling/sharding, sharding challenges)",
+      "stages": [
+        {
+          "title": "Drop it in the queue",
+          "sub": "Producers, consumers, decoupling",
+          "teaches": "A message queue is a durable component, stored in memory in the book's description, that supports asynchronous communication: it buffers messages and hands them out. Producers (publishers) create messages and publish them to the queue; consumers (subscribers) connect to it and do the work each message describes. This decoupling is key for a scalable, reliable app: the producer can post when the consumer is busy or down, and the consumer can read even when the producer is unavailable. Book example: a photo app that crops, sharpens and blurs photos, which takes time. Web servers publish photo-processing jobs to the queue; photo-processing workers pick them up and run them asynchronously. Producers and consumers scale independently: when the queue grows, add workers; when it's mostly empty, remove some.",
+          "interaction": "Simulation. Left: 2 web servers emitting photo-job tokens at a rate set by a slider (uploads/sec). Middle: a queue shown as a growing bar with a count. Right: worker boxes, each finishing one job per tick (each job takes 3 ticks). Controls: '+ worker', '− worker'. Phase 1 'Inline mode' (queue disabled): web servers do the filtering themselves and upload requests time out at higher rates (red). Phase 2 'Queue on': uploads return instantly ('job accepted'). The learner must keep the queue under 50 for 60 seconds while the upload rate ramps up and down, adding and removing workers. Phase 3: predict-then-watch 'All workers crash for 10 seconds. Do uploads fail?' (yes / no, they pile up in the queue) → no; the queue grows, then drains when workers return.",
+          "check": "Phase 2 target met and phase 3 prediction entered. Q.quiz, 2 questions: the two roles around a queue (producer/publisher, consumer/subscriber); what you do when the queue keeps growing (add consumers/workers)."
+        },
+        {
+          "title": "Gauges on the dashboard",
+          "sub": "Logging, metrics, automation",
+          "teaches": "Once a site serves a big business, tooling is essential. Logging: watch error logs to find problems; either per server, or (more practical) aggregated into a central service for easy search and viewing. Metrics, at three levels: host level (CPU, memory, disk I/O), aggregated level (e.g. performance of the whole database tier or cache tier), and key business metrics (daily active users, retention, revenue). Automation: when the system gets big and complex, use or build automation tools; continuous integration checks each code check-in automatically to catch problems early, and automating build, test and deploy boosts developer productivity. The design now includes a message queue for loose coupling and failure resilience, plus logging, monitoring, metrics and automation tools.",
+          "interaction": "Sort-into-bins. 10 cards drop into four bins: Host metric / Aggregated metric / Business metric / Not a metric (logging or automation). Cards: 'CPU usage on web-7' (host), 'Disk I/O on db-2' (host), 'Memory on cache-1' (host), 'p99 latency of the whole DB tier' (aggregated), 'Cache tier hit rate' (aggregated), 'Daily active users' (business), 'Week-4 retention' (business), 'Revenue per day' (business), 'Search all servers' error logs in one place' (not a metric: centralized logging), 'Every commit runs the test suite automatically' (not a metric: CI/automation). Then a mini-scenario: '40 servers, one throws 500s, which tool finds it fastest?' with options SSH into each / centralized logs / bigger server → centralized logs.",
+          "check": "All cards placed (retry allowed) and the scenario answered."
+        },
+        {
+          "title": "Bigger box or more boxes?",
+          "sub": "Scaling the database: up vs sharding",
+          "teaches": "Vertical DB scaling means more CPU, RAM, disk. The book notes Amazon RDS offered servers with 24 TB of RAM, and that Stack Overflow in 2013 served 10M+ monthly unique visitors with just one master database. Drawbacks: hardware has limits, so a huge user base outgrows even the biggest server; greater risk of a single point of failure; and high cost, since powerful servers are much more expensive. Horizontal DB scaling, called sharding: split a large DB into smaller, easier-to-manage parts called shards. All shards share the same schema, but each holds different data (no overlap). Book example: users spread across 4 shards with user_id % 4 picking the shard. The sharding key (partition key) is the column or columns that decide where data goes; it lets you route each query to the right DB. Choose one that spreads data evenly.",
+          "interaction": "Calculate-and-route. Four shard boxes labelled 0–3. Five user IDs appear one at a time (e.g. 17, 42, 1000, 7, 2023); the learner types or taps the shard number (17 % 4 = 1, 42 % 4 = 2, 1000 % 4 = 0, 7 % 4 = 3, 2023 % 4 = 3). Each correct answer animates the user row sliding into its shard. Then a 'pick the key' panel: three candidate sharding keys for a users table, each with a live 1,000-user distribution bar chart across 4 shards: user_id (even), country (one shard holds ~45% because most users are in one country), signup month (uneven, plus all new writes hit the newest shard). The learner picks the key that spreads load evenly → user_id.",
+          "check": "All 5 routings correct and user_id chosen. Q.quiz, 2 questions: name two drawbacks of scaling the DB up (hardware limits, SPOF risk, cost); what all shards share (the same schema) and what differs (the data)."
+        },
+        {
+          "title": "Shard trouble",
+          "sub": "Resharding, celebrities, joins",
+          "teaches": "Sharding headaches: (1) Resharding: needed when a shard can't hold more data because of fast growth, or when some shards fill faster than others (shard exhaustion) due to uneven data spread. Resharding means changing the shard function and moving data. Consistent hashing (Chapter 5; World 6 quest 6.2 here) is a common fix. (2) Celebrity / hotspot key problem: heavy traffic to one shard overloads it. If Katy Perry, Justin Bieber and Lady Gaga all land on the same shard of a social app, that shard melts under reads. Fix: give each celebrity its own shard, and those shards may need splitting further. (3) Join and de-normalization: once data lives on many servers, joins across shards are hard. A common workaround is to de-normalize so a query can be answered from one table. Final step in the book: shard the DB tier for growing traffic, and move some non-relational functionality to a NoSQL store to lighten the DB load.",
+          "interaction": "Three-panel sim on the same 4 shards. (a) Resharding: a 'Add shard 5' button with a predict-first prompt: 'With user_id % N, going from 4 to 5 shards, about what share of users must move?' (20% / 50% / 80%) → about 80% (a key stays only when id % 4 equals id % 5). Animation shows rows flying between shards and a counter. A toggle 'Use consistent hashing' re-runs it: about 20% move. (b) Celebrity: the learner marks three users as celebrities; the QPS bar of their shard spikes 20× and turns red. The fix button 'Give each celebrity its own shard' redistributes load. (c) Joins: a query card 'Show posts with author names' needs users (shard 1) and posts (shard 3); the learner chooses between 'cross-shard join in the app', 'de-normalize author_name into posts', 'put everything back on one DB'. De-normalize is accepted, with a note that it costs extra storage and updates when a name changes.",
+          "check": "All three panels completed. Q.quiz, 3 questions: what shard exhaustion means (some shards fill faster due to uneven distribution); book's fix for celebrities (a dedicated shard each, possibly split further); the cost of de-normalizing (duplicated data to keep in sync)."
+        },
+        {
+          "title": "Boss: The Hydra of Hotspots",
+          "sub": "Queue it, watch it, or split it",
+          "teaches": "Picking the right tool among queues, observability and sharding.",
+          "interaction": "Q.boss with choices [{k:'queue', label:'Put a queue in between', sub:'decouple and buffer'}, {k:'observe', label:'Logs, metrics, automation', sub:'see and automate'}, {k:'shard', label:'Shard by a key', sub:'split the data'}, {k:'fixshard', label:'Fix the shard layout', sub:'reshard, isolate, de-normalize'}]. Scenarios (8): (1) photo filters take 8 s and uploads time out → queue. (2) uploads triple for one hour on a holiday and you don't want to triple servers permanently → queue (buffer the burst, scale workers). (3) one of 40 servers throws 500s and on-call is SSH-ing into each → observe (centralized logs). (4) the CEO asks whether last week's release hurt retention → observe (business metrics). (5) the single master DB is on the largest instance and at 95% disk → shard. (6) one celebrity's shard runs at 20× the others' QPS → fixshard (dedicated shard). (7) the feed query joins users and posts that now live on different shards → fixshard (de-normalize). (8) shard 2 fills three times faster because the key is signup country → fixshard (reshard on a better key / consistent hashing).",
+          "check": "Boss cleared."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "The interview answer, in your words",
+          "teaches": "Explaining queues and sharding with their trade-offs.",
+          "interaction": "Q.drill. Prompt: 'Uploads are timing out because image processing runs inline, and the primary DB is running out of room. Talk me through it.' Model answer (paraphrased): 'For uploads, I'd make the web servers producers: they put a processing job on a message queue and return right away, and a pool of workers consumes jobs. That decouples the two sides, so if workers are down jobs wait in the queue, and I scale workers on queue depth. I'd add centralized logging, metrics at host, tier and business level, and CI/CD automation, so we can see what's happening. For the DB, scaling up buys time, but it hits a hardware ceiling, stays a single point of failure and gets expensive, so I'd shard: same schema on each shard, rows routed by a key like user_id that spreads evenly. I'd plan for resharding with consistent hashing, give hot celebrity keys their own shards, and de-normalize to avoid cross-shard joins. Non-relational data can move to a NoSQL store.' Checks: ['Queue: producer/consumer, decoupling, scale workers on depth', 'Observability: logs, 3 metric levels, automation', 'DB scale-up limits', 'Sharding: same schema, sharding key, even spread', 'Three challenges: resharding, hotspots, joins'].",
+          "check": "Self-grade at least 4 of 5 checks."
+        }
+      ],
+      "caveats": [
+        "Real brokers like Kafka, RabbitMQ (durable queues) and SQS persist messages to disk or replicated storage; 'stored in memory' is a simplification. Most give at-least-once delivery, so consumers should be idempotent (processing a job twice is harmless).",
+        "user_id % N is the book's teaching example; production systems prefer consistent hashing, range-based or directory-based sharding so adding a shard doesn't move most of the data.",
+        "Sharding is a last resort for many teams: first try read replicas, caching, archiving cold data and a bigger box, because sharding makes transactions, joins and schema changes much harder.",
+        "The 24 TB RDS and 2013 Stack Overflow figures are the book's dated examples; check current instance sizes before quoting numbers.",
+        "Celebrity-per-shard handles reads but not every hotspot; write hotspots may also need key salting or splitting a key across shards."
+      ],
+      "sources": [
+        { "label": "ByteByteGo: Scale From Zero To Millions Of Users", "url": "https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" },
+        { "label": "Nick Craver: What it takes to run Stack Overflow (2013)", "url": "https://nickcraver.com/blog/2013/11/22/what-it-takes-to-run-stack-overflow/" },
+        { "label": "Amazon EC2 High Memory instances", "url": "https://aws.amazon.com/ec2/instance-types/high-memory/" },
+        { "label": "Wikipedia: Shard (database architecture)", "url": "https://en.wikipedia.org/wiki/Shard_(database_architecture)" },
+        { "label": "Wikipedia: Message queue", "url": "https://en.wikipedia.org/wiki/Message_queue" }
+      ]
+    },
+    {
+      "n": "BOSS",
+      "slug": "scale-boss-millions-live",
+      "t": "Zero to Millions, Live",
+      "d": "Mock interview: scale a startup's app from one server to millions of users as the traffic climbs",
+      "boss": true,
+      "badge": "🚀 Badge: Million-User Architect",
+      "winTitle": "Millions served. The interviewer is impressed.",
+      "goal": "Your win today: given 'scale this app', you can scope it, sketch the starting point, add each component at the right moment with the reason and its failure follow-up, and close with the chapter's eight scaling rules from memory.",
+      "bookSections": "Whole chapter, framed with the 4-step interview framework: single server → DB split → LB → replication → cache → CDN → stateless web tier → data centers → message queue → logging/metrics/automation → sharding; 'Millions of users and beyond' summary",
+      "stages": [
+        {
+          "title": "Scope it",
+          "sub": "Step 1 · understand the problem (3–10 min)",
+          "teaches": "The prompt isn't a 'design X' system, so scoping is about workload shape: how many users now and the target; read:write ratio (drives replicas and caching); how much is static media (drives CDN); where users live (drives multi-DC); slow background work (drives queues); consistency needs (how stale may reads be); availability expectations. The scenario used throughout: a photo-sharing app with web and mobile clients, now on one server, expecting to grow from a few thousand to tens of millions of users, reads far outnumber writes, users worldwide, and uploads get filters applied (the book's photo-processing example).",
+          "interaction": "Interview chat UI like 0008. The interviewer says: 'You're our first infrastructure hire. Our photo app runs on one server. We want to reach millions of users. How would you scale it?' The learner has 5 question tokens and a deck of 10 questions. Strong: 'How many users now, and what's the target?', 'What's the read:write ratio?', 'How much traffic is images and video?', 'Where are users located?', 'Is any request doing slow work, like image processing?', 'How fresh must reads be?'. Weak/premature: 'Should we use Kubernetes?', 'Which language is the backend in?', 'Can we use microservices?', 'What's the logo colour?'. Each strong pick gets an answer that pins a fact to a 'Requirements' board (e.g. '~10:1 reads to writes', '60% of bytes are images', 'users on 3 continents', 'filters take a few seconds'). Weak picks spend a token with a coach note.",
+          "check": "At least 4 strong facts on the board. Scorecard records wasted tokens."
+        },
+        {
+          "title": "Sketch the start",
+          "sub": "Step 2 · high-level design and buy-in",
+          "teaches": "Start from where the company is and say it out loud: DNS → one server running web app + DB. First obvious move: split web and data tiers; default to a relational DB, with NoSQL for specific needs. Then get buy-in before adding complexity: 'I'll grow this step by step as traffic grows; stop me if you want to go deep somewhere.'",
+          "interaction": "Whiteboard builder. Palette: Client (web), Client (mobile), DNS, Web server, Database, Load balancer, Cache, CDN, Message queue, Shards. The interviewer asks for 'today's system, plus your first change'. Accepted answer: clients → DNS → web server → separate database. If the learner drags in Cache/CDN/Shards now, the interviewer says 'Not yet; what problem would that solve today?' and the box greys out with a note (not a penalty, a scorecard mark for premature complexity). Then a buy-in moment: pick the best line to say from 3 options (the step-by-step framing above is best; 'Here's the final architecture with 14 boxes' and 'Let's start with sharding' are weaker).",
+          "check": "Starting diagram correct and buy-in line chosen."
+        },
+        {
+          "title": "The traffic ramp",
+          "sub": "Step 3 · deep dive as the users climb",
+          "teaches": "The chapter's order is an order of pain: each component fixes the symptom that appears next. 1K–10K users: single server overloaded / SPOF → LB + multiple web servers. DB is now the SPOF and reads dominate → master/slave replication. Same hot data fetched repeatedly → cache tier. Faraway users load images slowly → CDN. Users logged out after adding servers / autoscaling blocked → stateless web tier with a shared session store. International growth and DC outage risk → multiple data centers with GeoDNS. Slow work inside requests → message queue + workers. Can't see what's failing → logging, metrics, automation. Primary DB out of room/writes → sharding (+ move some data to NoSQL).",
+          "interaction": "The core sim. A user counter climbs through milestones (1K → 10K → 100K → 500K → 1M → 3M → 5M → 10M → 20M, labels illustrative). At each milestone the dashboard shows a symptom alarm, and the learner picks a fix from a toolbox of 10 components; the diagram grows with each correct pick. Milestones and symptoms in order: (1) web box at 98% CPU, and a reboot took the site down → Load balancer + 2 web servers. (2) DB at 90% CPU, 10:1 reads, and it's the last SPOF → Replication. (3) the same profile/feed queries thousands of times per second → Cache. (4) users in Asia wait 2 s for images → CDN. (5) after enabling autoscaling, users are randomly logged out → Stateless + session store. (6) a regional outage took everything down for an hour; EU users are slow → Second data center + GeoDNS. (7) uploads time out while filters run → Message queue + workers. (8) a 500 storm and nobody knows which server → Logging/metrics/automation. (9) primary DB at 95% disk on the biggest instance → Sharding. Wrong picks get the interviewer's 'why not' (e.g. sharding at 10K users: big complexity, no payoff yet). After each correct pick, the interviewer throws one follow-up as a 3-option mini-question: after LB → 'what if the LB dies?' (redundant pair / managed LB); after replication → 'master dies?' (promote a replica; watch for missing writes); after cache → 'cache node dies?' (multiple nodes, overprovision; DB must survive the miss spike); after CDN → 'shipped a new logo, users see the old one?' (version or invalidate); after stateless → 'where do sessions live?' (shared NoSQL/Redis store); after multi-DC → 'failover, user's data missing?' (cross-DC replication); after queue → 'workers crash?' (jobs wait, scale workers); after sharding → 'one celebrity's shard is hot?' (dedicated shard).",
+          "check": "All 9 milestones resolved with their follow-ups. The scorecard records wrong picks and premature components."
+        },
+        {
+          "title": "Boss: the curveball barrage",
+          "sub": "Step 3 · 'what happens when…?'",
+          "teaches": "Failure and growth follow-ups across the whole final design.",
+          "interaction": "Q.boss with choices [{k:'redundancy', label:'Add redundancy / failover', sub:'no single point of failure'}, {k:'cache', label:'Cache or CDN', sub:'serve it closer and faster'}, {k:'async', label:'Decouple with a queue', sub:'do it later'}, {k:'data', label:'Rework the data tier', sub:'replicas, shards, de-normalize'}]. Scenarios (8): (1) the one load balancer's machine fails → redundancy. (2) the only Memcached box reboots and the DB is flooded with misses → redundancy (several cache nodes, overprovision memory). (3) one viral photo's page gets 50,000 hits a second → cache. (4) thumbnails load slowly in Brazil → cache (CDN). (5) sending a welcome email makes signup take 4 seconds → async. (6) the primary database dies → redundancy (promote a replica). (7) the writes outgrow the biggest primary → data (shard). (8) the posts table now lives on 8 shards and the feed needs author names → data (de-normalize).",
+          "check": "Boss cleared."
+        },
+        {
+          "title": "Wrap it up",
+          "sub": "Step 4 · the eight rules (last 3–5 min)",
+          "teaches": "The book's closing checklist for scaling to millions and beyond (paraphrased): keep the web tier stateless; build redundancy at every tier; cache data as much as you can; support multiple data centers; host static assets on a CDN; scale the data tier by sharding; split tiers into separate services; monitor the system and use automation tools. Past millions, you keep optimizing and decouple further into smaller services.",
+          "interaction": "Pick-8 from 12 rule cards against a soft 45-second timer (no penalty after expiry, just a scorecard note). Strong: the 8 rules above. Decoys: 'Always start with microservices', 'Shard on day one', 'Put every query result in the CDN', 'Keep sessions on the web server for speed'. After picking, the learner drags each of the 8 rules onto the component it explains in the final diagram (e.g. 'stateless' → web tier + session store; 'sharding' → DB shards; 'redundancy' → LB pair, replicas, multi-DC).",
+          "check": "At least 7 of 8 rules picked and all placed on the diagram."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "The 60-second version + your scorecard",
+          "teaches": "The whole chapter as one story of growing pains.",
+          "interaction": "Q.drill. Prompt: 'You have 60 seconds: how do you take this app from one server to millions of users?' Model answer (paraphrased): 'I grow it in response to pain. Split the database off the web server first. Then scale out with a load balancer in front of stateless web servers, keeping sessions in a shared store so we can autoscale. Add a primary with read replicas, since reads dominate and the DB shouldn't be a single point of failure; if the primary dies we promote a replica. Put a cache in front of the DB for hot reads, and a CDN for images and other static files. Go multi-region with GeoDNS and cross-region replication once users are global, and move slow work like photo filters onto a message queue with workers. Add centralized logs, metrics and deployment automation throughout. When the primary runs out of room, shard by user ID, watching for hot keys, resharding and cross-shard joins. Rule of thumb: redundancy at every tier, and no complexity before the traffic needs it.' Checks: ['DB split → LB + stateless web tier + session store', 'Replication with failover', 'Cache + CDN', 'Multi-DC with GeoDNS, message queue', 'Observability/automation + sharding with its challenges', 'Grows in step with traffic (no premature complexity)']. After the drill, show the scorecard (tokens wasted, premature components, wrong ramp picks, boss hearts), stored under a separate key like 0008 does.",
+          "check": "Self-grade at least 5 of 6 checks."
+        }
+      ],
+      "caveats": [
+        "The chapter isn't a 'design X' prompt, so real interviews use it as background: you'll rarely be asked to 'scale from zero', but every later design reuses these blocks. This boss mirrors an interviewer who keeps saying 'now traffic is 10× bigger'.",
+        "User-count milestones in the ramp are illustrative. Real tipping points depend on the workload; plenty of apps serve millions of users on a handful of large servers.",
+        "'Split tiers into individual services' is the book's nod to microservices; that's an org and operations trade-off, not a free scaling win.",
+        "Order is flexible: many teams add a CDN and managed load balancer on day one because they're cheap, and put off multi-region for a long time because it's costly and complex."
+      ],
+      "sources": [
+        { "label": "ByteByteGo: Scale From Zero To Millions Of Users", "url": "https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" },
+        { "label": "ByteByteGo: A Framework For System Design Interviews", "url": "https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" },
+        { "label": "Netflix Tech Blog: Active-Active for Multi-Regional Resiliency", "url": "https://netflixtechblog.com/active-active-for-multi-regional-resiliency-c47719f6685b" },
+        { "label": "Nishtala et al., Scaling Memcache at Facebook (NSDI 2013)", "url": "https://www.usenix.org/conference/nsdi13/technical-sessions/presentation/nishtala" },
+        { "label": "Nick Craver: What it takes to run Stack Overflow (2013)", "url": "https://nickcraver.com/blog/2013/11/22/what-it-takes-to-run-stack-overflow/" }
+      ]
+    }
+  ],
+  "cheatsheetOutline": "Title: World 1, Scale From Zero to Millions of Users (one page). Top banner: the evolution strip as a single left-to-right timeline of icons: one server → DB split → LB → replicas → cache → CDN → stateless + session store → 2 data centers → queue + workers → logs/metrics/automation → shards, each tagged with the symptom that triggers it. §1.1 One box to LB: request path (domain → DNS → IP → HTTP → HTML/JSON); web vs data tier; SQL default vs NoSQL when (super-low latency, unstructured/no relations, only serialize/deserialize, massive data) + 4 NoSQL families with examples; scale up (hardware ceiling, no failover) vs scale out; LB public IP vs private IPs, failover, add servers. §1.2 Replication: master = writes, slaves = reads, more slaves than masters; three wins (performance, reliability, availability); failure table (one slave dies → reads to master temporarily; one of many → other slaves; master dies → promote + new slave; caveat: lag, missing writes, recovery scripts, read-your-writes); the 5-step request flow. §1.3 Cache + CDN: read-through loop diagram; five considerations (when to use, expiry, consistency, failures/SPOF + overprovision, eviction LRU/LFU/FIFO); CDN 6-step fetch flow with TTL; four CDN considerations (cost, expiry, fallback, invalidation via API or ?v=2) + caveat about content-hashed filenames. §1.4 Stateless + multi-DC: stateful vs stateless picture, sticky sessions' costs, shared NoSQL session store, autoscaling; GeoDNS split x% / 100−x%, full failover to the healthy DC; three challenges (traffic redirection, data sync, test & deploy). §1.5 Queues, gauges, shards: producer → queue → consumer, photo-processing example, scale workers on queue depth; metrics levels (host / aggregated / business) + logging + CI automation; DB scale-up limits (book's 24 TB RDS, Stack Overflow 2013 one master) vs sharding (same schema, different data, user_id % 4, choose an even key); challenges (resharding/shard exhaustion → consistent hashing, celebrity hotspot → own shard, joins → de-normalize). Final design diagram: Users (web + mobile) → GeoDNS → per-DC LB → stateless web servers (autoscaled) → cache tier + shared NoSQL session store → sharded primary/replica DBs, with CDN serving static assets, a message queue feeding workers, cross-DC replication, and a logging/metrics/automation band underneath. Footer: the eight 'millions and beyond' rules, plus 'what happens when…?' quick answers (LB dies, master dies, cache dies, DC outage, workers crash, celebrity shard)."
+}

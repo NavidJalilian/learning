@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Anatomy of a Snowflake</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: field colours, the 64-cell bit bar, layout puzzle, slow clock, decoder, number cards, epoch timeline */
+:root { --f-sign: #7d7a8f; --f-ts: #5a48f0; --f-dc: #0b8783; --f-m: #2f74c8; --f-seq: #b06a00; --f-pad: #aaa6b8; --on-f: #ffffff; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --f-sign: #9a97b2; --f-ts: #8f82ff; --f-dc: #31d3c8; --f-m: #5aa9ff; --f-seq: #ffb547; --f-pad: #55536f; --on-f: #0e0f1d; }
+}
+:root[data-theme="dark"] { --f-sign: #9a97b2; --f-ts: #8f82ff; --f-dc: #31d3c8; --f-m: #5aa9ff; --f-seq: #ffb547; --f-pad: #55536f; --on-f: #0e0f1d; }
+
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.bignum { font-family: var(--mono); font-weight: 700; }
+.bignum.bad { color: var(--bad); }
+.bignum.good { color: var(--good); }
+
+/* the 64-cell bit bar */
+.bitwrap { container-type: inline-size; padding: 14px 14px 10px; }
+.bits { display: grid; grid-template-columns: repeat(64, minmax(0, 1fr)); gap: 1px; }
+.bit { height: 30px; min-width: 0; border-radius: 2px; --f: var(--line); background: color-mix(in srgb, var(--f) 22%, var(--panel)); display: grid; place-items: center; font: 600 10px var(--mono); color: var(--muted); transition: background .35s, transform .5s, opacity .5s; }
+.bit.one { background: var(--f); color: var(--on-f); }
+.bit.none { background: var(--bg-2); }
+.bit:nth-child(8n+1):not(:first-child) { margin-left: 2px; }
+.bit.flip { animation: flip .6s; }
+.bit.drop { opacity: 0; transform: translateY(18px) rotate(25deg); }
+@keyframes flip { 40% { transform: scaleY(1.45); } }
+.ruler .sh { display: none; }
+@container (max-width: 600px) { .bit i { display: none; } .bit { height: 24px; } .ruler .lg { display: none; } .ruler .sh { display: inline; } }
+.ruler { display: grid; grid-template-columns: repeat(64, minmax(0, 1fr)); gap: 1px; margin-top: 5px; }
+.ruler .r { min-width: 0; text-align: center; font: 700 11px var(--font); line-height: 1.15; overflow: hidden; white-space: nowrap; text-overflow: clip; border-top: 3px solid currentColor; padding-top: 3px; }
+.ruler .r.tiny { overflow: visible; }
+.ruler .r.empty { color: var(--line); }
+.ruler small { display: block; font: 600 10px var(--mono); opacity: .85; }
+.bitwrap.mini { padding: 6px 0 0; }
+.bitwrap.mini .bit { height: 14px; }
+.bitwrap.mini .bit i, .bitwrap.mini .ruler { display: none; }
+.binstr { font-family: var(--mono); font-size: 12.5px; word-break: break-all; line-height: 1.5; }
+.binstr span + span { margin-left: .4em; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+
+/* stage 1: layout puzzle */
+.parts { margin: 12px 0; padding-left: 20px; }
+.parts li { margin: 6px 0; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-top: 8px; }
+.tile { text-align: left; border: 2px solid var(--line); border-left: 8px solid var(--f); background: var(--panel); border-radius: 12px; padding: 9px 12px; min-height: 52px; transition: border-color .2s, transform .1s, opacity .2s; }
+.tile:hover:not([disabled]) { border-color: var(--accent); border-left-color: var(--f); transform: translateY(-1px); }
+.tile b { display: block; font-size: 15px; }
+.tile span { font-size: 12.5px; color: var(--muted); }
+.tile[disabled] { opacity: .35; cursor: default; }
+.slots { display: grid; gap: 6px; margin-top: 12px; }
+.slot { display: grid; grid-template-columns: 28px 1fr auto 44px; gap: 8px; align-items: center; border: 1px solid var(--line); border-left: 6px solid var(--f); border-radius: 12px; padding: 6px 8px 6px 10px; background: var(--bg); animation: rise .3s; }
+.slot .pos { font: 700 13px var(--mono); color: var(--muted); }
+.slot b { font-size: 15px; min-width: 0; }
+.slot .x { width: 44px; height: 40px; border: 1px solid var(--line); background: var(--panel); border-radius: 10px; }
+.slot .x[disabled] { opacity: .3; cursor: default; }
+select, .numin { font: 600 15px var(--mono); padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); min-height: 42px; }
+.numin { width: 100%; max-width: 280px; min-width: 0; }
+.numin.sm { max-width: 110px; }
+.numin.ok { border-color: var(--good); background: var(--good-soft); }
+.numin.no { border-color: var(--bad); background: var(--bad-soft); }
+.empty { margin: 4px 0; }
+.status { font-size: 14px; color: var(--muted); }
+.maptbl { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 8px; }
+.maptbl th, .maptbl td { text-align: left; padding: 6px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.maptbl th { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.maptbl td:first-child { font-weight: 700; white-space: nowrap; }
+
+/* stage 2: slow clock + mint */
+.clockrow { display: flex; gap: 10px 14px; align-items: center; flex-wrap: wrap; padding: 12px 14px 0; font-size: 14px; }
+.clockrow .clk { font-family: var(--mono); font-weight: 700; color: var(--f-ts); }
+.tickbar { flex: 1; min-width: 80px; height: 6px; border-radius: 99px; background: var(--bg-2); overflow: hidden; border: 1px solid var(--line); }
+.tickbar i { display: block; height: 100%; width: 0; background: var(--f-ts); }
+.tickbar.go i { animation: fillup 2s linear forwards; }
+@keyframes fillup { to { width: 100%; } }
+.formula { font-family: var(--mono); font-size: 13px; padding: 4px 14px 12px; word-break: break-all; color: var(--muted); }
+.formula b { color: var(--ink); }
+.cts { color: var(--f-ts) !important; } .cdc { color: var(--f-dc) !important; } .cm { color: var(--f-m) !important; } .cseq { color: var(--f-seq) !important; }
+.sim-bar .btn { padding: 8px 12px; font-size: 14px; min-height: 42px; }
+.sim-bar label { display: inline-flex; gap: 6px; align-items: center; font-weight: 600; }
+#log2 { max-height: 190px; }
+#log2 .binstr { font-size: 11px; display: block; }
+.duel { display: none; gap: 8px; margin-top: 12px; }
+.duel.on { display: grid; animation: rise .35s; }
+.dcard { border: 2px solid var(--line); border-radius: 14px; padding: 10px 12px; background: var(--bg); transition: border-color .3s, background .3s; }
+.dcard.win { border-color: var(--good); background: var(--good-soft); }
+.dcard .dh { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; font-weight: 700; flex-wrap: wrap; }
+.dcard .did { font-family: var(--mono); font-size: 14px; word-break: break-all; min-height: 20px; }
+.verdict { font-size: 14px; font-weight: 600; min-height: 22px; text-align: center; }
+
+/* stage 3: decode steps */
+.bigid { font-family: var(--mono); font-weight: 700; font-size: 1.05em; word-break: break-all; }
+.dstep { border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-top: 12px; background: var(--bg); animation: rise .35s; }
+.dstep[hidden] { display: none; }
+.dstep .step { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.dstep h3 { font-size: 17px; margin: 4px 0 10px; }
+.dstep.solved { border-color: var(--good); }
+.dstep.solved .step { color: var(--good); }
+.inrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.inrow .mono { font-weight: 700; }
+.fieldread { display: grid; gap: 8px; }
+.fieldread label { display: grid; grid-template-columns: minmax(0, 1fr) 110px; gap: 8px; align-items: center; font-size: 14px; }
+.fieldread code { font-size: 14px; letter-spacing: .08em; }
+.result { font-family: var(--mono); font-size: 14px; margin-top: 10px; word-break: break-all; }
+.decoded { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; font-size: 14px; margin-top: 10px; }
+.decoded dt { color: var(--muted); font-weight: 600; }
+.decoded dd { margin: 0; font-family: var(--mono); word-break: break-all; }
+.decoded dd.note { font-family: var(--font); word-break: normal; overflow-wrap: anywhere; }
+.toyerr { color: var(--bad); font-size: 14px; min-height: 20px; margin-top: 6px; }
+
+/* stage 4: number cards + epoch timeline */
+.ncard { border: 2px solid var(--line); border-radius: 16px; padding: 16px; background: var(--bg); animation: rise .35s; }
+.ncard .step { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.ncard h3 { font-size: 17px; margin: 4px 0 12px; font-weight: 600; }
+.work { display: none; margin-top: 10px; font-size: 14px; padding: 10px 12px; border-radius: 10px; background: var(--bg-2); }
+.work.show { display: block; animation: rise .3s; }
+.pips { display: flex; gap: 5px; margin-bottom: 10px; }
+.pips i { flex: 1; height: 5px; border-radius: 99px; background: var(--line); }
+.pips i.done { background: var(--good); }
+.pips i.cur { background: var(--accent); }
+.slider { padding: 14px 14px 4px; display: grid; gap: 4px; }
+.slider label { display: flex; justify-content: space-between; font-weight: 600; font-size: 14px; gap: 8px; flex-wrap: wrap; }
+.slider input { width: 100%; accent-color: var(--accent); height: 32px; }
+.tl { position: relative; height: 74px; margin: 6px 14px 4px; }
+.tl .axis { position: absolute; left: 0; right: 0; top: 30px; height: 2px; background: var(--line); }
+.tl .life { position: absolute; top: 22px; height: 18px; border-radius: 6px; background: color-mix(in srgb, var(--f-ts) 30%, transparent); border: 2px solid var(--f-ts); transition: left .3s, width .3s; }
+.tl .today { position: absolute; top: 12px; height: 38px; width: 2px; background: var(--warn); }
+.tl .today span { position: absolute; top: -14px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 700; color: var(--warn); white-space: nowrap; }
+.tl .yr { position: absolute; top: 48px; transform: translateX(-50%); font: 600 11px var(--mono); color: var(--muted); }
+.tl .yr::before { content: ""; position: absolute; left: 50%; top: -14px; width: 1px; height: 8px; background: var(--muted); }
+.epochout { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 0 14px 14px; }
+@media (max-width: 560px) { .epochout { grid-template-columns: 1fr; } }
+.epochout div { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; font-size: 13px; color: var(--muted); }
+.epochout b { display: block; font-family: var(--mono); font-size: 15px; color: var(--ink); }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 7.3 · Design a Unique ID Generator</div>
+    <h1>Anatomy of a Snowflake</h1>
+    <p class="lede">UUIDs were too long and the ticket server was one box that could die. Twitter's answer fits everything into a single 64-bit number. Build its layout, mint IDs on a slowed-down clock, crack one open to read its birth date, and do the math behind "69 years".</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can draw <b>1 | 41 | 5 | 5 | 12</b> from memory, say what each section is for, decode an ID back to its timestamp, and justify "69 years" and "4,096 per millisecond" with arithmetic.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Divide the 64 bits</h2><div class="sub">Divide and conquer, one field at a time</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Recall the brief from Quest 7.1. IDs must be <b>unique</b>, <b>numbers only</b>, <b>fit in 64 bits</b>, <b>sorted by date</b>, and we need <b>over 10,000 new IDs a second</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems" target="_blank" rel="noopener">[1]</a></p>
+      <p>Twitter's <b>Snowflake</b> uses <b>divide and conquer</b>. Don't run one shared counter. Cut the 64 bits into sections, and give each section one job.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems" target="_blank" rel="noopener">[1]</a><a class="cite" href="https://blog.twitter.com/engineering/en_us/a/2010/announcing-snowflake.html" target="_blank" rel="noopener">[2]</a> Here are the five parts and what each one must be able to hold:</p>
+      <ul class="parts">
+        <li><b style="color:var(--f-sign)">Sign bit</b>: always 0. The book says it's kept for future use. In a <i>signed</i> 64-bit integer (like Java's <code>long</code>), the top bit marks negative numbers, so a 0 keeps every ID positive.</li>
+        <li><b style="color:var(--f-ts)">Timestamp</b>: milliseconds since a start moment you pick, called the <b>epoch</b>. Gets every bit the other parts leave over.</li>
+        <li><b style="color:var(--f-dc)">Datacenter ID</b>: which datacenter made the ID. Up to <b>32</b> datacenters.</li>
+        <li><b style="color:var(--f-m)">Machine ID</b>: which server inside that datacenter. Up to <b>32</b> per datacenter.</li>
+        <li><b style="color:var(--f-seq)">Sequence number</b>: counts IDs made on one machine in the same millisecond. Up to <b>4,096</b> of them. It resets to 0 every millisecond.</li>
+      </ul>
+      <p>Your job: tap the parts in order from <b>left to right</b>, then give each one a size. The leftmost bits are the <b>most significant</b>. They're worth the most, like the thousands digit in 4,321. Hint: <i>n</i> bits can count 2<sup><i>n</i></sup> different values.</p>
+
+      <div class="sim">
+        <div id="bb1"></div>
+        <div class="sim-bar"><span>Bits used: <span class="bignum" id="used1">0 / 64</span></span><span class="status" id="need1"></span></div>
+      </div>
+      <p class="small muted" style="margin:14px 0 0">Parts (tap to place, leftmost first):</p>
+      <div class="tiles" id="tiles1"></div>
+      <div class="slots" id="slots1"></div>
+      <div class="row" style="margin-top:12px"><button class="btn primary" id="check1" disabled>Check my layout</button><button class="btn" id="reset1">↻ Clear</button></div>
+      <div class="explain" id="hint1"></div>
+      <div class="callout tip" id="map1" style="display:none"><b>One section per requirement.</b>
+        <table class="maptbl">
+          <thead><tr><th>Section</th><th>Bits</th><th>What it buys you</th></tr></thead>
+          <tbody>
+            <tr><td style="color:var(--f-sign)">Sign</td><td>1</td><td>Always 0, so the ID stays positive. Reserved for later.</td></tr>
+            <tr><td style="color:var(--f-ts)">Timestamp</td><td>41</td><td><b>Sorted by date.</b> It sits in the top bits, so later means bigger.</td></tr>
+            <tr><td style="color:var(--f-dc)">DC</td><td>5</td><td rowspan="2"><b>Unique with no coordination.</b> No two generators share these 10 bits, so their outputs can never collide.</td></tr>
+            <tr><td style="color:var(--f-m)">Machine</td><td>5</td></tr>
+            <tr><td style="color:var(--f-seq)">Sequence</td><td>12</td><td><b>Throughput.</b> Many IDs per millisecond on one machine.</td></tr>
+            <tr><td>Total</td><td>64</td><td><b>Fits in 64 bits</b>, and it's one plain integer, so it's numeric.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Mint an ID</h2><div class="sub">Watch the bits fill in</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Making an ID means gluing four numbers together. Two tools do it. <code>&lt;&lt;</code> (<b>shift left</b>) slides a number's bits to the left and fills the gap with zeros. <code>|</code> (<b>bitwise OR</b>) merges bit patterns that don't overlap.</p>
+      <p style="text-align:center"><code>id = (timestamp &lt;&lt; 22) | (datacenter &lt;&lt; 17) | (machine &lt;&lt; 12) | sequence</code></p>
+      <p>Why 22? That's how many bits sit to the right of the timestamp: 5 + 5 + 12. The datacenter and machine IDs are set when the server starts. After that they normally stay fixed. The book warns that changing them needs careful review, because a mistake here means duplicate IDs.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems" target="_blank" rel="noopener">[1]</a> Only the timestamp and the sequence change while it runs.</p>
+      <p>This clock is slowed down about 2,000 times: one "millisecond" every 2 seconds. Play with <b>Generate</b>, then answer the four predictions below.</p>
+
+      <div class="sim">
+        <div class="clockrow"><span>🕐 ms since Twitter's epoch: <span class="clk" id="clk2">…</span></span><span class="tickbar" id="tickbar2"><i></i></span></div>
+        <div id="bb2"></div>
+        <div class="formula" id="formula2"></div>
+        <div class="sim-bar">
+          <span class="row" style="gap:8px">
+            <label>DC <select id="dc2" aria-label="Datacenter ID"></select></label>
+            <label>Machine <select id="m2" aria-label="Machine ID"></select></label>
+          </span>
+          <span class="row" style="gap:8px">
+            <button class="btn" id="run2">⏸ Pause clock</button>
+            <button class="btn" id="tickBtn2">+1 ms</button>
+            <button class="btn primary" id="gen2">Generate</button>
+          </span>
+        </div>
+        <div class="simlog" id="log2"><div>Each line: an ID in decimal, then its 64 bits coloured by section.</div></div>
+      </div>
+      <div class="duel" id="duel2">
+        <div class="dcard" id="dA"><div class="dh"><span>Machine 30 · DC 3</span><span class="mono small" id="dAt"></span></div><div class="did" id="dAid">waiting…</div><div id="dAbar"></div></div>
+        <div class="dcard" id="dB"><div class="dh"><span>Machine 1 · DC 3</span><span class="mono small" id="dBt"></span></div><div class="did" id="dBid">waiting…</div><div id="dBbar"></div></div>
+        <div class="verdict" id="verdict2"></div>
+      </div>
+      <div class="challenge boxed" id="r2box"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Decode the past</h2><div class="sub">Figure 7-7: from bits back to a date</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Now run it backwards. <code>&gt;&gt;</code> (<b>shift right</b>) slides bits right, and the ones that fall off the end are gone. <code>&amp;</code> (<b>bitwise AND</b>) with a <b>mask</b> keeps only the bits you want. 31 is <code>11111</code> in binary (five 1s), and 4,095 is twelve 1s.</p>
+      <p style="text-align:center"><code>timestamp = id &gt;&gt; 22</code> · <code>datacenter = (id &gt;&gt; 17) &amp; 31</code> · <code>machine = (id &gt;&gt; 12) &amp; 31</code> · <code>sequence = id &amp; 4095</code></p>
+      <p>The timestamp counts from Twitter's default epoch, <b>1288834974657</b> ms (4 Nov 2010, 01:42:54 UTC).<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems" target="_blank" rel="noopener">[1]</a><a class="cite" href="https://github.com/twitter-archive/snowflake" target="_blank" rel="noopener">[3]</a> The book's Figure 7-7 decodes one example. We'll do the same with this ID:</p>
+      <p style="text-align:center"><span class="bigid">1248292468186091525</span></p>
+      <div class="sim">
+        <div id="bb3"></div>
+        <div class="sim-bar"><span class="binstr" id="bin3"></span></div>
+      </div>
+
+      <div class="dstep" id="st3a">
+        <div class="step">Step a · the timestamp</div>
+        <h3>Shift right by how many bits to drop everything after the timestamp?</h3>
+        <div class="inrow"><span class="mono">id &gt;&gt;</span><input class="numin sm" id="shift3" inputmode="numeric" aria-label="Shift amount"><button class="btn primary" id="shiftBtn3">Shift it</button></div>
+        <div id="bb3s" style="display:none"></div>
+        <div class="explain" id="ex3a"></div>
+      </div>
+      <div class="dstep" id="st3b" hidden>
+        <div class="step">Step b · back to real time</div>
+        <h3>Add the epoch: 297,616,116,568 + 1,288,834,974,657 = ?</h3>
+        <div class="inrow"><input class="numin" id="sum3" inputmode="numeric" aria-label="Sum in milliseconds" placeholder="milliseconds since 1970"><button class="btn primary" id="sumBtn3">Check</button></div>
+        <div class="explain" id="ex3b"></div>
+      </div>
+      <div class="dstep" id="st3c" hidden>
+        <div class="step">Step c · the date</div>
+        <h3>1,586,451,091,225 ms after 1 Jan 1970 (the Unix epoch) is…</h3>
+        <div class="opts" id="dates3"></div>
+        <div class="explain" id="ex3c"></div>
+      </div>
+      <div class="dstep" id="st3d" hidden>
+        <div class="step">Step d · who made it</div>
+        <h3>Read the coloured segments. Convert each from binary to decimal.</h3>
+        <p class="small muted" style="margin-top:0">Place values from the right: … 16, 8, 4, 2, 1.</p>
+        <div class="fieldread">
+          <label><span><b style="color:var(--f-dc)">Datacenter</b> <code>00011</code></span><input class="numin" id="dcIn3" inputmode="numeric" aria-label="Datacenter ID"></label>
+          <label><span><b style="color:var(--f-m)">Machine</b> <code>10001</code></span><input class="numin" id="mIn3" inputmode="numeric" aria-label="Machine ID"></label>
+          <label><span><b style="color:var(--f-seq)">Sequence</b> <code>000000000101</code></span><input class="numin" id="seqIn3" inputmode="numeric" aria-label="Sequence number"></label>
+        </div>
+        <div class="row" style="margin-top:10px"><button class="btn primary" id="fieldsBtn3">Check all three</button></div>
+        <div class="explain" id="ex3d"></div>
+      </div>
+
+      <div class="callout warn" id="leak3" style="display:none"><b>So anyone holding an ID knows when it was made.</b> That's handy for debugging. It also means Snowflake IDs leak information: the creation time, and a rough idea of how busy each machine is. Never use them as secret or unguessable tokens, like a password-reset link.</div>
+
+      <div class="challenge boxed">
+        <div class="step">Decoder toy</div>
+        <h3 style="margin-bottom:8px">Paste any 64-bit Snowflake ID</h3>
+        <div class="inrow"><input class="numin" id="toyIn" inputmode="numeric" aria-label="Snowflake ID to decode" placeholder="e.g. 1248292468186091525" style="max-width:340px"><button class="btn primary" id="toyBtn">Decode</button></div>
+        <div class="chips" id="toyChips">
+          <button class="chip" data-v="1248292468186091525">book-style example</button>
+          <button class="chip" data-v="now">mint one now</button>
+          <button class="chip" data-v="20">20 · jack's first tweet</button>
+          <button class="chip" data-v="9223372036854775807">2⁶³ − 1 (the biggest)</button>
+        </div>
+        <div class="toyerr" id="toyErr"></div>
+        <div id="toyBar"></div>
+        <dl class="decoded" id="toyOut"></dl>
+      </div>
+      <div class="callout"><b>Why this page uses BigInt.</b> A plain JavaScript number can only store whole numbers exactly up to 2<sup>53</sup> − 1 (about 9 quadrillion). Snowflake IDs go far past that. The decoder shows what a plain number would do to each ID: it quietly rounds the last digits. Twitter's API added string copies of every ID (<code>id_str</code>) for this reason. Discord's API sends its snowflakes as strings too.<a class="cite" href="https://discord.com/developers/docs/reference#snowflakes" target="_blank" rel="noopener">[5]</a></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>How long, how many?</h2><div class="sub">The 69-year math and the throughput math</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Any bit layout invites two follow-up questions. <b>How long until it runs out?</b> And <b>how fast can it go?</b> Work out five numbers. Rough answers count, and each card has a "show working" button.</p>
+      <div id="cards4"></div>
+      <ul class="checklist" id="s4goals">
+        <li data-g="cards"><span class="box">✓</span><span>Crack all five number cards</span></li>
+        <li data-g="epoch"><span class="box">✓</span><span>Slide the epoch to your launch year (2026) and see the new deadline</span></li>
+      </ul>
+      <p style="margin-top:18px">The book's advice: pick a <b>custom epoch close to today</b>. Every millisecond between the epoch and your launch is a millisecond of the 69 years you've already used up.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems" target="_blank" rel="noopener">[1]</a></p>
+      <div class="sim">
+        <div class="slider"><label for="ep4"><span>Epoch: <span class="bignum" id="epVal">2010</span></span><span class="muted small">41 bits of ms ≈ 69.7 years</span></label><input type="range" id="ep4" min="2010" max="2030" step="1" value="2010" aria-label="Epoch year"></div>
+        <div class="tl" id="tl4" aria-hidden="true"></div>
+        <div class="epochout">
+          <div>Epoch starts<b id="epStart">—</b></div>
+          <div>Timestamp overflows<b id="epEnd">—</b></div>
+          <div>Years left from today<b id="epLeft">—</b></div>
+        </div>
+      </div>
+      <div class="callout tip"><b>After the 69 years?</b> The book says you'd need a new epoch or some other way to migrate IDs. Also note: the sequence is 0 for most IDs. It only climbs when one machine makes more than one ID inside the same millisecond.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems" target="_blank" rel="noopener">[1]</a></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Bit Wraith</h2><div class="sub">Which section is responsible?</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Seven things you might notice about Snowflake IDs. For each one, name the section that causes it. If two IDs differ, the bits that differ tell you how they were made.</p>
+      <div id="boss5"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">Draw it, then defend it</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill6"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> What if one machine is asked for a 4,097th ID inside a millisecond? Or its clock jumps <i>backwards</i>? That's <a href="0704-snowflake-clocks-and-tuning.html">Quest 7.4, <i>When Clocks Lie</i></a>.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 7: Design a Unique ID Generator in Distributed Systems</a>. Read "Twitter snowflake approach" and the deep dive on the timestamp and sequence number, including Figure 7-7. Then read Twitter's short 2010 post, <a href="https://blog.twitter.com/engineering/en_us/a/2010/announcing-snowflake.html" target="_blank" rel="noopener">Announcing Snowflake</a>, and skim the original Scala code in <a href="https://github.com/twitter-archive/snowflake" target="_blank" rel="noopener">twitter-archive/snowflake</a>. The whole generator is a few dozen lines.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <p style="margin-top:0"><b>Not every "snowflake" is 1 | 41 | 5 | 5 | 12.</b> Twitter's own code matches the book: 5 bits of datacenter ID plus 5 bits of worker ID.<a class="cite" href="https://github.com/twitter-archive/snowflake" target="_blank" rel="noopener">[3]</a> Instagram used 41 bits of time, a 13-bit shard ID and a 10-bit sequence, all generated inside PostgreSQL.<a class="cite" href="https://instagram-engineering.com/sharding-ids-at-instagram-1cf5a71e5a5c" target="_blank" rel="noopener">[4]</a> Discord uses a 42-bit timestamp counted from the start of 2015.<a class="cite" href="https://discord.com/developers/docs/reference#snowflakes" target="_blank" rel="noopener">[5]</a> Sony's Sonyflake counts time in 10 ms units (39 bits, about 174 years), with an 8-bit sequence and a 16-bit machine ID.<a class="cite" href="https://github.com/sony/sonyflake" target="_blank" rel="noopener">[6]</a> Same idea, different bit budgets.</p>
+      <p><b>"Sorted by time" is only rough across machines.</b> You saw it in stage 2. Inside one millisecond, IDs order by datacenter and machine number, not real time. Clocks that drift apart between machines blur the order further. That's Quest 7.4.</p>
+      <p style="margin-bottom:0"><b>69 or 69.7?</b> The book divides by 365 days a year and rounds down to "about 69 years". The exact figure is 69.7 years, so Twitter's epoch runs out in July 2080.</p>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"why not put the machine ID first?"</i> or <i>"how does a server get its machine ID when it boots?"</i> Follow-up questions are part of the quest.
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 7 "Design a Unique ID Generator in Distributed Systems" (ByteByteGo).</li>
+        <li>Twitter Engineering, "Announcing Snowflake", 2010 (the book's reference [3]).</li>
+        <li>twitter-archive/snowflake on GitHub: the original Scala implementation (IdWorker).</li>
+        <li>Instagram Engineering, "Sharding &amp; IDs at Instagram".</li>
+        <li>Discord developer docs, "Snowflakes".</li>
+        <li>sony/sonyflake on GitHub.</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0703',
+  winTitle: '64 bits, fully understood',
+  badge: '❄️ Badge: Snowflake Smith',
+  cheatsheet: '../reference/ch07-unique-id-cheatsheet.html',
+});
+const { sleep, shuffle, esc } = Q;
+const wait = ms => sleep(Q.reduced ? Math.min(ms, 60) : ms);
+
+/* ================= shared helpers (all 64-bit math in BigInt: these IDs exceed 2^53) ================= */
+const TW_EPOCH = 1288834974657n;          // Twitter's default epoch: 2010-11-04 01:42:54.657 UTC
+const MAX63 = (1n << 63n) - 1n;
+const F = {
+  sign: { name: 'Sign bit', long: 'sign', short: 'S', c: 'var(--f-sign)' },
+  ts: { name: 'Timestamp', long: 'timestamp', short: 'TS', c: 'var(--f-ts)' },
+  dc: { name: 'Datacenter ID', long: 'datacenter', short: 'DC', c: 'var(--f-dc)' },
+  m: { name: 'Machine ID', long: 'machine', short: 'M', c: 'var(--f-m)' },
+  seq: { name: 'Sequence number', long: 'sequence', short: 'seq', c: 'var(--f-seq)' },
+  pad: { name: 'new zeros', long: 'new zeros', short: '0', c: 'var(--f-pad)' },
+};
+const LAYOUT = [['sign', 1], ['ts', 41], ['dc', 5], ['m', 5], ['seq', 12]];
+const make = ({ ts, dc, m, seq }) => (BigInt(ts) << 22n) | (BigInt(dc) << 17n) | (BigInt(m) << 12n) | BigInt(seq);
+const split = id => ({ ts: id >> 22n, dc: (id >> 17n) & 31n, m: (id >> 12n) & 31n, seq: id & 4095n });
+const commas = v => String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+const utc = ms => { const d = new Date(Number(ms)); return isNaN(d) ? '—' : d.toISOString().replace('T', ' ').replace('Z', ' UTC'); };
+const digits = s => String(s).trim().replace(/[,\s_]/g, '');
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function binHTML(id, segs = LAYOUT) {
+  let i = 63, out = '';
+  segs.forEach(([k, n]) => { let s = ''; for (let j = 0; j < n; j++, i--) s += (id >> BigInt(i)) & 1n; out += `<span style="color:${F[k].c}">${s}</span>`; });
+  return `<span class="binstr">${out}</span>`;
+}
+// A 64-cell bit bar (cell 0 = most significant bit) with a ruler of labelled sections underneath.
+function bitbar(mount, { mini = false } = {}) {
+  mount.classList.add('bitwrap'); if (mini) mount.classList.add('mini');
+  mount.innerHTML = `<div class="bits" aria-hidden="true">${'<span class="bit"><i></i></span>'.repeat(64)}</div><div class="ruler" aria-hidden="true"></div>`;
+  const cells = $$('.bit', mount), ruler = $('.ruler', mount);
+  let last = null;
+  // segs: [[fieldKey, bits], ...] left → right. value: BigInt to show its bits, or null for solid colours.
+  function set(segs, value, { flash = false } = {}) {
+    let i = 0; const spans = [];
+    segs.forEach(([k, n]) => {
+      const take = Math.max(0, Math.min(n, 64 - i));
+      for (let j = 0; j < take; j++, i++) { const c = cells[i]; c.className = 'bit'; c.style.transitionDelay = ''; c.style.setProperty('--f', F[k].c); }
+      if (take) spans.push([k, take]);
+    });
+    const filled = i;
+    for (; i < 64; i++) { const c = cells[i]; c.className = 'bit none'; c.style.transitionDelay = ''; c.style.removeProperty('--f'); }
+    if (filled < 64) spans.push([null, 64 - filled]);
+    ruler.innerHTML = spans.map(([k, n]) => k
+      ? `<span class="r${n < 3 ? ' tiny' : ''}" style="grid-column:span ${n};color:${F[k].c}"><b>${n >= 16 ? F[k].long : n >= 8 ? `<span class="lg">${F[k].long}</span><span class="sh">${F[k].short}</span>` : F[k].short}</b><small>${n}</small></span>`
+      : `<span class="r empty" style="grid-column:span ${n}"><b>&nbsp;</b><small>${n} free</small></span>`).join('');
+    cells.forEach((c, idx) => {
+      const b = value == null ? null : Number((value >> BigInt(63 - idx)) & 1n);
+      if (b == null) { if (idx < filled) c.classList.add('one'); c.firstChild.textContent = ''; }
+      else { c.classList.toggle('one', b === 1); c.firstChild.textContent = b; }
+      if (flash && last != null && value != null && ((last >> BigInt(63 - idx)) & 1n) !== ((value >> BigInt(63 - idx)) & 1n)) { void c.offsetWidth; c.classList.add('flip'); }
+    });
+    last = value;
+  }
+  return { set, cells };
+}
+// Predict-then-watch round (same shape as the other quests). Resolves after the pick and the replay.
+function predict(box, { step, title, options, correct, act, explain, xp = 15 }) {
+  box.innerHTML = `${step ? `<div class="step">${step}</div>` : ''}<h3>${title}</h3><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+  const opts = $('.opts', box);
+  let busy = false;
+  return new Promise(resolve => {
+    shuffle(options.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = async () => {
+        if (busy) return; busy = true;
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        b.classList.add('picked');
+        await act();
+        const ok = i === correct;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-i="${correct}"]`, opts).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + explain;
+        ok ? Q.addXP(xp, b) : Q.loseHeart(b);
+        resolve({ ok, row: $('.row', box) });
+      };
+      opts.appendChild(b);
+    });
+  });
+}
+function btn(row, label, fn, primary = true) { const b = document.createElement('button'); b.className = 'btn' + (primary ? ' primary' : ''); b.textContent = label; b.onclick = fn; row.appendChild(b); return b; }
+
+/* ================= STAGE 1: build the layout ================= */
+Q.onStage(1, () => {
+  const ORDER = ['sign', 'ts', 'dc', 'm', 'seq'];
+  const SIZE = { sign: 1, ts: 41, dc: 5, m: 5, seq: 12 };
+  const JOB = { sign: 'keeps the ID positive', ts: 'ms since the epoch', dc: 'which datacenter', m: 'which server in it', seq: 'counter within 1 ms' };
+  const SIZEHINT = {
+    sign: 'The sign bit holds a single 0. How many bits is that?',
+    ts: 'The timestamp gets whatever the other four parts leave over, out of 64.',
+    dc: 'You need 32 datacenters. 32 = 2 × 2 × 2 × 2 × 2. How many bits count 32 values?',
+    m: 'You need 32 machines per datacenter. 32 = 2⁵.',
+    seq: 'You need 4,096 values per millisecond. 2¹⁰ = 1,024, so keep doubling.',
+  };
+  const bar = bitbar($('#bb1'));
+  const tiles = $('#tiles1'), slots = $('#slots1');
+  let placed = [], solved = false, paid = false, quizStarted = false;
+
+  shuffle(ORDER).forEach(k => {
+    const b = document.createElement('button');
+    b.className = 'tile'; b.dataset.k = k; b.style.setProperty('--f', F[k].c);
+    b.innerHTML = `<b>${F[k].name}</b><span>${JOB[k]}</span>`;
+    b.onclick = () => { if (solved || placed.some(p => p.k === k)) return; placed.push({ k, n: null }); renderSlots(); hideHint(); };
+    tiles.appendChild(b);
+  });
+  function hideHint() { $('#hint1').className = 'explain'; }
+  function renderSlots() {
+    $$('.tile', tiles).forEach(t => { t.disabled = solved || placed.some(p => p.k === t.dataset.k); });
+    slots.innerHTML = placed.length ? placed.map((p, i) => `<div class="slot" style="--f:${F[p.k].c}"><span class="pos">${i + 1}</span><b>${F[p.k].name}</b>
+        <select data-i="${i}" aria-label="Size of ${F[p.k].name}" ${solved ? 'disabled' : ''}><option value="">bits?</option>${[1, 5, 10, 12, 41, 42].map(v => `<option value="${v}" ${p.n === v ? 'selected' : ''}>${v} bit${v > 1 ? 's' : ''}</option>`).join('')}</select>
+        <button class="x" data-i="${i}" aria-label="Remove ${F[p.k].name}" ${solved ? 'disabled' : ''}>✕</button></div>`).join('')
+      : '<p class="small muted empty">Nothing placed yet. Which part goes leftmost?</p>';
+    $$('select', slots).forEach(s => s.onchange = () => { placed[+s.dataset.i].n = s.value ? +s.value : null; meter(); hideHint(); });
+    $$('.x', slots).forEach(b => b.onclick = () => { placed.splice(+b.dataset.i, 1); renderSlots(); hideHint(); });
+    meter();
+  }
+  function meter() {
+    const used = placed.reduce((s, p) => s + (p.n || 0), 0);
+    bar.set(placed.filter(p => p.n).map(p => [p.k, p.n]), null);
+    const u = $('#used1'); u.textContent = `${used} / 64`; u.className = 'bignum ' + (used === 64 ? 'good' : used > 64 ? 'bad' : '');
+    const need = $('#need1');
+    if (solved) need.textContent = '✓ 1 | 41 | 5 | 5 | 12';
+    else if (placed.length < 5) need.textContent = `Place ${5 - placed.length} more part${placed.length === 4 ? '' : 's'}`;
+    else if (placed.some(p => !p.n)) need.textContent = 'Pick a size for every part';
+    else if (used !== 64) need.textContent = used > 64 ? `${used - 64} bits too many` : `${64 - used} bits short`;
+    else need.textContent = 'Exactly 64. Check it!';
+    $('#check1').disabled = solved || placed.length < 5 || placed.some(p => !p.n) || used !== 64;
+  }
+  $('#check1').onclick = e => {
+    const ks = placed.map(p => p.k), hint = $('#hint1');
+    let msg = null;
+    if (ks[0] !== 'sign') msg = 'The sign bit is the very top bit of a signed 64-bit integer, so it goes first.';
+    else if (ks.indexOf('seq') < ks.indexOf('ts')) msg = 'What should decide sort order: the time, or the counter? Whatever sits further left wins every comparison.';
+    else if (ks[1] !== 'ts') msg = 'IDs must sort by time. The first real part after the sign bit decides the order. Which one belongs there?';
+    else if (ks[4] !== 'seq') msg = 'The sequence changes the fastest, on every ID. So it belongs at the far right, like the seconds on a clock.';
+    else if (ks[2] !== 'dc') msg = 'Go from big to small: first the datacenter, then the machine inside it.';
+    else { const bad = placed.find(p => p.n !== SIZE[p.k]); if (bad) msg = `The order is right. Check the sizes: ${SIZEHINT[bad.k]}`; }
+    if (msg) { hint.className = 'explain show bad'; hint.innerHTML = '<b>Not yet.</b> ' + msg; Q.loseHeart(e.currentTarget); return; }
+    solved = true;
+    hint.className = 'explain show good';
+    hint.innerHTML = '<b>That’s Snowflake: 1 | 41 | 5 | 5 | 12.</b> The sign bit, then 41 bits of time, then 10 bits naming the generator, then a 12-bit counter. Read the table below, then answer three quick checks.';
+    if (!paid) { paid = true; Q.addXP(20, e.currentTarget); }
+    renderSlots(); bar.set(LAYOUT, null);
+    $('#map1').style.display = 'block';
+    startQuiz();
+  };
+  $('#reset1').onclick = () => { placed = []; solved = false; hideHint(); renderSlots(); };
+  renderSlots();
+
+  function startQuiz() {
+    if (quizStarted) return; quizStarted = true;
+    const QS = [
+      { q: 'Why does the timestamp sit in the top bits, right after the sign bit?',
+        options: ['Top bits win any comparison, so IDs sort by time', 'It is the biggest part, and big parts go first', 'Clocks are read first, so their bits go first too'], correct: 0,
+        good: 'When you compare two numbers, the leftmost bit that differs decides. Put time there, and a later millisecond beats any machine or sequence value. So sorting IDs sorts them by time.',
+        bad: 'Size and reading order don’t matter. When you compare two numbers, the leftmost bit that differs decides. Time sits there, so a later millisecond always wins and IDs sort by time.' },
+      { q: 'Two machines mint IDs in the same millisecond and never talk to each other. Why can’t the IDs collide?',
+        options: ['Their datacenter and machine bits differ', 'Their clocks are kept exactly in sync', 'A central server hands out the sequences'], correct: 0,
+        good: 'Every generator has its own datacenter + machine pair, so its IDs live in their own slice of the number space. That’s how Snowflake gets uniqueness with <b>no coordination</b>.',
+        bad: 'No sync or central server is needed, and that’s the point. Every generator has its own datacenter + machine pair, so their IDs can never be equal.' },
+      { q: 'What value does the sign bit hold?',
+        options: ['Always 0, so the ID stays positive', 'Always 1, to mark it as a Snowflake', 'It flips between 0 and 1 every ms'], correct: 0,
+        good: 'Always 0. The book keeps it for future use. In a signed 64-bit integer, 0 in the top bit means positive.',
+        bad: 'It’s always 0. The book keeps it for future use, and 0 in the top bit of a signed integer means the number is positive.' },
+    ];
+    let k = 0;
+    const next = () => {
+      if (k >= QS.length) { setTimeout(() => Q.clearStage(1), 700); return; }
+      const qz = QS[k]; k++;
+      Q.quiz($('#s1quiz'), { ...qz, tag: `Check ${k} of ${QS.length}`, xp: 15, onDone: () => setTimeout(next, 500) });
+    };
+    next();
+  }
+});
+
+/* ================= STAGE 2: mint on a slow clock ================= */
+Q.onStage(2, () => {
+  const bar = bitbar($('#bb2'));
+  const barA = bitbar($('#dAbar'), { mini: true }), barB = bitbar($('#dBbar'), { mini: true });
+  let now = BigInt(Date.now()) - TW_EPOCH;   // ms since Twitter's epoch, slowed down from here on
+  let running = false, timer = null, busy = false, count = 0, shown = null;
+  const gen = { last: -1n, seq: 0 };
+  const dcSel = $('#dc2'), mSel = $('#m2');
+  [dcSel, mSel].forEach(s => { s.innerHTML = Array.from({ length: 32 }, (_, i) => `<option value="${i}">${i}</option>`).join(''); });
+  dcSel.value = '3'; mSel.value = '17';
+  [dcSel, mSel].forEach(s => s.onchange = () => { gen.last = -1n; preview(); });
+
+  function restartBar() { const tb = $('#tickbar2'); tb.classList.remove('go'); void tb.offsetWidth; if (running && !Q.reduced) tb.classList.add('go'); }
+  function tick(log) {
+    now += 1n; $('#clk2').textContent = commas(now); restartBar();
+    if (log) logTo('log2', `⏱ tick: now millisecond ${commas(now)}`, 'w');
+  }
+  function setRun(on) {
+    running = on; clearInterval(timer); timer = on ? setInterval(() => tick(false), 2000) : null;
+    $('#run2').textContent = on ? '⏸ Pause clock' : '▶ Run clock'; restartBar();
+  }
+  function mint(g, dc, m) { if (g.last === now) g.seq++; else { g.last = now; g.seq = 0; } return make({ ts: now, dc, m, seq: g.seq }); }
+  function formula(id) {
+    const p = split(id);
+    $('#formula2').innerHTML = `id = (<b class="cts">${p.ts}</b> &lt;&lt; 22) | (<b class="cdc">${p.dc}</b> &lt;&lt; 17) | (<b class="cm">${p.m}</b> &lt;&lt; 12) | <b class="cseq">${p.seq}</b><br>= <b>${id}</b>`;
+  }
+  function show(id) { bar.set(LAYOUT, id, { flash: shown != null }); formula(id); shown = id; }
+  function preview() { show(make({ ts: now, dc: +dcSel.value, m: +mSel.value, seq: 0 })); }
+  function generate() {
+    const id = mint(gen, +dcSel.value, +mSel.value); count++;
+    show(id);
+    logTo('log2', `#${count} · <b>${id}</b> · seq ${gen.seq}${binHTML(id)}`);
+    return id;
+  }
+  $('#clk2').textContent = commas(now);
+  preview();
+  setRun(true);
+  $('#run2').onclick = () => { if (!busy) setRun(!running); };
+  $('#tickBtn2').onclick = () => { if (!busy) tick(true); };
+  $('#gen2').onclick = () => { if (!busy) generate(); };
+
+  // the duel: two machines in datacenter 3, each with its own sequence counter
+  const dg = { 30: { last: -1n, seq: 0 }, 1: { last: -1n, seq: 0 } };
+  const ids = {};
+  function duelReset() {
+    $('#duel2').classList.add('on'); ['A', 'B'].forEach(x => { $('#d' + x).classList.remove('win'); $(`#d${x}id`).textContent = 'waiting…'; $(`#d${x}t`).textContent = ''; });
+    barA.set(LAYOUT, null); barB.set(LAYOUT, null); $('#verdict2').textContent = ''; delete ids[30]; delete ids[1];
+    dg[30] = { last: -1n, seq: 0 }; dg[1] = { last: -1n, seq: 0 };
+  }
+  function duelMint(m) {
+    const id = mint(dg[m], 3, m), x = m === 30 ? 'A' : 'B';
+    ids[m] = id;
+    $(`#d${x}id`).textContent = id; $(`#d${x}t`).textContent = `ms …${String(now).slice(-4)} · seq ${dg[m].seq}`;
+    (m === 30 ? barA : barB).set(LAYOUT, id, { flash: true });
+    logTo('log2', `machine ${m} minted <b>${id}</b> in ms …${String(now).slice(-4)}`);
+  }
+  function duelVerdict() {
+    const a = ids[30], b = ids[1], w = a > b ? 30 : 1, diff = a > b ? a - b : b - a;
+    $(w === 30 ? '#dA' : '#dB').classList.add('win');
+    $('#verdict2').innerHTML = `Machine ${w}’s ID is bigger, by ${commas(diff)}.`;
+  }
+  async function run(act) { busy = true; try { await act(); } finally { busy = false; } }
+
+  const ROUNDS = [
+    { title: 'You’ll press <b>Generate</b> 3 times inside one millisecond. Which section changes between the three IDs?',
+      options: ['The timestamp section', 'The machine ID section', 'The sequence section'], correct: 2, duel: false,
+      act: async () => { setRun(false); tick(true); for (let j = 0; j < 3; j++) { await wait(j ? 700 : 350); generate(); } },
+      explain: 'Same millisecond, same machine, so the timestamp, datacenter and machine bits stay put. Only the sequence counts up: 0, 1, 2. That’s how one machine makes many IDs per millisecond.' },
+    { title: 'The clock ticks to the next millisecond. Then you press <b>Generate</b> once. What’s the sequence number?',
+      options: ['It resets back to 0', 'It carries on, at 3', 'It jumps up to 4,095'], correct: 0, duel: false,
+      act: async () => {
+        setRun(false);
+        if (gen.last !== now || gen.seq < 2) { tick(true); for (let j = 0; j < 3; j++) { await wait(250); generate(); } }
+        await wait(500); tick(true); await wait(600); generate();
+      },
+      explain: 'It starts again at 0 in every new millisecond. The timestamp went up by 1, and since it sits further left, this ID is bigger than every ID from the millisecond before, whatever their sequence numbers were.' },
+    { title: '<b>Machine 30</b> mints an ID. The clock ticks. Then <b>machine 1</b> mints one. Which ID is bigger?',
+      options: ['Machine 1’s, minted one tick later', 'Machine 30’s, the higher machine', 'Neither one: they come out equal'], correct: 0, duel: true,
+      act: async () => { setRun(false); duelReset(); tick(true); await wait(400); duelMint(30); await wait(700); tick(true); await wait(500); duelMint(1); await wait(300); duelVerdict(); },
+      explain: 'A later millisecond always wins. The timestamp bits sit to the left of the machine bits, so +1 ms outweighs any machine number. Across the fleet, IDs sort by time, at least to the millisecond.' },
+    { title: 'Same millisecond this time. <b>Machine 30</b> mints first, then <b>machine 1</b> a moment later. Which ID is bigger?',
+      options: ['Machine 1’s, minted a moment later', 'Machine 30’s, the higher machine', 'Neither one: they come out equal'], correct: 1, duel: true,
+      act: async () => { setRun(false); duelReset(); tick(true); await wait(400); duelMint(30); await wait(800); duelMint(1); await wait(300); duelVerdict(); },
+      explain: 'The timestamps match, so the next section decides: machine 30 beats machine 1, even though machine 1 minted later. Inside one millisecond, the order follows machine numbers, not real time. So “sorted by time” is only rough across machines.' },
+  ];
+  let ri = 0;
+  async function showRound() {
+    const r = ROUNDS[ri];
+    if (!r.duel) $('#duel2').classList.remove('on'); else duelReset();
+    const { ok, row } = await predict($('#r2box'), { step: `Prediction ${ri + 1} of ${ROUNDS.length}`, title: r.title, options: r.options, correct: r.correct, act: () => run(r.act), explain: r.explain });
+    if (!ok) btn(row, '↻ Watch it again', () => { if (!busy) run(r.act); }, false);
+    btn(row, ri < ROUNDS.length - 1 ? 'Next prediction →' : 'Finish →', () => {
+      if (busy) return;
+      ri++;
+      if (ri < ROUNDS.length) return showRound();
+      setRun(true);
+      $('#r2box').innerHTML = '<p class="small" style="margin:0 0 10px">✓ All four predictions done. The clock is running again. Keep minting, try other machine numbers, or replay.</p><div class="row"><button class="btn" id="r2replay">↻ Replay the predictions</button></div>';
+      $('#r2replay').onclick = () => { ri = 0; showRound(); };
+      Q.clearStage(2);
+    });
+  }
+  showRound();
+});
+
+/* ================= STAGE 3: decode ================= */
+Q.onStage(3, () => {
+  const ID = 1248292468186091525n, P = split(ID), MS = P.ts + TW_EPOCH;   // ts 297616116568, dc 3, machine 17, seq 5
+  const bar = bitbar($('#bb3')); bar.set(LAYOUT, ID);
+  $('#bin3').innerHTML = binHTML(ID);
+  const done = new Set(), missed = new Set();
+  function miss(step, el) { if (!missed.has(step)) { missed.add(step); Q.loseHeart(el); } else Q.toast('try again', el, 'practice'); }
+  function solve(step, xp, el, nextId) {
+    $('#st3' + step).classList.add('solved');
+    if (!done.has(step)) { done.add(step); Q.addXP(xp, el); }
+    if (nextId) { const n = $('#st3' + nextId); if (n.hidden) { n.hidden = false; setTimeout(() => { const f = n.querySelector('input, button'); f && f.focus({ preventScroll: true }); n.scrollIntoView({ behavior: Q.reduced ? 'auto' : 'smooth', block: 'nearest' }); }, 200); } }
+    if (done.size === 4) { $('#leak3').style.display = 'block'; setTimeout(() => Q.clearStage(3), 900); }
+  }
+  function ex(step, ok, html) { const e = $('#ex3' + step); e.className = 'explain show ' + (ok ? 'good' : 'bad'); e.innerHTML = html; }
+
+  // step a: shift right
+  let shifting = false;
+  const sbar = bitbar($('#bb3s'));
+  async function doShift(e) {
+    if (shifting) return;
+    const n = parseInt(digits($('#shift3').value), 10), el = e.currentTarget;
+    if (!(n >= 1 && n <= 63)) { ex('a', false, 'Type a whole number of bits between 1 and 63.'); return; }
+    shifting = true;
+    const r = ID >> BigInt(n);
+    bar.cells.forEach((c, i) => { if (i >= 64 - n) { c.style.transitionDelay = (63 - i) * 18 + 'ms'; c.classList.add('drop'); } });
+    await wait(500 + n * 18);
+    bar.set(LAYOUT, ID);
+    const sb = $('#bb3s'); sb.style.display = 'block';
+    const keep = []; let left = 64 - n;
+    LAYOUT.forEach(([k, b]) => { const t = Math.min(b, left); if (t > 0) keep.push([k, t]); left -= t; });
+    sbar.set([['pad', n], ...keep], r);
+    shifting = false;
+    if (n === 22) {
+      $('#shift3').className = 'numin sm ok';
+      ex('a', true, `<b>id &gt;&gt; 22 = ${commas(r)}.</b> The 22 bits of datacenter, machine and sequence fell off the right end, and zeros slid in on the left. What’s left is the raw timestamp: milliseconds since Twitter’s epoch.`);
+      solve('a', 15, el, 'b');
+    } else {
+      $('#shift3').className = 'numin sm no';
+      ex('a', false, `id &gt;&gt; ${n} = ${commas(r)}. ${n < 22 ? 'That still has some datacenter, machine or sequence bits glued to the end. Count every bit to the right of the timestamp: 5 + 5 + 12.' : 'That chopped off part of the timestamp too. Only drop the bits to its right: 5 + 5 + 12.'}`);
+      miss('a', el);
+    }
+  }
+  $('#shiftBtn3').onclick = doShift;
+  $('#shift3').addEventListener('keydown', e => { if (e.key === 'Enter') $('#shiftBtn3').click(); });
+
+  // step b: add the epoch
+  $('#sumBtn3').onclick = e => {
+    const s = digits($('#sum3').value);
+    if (!/^\d+$/.test(s)) { ex('b', false, 'Type the sum as a whole number. Commas are fine.'); return; }
+    if (BigInt(s) === MS) {
+      $('#sum3').className = 'numin ok';
+      ex('b', true, `<b>${commas(MS)} ms.</b> That’s the same moment, now counted from 1 Jan 1970 (the Unix epoch) like most clocks do.`);
+      solve('b', 15, e.currentTarget, 'c');
+    } else {
+      $('#sum3').className = 'numin no';
+      ex('b', false, `Not quite. Line the numbers up by their commas:<br><span class="mono">&nbsp;&nbsp;&nbsp;297,616,116,568<br>+ 1,288,834,974,657</span><br>A calculator is fine. The point is knowing <i>what</i> to add.`);
+      miss('b', e.currentTarget);
+    }
+  };
+  $('#sum3').addEventListener('keydown', e => { if (e.key === 'Enter') $('#sumBtn3').click(); });
+
+  // step c: pick the date
+  const DATES = [
+    { t: '2020-04-09 16:51:31 UTC', ok: true, why: 'That matches the book’s Figure 7-7 example: 9 April 2020, 16:51:31 UTC.' },
+    { t: '2010-11-04 01:42:54 UTC', why: 'That’s Twitter’s epoch itself, where the timestamp counts from 0. Our timestamp is far above 0.' },
+    { t: '1979-06-07 15:08:36 UTC', why: 'That’s what you get if you forget the epoch and count 297,616,116,568 ms from 1970.' },
+    { t: '2080-07-10 17:30:30 UTC', why: 'That’s the very last moment 41 bits can reach from Twitter’s epoch (you’ll compute it in stage 4).' },
+  ];
+  const dbox = $('#dates3');
+  shuffle(DATES).forEach(d => {
+    const b = document.createElement('button'); b.className = 'opt'; b.textContent = d.t;
+    b.onclick = () => {
+      if (d.ok) {
+        $$('.opt', dbox).forEach(x => x.disabled = true); b.classList.add('right');
+        ex('c', true, `<b>${d.why}</b> Your browser agrees: <span class="mono">${utc(MS)}</span>.`);
+        solve('c', 15, b, 'd');
+      } else { b.disabled = true; b.classList.add('wrong'); ex('c', false, d.why); miss('c', b); }
+    };
+    dbox.appendChild(b);
+  });
+
+  // step d: read the fields
+  $('#fieldsBtn3').onclick = e => {
+    const want = { dcIn3: 3, mIn3: 17, seqIn3: 5 }, names = { dcIn3: 'datacenter', mIn3: 'machine', seqIn3: 'sequence' };
+    const wrong = Object.keys(want).filter(k => parseInt(digits($('#' + k).value), 10) !== want[k]);
+    Object.keys(want).forEach(k => { $('#' + k).className = 'numin ' + (wrong.includes(k) ? 'no' : 'ok'); });
+    if (!wrong.length) {
+      ex('d', true, '<b>Datacenter 3, machine 17, sequence 5.</b> 00011 = 2 + 1. 10001 = 16 + 1. 000000000101 = 4 + 1. So this ID came from machine 17 in datacenter 3, and it was the 6th ID that machine made in that millisecond (counting from 0).');
+      solve('d', 20, e.currentTarget);
+    } else {
+      ex('d', false, `Check the ${wrong.map(k => names[k]).join(' and ')}. Add up the place values wherever there’s a 1. For example, <code>01010</code> = 8 + 2 = 10.`);
+      miss('d', e.currentTarget);
+    }
+  };
+
+  // decoder toy (free play, no score)
+  const toyBar = bitbar($('#toyBar'));
+  function decode(raw) {
+    const s = digits(raw), err = $('#toyErr'), out = $('#toyOut');
+    err.textContent = '';
+    if (!/^\d{1,19}$/.test(s)) { err.textContent = 'Type a positive whole number (up to 19 digits).'; return; }
+    const id = BigInt(s);
+    if (id > MAX63) { err.textContent = 'That’s bigger than a signed 64-bit integer can hold (max 9,223,372,036,854,775,807).'; return; }
+    const p = split(id), ms = p.ts + TW_EPOCH, printed = String(Number(id)), exact = printed === String(id);
+    toyBar.set(LAYOUT, id);
+    out.innerHTML = `<dt>timestamp</dt><dd>${commas(p.ts)} ms after the epoch</dd>
+      <dt>created</dt><dd>${utc(ms)}</dd>
+      <dt>datacenter</dt><dd>${p.dc}</dd><dt>machine</dt><dd>${p.m}</dd><dt>sequence</dt><dd>${p.seq}</dd>
+      <dt>as a JS Number</dt><dd>${esc(printed)} ${exact ? '<span style="color:var(--good)">(exact)</span>' : '<span style="color:var(--bad)">✗ last digits mangled: a different ID</span>'}</dd>
+      ${id === 20n ? '<dt>note</dt><dd class="note">Tweet 20 is from 2006, before Snowflake existed. Old tweet IDs were plain sequential numbers, so reading one as a Snowflake gives nonsense: “sequence 20 at the epoch instant”.</dd>' : ''}
+      ${id === MAX63 ? '<dt>note</dt><dd class="note">All 63 bits set. That’s the last ID a 2010 epoch can ever mint.</dd>' : ''}`;
+  }
+  $('#toyBtn').onclick = () => decode($('#toyIn').value);
+  $('#toyIn').addEventListener('keydown', e => { if (e.key === 'Enter') decode($('#toyIn').value); });
+  $$('#toyChips .chip').forEach(c => c.onclick = () => {
+    const v = c.dataset.v === 'now' ? String(make({ ts: BigInt(Date.now()) - TW_EPOCH, dc: Math.floor(Math.random() * 32), m: Math.floor(Math.random() * 32), seq: 0 })) : c.dataset.v;
+    $('#toyIn').value = v; decode(v);
+  });
+  toyBar.set(LAYOUT, null);
+});
+
+/* ================= STAGE 4: the numbers ================= */
+Q.onStage(4, () => {
+  // parse "4,096,000", "4.1m", "4.1 million", "1k" …
+  function num(raw) {
+    const s = String(raw).trim().toLowerCase().replace(/[,_\s]/g, '').replace(/years?|yrs?|machines?|generators?|ids?|persecond|persec|\/s/g, '');
+    const m = s.match(/^(\d*\.?\d+)(k|thousand|m|million|mn|b|bn|billion)?$/);
+    if (!m) return NaN;
+    const mult = { k: 1e3, thousand: 1e3, m: 1e6, million: 1e6, mn: 1e6, b: 1e9, bn: 1e9, billion: 1e9 }[m[2]] || 1;
+    return parseFloat(m[1]) * mult;
+  }
+  const CARDS = [
+    { q: '41 bits count up to 2<sup>41</sup> − 1 = 2,199,023,255,551 milliseconds. How many <b>years</b> is that?', ph: 'years',
+      ok: v => v >= 69 && v <= 70,
+      work: '2,199,023,255,551 ms ÷ 1,000 = 2,199,023,255 s. ÷ 3,600 = 610,840 hours. ÷ 24 = 25,452 days. ÷ 365 ≈ <b>69.7 years</b>. The book rounds it to “about 69 years”.' },
+    { q: 'Twitter’s epoch is 4 Nov 2010. In what <b>year</b> do its 41 bits of milliseconds run out?', ph: 'year',
+      ok: v => v >= 2079 && v <= 2081,
+      work: '4 Nov 2010 is about 2010.84. Add 69.7 years and you get about 2080.5: <b>July 2080</b> (10 July 2080, to be exact).' },
+    { q: '5 datacenter bits and 5 machine bits. How many separate <b>generators</b> can exist?', ph: 'generators',
+      ok: v => v === 1024,
+      work: '2<sup>5</sup> datacenters × 2<sup>5</sup> machines = 32 × 32 = 2<sup>10</sup> = <b>1,024</b>. The 10 middle bits together count 0 to 1,023.' },
+    { q: 'At most, how many IDs can one machine mint <b>per second</b>?', ph: 'IDs per second',
+      ok: v => v >= 4e6 && v <= 4.2e6,
+      work: '12 bits = 2<sup>12</sup> = 4,096 IDs per millisecond. × 1,000 ms = <b>4,096,000 per second</b>, about 4.1 million. The whole fleet of 1,024 generators tops out near 4.19 billion per second.' },
+    { q: 'Our requirement is 10,000 IDs per second. How many machines’ worth of sequence numbers is that, at minimum?', ph: 'machines',
+      ok: v => v === 1,
+      work: '10,000 per second is only about 10 per millisecond. One machine can do 4,096 per millisecond, so <b>1</b> is enough, with about 400× headroom. You’d still run more than one so a crash doesn’t stop new IDs. That’s a 7.4 topic.' },
+  ];
+  const goals = new Set();
+  let ci = 0;
+  function goal(g, xp, el) {
+    if (goals.has(g)) return;
+    goals.add(g); const li = $(`#s4goals [data-g="${g}"]`); li.classList.add('done'); if (xp) Q.addXP(xp, li);
+    if (goals.size === 2) setTimeout(() => Q.clearStage(4), 800);
+  }
+  function pips() { return `<div class="pips">${CARDS.map((_, i) => `<i class="${i < ci ? 'done' : i === ci ? 'cur' : ''}"></i>`).join('')}</div>`; }
+  function showCard() {
+    const box = $('#cards4');
+    if (ci >= CARDS.length) {
+      box.innerHTML = `<div class="ncard">${pips()}<b>✓ All five numbers cracked.</b> <span class="small muted">69.7 years · July 2080 · 1,024 generators · 4,096,000 per second per machine · 1 machine for 10,000/s.</span><div class="row" style="margin-top:10px"><button class="btn" id="cardsAgain">↻ Practise the cards again</button></div></div>`;
+      $('#cardsAgain').onclick = () => { ci = 0; showCard(); };
+      goal('cards', 0, box);
+      return;
+    }
+    const c = CARDS[ci];
+    let missedThis = false, solved = false;
+    box.innerHTML = `<div class="ncard">${pips()}<div class="step">Card ${ci + 1} of ${CARDS.length}</div><h3>${c.q}</h3>
+      <div class="inrow"><input class="numin" id="cIn" inputmode="decimal" aria-label="Your answer" placeholder="${c.ph}"><button class="btn primary" id="cCheck">Check</button><button class="btn" id="cWork">Show working</button></div>
+      <div class="explain" id="cEx"></div><div class="work" id="cW">${c.work}</div><div class="row" id="cRow" style="margin-top:10px"></div></div>`;
+    const inp = $('#cIn');
+    $('#cWork').onclick = () => $('#cW').classList.toggle('show');
+    $('#cCheck').onclick = e => {
+      if (solved) return;
+      const v = num(inp.value), ex = $('#cEx');
+      if (isNaN(v)) { ex.className = 'explain show bad'; ex.textContent = 'Type a number (commas, “4.1m” or “4.1 million” all work).'; return; }
+      if (c.ok(v)) {
+        solved = true; inp.className = 'numin ok'; inp.readOnly = true;
+        ex.className = 'explain show good'; ex.innerHTML = '<b>Yes.</b> ' + c.work; $('#cW').classList.remove('show');
+        Q.addXP(12, e.currentTarget);
+        btn($('#cRow'), ci < CARDS.length - 1 ? 'Next card →' : 'Done →', () => { ci++; showCard(); });
+      } else {
+        inp.className = 'numin no';
+        ex.className = 'explain show bad'; ex.innerHTML = '<b>Not quite.</b> Open the working below, then try again.';
+        $('#cW').classList.add('show');
+        if (!missedThis) { missedThis = true; Q.loseHeart(e.currentTarget); }
+      }
+    };
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') $('#cCheck').click(); });
+  }
+  showCard();
+
+  // epoch slider + timeline (2000 → 2110)
+  const LIFE = 2199023255551, Y0 = 2000, Y1 = 2110, YMS = 365.2425 * 864e5;
+  const tl = $('#tl4');
+  const pctOf = ms => ((ms - Date.UTC(Y0, 0, 1)) / (Date.UTC(Y1, 0, 1) - Date.UTC(Y0, 0, 1))) * 100;
+  tl.innerHTML = `<div class="axis"></div><div class="life" id="tlLife"></div><div class="today" style="left:${pctOf(Date.now())}%"><span>today</span></div>` +
+    [2000, 2020, 2040, 2060, 2080, 2100].map(y => `<span class="yr" style="left:${pctOf(Date.UTC(y, 0, 1))}%">${y}</span>`).join('');
+  function epoch() {
+    const y = +$('#ep4').value;
+    const start = y === 2010 ? Number(TW_EPOCH) : Date.UTC(y, 0, 1), end = start + LIFE;
+    $('#epVal').textContent = y === 2010 ? '2010 (Twitter’s)' : y;
+    $('#epStart').textContent = utc(start).slice(0, 10);
+    $('#epEnd').textContent = utc(end).slice(0, 10);
+    $('#epLeft').textContent = ((end - Date.now()) / YMS).toFixed(1) + ' yrs';
+    const l = $('#tlLife'); l.style.left = pctOf(start) + '%'; l.style.width = (pctOf(end) - pctOf(start)) + '%';
+    if (y >= 2026) goal('epoch', 10, $('#ep4'));
+  }
+  $('#ep4').addEventListener('input', epoch);
+  epoch();
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss5'), {
+  name: '👻 The Bit Wraith',
+  xp: 15,
+  choices: [
+    { k: 'ts', label: 'Timestamp', sub: '41 bits' },
+    { k: 'node', label: 'Datacenter + machine', sub: '10 bits' },
+    { k: 'seq', label: 'Sequence', sub: '12 bits' },
+    { k: 'sign', label: 'Sign bit', sub: '1 bit' },
+  ],
+  scenarios: shuffle([
+    { e: '🔁', t: 'Same machine, same millisecond', d: 'Two IDs from one server, made 0.2 ms apart. Which section is different?', a: 'seq', why: 'Timestamp, datacenter and machine are all the same, so only the sequence counter (0, then 1) tells them apart.' },
+    { e: '🌐', t: 'Same millisecond, two machines', d: 'Machine 4 and machine 9 each mint their first ID of the same millisecond. What makes the two IDs differ?', a: 'node', why: 'Same timestamp, and both have sequence 0. Only the datacenter + machine bits differ, and that’s what rules out collisions with no coordination.' },
+    { e: '🐦', t: 'Newest tweet, biggest ID', d: 'Sort tweets by ID and the newest come out last (roughly). Which section makes that work?', a: 'ts', why: 'The timestamp fills the top bits right after the sign bit, so a later millisecond beats any machine or sequence value.' },
+    { e: '☕', t: 'Never negative in Java', d: 'Services store IDs in Java’s signed 64-bit <code>long</code>. Why is no ID ever negative?', a: 'sign', why: 'The top bit of a signed integer marks negative numbers. Snowflake keeps it at 0, so every ID is positive.' },
+    { e: '⏳', t: 'The year-2080 problem', d: 'With Twitter’s 2010 epoch, this design stops working in mid-2080. Which section runs out?', a: 'ts', why: '41 bits of milliseconds top out at 2<sup>41</sup> − 1, about 69.7 years after the epoch. Then you need a new epoch or a migration.' },
+    { e: '🏢', t: 'No room for server #33', d: 'Datacenter 7 wants to add its 33rd ID server. The design says no. Which section is the limit?', a: 'node', why: '5 machine bits only count 0 to 31: 32 machines per datacenter. Likewise, 5 datacenter bits allow 32 datacenters.' },
+    { e: '🚦', t: 'A speed cap', d: 'One server is asked for 5,000 IDs inside a single millisecond. It can’t make them all in that millisecond. Which section caps it?', a: 'seq', why: '12 bits give 4,096 values per millisecond. The 4,097th request has to wait for the next millisecond. Quest 7.4 looks at that case.' },
+  ]),
+  outro: 'Time on the left for order, the generator’s name in the middle for uniqueness, a counter on the right for speed.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: interview drill ================= */
+Q.onStage(6, () => Q.drill($('#drill6'), {
+  prompt: 'The interviewer: <i>"You said Snowflake. Walk me through your 64 bits and the numbers behind them."</i>',
+  placeholder: 'I’d split the 64 bits into…',
+  model: '"I\'d use a Snowflake-style 64-bit ID: 1 sign bit, 41 bits of milliseconds since a custom epoch, 5 bits of datacenter ID, 5 bits of machine ID, and a 12-bit sequence. The timestamp comes first, so IDs sort by time. The datacenter and machine bits give every generator its own slice of the number space, so they never have to coordinate. 12 bits give 4,096 IDs per millisecond per machine, far more than 10,000 a second. And 41 bits of milliseconds last about 69 years from the epoch, so I\'d set the epoch close to launch day."',
+  checks: [
+    'I gave the layout 1 | 41 | 5 | 5 | 12',
+    'I said why the timestamp comes first (sorting by time)',
+    'I said why no coordination is needed (datacenter + machine bits)',
+    'I said 4,096 IDs per millisecond per machine',
+    'I said about 69 years of timestamps',
+    'I mentioned a custom epoch near launch',
+  ],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Count in Base 62</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: character-class colours, the base-62 keyboard, division ladder, place-value slots,
+   decode tiles, the odometer, the attacker's link cards, and the two-column sort */
+:root { --c-dig: #2f7fd8; --c-low: #0d9a96; --c-up: #b8409a; --c-dig-soft: #e3eefb; --c-low-soft: #dcf5f3; --c-up-soft: #f8e4f2; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --c-dig: #5aa9ff; --c-low: #31d3c8; --c-up: #f07ad0; --c-dig-soft: #15253d; --c-low-soft: #123335; --c-up-soft: #36182f; }
+}
+:root[data-theme="dark"] { --c-dig: #5aa9ff; --c-low: #31d3c8; --c-up: #f07ad0; --c-dig-soft: #15253d; --c-low-soft: #123335; --c-up-soft: #36182f; }
+
+.dig { --cc: var(--c-dig); --cs: var(--c-dig-soft); }
+.low { --cc: var(--c-low); --cs: var(--c-low-soft); }
+.up  { --cc: var(--c-up);  --cs: var(--c-up-soft); }
+.bignum { font-family: var(--mono); font-weight: 700; }
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+
+/* base-62 keyboard / mapping strip */
+.kb { padding: 12px 14px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+.kb-legend { font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 14px; margin-bottom: 8px; }
+.kb-legend b { font-family: var(--mono); color: var(--cc); }
+.kb-sec { margin-top: 6px; }
+.kb-sec > span { display: block; font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--cc); margin-bottom: 3px; }
+.kb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 4px; }
+.key { min-height: 44px; padding: 2px 0; border-radius: 9px; border: 1px solid color-mix(in srgb, var(--cc) 35%, var(--line)); background: var(--cs); display: grid; place-items: center; line-height: 1.05; transition: transform .1s, box-shadow .2s; }
+.key b { font: 700 17px var(--mono); color: var(--cc); }
+.key small { font: 600 10px var(--mono); color: var(--muted); }
+.key:hover { transform: translateY(-1px); box-shadow: 0 0 0 2px var(--cc); }
+.key.hit { background: var(--good-soft); box-shadow: 0 0 0 2px var(--good); }
+.key.miss { background: var(--bad-soft); animation: shake .4s; }
+.kb.await .key { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent); }
+
+/* division ladder + slots */
+.abacus { padding: 0; }
+.ladder { padding: 12px 14px 0; display: grid; gap: 4px; font-family: var(--mono); font-size: 14px; }
+.lad-row { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; padding: 6px 10px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); animation: rise .3s; }
+.lad-row .r { font-weight: 700; color: var(--accent); }
+.lad-row .ch { margin-left: auto; font-weight: 700; padding: 1px 8px; border-radius: 6px; background: var(--cs); color: var(--cc); }
+.divrow { padding: 12px 14px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-family: var(--mono); font-size: 17px; }
+.divrow:empty { display: none; }
+.numin { width: 104px; height: 44px; border-radius: 10px; border: 2px solid var(--line); background: var(--panel); color: var(--ink); font: 700 18px var(--mono); text-align: center; }
+.numin.wide { width: 100%; max-width: 280px; text-align: left; padding: 0 12px; font-size: 16px; }
+.numin.bad { border-color: var(--bad); animation: shake .4s; }
+.numin.ok { border-color: var(--good); }
+.slots { display: flex; justify-content: center; gap: 10px; padding: 14px; flex-wrap: wrap; }
+.slot { width: 82px; border-radius: 14px; border: 2px dashed var(--line); background: var(--panel); text-align: center; padding: 8px 4px; transition: border-color .3s, background .3s; }
+.slot .c { font: 700 34px var(--mono); line-height: 1.1; min-height: 38px; color: var(--cc, var(--muted)); }
+.slot .v { font: 600 13px var(--mono); color: var(--ink); min-height: 18px; }
+.slot .p { font-size: 12px; color: var(--muted); }
+.slot.filled { border-style: solid; border-color: var(--cc); background: var(--cs); }
+.slot.next { border-color: var(--accent); }
+.slot.flash { animation: blip .6s; }
+@keyframes blip { 40% { transform: scale(1.15); } }
+.s1msg { padding: 0 14px 12px; font-size: 15px; min-height: 24px; text-align: center; }
+.s1msg.bad { color: var(--bad); }
+.s1msg.good { color: var(--good); }
+.reveal { margin-top: 14px; border-radius: 18px; padding: 18px; text-align: center; background: linear-gradient(160deg, var(--accent-soft), var(--teal-soft)); animation: rise .4s; }
+.reveal .code { font: 700 52px var(--mono); letter-spacing: .06em; line-height: 1.1; }
+.reveal .url { display: inline-block; margin-top: 6px; font-family: var(--mono); font-size: 15px; background: var(--panel); border: 1px solid var(--line); padding: 5px 12px; border-radius: 99px; word-break: break-all; }
+.reveal .sum { font-family: var(--mono); font-size: 13.5px; color: var(--muted); margin-top: 10px; word-break: break-word; }
+
+/* stage 2: decode puzzles + machine */
+.puzzles { display: grid; gap: 12px; margin-top: 12px; }
+.puz { border: 1px solid var(--line); border-radius: 16px; padding: 14px; background: var(--bg); }
+.puz.done { border-color: var(--good); background: var(--good-soft); }
+.puz-h { display: flex; justify-content: space-between; gap: 8px; align-items: center; flex-wrap: wrap; font-weight: 700; }
+.tiles { display: flex; gap: 8px; margin: 12px 0; flex-wrap: wrap; }
+.tile { width: 70px; text-align: center; border-radius: 12px; padding: 6px 2px; background: var(--cs); border: 1px solid color-mix(in srgb, var(--cc) 40%, var(--line)); }
+.tile b { display: block; font: 700 28px var(--mono); color: var(--cc); line-height: 1.15; }
+.tile .val { font: 600 12px var(--mono); color: var(--ink); min-height: 16px; }
+.tile .pw { font-size: 12px; color: var(--muted); }
+.puz .row .btn { padding: 8px 14px; }
+.puz .work { font-family: var(--mono); font-size: 13.5px; margin-top: 8px; word-break: break-word; }
+.machine .io { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: end; padding: 14px; }
+@media (max-width: 640px) { .machine .io { grid-template-columns: 1fr; } }
+.machine label { display: grid; gap: 4px; font-size: 13px; font-weight: 700; color: var(--muted); }
+.machine .numin.wide { max-width: none; }
+.machine .mid { display: flex; gap: 6px; flex-wrap: wrap; }
+.machine .mid .btn { padding: 8px 12px; font-size: 14px; }
+.mlad { padding: 0 14px 12px; display: grid; gap: 3px; font-family: var(--mono); font-size: 12.5px; max-height: 260px; overflow-y: auto; }
+.mlad div { padding: 3px 8px; border-radius: 6px; background: var(--panel); border: 1px solid var(--line); animation: rise .25s; word-break: break-word; }
+.mlad .ch { font-weight: 700; color: var(--cc); }
+.mout { font-family: var(--mono); word-break: break-all; }
+
+/* stage 3: odometer */
+.odo { padding: 16px 14px 8px; text-align: center; }
+.oslots { display: flex; justify-content: center; gap: 4px; flex-wrap: nowrap; }
+.oslot { width: 36px; height: 50px; border-radius: 9px; display: grid; place-items: center; font: 700 26px var(--mono); background: var(--panel); border: 2px solid var(--accent); color: var(--ink); transition: background .2s; }
+.oslot.ghost { border: 2px dashed var(--line); color: transparent; background: none; }
+.oslots.eleven .oslot { width: 28px; height: 44px; font-size: 19px; }
+.oslot.roll { animation: blip .5s; background: var(--accent-soft); }
+.oid { font: 700 20px var(--mono); margin-top: 10px; word-break: break-all; }
+.oday { font-size: 14px; color: var(--muted); min-height: 22px; }
+.olen { display: inline-block; margin-top: 4px; font-weight: 700; padding: 2px 10px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); font-size: 13px; }
+.lad7 { width: 100%; border-collapse: collapse; font-size: 13px; }
+.lad7 th, .lad7 td { padding: 5px 8px; text-align: left; border-top: 1px solid var(--line); }
+.lad7 th { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.lad7 td { font-family: var(--mono); }
+.lad7 tr.cur td { background: var(--accent-soft); font-weight: 700; }
+.lad7 tr.past td { color: var(--muted); }
+.lad7wrap { padding: 4px 14px 12px; overflow-x: auto; }
+.sim-bar .btn { padding: 7px 12px; font-size: 14px; }
+.seg button { min-height: 36px; }
+.sfwrap { display: none; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); font-size: 14px; }
+.sfwrap.on { display: block; animation: rise .35s; }
+.sfnote { margin-top: 8px; font-size: 14px; }
+
+/* stage 4: the guessing game */
+.attack { padding: 14px; }
+.mylink { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 14px; }
+.mylink code { font-size: 15px; padding: 4px 10px; }
+.dests { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; margin-top: 12px; }
+.dest { border-radius: 12px; border: 1px solid var(--line); background: var(--panel); padding: 10px 12px; font-size: 14px; animation: rise .3s; min-width: 0; }
+.dest .u { font-family: var(--mono); font-size: 12.5px; color: var(--accent); font-weight: 700; }
+.dest .t { font-weight: 700; margin: 2px 0; }
+.dest .h { font-family: var(--mono); font-size: 12px; color: var(--muted); word-break: break-all; }
+.dest .n { font-size: 12.5px; color: var(--bad); font-weight: 600; }
+.dest.leak { border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); }
+.dest.miss { border-style: dashed; color: var(--muted); }
+.dest.miss .t { color: var(--muted); }
+.alarm { display: none; margin-top: 12px; border-radius: 14px; padding: 12px 14px; background: var(--bad-soft); color: var(--ink); font-size: 15px; border-left: 5px solid var(--bad); }
+.alarm.on { display: block; animation: rise .35s; }
+.alarm.safe { background: var(--good-soft); border-left-color: var(--good); }
+.defend { display: none; margin-top: 14px; }
+.defend.on { display: block; animation: rise .35s; }
+
+/* stage 5: sort */
+.pool { display: grid; gap: 8px; margin-top: 12px; }
+.pcard { border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; background: var(--bg); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; animation: rise .3s; }
+.pcard.bounce { animation: shake .4s; border-color: var(--bad); }
+.pcard p { margin: 0; font-weight: 600; flex: 1 1 200px; }
+.pcard .row { gap: 6px; }
+.pcard .opt { padding: 7px 10px; font-size: 13.5px; }
+.pcard .hint { flex-basis: 100%; font-size: 13.5px; color: var(--bad); }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+@media (max-width: 560px) { .cols { grid-template-columns: 1fr; } }
+.col { border: 2px dashed var(--line); border-radius: 16px; padding: 10px; min-height: 90px; }
+.col h3 { margin: 0 0 8px; font-size: 15px; }
+.col.hash h3 { color: var(--warn); }
+.col.b62 h3 { color: var(--accent); }
+.col ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.col li { font-size: 14px; padding: 7px 10px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); animation: rise .3s; }
+.cmp { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 14px; }
+.cmp th, .cmp td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+.cmp th { background: var(--bg-2); font-size: 13px; }
+.cmp td:first-child { font-weight: 700; color: var(--muted); }
+.cmpwrap { display: none; overflow-x: auto; }
+.cmpwrap.on { display: block; animation: rise .4s; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 8.3 · Design a URL Shortener</div>
+    <h1>Count in Base 62</h1>
+    <p class="lede">Hashing gave you short codes that can collide. Now try the other road: give every link a unique number and simply write that number in base 62. It never collides. It does have one weak spot.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can convert an ID to base 62 by hand (<b>11157 → 2TX</b>), explain why it never collides, and compare it with hash + collision resolution, including its weak spot: codes that are <b>easy to guess</b>.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>The 62-digit abacus</h2><div class="sub">Divide by 62, keep the remainders</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>In <a href="0802-url-shortener-hash-and-collisions.html">Quest 8.2</a> you built the short code by <b>hashing</b> the long URL. The book's second approach is <b>base conversion</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-url-shortener" target="_blank" rel="noopener">[1]</a> Every new long URL gets a unique whole number, its <b>ID</b> (the row's primary key). Then you write that number in <b>base 62</b>, and that's the code.</p>
+      <p>Why 62? A code may use the digits <code>0–9</code>, the letters <code>a–z</code> and the letters <code>A–Z</code>. That's 10 + 26 + 26 = 62 characters, so one character can stand for any value from 0 to 61. The book maps them like this:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-url-shortener" target="_blank" rel="noopener">[1]</a></p>
+      <div class="kb-legend" style="font-size:15px;margin:4px 0 2px"><span class="dig">0–9 → <b>0–9</b></span><span class="low">10–35 → <b>a–z</b></span><span class="up">36–61 → <b>A–Z</b></span></div>
+      <div class="callout tip"><b>How place values work.</b> In base 10 the places are worth 1, 10, 100… (each one 10× the one to its right). In base 62 they're worth 1, 62, 3,844 (that's 62²)… To convert a number: divide it by 62. The <b>remainder</b> (what's left over) is the rightmost character. Then divide the <b>quotient</b> (the whole-number answer) by 62 again for the next character. Stop when the quotient reaches 0.</div>
+      <p>Convert the book's example, ID <b>11157</b>. Type the quotient and the remainder for each step (a calculator is fine), then tap the character for the remainder on the keyboard.</p>
+      <div class="sim abacus">
+        <div class="ladder" id="ladder"></div>
+        <div class="divrow" id="divrow"></div>
+        <div class="slots" id="slots"></div>
+        <div class="s1msg" id="s1msg" aria-live="polite"></div>
+        <div class="kb" id="kb1"></div>
+      </div>
+      <div id="reveal1"></div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Decode it back</h2><div class="sub">Calculate-and-check</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Going back is the reverse. Turn each character into its value, multiply it by its place value (1, 62, 3,844…), and add everything up. Here are three codes. Work out the ID behind each one.</p>
+      <div class="puzzles" id="puzzles"></div>
+      <div class="callout"><b>Why this can never collide.</b> Base 62 is just another way of <i>writing</i> a number, like Roman numerals. Every ID has exactly one code and every code has exactly one ID, so the mapping is <b>one-to-one</b>. If no two links share an ID, no two links can share a code.<a class="cite" href="https://en.wikipedia.org/wiki/Base62" target="_blank" rel="noopener">[2]</a></div>
+      <h3 style="margin:22px 0 4px;font-size:18px">⚙️ Machine mode</h3>
+      <p class="small muted" style="margin-top:0">Optional: type any number or code and watch the converter work. It starts with the book's own example from its shortening flow.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-url-shortener" target="_blank" rel="noopener">[1]</a></p>
+      <div class="sim machine">
+        <div class="io">
+          <label for="mId">ID (base 10)<input class="numin wide" id="mId" inputmode="numeric" autocomplete="off" value="2009215674938"></label>
+          <div class="mid"><button class="btn primary" id="mEnc">Encode →</button><button class="btn" id="mDec">← Decode</button></div>
+          <label for="mCode">Short code (base 62)<input class="numin wide" id="mCode" autocomplete="off" spellcheck="false" value=""></label>
+        </div>
+        <div class="mlad" id="mLad"></div>
+        <div class="sim-bar"><span id="mOut" class="mout">Press Encode to run the book's example.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Watch the code grow</h2><div class="sub">Length isn't fixed</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>A hash-based code is always the same length: you cut the hash to 7 characters. A base-62 code is as long as the number needs, so it <b>grows with the ID</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-url-shortener" target="_blank" rel="noopener">[1]</a> Your IDs come from a unique ID generator (the whole of <a href="0703-snowflake-bit-layout.html">Chapter 7</a>). Here it's a simple counter: 1, 2, 3…</p>
+      <p>From <a href="0801-url-shortener-scope-and-api.html">Quest 8.1</a>: the service creates <b>100 million</b> new links a day and must cover 10 years, which is 365 billion links.</p>
+      <div class="challenge boxed" id="predict3"></div>
+      <div class="sim">
+        <div class="odo">
+          <div class="oslots" id="oslots" aria-live="off"></div>
+          <div class="oid" id="oid"></div>
+          <div class="olen" id="olen"></div>
+          <div class="oday" id="oday"></div>
+        </div>
+        <div class="sim-bar">
+          <span class="row" style="gap:6px"><button class="btn primary" id="oRun" disabled>▶ Run</button><button class="btn" id="oSkip" disabled title="Jump to just before the code gets one character longer">⏭ Next length</button><button class="btn" id="oReset">↻</button></span>
+          <span class="seg" id="oSpeed" aria-label="IDs per tick"><button data-v="1" class="on">×1</button><button data-v="1000">×1K</button><button data-v="1000000">×1M</button><button data-v="1000000000">×1B</button></span>
+        </div>
+        <div class="lad7wrap"><table class="lad7" id="lad7"></table><div class="small muted" style="margin-top:4px">"Starts" = the day that length first appears, at 100M new links a day.</div></div>
+        <div class="sfwrap" id="sfwrap">
+          <div class="row"><b>ID source:</b><span class="seg" id="srcSeg"><button data-s="ctr" class="on">Counter</button><button data-s="sf">Snowflake (64-bit)</button></span></div>
+          <div class="sfnote" id="sfnote"></div>
+        </div>
+        <div class="simlog" id="olog"><div>Counter at ID 1. Make your prediction, then press ▶ Run.</div></div>
+      </div>
+      <ul class="checklist" id="s3goals">
+        <li data-g="pred"><span class="box">✓</span><span>Lock in a prediction</span></li>
+        <li data-g="seven"><span class="box">✓</span><span>Run the odometer until the code needs <b>7 characters</b></span></li>
+        <li data-g="sf"><span class="box">✓</span><span>Switch the ID source to a <b>Snowflake</b> ID and look at the length</span></li>
+      </ul>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>The guessing game</h2><div class="sub">Spot the security hole</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book flags one real problem with this approach. If the ID goes up by 1 for every new link, anyone can work out the <b>next</b> short URL, and that is a security concern.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-url-shortener" target="_blank" rel="noopener">[1]</a> Time to see why. You play the <b>attacker</b>.</p>
+      <div class="sim">
+        <div class="attack">
+          <div class="mylink"><span>You shortened a link an hour ago and got</span><code id="myCode">tinyurl.com/2TX</code><span class="muted small">Thousands of links have been made since.</span></div>
+          <div class="row" style="margin-top:12px"><button class="btn primary" id="tryNext">🔎 Try the next code</button><span class="small">Links found: <span class="bignum" id="found">0</span></span></div>
+          <div class="dests" id="dests"></div>
+          <div class="alarm" id="alarm"></div>
+          <div class="defend" id="defend">
+            <div class="callout tip" style="margin:0"><b>🛡️ Switch sides: you're the defender now.</b> Before encoding, run each ID through a <b>reversible scramble</b>: a function with a secret key that shuffles IDs into a big space (all 3.5 trillion 7-character codes) and can be undone by the server. IDs are still unique, so codes still never collide. They just stop being neighbours.</div>
+            <div class="row" style="margin-top:10px"><button class="btn primary" id="scrOn">Turn on scrambling</button></div>
+          </div>
+        </div>
+        <div class="simlog" id="alog"><div>Your link: ID 11157 → 2TX. Press "Try the next code".</div></div>
+      </div>
+      <ul class="checklist" id="s4goals">
+        <li data-g="leak"><span class="box">✓</span><span>As the attacker, walk the sequence and find <b>5</b> other people's links</span></li>
+        <li data-g="safe"><span class="box">✓</span><span>As the defender, turn on scrambling and let the attacker try <b>5</b> more guesses</span></li>
+      </ul>
+      <div class="callout warn" id="leakNote" style="display:none"><b>This really happens.</b> In 2016, researchers scanned the code spaces of public URL shorteners. They found links to cloud-storage files that anyone could open and edit, and map directions that revealed where people live and which clinics they visited.<a class="cite" href="https://arxiv.org/abs/1604.02734" target="_blank" rel="noopener">[3]</a> Other fixes: make codes <b>longer</b> (a bigger space is harder to hit), <b>rate-limit</b> the redirect endpoint so one client can't try millions of codes, and never treat a short link as a password for private data.</div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Sort the showdown</h2><div class="sub">Hash + collision vs base 62</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Quick recap of the other road from <a href="0802-url-shortener-hash-and-collisions.html">Quest 8.2</a>: hash the long URL (CRC32, MD5 or SHA-1), keep the first 7 characters, and check the database. If that code is taken (a <b>collision</b>), add a fixed string to the URL and hash again until the code is free.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-url-shortener" target="_blank" rel="noopener">[1]</a></p>
+      <p>The book ends the comparison with a side-by-side table. Build it yourself: send each property to the approach it describes. A wrong pick bounces back with a hint.</p>
+      <div class="pool" id="pool"></div>
+      <div class="cols">
+        <div class="col hash"><h3>🎲 Hash + collision resolution</h3><ul id="colHash"></ul></div>
+        <div class="col b62"><h3>🔢 Base 62 conversion</h3><ul id="colB62"></ul></div>
+      </div>
+      <div class="cmpwrap" id="cmpwrap">
+        <table class="cmp">
+          <thead><tr><th></th><th>Hash + collision resolution</th><th>Base 62 conversion</th></tr></thead>
+          <tbody>
+            <tr><td>Length</td><td>Fixed (e.g. always 7)</td><td>Grows with the ID</td></tr>
+            <tr><td>ID generator</td><td>Not needed</td><td>Needed (unique IDs)</td></tr>
+            <tr><td>Collisions</td><td>Possible, must be resolved</td><td>Impossible, since the ID is unique</td></tr>
+            <tr><td>Next code</td><td>Can't be worked out</td><td>Easy to work out if IDs go up by 1</td></tr>
+          </tbody>
+        </table>
+        <div class="callout tip"><b>The book's pick.</b> For its deep dive, the book goes with base 62 conversion.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-url-shortener" target="_blank" rel="noopener">[1]</a> In an interview, the pick matters less than saying out loud what you give up.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Boss: The Twin Generators</h2><div class="sub">Which approach fits the client?</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Six clients, six sets of constraints. For each one, pick the code generator you'd recommend: <b>hash + collision resolution</b>, or <b>base 62 of a unique ID</b>.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 7 ================= -->
+  <section class="stage" data-stage="7" id="s7">
+    <div class="stage-h"><div class="num">7</div><div><h2>Say it like a senior</h2><div class="sub">Pick one and defend it</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> You can now make a code. Next, follow a request all the way through: the shortening flow that stores the row, and the redirect flow that reads it back through a cache. That's <a href="0804-url-shortener-flows-and-scale.html">Quest 8.4, <i>Shorten &amp; Bounce</i></a>.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-url-shortener" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 8: Design a URL Shortener</a>. Read the Step 3 deep dive: "Base 62 conversion", the comparison table, and the URL shortening flow that uses ID 2009215674938. For where the IDs come from, see Ch. 7 and Twitter's <a href="https://blog.x.com/engineering/en_us/a/2010/announcing-snowflake" target="_blank" rel="noopener">Snowflake announcement</a>.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <p style="margin:0 0 8px"><b>Which ID generator?</b> The book's example ID 2009215674938 is about 41 bits, which conveniently encodes to 7 characters. A Snowflake ID from Chapter 7 is 64 bits and encodes to <b>11</b>.<a class="cite" href="https://blog.x.com/engineering/en_us/a/2010/announcing-snowflake" target="_blank" rel="noopener">[5]</a> To keep codes at 7 characters, real systems use a counter-style generator, such as Flickr's <b>ticket servers</b>,<a class="cite" href="https://code.flickr.net/2010/02/08/ticket-servers-distributed-unique-primary-keys-on-the-cheap/" target="_blank" rel="noopener">[4]</a> or hand each web server a pre-allocated <b>range</b> of IDs to use up locally.</p>
+      <p style="margin:0 0 8px"><b>The alphabet order is a convention.</b> The book puts a–z before A–Z. Other tools put A–Z first.<a class="cite" href="https://en.wikipedia.org/wiki/Base62" target="_blank" rel="noopener">[2]</a> Any fixed order works, as long as encode and decode agree.</p>
+      <p style="margin:0 0 8px"><b>Unique IDs don't de-duplicate long URLs.</b> If the same long URL is shortened twice, it gets two IDs and two codes. To give each long URL one code, you still look it up first (the book's flow does exactly that).</p>
+      <p style="margin:0"><b>Scrambling isn't encryption.</b> This page's scramble (multiply and add, modulo 62⁷) shows the idea, but someone could recover the secret from a few known codes. A real system would use a proper keyed cipher sized to the code space, or random IDs with a uniqueness check.</p>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"why not just use random 7-character codes?"</i> or <i>"how do several web servers share one counter without a bottleneck?"</i>
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 8 "Design a URL Shortener" (ByteByteGo).</li>
+        <li>"Base62", Wikipedia.</li>
+        <li>Georgiev &amp; Shmatikov, "Gone in Six Characters: Short URLs Considered Harmful for Cloud Services" (2016).</li>
+        <li>Flickr Engineering, "Ticket Servers: Distributed Unique Primary Keys on the Cheap" (2010).</li>
+        <li>Twitter Engineering, "Announcing Snowflake" (2010).</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0803',
+  winTitle: '11157 is 2TX. You speak base 62!',
+  badge: '🔢 Badge: Base-62 Abacus',
+  cheatsheet: '../reference/ch08-url-shortener-cheatsheet.html',
+});
+const { sleep, shuffle, esc } = Q;
+
+/* ================= shared helpers ================= */
+const ALPH = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const kind = i => i < 10 ? 'dig' : i < 36 ? 'low' : 'up';
+const kindOf = ch => kind(ALPH.indexOf(ch));
+function enc(n) { n = BigInt(n); if (n === 0n) return '0'; let s = ''; while (n > 0n) { s = ALPH[Number(n % 62n)] + s; n /= 62n; } return s; }
+function dec(s) { let n = 0n; for (const c of s) n = n * 62n + BigInt(ALPH.indexOf(c)); return n; }
+const fmt = n => BigInt(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+const SUP = { 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
+const pow62 = k => '62' + String(k).split('').map(d => SUP[d]).join('');
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); Q.addXP(xp || 10, li);
+  return true;
+}
+const onKey = (el, fn) => el.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); fn(); } });
+function rangeHint(r) {
+  if (r < 10) return `${r} is below 10, so it's just the digit <b>${r}</b>.`;
+  if (r < 36) return `${r} is in 10–35 (lowercase). ${r} − 10 = ${r - 10}, so count ${r - 10} letters past <b>a</b>.`;
+  return `${r} is in 36–61 (uppercase). ${r} − 36 = ${r - 36}, so count ${r - 36} letters past <b>A</b>.`;
+}
+function buildKeyboard(mount, onTap) {
+  const secs = [['dig', 'Digits · 0–9', 0, 10], ['low', 'Lowercase · 10–35', 10, 36], ['up', 'Uppercase · 36–61', 36, 62]];
+  mount.innerHTML = secs.map(([k, label, a, b]) => `<div class="kb-sec ${k}"><span>${label}</span><div class="kb-grid">${
+    Array.from({ length: b - a }, (_, j) => `<button class="key ${k}" data-i="${a + j}" aria-label="character ${ALPH[a + j]}, value ${a + j}"><b>${ALPH[a + j]}</b><small>${a + j}</small></button>`).join('')
+  }</div></div>`).join('');
+  $$('.key', mount).forEach(b => b.onclick = () => onTap(+b.dataset.i, b));
+}
+function flashKey(b, cls) { b.classList.remove('hit', 'miss'); void b.offsetWidth; b.classList.add(cls); setTimeout(() => b.classList.remove(cls), 900); }
+function seqQuiz(mount, list, onAll) {
+  let i = 0;
+  const next = () => { if (i >= list.length) return onAll && onAll(); const qz = list[i++]; Q.quiz(mount, { ...qz, onDone: () => setTimeout(next, 500) }); };
+  next();
+}
+
+/* ================= STAGE 1: the abacus ================= */
+Q.onStage(1, () => {
+  const kb = $('#kb1');
+  let S, quizShown = false;
+  function stepsFor(n) { const out = []; let x = n; do { out.push({ n: x, q: Math.floor(x / 62), r: x % 62 }); x = Math.floor(x / 62); } while (x > 0); return out; }
+  function start(n, practice) {
+    const steps = stepsFor(n);
+    S = { n, steps, i: 0, phase: 'div', slots: Array(steps.length).fill(null), practice, missDiv: {}, missKey: {} };
+    $('#reveal1').innerHTML = '';
+    render();
+    setMsg(practice ? `Practice round: convert <b>${fmt(n)}</b>. No XP or hearts at stake.` : 'Step 1: divide 11157 by 62.');
+    focusQ();
+  }
+  const focusQ = () => { const q = $('#qIn'); if (q && document.activeElement && document.activeElement.closest && document.activeElement.closest('#s1')) q.focus(); };
+  function setMsg(html, cls) { const m = $('#s1msg'); m.innerHTML = html; m.className = 's1msg' + (cls ? ' ' + cls : ''); }
+  function render() {
+    const L = S.steps.length;
+    $('#ladder').innerHTML = S.steps.map((st, k) => {
+      const shown = k < S.i || (k === S.i && S.phase === 'key');
+      if (!shown) return '';
+      const ch = S.slots[L - 1 - k];
+      return `<div class="lad-row"><span>${fmt(st.n)} ÷ 62 = ${fmt(st.q)}</span><span>remainder <span class="r">${st.r}</span></span>${ch ? `<span class="ch ${kindOf(ch)}">→ ${ch}</span>` : '<span class="ch" style="color:var(--muted)">→ ?</span>'}</div>`;
+    }).join('');
+    const dr = $('#divrow');
+    if (S.phase === 'div') {
+      const st = S.steps[S.i];
+      dr.innerHTML = `<span>${fmt(st.n)} ÷ 62 =</span><input class="numin" id="qIn" inputmode="numeric" autocomplete="off" aria-label="quotient"><span>r</span><input class="numin" id="rIn" inputmode="numeric" autocomplete="off" aria-label="remainder"><button class="btn primary" id="divGo">Check</button>`;
+      $('#divGo').onclick = checkDiv; onKey($('#qIn'), checkDiv); onKey($('#rIn'), checkDiv);
+    } else dr.innerHTML = '';
+    const nextSlot = S.phase === 'done' ? -1 : L - 1 - S.i;
+    $('#slots').innerHTML = S.slots.map((ch, j) => {
+      const p = L - 1 - j, v = ch ? ALPH.indexOf(ch) : null;
+      return `<div class="slot ${ch ? 'filled ' + kindOf(ch) : ''} ${j === nextSlot ? 'next' : ''}" data-j="${j}"><div class="c">${ch || '·'}</div><div class="v">${v !== null ? v + ' ×' : ''}</div><div class="p">${pow62(p)} = ${fmt(62 ** p)}</div></div>`;
+    }).join('');
+    kb.classList.toggle('await', S.phase === 'key');
+  }
+  function checkDiv() {
+    const st = S.steps[S.i], qi = $('#qIn'), ri = $('#rIn');
+    const q = qi.value.replace(/[,\s]/g, ''), r = ri.value.replace(/[,\s]/g, '');
+    if (q === '' || r === '') { setMsg('Fill in both boxes: the quotient and the remainder.', 'bad'); return; }
+    const qOk = +q === st.q && /^\d+$/.test(q), rOk = +r === st.r && /^\d+$/.test(r);
+    qi.classList.toggle('bad', !qOk); ri.classList.toggle('bad', !rOk);
+    if (qOk && rOk) {
+      if (!S.practice) Q.addXP(10, $('#divGo'));
+      S.phase = 'key';
+      render();
+      setMsg(`Remainder <b>${st.r}</b> drops into the ${pow62(S.i)} slot. Now tap the character worth <b>${st.r}</b> on the keyboard below.`);
+      return;
+    }
+    if (!S.missDiv[S.i] && !S.practice) { S.missDiv[S.i] = true; Q.loseHeart($('#divGo')); }
+    const exact = (st.n / 62).toFixed(3);
+    if (qOk) setMsg(`The quotient is right. The remainder is what's left: ${fmt(st.n)} − 62 × ${fmt(st.q)} = ?`, 'bad');
+    else setMsg(`${fmt(st.n)} ÷ 62 = ${exact}… The quotient is the whole-number part. Then remainder = ${fmt(st.n)} − 62 × quotient.`, 'bad');
+  }
+  function tap(i, b) {
+    if (!S || S.phase !== 'key') { Q.toast(`${ALPH[i]} = ${i}`, b, 'practice'); return; }
+    const st = S.steps[S.i];
+    if (i === st.r) {
+      flashKey(b, 'hit');
+      S.slots[S.steps.length - 1 - S.i] = ALPH[i];
+      if (!S.practice) Q.addXP(5, b);
+      S.i++;
+      if (S.i >= S.steps.length) { S.phase = 'done'; render(); setMsg('Quotient 0: done. Now read the slots from left to right.', 'good'); finish(); return; }
+      S.phase = 'div'; render();
+      setMsg(`${st.r} → <b>${ALPH[i]}</b>. Next: divide the quotient, ${fmt(S.steps[S.i].n)}, by 62.`, 'good');
+      focusQ();
+    } else {
+      flashKey(b, 'miss');
+      if (!S.missKey[S.i] && !S.practice) { S.missKey[S.i] = true; Q.loseHeart(b); }
+      setMsg(`<b>${ALPH[i]}</b> is worth ${i}. You need ${st.r}. ${rangeHint(st.r)}`, 'bad');
+    }
+  }
+  async function finish() {
+    const code = S.slots.join(''), L = S.steps.length;
+    const parts = S.slots.map((ch, j) => `${ALPH.indexOf(ch)}×${fmt(62 ** (L - 1 - j))}`);
+    const vals = S.slots.map((ch, j) => ALPH.indexOf(ch) * 62 ** (L - 1 - j));
+    const rems = S.steps.map(s => s.r).join(', ');
+    for (const el of $$('#slots .slot')) { el.classList.add('flash'); await sleep(Q.reduced ? 0 : 180); }
+    $('#reveal1').innerHTML = `<div class="reveal"><div class="small muted">Remainders in the order you found them: ${rems}. The first one is the rightmost character, so the code reads:</div>
+      <div class="code">${[...code].map(c => `<span class="${kindOf(c)}" style="color:var(--cc)">${c}</span>`).join('')}</div>
+      <div class="url">https://tinyurl.com/${code}</div>
+      <div class="sum">Check: ${parts.join(' + ')} = ${vals.map(fmt).join(' + ')} = ${fmt(S.n)} ✓</div>
+      ${S.practice ? '' : '<div class="small" style="margin-top:8px">That is the book\'s example exactly: 11157 = 2 × 62² + 55 × 62¹ + 59 × 62⁰, which is <b>2TX</b>.</div>'}
+      <div class="row" style="justify-content:center;margin-top:12px" id="againRow"></div></div>`;
+    const again = () => { const b = document.createElement('button'); b.className = 'btn'; b.textContent = '↻ Practice with another number'; b.onclick = () => start(3844 + Math.floor(Math.random() * (238328 - 3844)), true); $('#againRow').appendChild(b); };
+    if (S.practice || quizShown) { again(); return; }
+    quizShown = true;
+    setTimeout(() => seqQuiz($('#s1quiz'), [
+      { tag: 'Check 1 of 2', q: 'In the book’s mapping, which value does the lowercase letter <code>a</code> stand for?', options: ['The value 10', 'The value 36', 'The value 0', 'The value 1'], correct: 0,
+        good: 'Digits use 0–9, so the alphabet starts right after: <code>a</code> = 10, up to <code>z</code> = 35.',
+        bad: 'Digits use up 0–9, so lowercase starts at 10: <code>a</code> = 10, up to <code>z</code> = 35.' },
+      { tag: 'Check 2 of 2', q: 'And the uppercase letter <code>A</code>?', options: ['The value 36', 'The value 10', 'The value 26', 'The value 62'], correct: 0,
+        good: '10 digits + 26 lowercase letters = 36 values used up, so <code>A</code> = 36, up to <code>Z</code> = 61. There is no 62: that would need a second character.',
+        bad: '10 digits + 26 lowercase letters use up 0–35, so <code>A</code> = 36 and <code>Z</code> = 61. The value 62 needs two characters: <code>10</code>.' },
+    ], () => { again(); setTimeout(() => Q.clearStage(1), 700); }), 600);
+  }
+  buildKeyboard(kb, tap);
+  kb.insertAdjacentHTML('afterbegin', '<div class="kb-legend"><span>Tap a key any time to see its value. When a remainder is waiting, tap its character.</span></div>');
+  start(11157, false);
+});
+
+/* ================= STAGE 2: decode it back ================= */
+Q.onStage(2, () => {
+  const PUZ = [
+    { c: '2TX', a: 11157n, note: 'The round trip: the code from stage 1 decodes back to the same ID.' },
+    { c: '10', a: 62n, note: 'Just like "10" in base 10 means ten, "10" in base 62 means sixty-two: one 62 and nothing else.' },
+    { c: 'zz', a: 2205n, note: '' },
+  ];
+  PUZ[2].note = `The largest two-character code made only of digits and lowercase letters. Two-character codes keep going with uppercase: 2,206 is <code>${enc(2206)}</code>, all the way up to 3,843, which is <code>${enc(3843)}</code>. Then 3,844 = 62² needs three: <code>${enc(3844)}</code>.`;
+  let solved = 0;
+  $('#puzzles').innerHTML = PUZ.map((p, k) => {
+    const L = p.c.length;
+    return `<div class="puz" data-k="${k}"><div class="puz-h"><span>Puzzle ${k + 1}: <code style="font-size:18px">${p.c}</code> → ID?</span><span class="pz-st small muted">unsolved</span></div>
+      <div class="tiles">${[...p.c].map((ch, j) => `<div class="tile ${kindOf(ch)}"><b>${ch}</b><div class="val"></div><div class="pw">× ${fmt(62 ** (L - 1 - j))}</div></div>`).join('')}</div>
+      <div class="row"><input class="numin" style="width:150px" inputmode="numeric" autocomplete="off" aria-label="ID for ${p.c}"><button class="btn primary pz-go">Check</button><button class="btn pz-hint">Show character values</button></div>
+      <div class="work"></div></div>`;
+  }).join('');
+  $$('#puzzles .puz').forEach(box => {
+    const p = PUZ[+box.dataset.k], inp = $('input', box), work = $('.work', box);
+    let missed = false, done = false;
+    const showVals = () => { $$('.tile', box).forEach((t, j) => $('.val', t).textContent = '= ' + ALPH.indexOf(p.c[j])); };
+    const L = p.c.length;
+    const breakdown = () => [...p.c].map((ch, j) => `${ALPH.indexOf(ch)} × ${fmt(62 ** (L - 1 - j))}`).join(' + ') + ' = ' + fmt(p.a);
+    $('.pz-hint', box).onclick = showVals;
+    const go = () => {
+      if (done) return;
+      const v = inp.value.replace(/[,\s]/g, '');
+      if (!/^\d+$/.test(v)) { work.innerHTML = '<span style="color:var(--bad)">Type a whole number.</span>'; return; }
+      if (BigInt(v) === p.a) {
+        done = true; inp.classList.add('ok'); inp.disabled = true; box.classList.add('done'); showVals();
+        $('.pz-st', box).textContent = '✓ solved';
+        work.innerHTML = `${breakdown()} ✓<div style="font-family:var(--font);font-size:14px;margin-top:4px">${p.note}</div>`;
+        Q.addXP(15, $('.pz-go', box));
+        $('.pz-go', box).disabled = true;
+        if (++solved === PUZ.length) setTimeout(() => Q.clearStage(2), 900);
+      } else {
+        inp.classList.remove('bad'); void inp.offsetWidth; inp.classList.add('bad');
+        if (!missed) { missed = true; Q.loseHeart($('.pz-go', box)); }
+        showVals();
+        work.innerHTML = `<span style="color:var(--bad)">Not ${fmt(BigInt(v))}.</span> Multiply each character's value by the number under it, then add. ${L > 1 ? `The leftmost character is worth the most.` : ''}`;
+      }
+    };
+    $('.pz-go', box).onclick = go; onKey(inp, go);
+  });
+
+  /* machine mode */
+  let token = 0, used = false;
+  const mId = $('#mId'), mCode = $('#mCode'), lad = $('#mLad'), out = $('#mOut');
+  function touch(el) { if (!used) { used = true; Q.addXP(10, el); } }
+  async function runEnc() {
+    const raw = mId.value.replace(/[,\s]/g, '');
+    if (!/^\d{1,40}$/.test(raw)) { out.innerHTML = '<span style="color:var(--bad)">Type a whole number (digits only, up to 40 of them).</span>'; return; }
+    const my = ++token; let n = BigInt(raw);
+    lad.innerHTML = ''; mCode.value = ''; touch($('#mEnc'));
+    const code = enc(n);
+    if (n === 0n) lad.innerHTML = '<div>0 is just <span class="ch dig">0</span></div>';
+    while (n > 0n) {
+      const q = n / 62n, r = Number(n % 62n);
+      lad.insertAdjacentHTML('beforeend', `<div>${fmt(n)} ÷ 62 = ${fmt(q)} r ${r} → <span class="ch ${kind(r)}">${ALPH[r]}</span></div>`);
+      lad.scrollTop = lad.scrollHeight;
+      n = q;
+      if (!Q.reduced) { await sleep(220); if (my !== token) return; }
+    }
+    mCode.value = code;
+    out.innerHTML = `${fmt(BigInt(raw))} → <b>${code}</b> · ${code.length} character${code.length === 1 ? '' : 's'} · ${BigInt(raw).toString(2).length} bits · tinyurl.com/${code}`;
+  }
+  async function runDec() {
+    const s = mCode.value.trim();
+    if (!/^[0-9a-zA-Z]{1,24}$/.test(s)) { out.innerHTML = '<span style="color:var(--bad)">Use only 0–9, a–z and A–Z (up to 24 characters).</span>'; return; }
+    const my = ++token; lad.innerHTML = ''; mId.value = ''; touch($('#mDec'));
+    let total = 0n; const L = s.length;
+    for (let j = 0; j < L; j++) {
+      const v = ALPH.indexOf(s[j]), pw = 62n ** BigInt(L - 1 - j), part = BigInt(v) * pw;
+      total += part;
+      lad.insertAdjacentHTML('beforeend', `<div><span class="ch ${kind(v)}">${s[j]}</span> = ${v} × ${pow62(L - 1 - j)} (${fmt(pw)}) = ${fmt(part)} · running total ${fmt(total)}</div>`);
+      lad.scrollTop = lad.scrollHeight;
+      if (!Q.reduced) { await sleep(220); if (my !== token) return; }
+    }
+    mId.value = total.toString();
+    out.innerHTML = `<b>${s}</b> → ${fmt(total)}`;
+  }
+  $('#mEnc').onclick = runEnc; $('#mDec').onclick = runDec;
+  onKey(mId, runEnc); onKey(mCode, runDec);
+});
+
+/* ================= STAGE 3: watch the code grow ================= */
+Q.onStage(3, () => {
+  const T = [1, 2, 3, 4, 5, 6, 7].map(k => 62 ** k);          // 62 … 3,521,614,606,208 (safe in a Number)
+  const PER_DAY = 1e8, TEN_YEARS = 365e9;
+  const goals = new Set();
+  let id = 1, speed = 1, timer = null, running = false, holding = false, predicted = null, passed = false, mode = 'ctr', quizShown = false;
+  const OPTS = ['365,000,000,000', '56,800,235,584', '3,521,614,606,208'], CORRECT = 1;
+  // prediction
+  const pbox = $('#predict3');
+  pbox.innerHTML = `<div class="step">Predict first</div><h3>The counter starts at ID 1. At which ID does the code first need <b>7 characters</b>?</h3><div class="opts"></div><div class="explain"></div>`;
+  shuffle(OPTS.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+    const b = document.createElement('button'); b.className = 'opt mono'; b.textContent = 'ID ' + o; b.dataset.i = i;
+    b.onclick = () => {
+      if (predicted !== null) return;
+      predicted = i; $$('.opt', pbox).forEach(x => x.disabled = true); b.classList.add('picked');
+      const ex = $('.explain', pbox); ex.className = 'explain show'; ex.style.background = 'var(--accent-soft)';
+      ex.innerHTML = '<b>Locked in.</b> Now press ▶ Run and watch. Use the speed buttons (and ⏭) so you aren\'t here all year.';
+      checkGoal('#s3goals', 'pred', goals, 5);
+      $('#oRun').disabled = false; $('#oSkip').disabled = false;
+      logTo('olog', `Your prediction: ID ${o}.`);
+    };
+    $('.opts', pbox).appendChild(b);
+  });
+  function gradePrediction() {
+    if (predicted === null || pbox.dataset.graded) return;
+    pbox.dataset.graded = '1';
+    const ok = predicted === CORRECT, ex = $('.explain', pbox), btn = $(`.opt[data-i="${predicted}"]`, pbox);
+    btn.classList.add(ok ? 'right' : 'wrong'); if (!ok) $(`.opt[data-i="${CORRECT}"]`, pbox).classList.add('right');
+    ex.className = 'explain show ' + (ok ? 'good' : 'bad'); ex.style.background = '';
+    ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + '7 characters start at 62⁶ = <b>56,800,235,584</b>, which is written <code>1000000</code>, just like 1,000,000 is the first 7-digit number in base 10. 365 billion is the 10-year total (still 7 characters). 3.5 trillion is 62⁷, where an <b>8th</b> character would be needed.';
+    ok ? Q.addXP(20, btn) : Q.loseHeart(btn);
+  }
+  // ladder table
+  function ladder() {
+    const len = enc(id).length;
+    $('#lad7').innerHTML = `<thead><tr><th>Length</th><th>IDs</th><th>Starts</th></tr></thead><tbody>${
+      [1, 2, 3, 4, 5, 6, 7].map(k => {
+        const lo = k === 1 ? 1 : T[k - 2], hi = T[k - 1] - 1, day = Math.max(1, Math.round(lo / PER_DAY));
+        const when = day === 1 ? 'day 1' : `~day ${fmt(day)}${day > 365 ? ` (${(day / 365).toFixed(1)} yrs)` : ''}`;
+        return `<tr class="${k === len && mode === 'ctr' ? 'cur' : k < len ? 'past' : ''}"><td>${k} char${k > 1 ? 's' : ''}</td><td>${fmt(lo)} – ${fmt(hi)}</td><td>${when}</td></tr>`;
+      }).join('')}</tbody>`;
+  }
+  function slots(code, max, rollFrom) {
+    const box = $('#oslots');
+    box.classList.toggle('eleven', max > 7);
+    const pad = Math.max(0, max - code.length);
+    box.innerHTML = Array.from({ length: pad }, () => '<div class="oslot ghost">·</div>').join('') +
+      [...code].map((c, j) => `<div class="oslot${rollFrom !== undefined && j >= rollFrom && !Q.reduced ? ' roll' : ''}">${c}</div>`).join('');
+  }
+  let prevCode = '1';
+  function render(roll) {
+    if (mode !== 'ctr') return;
+    const code = enc(id);
+    let from;
+    if (roll) { from = 0; } else { for (let j = 0; j < code.length; j++) if (code[j] !== prevCode[j]) { from = j; break; } if (code.length !== prevCode.length) from = 0; if (speed > 1000) from = undefined; }
+    slots(code, 7, from);
+    prevCode = code;
+    $('#oid').textContent = 'ID ' + fmt(id);
+    $('#olen').textContent = `${code.length} character${code.length > 1 ? 's' : ''} · tinyurl.com/${code}`;
+    const day = Math.max(1, Math.round(id / PER_DAY));
+    $('#oday').textContent = `📅 At 100M new links a day, ID ${fmt(id)} is made on ${day === 1 ? '' : 'about '}day ${fmt(day)}${day > 365 ? ` (~${(day / 365).toFixed(1)} years in)` : ''}.${id >= TEN_YEARS ? ' That’s past the 10-year mark.' : ''}`;
+    ladder();
+  }
+  function stop() { running = false; clearInterval(timer); timer = null; $('#oRun').textContent = '▶ Run'; }
+  function play() {
+    if (mode !== 'ctr' || predicted === null) return;
+    if (id >= T[6]) { logTo('olog', 'The counter is at 62⁷. Press ↻ to start again.'); return; }
+    running = true; $('#oRun').textContent = '⏸ Pause';
+    clearInterval(timer); timer = setInterval(tick, Q.reduced ? 120 : 80);
+  }
+  async function tick() {
+    if (holding) return;
+    const next = id + speed;
+    const t = T.find(x => id < x && x <= next);
+    if (t === undefined) { id = next; render(false); return; }
+    id = t; render(true);
+    const k = T.indexOf(t) + 2;
+    logTo('olog', `ID ${fmt(t)} = ${pow62(k - 1)} → <b>${enc(t)}</b>: the code now needs <b>${k}</b> characters.`, k >= 7 ? 'w' : 'g');
+    if (t === T[5] && !passed) {
+      passed = true; stop();
+      gradePrediction();
+      checkGoal('#s3goals', 'seven', goals, 10);
+      logTo('olog', 'Day 568, about 1.6 years in. Every link made for the next ~95 years fits in 7 characters.', 'g');
+      $('#sfwrap').classList.add('on');
+      $('#sfnote').innerHTML = 'Chapter 7’s Snowflake generator is the obvious way to get unique IDs across many servers. Flip the switch: what happens to the code length?';
+      return;
+    }
+    if (t === T[6]) { stop(); logTo('olog', '62⁷ ≈ 3.5 trillion: 8 characters. At 100M a day that’s ~96 years away.', 'w'); return; }
+    holding = true; await sleep(Q.reduced ? 100 : 900); holding = false;
+  }
+  $('#oRun').onclick = () => running ? stop() : play();
+  $('#oSkip').onclick = () => {
+    if (mode !== 'ctr' || predicted === null) return;
+    const t = T.find(x => x > id);
+    if (!t) return;
+    const target = t - 5 * speed;
+    if (target > id) { id = target; render(false); logTo('olog', `⏭ jumped to ID ${fmt(id)}, just before the code grows.`); }
+    if (!running) play();
+  };
+  $('#oReset').onclick = () => { stop(); id = 1; prevCode = '1'; if (mode === 'ctr') render(false); logTo('olog', '↻ counter back to ID 1'); };
+  $$('#oSpeed button').forEach(b => b.onclick = () => { speed = +b.dataset.v; $$('#oSpeed button').forEach(x => x.classList.toggle('on', x === b)); });
+  // Snowflake toggle
+  const EPOCH = 1288834974657n;
+  function snowflakeNow() { return ((BigInt(Date.now()) - EPOCH) << 22n) | (1n << 17n) | (1n << 12n); }
+  const MAX63 = (1n << 63n) - 1n;
+  $$('#srcSeg button').forEach(b => b.onclick = () => {
+    mode = b.dataset.s; $$('#srcSeg button').forEach(x => x.classList.toggle('on', x === b));
+    if (mode === 'sf') {
+      stop();
+      const sf = snowflakeNow(), code = enc(sf);
+      slots(code, 11, 0);
+      $('#oid').textContent = 'ID ' + fmt(sf);
+      $('#olen').textContent = `${code.length} characters · tinyurl.com/${code}`;
+      $('#oday').textContent = `A Snowflake made right now: ${sf.toString(2).length} bits (timestamp, machine and sequence packed into 64 bits).`;
+      $('#sfnote').innerHTML = `Even a brand-new Snowflake ID is a huge number, because the timestamp sits in the high bits. The largest possible one, 2⁶³ − 1 = ${fmt(MAX63)}, encodes to <code>${enc(MAX63)}</code>: <b>11 characters</b>. The counter gave 7 for the next century.`;
+      $('#oRun').disabled = true; $('#oSkip').disabled = true;
+      ladder();
+      logTo('olog', `Snowflake ID → <b>${code}</b> (${code.length} characters). Ouch.`, 'w');
+      if (checkGoal('#s3goals', 'sf', goals, 10)) showQuiz();
+    } else {
+      $('#oRun').disabled = predicted === null; $('#oSkip').disabled = predicted === null;
+      $('#sfnote').innerHTML = 'Back to the counter.';
+      prevCode = ''; render(true);
+    }
+  });
+  function showQuiz() {
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => Q.quiz($('#s3quiz'), {
+      q: 'Why does a 64-bit Snowflake ID turn into an 11-character code instead of 7?',
+      options: ['Numbers near 2⁶³ need about 10.6 base-62 digits', 'Snowflake codes spell the machine ID in letters', 'Base 62 pads every code up to eleven characters'],
+      correct: 0,
+      good: 'Each base-62 character carries about 5.95 bits (log₂ 62). 63 bits ÷ 5.95 ≈ 10.6, so you need 11 characters. A counter that stays below 62⁷ ≈ 3.5 trillion fits in 7. That’s why short-link services prefer counter-style IDs, such as ticket servers or pre-allocated ranges.',
+      bad: 'Base 62 just writes the number down, with no padding and no special fields. The number itself is huge: 63 bits ÷ ~5.95 bits per character ≈ 10.6, so 11 characters.',
+      onDone: () => setTimeout(() => Q.clearStage(3), 900),
+    }), 500);
+  }
+  render(false);
+});
+
+/* ================= STAGE 4: the guessing game ================= */
+Q.onStage(4, () => {
+  const LEAKS = [
+    { e: '📄', t: 'Doc: "Q3 salary review (DRAFT)"', h: 'docs.example.com/d/8f2k…/edit', n: 'Anyone with the link can edit' },
+    { e: '🗺️', t: 'Directions: 14 Elm St → Riverside Clinic', h: 'maps.example.com/dir/14+Elm+St/…', n: 'Reveals a home address' },
+    { e: '📹', t: 'Video call: "Weekly board meeting"', h: 'meet.example.com/qzx-ploa-rte', n: 'No waiting room, no password' },
+    { e: '🗂️', t: 'Folder: "passport scans"', h: 'drive.example.com/folder/1aZ…', n: 'Shared publicly by mistake' },
+    { e: '🧾', t: 'Invoice #4471, paid by card', h: 'pay.example.com/inv/4471?k=…', n: 'Name, email, last 4 card digits' },
+    { e: '🔑', t: 'Password-reset page', h: 'app.example.com/reset?token=…', n: 'Token still valid' },
+    { e: '🧪', t: 'Lab results (PDF)', h: 'files.example.com/lab-2291.pdf', n: 'No login required' },
+    { e: '📝', t: 'Survey: staff feedback (with answers)', h: 'forms.example.com/r/77Qe…', n: 'Response page left open' },
+  ];
+  const M = 62n ** 7n, A = 2654435761n, B = 1234567890123n, ISSUED = 4000000n;
+  // inverse of A mod M (A is odd and not a multiple of 31, so it exists)
+  function inv(a, m) { let [r0, r1, s0, s1] = [a % m, m, 1n, 0n]; while (r1) { const q = r0 / r1; [r0, r1] = [r1, r0 - q * r1]; [s0, s1] = [s1, s0 - q * s1]; } return ((s0 % m) + m) % m; }
+  const AINV = inv(A, M);
+  const scr = id => (id * A + B) % M, unscr = c => (((c - B) % M + M) % M * AINV) % M;
+  const pad7 = n => enc(n).padStart(7, '0');
+  const goals = new Set();
+  let mode = 'seq', cur = 11157n, leaks = 0, guesses = 0, quizShown = false;
+  function card(html, cls) { const d = $('#dests'); d.insertAdjacentHTML('afterbegin', `<div class="dest ${cls}">${html}</div>`); while (d.children.length > 6) d.lastElementChild.remove(); }
+  $('#tryNext').onclick = e => {
+    const btn = e.currentTarget;
+    if (mode === 'seq') {
+      cur += 1n; const code = enc(cur), L = LEAKS[leaks % LEAKS.length];
+      leaks++;
+      card(`<div class="u">tinyurl.com/${code}</div><div class="t">${L.e} ${L.t}</div><div class="h">→ ${L.h}</div><div class="n">⚠ ${L.n}</div>`, 'leak');
+      $('#found').textContent = leaks;
+      $('#tryNext').textContent = `🔎 Try the next code (${enc(cur + 1n)})`;
+      logTo('alog', `${code} = ID ${fmt(cur)}: just add 1 to the ID and re-encode. Hit.`, 'e');
+      if (leaks === 5) {
+        checkGoal('#s4goals', 'leak', goals, 15);
+        const a = $('#alarm'); a.className = 'alarm on';
+        a.innerHTML = '<b>🚨 You just enumerated 5 private links</b> in 5 tries, with zero skill. A script could walk millions of codes an hour. The codes were never secret: they were a counter in disguise.';
+        $('#defend').classList.add('on'); $('#leakNote').style.display = 'block';
+      }
+    } else {
+      guesses++;
+      cur = (cur + 1n) % M;
+      const code = pad7(cur), id = unscr(cur), hit = id >= 1n && id <= ISSUED;
+      card(hit ? `<div class="u">tinyurl.com/${code}</div><div class="t">🎯 A real link</div><div class="h">ID ${fmt(id)}</div><div class="n">Lucky guess</div>`
+        : `<div class="u">tinyurl.com/${code}</div><div class="t">404 · nothing here</div><div class="h">un-scrambles to ID ${fmt(id)}, never issued</div>`, hit ? 'leak' : 'miss');
+      logTo('alog', `${code} → ${hit ? 'hit' : '404'}`, hit ? 'e' : 'g');
+      if (guesses === 5) {
+        checkGoal('#s4goals', 'safe', goals, 15);
+        const a = $('#alarm'); a.className = 'alarm on safe';
+        a.innerHTML = `<b>🛡️ 0 for 5.</b> The service has issued about ${fmt(ISSUED)} links, spread over 62⁷ ≈ 3.5 trillion possible codes, so a guess hits about 1 time in ${fmt(M / ISSUED)}. Note what this costs: every code is now a full 7 characters. <span class="muted">Honest catch: after 10 years at 100M a day (365 billion links) about 1 guess in 10 hits, so you still want rate limiting, and longer codes for anything sensitive.</span>`;
+        showQuiz();
+      }
+    }
+  };
+  $('#scrOn').onclick = e => {
+    if (mode === 'scr') return;
+    mode = 'scr'; guesses = 0; e.currentTarget.disabled = true; e.currentTarget.textContent = '✓ Scrambling is on';
+    cur = scr(11157n);
+    $('#myCode').textContent = 'tinyurl.com/' + pad7(cur);
+    $('#dests').innerHTML = ''; $('#alarm').className = 'alarm';
+    $('#tryNext').textContent = '🔎 Attacker: try the next code';
+    logTo('alog', `Scrambling on. Your same link (ID 11157) is now ${pad7(cur)}. The attacker tries its neighbours.`, 'w');
+  };
+  function showQuiz() {
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => seqQuiz($('#s4quiz'), [
+      { tag: 'Check 1 of 2', q: 'Why could the attacker walk from <code>2TX</code> to other people’s links?',
+        options: ['IDs go up by one, so the next code is predictable', 'Base 62 is a weak kind of encryption to crack', 'Seven characters are too few to stay unique'], correct: 0,
+        good: 'Base 62 isn’t encryption at all, just another way to write the number. If the number is a counter, the codes are a counter too: add 1 and re-encode.',
+        bad: 'Base 62 isn’t encryption, and the codes are perfectly unique. The problem is that the ID is a counter, so the next code is always "this ID + 1, re-encoded".' },
+      { tag: 'Check 2 of 2', q: 'Which change makes the next short code hard to guess?',
+        options: ['Scramble the ID with a secret key, then encode', 'Use only lowercase letters in the alphabet', 'Cache the redirect responses for longer'], correct: 0,
+        good: 'A keyed, reversible scramble (or random IDs) breaks the sequence but keeps IDs unique. Pair it with rate limiting and longer codes for sensitive links.',
+        bad: 'A smaller alphabet makes codes <i>easier</i> to guess, and caching doesn’t change which codes exist. Scramble (or randomise) the ID before encoding, and rate-limit the redirect endpoint.' },
+    ], () => setTimeout(() => Q.clearStage(4), 700)), 500);
+  }
+  $('#tryNext').textContent = '🔎 Try the next code (2TY)';
+});
+
+/* ================= STAGE 5: sort the showdown ================= */
+Q.onStage(5, () => {
+  const CARDS = [
+    { t: 'Short URL length is fixed', a: 'hash', hint: 'Base 62 writes the whole ID, so bigger IDs make longer codes.' },
+    { t: 'Needs a unique ID generator', a: 'b62', hint: 'Hashing works on the long URL itself. Which approach starts from an ID?' },
+    { t: 'Collisions can happen and must be resolved', a: 'hash', hint: 'Unique IDs give unique codes. Which approach cuts a hash down to 7 characters?' },
+    { t: 'The next short URL is easy to guess', a: 'b62', hint: 'Which approach is a counter in disguise?' },
+    { t: 'Length grows as the ID grows', a: 'b62', hint: 'Hashing always keeps exactly 7 characters.' },
+    { t: 'Collisions are impossible', a: 'b62', hint: 'Hashes of different URLs can share their first 7 characters.' },
+    { t: 'No unique ID generator needed', a: 'hash', hint: 'Base 62 has nothing to encode without an ID.' },
+    { t: 'The next short URL can’t be worked out', a: 'hash', hint: 'With an ID that goes up by 1, the next code is just ID + 1, re-encoded.' },
+  ];
+  let left = CARDS.length;
+  const pool = $('#pool');
+  pool.innerHTML = shuffle(CARDS.map((c, i) => ({ c, i }))).map(({ c, i }) => `<div class="pcard" data-i="${i}"><p>${c.t}</p><div class="row"><button class="opt" data-k="hash">🎲 Hash</button><button class="opt" data-k="b62">🔢 Base 62</button></div><div class="hint" hidden></div></div>`).join('');
+  $$('.pcard', pool).forEach(el => {
+    const c = CARDS[+el.dataset.i]; let missed = false;
+    $$('.opt', el).forEach(b => b.onclick = () => {
+      if (b.dataset.k === c.a) {
+        Q.addXP(5, b);
+        const li = document.createElement('li'); li.textContent = c.t;
+        $(c.a === 'hash' ? '#colHash' : '#colB62').appendChild(li);
+        el.remove();
+        if (--left === 0) done();
+      } else {
+        el.classList.remove('bounce'); void el.offsetWidth; el.classList.add('bounce');
+        if (!missed) { missed = true; Q.loseHeart(b); }
+        const h = $('.hint', el); h.hidden = false; h.textContent = '↩ Bounced. ' + c.hint;
+      }
+    });
+  });
+  function done() {
+    pool.innerHTML = '<p class="small muted" style="margin:0">All 8 sorted. Here is the same thing as the book’s table:</p>';
+    $('#cmpwrap').classList.add('on');
+    setTimeout(() => Q.clearStage(5), 900);
+  }
+});
+
+/* ================= STAGE 6: boss ================= */
+Q.onStage(6, () => Q.boss($('#boss'), {
+  name: '♊ The Twin Generators',
+  xp: 15,
+  choices: [
+    { k: 'hash', label: 'Hash + collision', sub: 'fixed length, no ID service' },
+    { k: 'b62', label: 'Base 62 of an ID', sub: 'unique by construction' },
+  ],
+  scenarios: [
+    { e: '🧱', t: 'No ID service', d: 'The team has no distributed unique ID generator and can’t build one this quarter.', a: 'hash',
+      why: 'Base 62 conversion has nothing to encode without a unique ID. Hashing the long URL needs no ID at all. You pay for it with a collision check on every insert.' },
+    { e: '🔁', t: 'No retry loops', d: 'The insert path must never loop through "collision → add a suffix → hash again → check again".', a: 'b62',
+      why: 'Unique IDs give unique codes, so there is never a collision to retry. Hash + collision resolution can need several rounds when 7-character prefixes clash.' },
+    { e: '🧪', t: 'Private lab reports', d: 'Short links will point at patients’ lab results. Nobody should find one by trying nearby codes.', a: 'hash',
+      why: 'A hash-based code doesn’t follow a sequence, so there is no "next" code to try. Plain base 62 codes can be walked one by one; you’d have to scramble the IDs first. And either way, put the reports behind a login. A short link is not a password.' },
+    { e: '🚀', t: 'Short and sweet at launch', d: 'Marketing wants the shortest possible codes during the first year.', a: 'b62',
+      why: 'Base 62 codes grow with the ID. The first 916 million links fit in 5 characters, and at 100M a day the 7th character only shows up around day 568. Hash codes are the full 7 characters from day one.' },
+    { e: '🕵️', t: 'Competitors are counting', d: 'Security review: a rival must not be able to estimate how many links you create each day.', a: 'hash',
+      why: 'With sequential IDs, a rival makes one link today and one tomorrow, decodes both, and subtracts: that’s your daily volume. Hash-based codes give nothing away.' },
+    { e: '⚡', t: 'Zero uniqueness lookups', d: 'The write path should not ask the database whether a new code is already taken.', a: 'b62',
+      why: 'A unique ID makes the code unique by construction, so there is nothing to check. Hashing has to check the database (or a Bloom filter, a compact "have I seen this?" set) on every insert. Checking whether the long URL already has a code is a separate, optional lookup.' },
+  ],
+  outro: 'The pattern: base 62 when you have an ID generator and want zero collisions and short early codes; hashing when you can’t run one, or when codes must not reveal a sequence.',
+  onDone: () => Q.clearStage(6),
+}));
+
+/* ================= STAGE 7: interview drill ================= */
+Q.onStage(7, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"You need a 7-character code for every long URL. Hashing or base 62: which would you pick, and why?"</i>',
+  placeholder: 'I’d go with base 62 because…',
+  model: '"I’d take a unique ID from a distributed ID generator and base-62 encode it, using 0–9, a–z and A–Z. 11157, for example, becomes 2TX. Since the IDs are unique, there are never collisions and no retry loop. The trade-offs: the code length grows with the ID instead of being fixed, I depend on an ID generator, and sequential IDs make the next code guessable. So I’d scramble the ID before encoding, or use random IDs, and rate-limit the redirect path. Hash plus collision resolution gives fixed-length, unguessable codes with no ID service, but every insert needs a uniqueness check."',
+  checks: ['I explained base 62 encoding (0–9, a–z, A–Z)', 'I listed the trade-offs from the comparison table', 'I named the guessability risk and a fix'],
+  onDone: () => Q.clearStage(7),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

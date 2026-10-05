@@ -1,0 +1,408 @@
+{
+  "world": 13,
+  "chapterTitle": "Design a Search Autocomplete System",
+  "worldName": "Typeahead Tower",
+  "quests": [
+    {
+      "n": "13.1",
+      "slug": "autocomplete-scope-and-estimation",
+      "t": "Every Keystroke Counts",
+      "d": "Scope autocomplete, do the envelope math, and see why one SQL table can't keep up",
+      "boss": false,
+      "badge": "⌨️ Badge: Keystroke Counter",
+      "winTitle": "Problem scoped, numbers crunched",
+      "goal": "Your win today: in the first 5 minutes you can pin down what autocomplete must do (prefix match, top 5, ranked by popularity, under 100 ms), derive ~24,000 QPS / ~48,000 peak / 0.4 GB a day out loud, and explain why a frequency table queried with LIKE 'prefix%' collapses at that scale.",
+      "bookSections": "Step 1 – Understand the problem and establish design scope (requirements, back-of-the-envelope estimation); Step 2 – Propose high-level design and get buy-in (data gathering service, query service, frequency table + SQL query)",
+      "stages": [
+        {
+          "title": "Ask before you build",
+          "sub": "The requirements interview",
+          "teaches": "Autocomplete (also called typeahead, search-as-you-type, incremental search): as you type, the box suggests the most likely full queries. The book's scoping Q&A pins down: (1) matching only at the BEGINNING of a query (prefix match), not in the middle; (2) return 5 suggestions; (3) ranked by popularity = historical query frequency; (4) no spell check or autocorrect; (5) English queries only (multi-language is a nice-to-have later); (6) all lowercase alphabetic characters, no capitals or special characters; (7) 10 million daily active users (DAU = distinct people using it per day). Asking these first is what turns a vague prompt into a solvable one.",
+          "interaction": "Top: a fake search box with a dropdown. Below: 9 question cards the learner can 'ask the interviewer'. 7 are useful (match at start or anywhere? how many suggestions? how are they ranked? spell check? which languages? capitals/special chars? how many users?) and each reveals the book's answer onto a pinned 'Requirements board'. 2 are time-wasters ('What font should the dropdown use?', 'Which cloud provider?') — tapping one shows the interviewer's eyebrow-raise, costs a heart. When all 7 are asked, the board is complete and the fake search box comes alive: typing 't' then 'tw' shows exactly 5 suggestions and a request log underneath printing one line per keystroke (GET /autocomplete?q=t, GET /autocomplete?q=tw). End with a 3-question Q.quiz.",
+          "check": "Quiz: (1) User types 'peak' — should 'twin peak' be suggested under the book's rules? (No: matching is only at the beginning.) (2) What decides the order of the 5 suggestions? (Historical query frequency.) (3) User types 'twiter' — does the system fix the typo? (No, spell check is out of scope.)"
+        },
+        {
+          "title": "What 'fast' means",
+          "sub": "Non-functional requirements",
+          "teaches": "Non-functional requirements (how well, not what): FAST — results must appear as fast as the user types; the book cites Facebook's typeahead write-up: within 100 milliseconds, or the box stutters. RELEVANT — suggestions relate to the prefix. SORTED — ranked by the popularity model. SCALABLE — handles high traffic. HIGHLY AVAILABLE — stays up and fast when part of the system is offline, slows down, or hits network errors.",
+          "interaction": "Predict-then-watch latency sim. A ghost typist types 'dinner' at one character every 150 ms. A slider sets server response time (20 ms → 600 ms). Before playing, the learner predicts the slowest setting that still 'feels instant' (choices: 50, 100, 300, 600 ms). Play: at ≤100 ms each keystroke's suggestions appear before the next key; above that, responses arrive out of date (suggestions for 'din' showing while the box says 'dinne'), drawn with a red 'stale' tag. Then a sort mechanic: drag 5 cards (Fast, Relevant, Sorted, Scalable, Highly available) onto their one-line definitions.",
+          "check": "Right prediction: 100 ms (the book's target). Sort must match all 5 cards; wrong drops bounce back."
+        },
+        {
+          "title": "Envelope math",
+          "sub": "Calculate, then check",
+          "teaches": "Back-of-the-envelope estimation (rough maths to size the system): 10M DAU; an average person makes 10 searches a day; an average query is 20 bytes (ASCII = 1 byte per character; ~4 words × ~5 characters). The client sends a request for EVERY character typed, so one search ≈ 20 requests ('dinner' alone sends q=d, q=di, q=din, q=dinn, q=dinne, q=dinner). QPS = 10,000,000 × 10 × 20 / 24 h / 3600 s ≈ 24,000 (exactly ~23,150; the book rounds up). Peak QPS = 2 × QPS ≈ 48,000. Storage: assume 20% of daily queries are new → 10,000,000 × 10 × 20 bytes × 20% = 0.4 GB of new data per day.",
+          "interaction": "Calculate-and-check worksheet, four rows unlocked in order on screen but all editable: (a) requests per search, (b) average QPS, (c) peak QPS, (d) new storage per day. Each row has a number input, a 'Check' button and a 'Hint' button (hint reveals the formula with the learner's own numbers substituted). Accept ±10% (so 21,000–26,000 for QPS). A live 'dinner' animation above row (a) shows six request bubbles flying off as letters appear, so the learner can count them. After all four are right, a summary card prints the four numbers in big type for the cheat sheet.",
+          "check": "(a) ~20, (b) ~24,000 QPS, (c) ~48,000, (d) ~0.4 GB/day. Wrong answers show which factor was missed (e.g. forgot × 20 requests per search → 1,157 QPS)."
+        },
+        {
+          "title": "Two boxes and a table",
+          "sub": "The high-level design, and where it breaks",
+          "teaches": "At a high level the system is two services. DATA GATHERING SERVICE: collects user queries and aggregates them in real time into a frequency table (columns: query, frequency). QUERY SERVICE: given a prefix, returns the 5 most frequent queries, e.g. with SQL: SELECT * FROM frequency_table WHERE query LIKE 'tw%' ORDER BY frequency DESC LIMIT 5. Book example table: twitter 35, twitch 29, twilight 25, twin peak 21, twitch prime 18, twitter search 14, twillo 10, twin peak sf 8 → typing 'tw' returns twitter, twitch, twilight, twin peak, twitch prime. This is fine for small data, but at scale the database becomes the bottleneck: every keystroke runs a prefix scan plus sort, ~48,000 times a second at peak, while every completed search also writes to the same table.",
+          "interaction": "Two-panel sim. Left (Data gathering): buttons for searches 'twitch', 'twitter', 'twitter', 'twillo'; each click bumps a row's frequency in a live table (new rows insert at 1). Right (Query service): learner types 'tw'; the SQL query is shown, matching rows glow, sort animates, top 5 get a gold border. Then a 'Scale it' slider: table size 1K → 1M → 1B rows and traffic 10 → 48,000 QPS. A DB-load gauge climbs into red; a request queue piles up under it. Predict first: 'At what point does this design fail — the number of rows, the number of requests, or both?'",
+          "check": "Prediction answer: both (more rows to scan and sort per request × tens of thousands of requests a second, plus write contention). Short Q.quiz: which LIMIT value? (5) Which keyword makes this a prefix match? (LIKE 'tw%')."
+        },
+        {
+          "title": "Boss: The Scope Creeper",
+          "sub": "Interviewer scenarios",
+          "teaches": "Applying scope and estimates under pressure.",
+          "interaction": "Q.boss() with 5 scenario cards, 3 choices each: (1) Interviewer: 'Should we also autocorrect typos?' → right: confirm it's out of scope for now, note it as an extension. (2) 'Your QPS seems high — why 20 requests per search?' → right: a request per character, average query 20 characters. (3) 'Traffic doubles at peak — what do you size for?' → ~48,000 QPS. (4) 'Why not just keep using the SQL frequency table?' → per-keystroke prefix scans and sorts can't hit 100 ms at 48k QPS. (5) 'How much new data per day?' → ~0.4 GB (20% of queries are new × 20 bytes).",
+          "check": "Engine-scored; wrong pick costs a heart and shows a one-line explanation."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "The first five minutes, in your words",
+          "teaches": "Free recall of scope + estimates + naive design.",
+          "interaction": "Q.drill(): prompt 'You've been asked to design search autocomplete. Give your first 5 minutes: the requirements you'd confirm, the numbers, and the first-cut design.' Learner types an answer, then self-grades against a checklist.",
+          "check": "Checklist: prefix-only matching; top 5; ranked by historical frequency; no spell check, English, lowercase; 10M DAU; <100 ms; ~24k QPS, ~48k peak; 0.4 GB/day new; two services (data gathering + query); frequency table + LIKE query works small, bottlenecks at scale."
+        }
+      ],
+      "caveats": [
+        "The 20-requests-per-search figure assumes a request on every keystroke. Real clients usually 'debounce' (wait until the user pauses for a few tens of milliseconds before sending), so real request counts are lower. The book's number is a deliberately pessimistic upper bound.",
+        "10,000,000 × 10 × 20 / 86,400 is about 23,150; the book rounds to ~24,000. Rounding up is normal in envelope math — say so out loud.",
+        "The 0.4 GB/day counts only the new query strings. It leaves out frequency counters, raw logs, and the per-node top-k lists added later, which are much bigger.",
+        "The 100 ms target comes from Facebook's typeahead article. It's a common rule of thumb, not a universal standard."
+      ],
+      "sources": [
+        { "label": "ByteByteGo — Design a Search Autocomplete System (book chapter)", "url": "https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system" },
+        { "label": "Facebook Engineering — The Life of a Typeahead Query", "url": "https://www.facebook.com/notes/facebook-engineering/the-life-of-a-typeahead-query/389105248919/" },
+        { "label": "ByteByteGo — Back-of-the-envelope estimation", "url": "https://bytebytego.com/courses/system-design-interview/back-of-the-envelope-estimation" }
+      ]
+    },
+    {
+      "n": "13.2",
+      "slug": "trie-top-k",
+      "t": "Grow the Trie",
+      "d": "The trie data structure, top-k search, and two tricks that make it O(1)",
+      "boss": false,
+      "badge": "🌳 Badge: Trie Tender",
+      "winTitle": "Top 5 in a single hop",
+      "goal": "Your win today: you can draw a trie, explain why the naive top-k lookup is O(p) + O(c) + O(c log c), and show how capping the prefix length and caching the top-k queries at every node make it O(1), and say what that speed costs in memory.",
+      "bookSections": "Step 3 – Design deep dive: Trie data structure (basic trie, frequency on nodes, top-k algorithm, limit the max length of a prefix, cache top search queries at each node)",
+      "stages": [
+        {
+          "title": "Plant a trie",
+          "sub": "A tree where every path spells a prefix",
+          "teaches": "A trie (pronounced 'try', from re-TRIE-val) is a tree for storing strings compactly. The root is the empty string. Each node stores one character, and the path from the root to a node spells a prefix. In the book's version each node can have 26 children, one per lowercase letter. Words that share a prefix share nodes: tree, try, true all go through t → tr. To support ranking, a node where a complete query ends also stores that query's frequency. Book example: tree 10, try 29, true 35, toy 14, wish 25, win 50.",
+          "interaction": "Build-it sim. An empty root on a canvas and six word chips: tree, try, true, toy, wish, win (each showing its frequency). Learner taps a chip; before it animates, they predict 'how many NEW nodes will this word add?' via +/- stepper. Then nodes grow letter by letter, reusing existing ones (reused nodes flash blue, new ones pop in green), and the end node gets a frequency badge. Order is free.",
+          "check": "Correct new-node counts depend on order; e.g. in the order tree, try, true, toy, wish, win the answers are 4 (t, tr, tre, tree), 1 (try), 2 (tru, true), 2 (to, toy), 4 (w, wi, wis, wish), 1 (win). The engine computes the right count live from the current trie. 3 correct predictions in a row = stage clear. Short Q.quiz after: 'What does a node represent?' (a prefix / the string spelled from the root)."
+        },
+        {
+          "title": "Top-k the slow way",
+          "sub": "Three steps, three costs",
+          "teaches": "Notation: p = length of the prefix, n = total nodes in the trie, c = number of children (descendants) under a given node. To get the top k for a prefix: Step 1 — find the prefix node: O(p). Step 2 — traverse its whole subtree to collect every valid query (node with a frequency): O(c). Step 3 — sort those queries and take the top k: O(c log c). Total: O(p) + O(c) + O(c log c). Book example, k = 2, user types 'be': walk b → be; subtree holds be 15, bee 20, beer 10, best 35, bet 29; sorted top 2 = best (35), bet (29). Problem: in the worst case (short prefix like 'a') you traverse most of the trie on every keystroke.",
+          "interaction": "Step-through sim on a small 'b' trie (be 15, bee 20, beer 10, best 35, bet 29). Learner types 'be' and presses three buttons in order: 'Find prefix' (path lights up, counter p = 2), 'Collect' (DFS animation visits each descendant, counter c ticks to the number visited), 'Sort & take top 2' (cards shuffle into order; best and bet rise). A cost bar shows p, c and c log c as stacked segments. Then a 'Worst case' button swaps in a 1,000,000-node trie (drawn as a dense blob) with prefix 'a': the c counter spins up to hundreds of thousands and a 100 ms budget line is blown through.",
+          "check": "Q.quiz: (1) Which step dominates for a short prefix? (sort, O(c log c), and the traversal). (2) For 'be' with k = 2, what's returned? (best, bet)."
+        },
+        {
+          "title": "Two cheats that buy O(1)",
+          "sub": "Cap the prefix, cache the answers",
+          "teaches": "Optimization 1 — limit the max prefix length: users rarely type long queries, so cap p at a small integer such as 50. Finding the prefix becomes O(small constant) = O(1). Optimization 2 — cache the top search queries at each node: store the top k (5–10 is enough) most frequent queries directly on every node, e.g. node 'be' holds [best: 35, bet: 29, bee: 20, be: 15, beer: 10]. Now there is no traversal and no sort. The revised algorithm: find the prefix node O(1) + return its cached top-k O(1) = O(1) overall. The price: much more memory (trading space for time), which the book judges worth it because speed is the top requirement.",
+          "interaction": "Same 'b' trie with two toggle switches: [Cap prefix at 50] and [Cache top-k at nodes]. With both off, typing 'be' replays the slow 3-step animation with its counters. Turning on caching makes small lists appear next to every node. Typing 'be' now lights only the path and pops the node's stored list straight into the dropdown; the 'nodes visited' counter shows 2 and the sort step is greyed out. A memory gauge beside the trie jumps when caching turns on. Predict-then-watch: before flipping caching on, the learner predicts what happens to (a) lookup time and (b) memory (up/down/same each).",
+          "check": "Prediction: lookup time down, memory up. Then Q.quiz: 'Why is capping at 50 safe?' (real queries are almost never that long). 'Why only k = 5–10 per node?' (keeps the extra memory small; we only show 5)."
+        },
+        {
+          "title": "Pay for speed",
+          "sub": "Count the copies",
+          "teaches": "Caching top-k at every node means one popular query gets copied into the list of EVERY ancestor node where it makes the top k. A query of length L can be stored in up to L + 1 lists (each of its prefix nodes plus the root). It also means one frequency change can force updates all the way up to the root. That is the write-side cost, picked up again in the next quest.",
+          "interaction": "Calculate-and-check. The screen shows 'beer' highlighted in the 'b' trie with each ancestor's top-5 list. The learner answers: (a) In how many node lists can 'beer' appear at most? (5: root, b, be, bee, beer). (b) If 'beer' climbs from 10 to 30, which nodes' lists might change? The learner taps the nodes; the engine reveals root, b, be, bee, beer, and that nodes NOT on its path (bet, best) don't change.",
+          "check": "(a) 5. (b) exactly the ancestors on the path, plus 'beer' itself; tapping 'best' or 'bet' costs a heart with explanation 'not on beer's path'."
+        },
+        {
+          "title": "Boss: The Lag Hydra",
+          "sub": "Choose the right trie move",
+          "teaches": "Applying trie reasoning to interview follow-ups.",
+          "interaction": "Q.boss() with 5 cards: (1) 'Lookup is slow for one-letter prefixes — why?' → subtree traversal + sort over huge c. (2) 'How do you make it O(1)?' → cap prefix length + cache top-k per node. (3) 'Isn't caching at every node wasteful?' → yes, it trades space for time; k is small so it's bounded. (4) 'A user pastes a 200-character query' → the prefix cap means we only look up the first 50; long queries are rare. (5) 'Why not a hash map of prefix → results instead of a tree?' → that is essentially what the cached trie becomes when stored in a key-value DB (next quest); the trie is how you BUILD those lists cheaply.",
+          "check": "Engine-scored."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "Explain the trie in 60 seconds",
+          "teaches": "Free recall.",
+          "interaction": "Q.drill(): 'Explain to the interviewer how your trie returns the top 5 for a prefix, what it costs, and how you got it to O(1).'",
+          "check": "Checklist: root = empty string, nodes = prefixes, frequency on query nodes; naive O(p) + O(c) + O(c log c); cap prefix (~50) → O(1) find; cache top-k on each node → O(1) return; cost = memory, plus updates ripple to ancestors."
+        }
+      ],
+      "caveats": [
+        "'O(1)' is a bit of a trick: lookup is really O(p), and it only counts as constant because p is capped at 50. Say 'bounded by the max prefix length' if pressed.",
+        "The book says each node has 26 children (lowercase a–z), but its own examples contain spaces ('twin peak'), so a real alphabet needs at least 27 symbols. In practice, children are stored in a map, not a fixed array of 26.",
+        "Storing the top-k on every node is effectively a precomputed prefix → answers table. Many production systems skip the in-memory tree and store exactly that table (Prefixy, for example, keeps per-prefix sorted sets in Redis).",
+        "Real ranking uses more than raw frequency (freshness, location, personalization). The book deliberately ranks by historical frequency only."
+      ],
+      "sources": [
+        { "label": "ByteByteGo — Design a Search Autocomplete System (book chapter)", "url": "https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system" },
+        { "label": "Wikipedia — Trie", "url": "https://en.wikipedia.org/wiki/Trie" },
+        { "label": "Prefixy team — How We Built Prefixy: A Scalable Prefix Search Service for Powering Autocomplete", "url": "https://medium.com/@prefixyteam/how-we-built-prefixy-a-scalable-prefix-search-service-for-powering-autocomplete-c20f98e2eff1" }
+      ]
+    },
+    {
+      "n": "13.3",
+      "slug": "data-gathering-service",
+      "t": "The Weekly Harvest",
+      "d": "Logs, aggregators, workers: how the trie gets built, stored and updated",
+      "boss": false,
+      "badge": "🌾 Badge: Log Harvester",
+      "winTitle": "Pipeline built, trie refreshed",
+      "goal": "Your win today: you can draw the data gathering pipeline (analytics logs → aggregators → aggregated data → workers → trie DB → trie cache), explain why the trie is NOT updated on every search, compare document-store vs key-value storage for the trie, and explain weekly rebuild vs in-place updates.",
+      "bookSections": "Step 3 – Design deep dive: Data gathering service (analytics logs, aggregators, aggregated data, workers, trie cache, trie DB: document store vs key-value store); Trie operations (create, update)",
+      "stages": [
+        {
+          "title": "Why not update live?",
+          "sub": "Predict, then watch the trie choke",
+          "teaches": "In the high-level design, every search updated the data in real time. The book calls this impractical for two reasons: (1) users enter billions of queries a day, and updating the trie on every one (including every ancestor's cached top-k list) would slow down the query service; (2) once the trie is built, the top suggestions barely change from hour to hour, so constant updates buy almost nothing.",
+          "interaction": "Predict-then-watch. A trie with cached lists sits under a stream of incoming searches (dots flying in). Toggle: 'Update trie on every search' vs 'Batch updates'. Learner first predicts what happens to read latency with live updates at 48,000 QPS (stays flat / rises a little / blows past 100 ms). Play: in live mode each search flashes its full ancestor path for a write, reads queue behind those writes, and a latency needle crosses the 100 ms line. A side panel shows 'top 5 for tw' before and after 10,000 searches: in live mode it's identical, so all that work changed nothing visible.",
+          "check": "Prediction: blows past 100 ms. Q.quiz: 'Give the two reasons the book rejects real-time updates.' (volume of writes slows reads; the top-k barely changes)."
+        },
+        {
+          "title": "Lay the pipeline",
+          "sub": "Tap the stages in order",
+          "teaches": "The redesigned data gathering service: ANALYTICS LOGS store raw search queries (query, time). They are append-only and not indexed. AGGREGATORS crunch the huge logs into counts; the interval depends on the product (Twitter-style real-time products need short intervals; for most autocomplete, weekly is fine). AGGREGATED DATA is a table (query, time = start of the week, frequency). WORKERS are servers that run async jobs on a schedule: they build the trie and store it in the TRIE DB (persistent storage). The TRIE CACHE is a distributed cache that keeps the trie in memory for fast reads and takes a weekly snapshot of the DB.",
+          "interaction": "Order mechanic: six shuffled component tiles (Analytics logs, Aggregators, Aggregated data, Workers, Trie DB, Trie cache). Tap them in the order data flows. Each correct tap draws an arrow and opens a one-line role card; a wrong tap shakes and costs a heart ('Workers need aggregated data first'). When finished, the full diagram stays on screen with a tiny sample row flowing through it.",
+          "check": "Correct order: Analytics logs → Aggregators → Aggregated data → Workers → Trie DB → Trie cache (weekly snapshot)."
+        },
+        {
+          "title": "Squash the logs",
+          "sub": "Raw rows into weekly counts",
+          "teaches": "Logs are huge and not in the right shape, so aggregate first. Raw rows look like (tree, 2019-10-01 22:01:01), (try, 2019-10-01 22:01:05), (tree, 2019-10-01 22:01:30)... Aggregated rows look like (tree, week of 2019-10-01, 12000), (tree, week of 2019-10-08, 15000), (toy, week of 2019-10-01, 8500). Choosing the aggregation interval is a freshness-vs-cost trade-off.",
+          "interaction": "Left: a scrolling raw log of ~30 (query, timestamp) rows across two weeks (tree, toy, try, true). Learner clicks 'Run aggregator', and rows fly into buckets and collapse into an aggregated table with per-week counts (scaled up ×1000 for realism). Then an interval slider (real-time / hourly / daily / weekly) shows two meters: 'freshness' (how fast a new trend shows up) and 'compute cost' (how often the trie must be rebuilt). Learner then picks the interval for 3 product cards: a general web search box (weekly is fine per the book), a Twitter-like trending feed (short/real-time), an internal docs search (weekly or longer).",
+          "check": "Aggregated count for 'tree' in week 1 must match the raw rows. Product picks: weekly, short interval, weekly/longer."
+        },
+        {
+          "title": "Store the trie",
+          "sub": "Document store or key-value store?",
+          "teaches": "The Trie DB has two options. (1) DOCUMENT STORE: a new trie is built weekly, so serialize the whole snapshot and store it as documents; MongoDB is the book's example. (2) KEY-VALUE STORE: turn the trie into a hash table: every prefix becomes a key, and that node's data (its cached top-k list) becomes the value. E.g. key 'be' → value [best:35, bet:29, bee:20, be:15, beer:10]. The key-value form is what makes a single-lookup read possible.",
+          "interaction": "Drag-to-map. A small cached trie (root, b, be, bee, beer, bes, best, bet) on the left; an empty key-value table on the right. The learner drags each node into the table; it lands as a row with key = its prefix and value = its top-k list. After 4 rows, the rest auto-fill. Then a 2-question 'pick the store' round: 'You rebuild the whole trie every Sunday and just need to save and load it' → document store; 'You want to fetch one prefix's answers in one lookup, and maybe shard by key' → key-value.",
+          "check": "Every row's key must equal the node's prefix string. Both store picks right."
+        },
+        {
+          "title": "Swap or patch?",
+          "sub": "Create and update the trie",
+          "teaches": "CREATE: workers build the trie from aggregated data. UPDATE option 1 (the book's choice): build a brand-new trie weekly and swap it in to replace the old one. UPDATE option 2: update individual nodes in place. Avoid this because it's slow, though it's OK if the trie is small. When you update a node, every ancestor up to the root must also update, because ancestors cache their children's top queries. Example: 'beer' goes 10 → 30. Its parents' lists must be re-ranked, e.g. 'be' becomes [best:35, beer:30, bet:29, bee:20, be:15].",
+          "interaction": "Spot-the-bug patch sim. Event card: 'beer: 10 → 30'. The learner patches the trie in place by tapping each node whose cached list must change, then pressing 'Done'. The engine then plays reads for prefixes 'b', 'be', 'bee', 'beer': any node the learner forgot shows a STALE list (beer still at 10, wrong order) highlighted in red. Second mode, 'Weekly swap': press 'Build new trie', and a fresh trie assembles off to the side, then slides in atomically while reads continue on the old one with no stale reads. Final Q.quiz.",
+          "check": "Nodes to tap: beer, bee, be, b, root (everything on the path; nodes off the path must not be tapped). Quiz: 'Why does the book prefer weekly rebuild?' (simpler and avoids per-node ancestor-ripple writes; the top-k barely changes within a week anyway)."
+        },
+        {
+          "title": "Boss: The Backlog Golem",
+          "sub": "Pipeline scenarios",
+          "teaches": "Applying the data pipeline to follow-ups.",
+          "interaction": "Q.boss() with 5 cards: (1) 'Logs are terabytes — query them directly for suggestions?' → no: aggregate offline first; logs are append-only and unindexed. (2) 'Product wants Twitter-style freshness' → shorten the aggregation interval (and see trending in 13.5). (3) 'Where do workers write, and where do reads come from?' → workers write the Trie DB; reads hit the Trie Cache, which snapshots the DB weekly. (4) 'Trie Cache node dies' → rebuild from the persistent Trie DB (that's why the DB exists). (5) 'One query's count changed mid-week; patch it?' → only if the trie is small; must update all ancestors; otherwise wait for the weekly rebuild.",
+          "check": "Engine-scored."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "Walk the pipeline out loud",
+          "teaches": "Free recall.",
+          "interaction": "Q.drill(): 'Walk me from a user hitting Enter on a search to that query showing up in someone else's suggestions.'",
+          "check": "Checklist: analytics log (append-only, unindexed) → aggregators (weekly for most cases) → aggregated table (query, week, frequency) → workers build trie → Trie DB (document snapshot or prefix→top-k KV) → Trie Cache weekly snapshot; not real-time because of write volume + stable top-k; update by weekly swap; in-place updates must touch every ancestor."
+        }
+      ],
+      "caveats": [
+        "Weekly is the book's example interval. Big search engines refresh much more often and run a separate fresh/trending path. Weekly is a starting point, not best practice.",
+        "The book's figures date from 2019 (the aggregated table uses 2019 weeks). The numbers are illustrative, not real Google data.",
+        "Swapping in a whole new trie needs enough memory for two tries at once during the switchover. This is worth mentioning if the interviewer asks about memory.",
+        "Storing the trie as prefix → top-k rows in a key-value store loses the tree shape. That's fine for reads, but rebuilding is done from the aggregated data, not from the KV rows."
+      ],
+      "sources": [
+        { "label": "ByteByteGo — Design a Search Autocomplete System (book chapter)", "url": "https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system" },
+        { "label": "Wikipedia — MongoDB (the book's document-store example)", "url": "https://en.wikipedia.org/wiki/MongoDB" },
+        { "label": "Ramabhadran et al. — Prefix Hash Tree: An Indexing Data Structure over Distributed Hash Tables", "url": "https://people.eecs.berkeley.edu/~sylvia/papers/pht.pdf" }
+      ]
+    },
+    {
+      "n": "13.4",
+      "slug": "query-service",
+      "t": "Faster Than a Keystroke",
+      "d": "The query path, browser caching, data sampling, and the filter layer",
+      "boss": false,
+      "badge": "⚡ Badge: Speed Typist",
+      "winTitle": "Suggestions before the next key",
+      "goal": "Your win today: you can trace one keystroke through load balancer → API servers → Trie Cache (→ Trie DB on a miss), name the three speed tricks (AJAX, browser caching with Cache-Control: private, max-age=3600, data sampling) and their costs, and explain how a filter layer removes harmful suggestions right away while the DB is cleaned asynchronously.",
+      "bookSections": "Step 3 – Design deep dive: Query service (improved design, AJAX, browser caching, data sampling); Trie operations (delete, filter layer)",
+      "stages": [
+        {
+          "title": "Follow one keystroke",
+          "sub": "The read path, hit and miss",
+          "teaches": "Improved query service: (1) the search query goes to the LOAD BALANCER (spreads traffic across servers); (2) the LB routes to an API server; (3) API servers get trie data from the TRIE CACHE and build the suggestions; (4) if the data isn't in the cache (a cache miss), it's loaded from the TRIE DB and put back into the cache so the next request for that prefix is fast. Misses happen when a cache server is out of memory or offline.",
+          "interaction": "Animated packet sim across 5 boxes: Browser → Load balancer → API server → Trie Cache → Trie DB. The learner types a prefix. Before each run they predict the path by tapping boxes in order. Run 1 (warm cache): the packet stops at Trie Cache, ~5 ms. Then press 'Restart cache server' (cache empties) and Run 2: the packet goes on to Trie DB, the latency counter jumps, and a 'replenish' arrow writes the prefix's top-k back into the cache. Run 3 is fast again. A latency strip shows all three runs side by side.",
+          "check": "Predicted paths must match: hit = Browser → LB → API → Cache; miss = … → Cache → DB → back into Cache. Q.quiz: 'When does the query service read the Trie DB?' (only on a cache miss)."
+        },
+        {
+          "title": "Three speed tricks",
+          "sub": "AJAX and the browser cache",
+          "teaches": "Lightning-fast speed is the top priority, so the book adds: AJAX REQUEST — the page sends and receives autocomplete data in the background without reloading the whole page. BROWSER CACHING — suggestions rarely change within a short time, so the browser stores them. The book notes Google uses the response header Cache-Control: private, max-age=3600. 'private' means only the user's own browser may cache it, not shared proxies or CDNs. 'max-age=3600' means it stays fresh for 3600 seconds = 1 hour. DATA SAMPLING (next stage) — log only 1 of every N requests.",
+          "interaction": "Browser-cache sim. A search box plus a network panel like DevTools. The learner types 'dinner', backspaces to 'din', then retypes 'dinner'. First pass: 6 network rows (blue). Second pass: every prefix shows 'from browser cache' (green) and the server request counter doesn't move. A 'Fast-forward 1 hour' button ages the cache; the next keystroke goes back to the network. A header inspector lets the learner toggle 'private' ↔ 'public' and see a shared office proxy icon start (public) or stop (private) storing a copy. A 'Full page reload' vs 'AJAX' toggle shows the whole page flashing white vs just the dropdown updating.",
+          "check": "Q.quiz: (1) 'max-age=3600 means?' (fresh for 1 hour). (2) 'Why private?' (only the user's browser caches it, not shared caches). (3) 'How many requests reach the server on the second pass?' (0)."
+        },
+        {
+          "title": "Log 1 in N",
+          "sub": "Data sampling, and what it loses",
+          "teaches": "Logging every query takes a lot of processing power and storage. With data sampling, only 1 out of every N requests is logged. Counts scale back up roughly ×N, and the ranking of popular queries stays the same. The cost: rare long-tail queries may never be sampled, or their counts get noisy.",
+          "interaction": "Slider N = 1, 10, 100, 1000 over a simulated week of 'tw' searches (twitter 35k, twitch 29k, twilight 25k, twin peak 21k, twitch prime 18k, twitter search 14k, twillo 10k, twin peak sf 80). For each N: a 'logged rows/day' counter (calculated from 10M × 10 searches / N), storage saved, and the top-5 for 'tw' recomputed from the sample, plus a bar showing 'twin peak sf' estimated count jumping around or hitting 0. Calculate-and-check: 'With N = 10, how many searches a day get logged?' (10,000,000 × 10 / 10 = 10,000,000).",
+          "check": "Answer 10 million (±5%). Learner notes the top 5 stays stable up to large N while the rare query's estimate degrades."
+        },
+        {
+          "title": "The filter layer",
+          "sub": "Deleting what must never appear",
+          "teaches": "DELETE: we must remove hateful, violent, sexually explicit, or dangerous autocomplete suggestions. Add a FILTER LAYER in front of the Trie Cache (between the API servers and the cache) to drop unwanted suggestions. It's flexible: different filter rules can be swapped in. The unwanted entries are then PHYSICALLY removed from the database asynchronously, so the next weekly build uses a clean data set.",
+          "interaction": "Read-path diagram with a new 'Filter' box. The learner types a prefix; suggestions include a few placeholder rows tagged [harmful] (shown as redacted grey bars with a category label, e.g. 'violent', no real offensive text). Toggling rule chips (violent, hateful, explicit, dangerous) makes the filter strip them live. Then a 'what if' panel: three buttons: 'filter only', 'DB purge only', 'both'. Each plays one week: filter-only leaves the bad entry in the DB forever (it reappears if the rule is turned off); DB-purge-only leaves it visible until the next rebuild; 'both' hides it immediately and removes it for good.",
+          "check": "The learner must pick 'both' as the book's design and explain via Q.quiz why: filter = instant, async purge = permanent and clean next build."
+        },
+        {
+          "title": "Boss: The Spinner of Doom",
+          "sub": "Query-path scenarios",
+          "teaches": "Applying query-service ideas to follow-ups.",
+          "interaction": "Q.boss() with 5 cards: (1) 'p99 latency spikes every Monday morning' → the weekly cache snapshot/swap is causing misses; warm the cache before switching. (2) 'Users retype the same prefixes; server load is high' → browser caching with max-age. (3) 'Logging is eating storage' → sample 1 of N. (4) 'A harmful suggestion is trending — remove it NOW' → filter layer rule, then async DB purge. (5) 'Why not cache suggestions at a shared CDN with public?' → book uses private; results may later be personalized/regional, and shared caching can serve one user's results to others (good trade-off to discuss).",
+          "check": "Engine-scored."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "The read path, out loud",
+          "teaches": "Free recall.",
+          "interaction": "Q.drill(): 'Trace a keystroke from the browser to the dropdown, and name everything you did to keep it under 100 ms and safe.'",
+          "check": "Checklist: LB → API servers → Trie Cache, miss → Trie DB + replenish; AJAX; Cache-Control: private, max-age=3600 (1 hour); sample 1 in N (loses long tail); filter layer in front of the cache for harmful suggestions + async physical delete from DB."
+        }
+      ],
+      "caveats": [
+        "The 'Google uses Cache-Control: private, max-age=3600' detail is a snapshot from when the book was written. Treat it as an example of the technique, not a current fact about Google.",
+        "Sampling keeps popular rankings but distorts rare queries. That's acceptable for a top-5-by-popularity product and bad for anything that needs exact counts.",
+        "A filter layer is a blocklist on the read path. Real moderation (e.g. Google's published autocomplete policies) also uses classifiers, human review and appeals, which the book doesn't cover.",
+        "Browser caching means a removed suggestion can linger in a user's browser for up to max-age. That's a small consistency trade-off worth naming."
+      ],
+      "sources": [
+        { "label": "ByteByteGo — Design a Search Autocomplete System (book chapter)", "url": "https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system" },
+        { "label": "MDN — Cache-Control header", "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cache-Control" },
+        { "label": "Google Search Help — How Google autocomplete predictions work (policies)", "url": "https://support.google.com/websearch/answer/7368877" },
+        { "label": "Google blog — How Google autocomplete works in Search", "url": "https://blog.google/products/search/how-google-autocomplete-works-search/" }
+      ]
+    },
+    {
+      "n": "13.5",
+      "slug": "scaling-autocomplete",
+      "t": "Split the Alphabet",
+      "d": "Shard the trie, balance hot letters, and handle languages, countries and trends",
+      "boss": false,
+      "badge": "🔤 Badge: Alphabet Splitter",
+      "winTitle": "Every letter has a home",
+      "goal": "Your win today: you can shard the trie by first letter (and deeper), explain why that's uneven and how a shard map manager fixes it with historical data, and answer the book's three wrap-up follow-ups: multiple languages (Unicode), country-specific results (per-country tries on CDNs), and real-time trending queries (streaming).",
+      "bookSections": "Step 3 – Design deep dive: Scale the storage (first-character sharding, multi-level sharding, shard map manager); Step 4 – Wrap up (multi-language support, country-specific queries, trending/real-time queries)",
+      "stages": [
+        {
+          "title": "Slice by first letter",
+          "sub": "The naive shard",
+          "teaches": "Sharding = splitting data across servers. For an English-only system, shard by the first character. 2 servers: 'a'–'m' and 'n'–'z'. 3 servers: 'a'–'i', 'j'–'r', 's'–'z'. You can go up to 26 servers, one per letter. Past 26, shard on the second or even third letter: e.g. queries starting with 'a' split into 'aa'–'ag', 'ah'–'an', 'ao'–'au', 'av'–'az'. The problem: data is UNEVEN, because far more words start with 'c' than with 'x'.",
+          "interaction": "An a–z bar with draggable dividers and a server-count stepper (2, 3, 26, 30). Each letter has a bar for its share of queries (illustrative English first-letter distribution: s, c, p, m tall; x, z, q, y tiny). Load gauges above each server fill up from the letters it owns. Step 1: set 2 servers at a–m / n–z and 3 at a–i / j–r / s–z (book's splits); the gauges are unequal. Step 2: set 26 servers; the 's' server is in the red while 'x' idles. Step 3: at 30 servers, the learner must split one letter at the second level; picking 's' or 'c' gets a gold check, picking 'x' gets 'that server was already bored'.",
+          "check": "Q.quiz: 'Max servers with first-letter sharding alone?' (26). 'What do you do beyond that?' (shard on the 2nd/3rd character). 'Why are loads uneven?' (letter frequency isn't uniform)."
+        },
+        {
+          "title": "The shard map manager",
+          "sub": "Balance by history, not by alphabet",
+          "teaches": "Instead of fixed letter ranges, shard by HISTORICAL data distribution. A SHARD MAP MANAGER keeps a lookup database saying which shard holds which prefixes. Book example: if 's' gets about as many queries as 'u', 'v', 'w', 'x', 'y' and 'z' combined, use two shards: one for 's' alone and one for 'u'–'z'. Every read and write first asks the shard map manager where the prefix lives.",
+          "interaction": "Bin-packing puzzle: letter tiles sized by historical query volume; 4 shard bins each with a capacity line. The learner drags tiles into bins (contiguous ranges not required, mirroring the lookup table). A 'max shard load' meter must end under 110% of the average. When it's balanced, the shard map table auto-generates (prefix range → shard id). Then a lookup test: three queries ('sun', 'xylophone', 'cat') animate a packet: API server → Shard map manager → correct shard. The learner predicts the shard for each before it runs.",
+          "check": "Balanced if max bin ≤ 110% of mean; predicted shards must match the generated map."
+        },
+        {
+          "title": "Beyond English",
+          "sub": "Languages and countries",
+          "teaches": "Follow-up 1: support multiple languages by storing Unicode characters in trie nodes. Unicode is an encoding standard covering the characters of all the world's writing systems, modern and ancient. The node can no longer have a fixed 26 children, so children become a map. Follow-up 2: different countries search for different things, so build a different trie per country and store the tries in CDNs (content delivery networks: servers close to users) to cut response time.",
+          "interaction": "Sort mechanic: 6 situation cards dropped into 3 bins: 'Unicode trie nodes', 'Per-country tries on CDNs', 'Neither'. Cards: 'Japanese users type in kana' → Unicode; 'Top queries in Brazil differ from the US' → per-country; 'Users in India complain suggestions are slow and US-centric' → per-country + CDN; 'Accented é breaks the a–z array' → Unicode; 'Users want typo correction' → neither (out of scope); 'A German user wants German-language suggestions' → Unicode. Then a mini demo: a trie node shows a 26-slot array; inserting 'é' fails with an overflow animation; switching to 'children map' succeeds.",
+          "check": "All 6 cards correctly binned; Q.quiz: 'Why put country tries on CDNs?' (serve from close to the user → lower latency)."
+        },
+        {
+          "title": "Trending now",
+          "sub": "When the news breaks",
+          "teaches": "Follow-up 3: real-time trending queries (e.g. breaking news). The base design fails: offline workers aren't scheduled to rebuild yet, and even if they ran, a full trie build takes too long. The book's ideas: (1) shrink the working data set by sharding; (2) change the ranking model to give recent searches more weight; (3) treat data as a STREAM (data generated continuously, so you never have all of it at once), which needs different systems: Apache Hadoop MapReduce, Apache Spark Streaming, Apache Storm, Apache Kafka. The book says these are beyond its scope.",
+          "interaction": "Breaking-news sim. A timeline (Mon–Sun) with the weekly rebuild marked on Sunday. On Tuesday a 'NEWS: volcano erupts' event fires, and live searches for 'volcano eruption' spike (bar climbs). The dropdown for 'vo' still shows last week's list. The learner can toggle three mitigations: [Recency-weighted ranking], [Smaller shards, faster rebuild], [Streaming pipeline (Kafka → stream processor → trie)]. Each toggle shrinks the 'time until it appears' counter (e.g. ~5 days → hours → minutes); streaming alone gets it to minutes. Predict first: 'Which single change gets it into suggestions fastest?'",
+          "check": "Prediction: streaming pipeline. Q.quiz: 'Two reasons the weekly design can't show trends.' (workers not scheduled yet; full rebuild too slow)."
+        },
+        {
+          "title": "Boss: The Hot-Letter Titan",
+          "sub": "Scaling and follow-up scenarios",
+          "teaches": "Applying scaling + wrap-up answers.",
+          "interaction": "Q.boss() with 6 cards: (1) 'The 's' shard is melting' → shard map manager rebalances by history (split 's' to the second level). (2) 'We need 40 shards' → shard on the 2nd/3rd character. (3) 'Launching in Japan' → Unicode nodes + a country trie. (4) 'Users in Australia see 300 ms' → per-country trie served from a nearby CDN. (5) 'A celebrity news story breaks; suggestions are a week stale' → recency weighting + streaming pipeline. (6) 'Why not hash-shard prefixes randomly?' → it works for KV point lookups, but you lose the simple letter → shard rule; the book picks range-by-letter plus a map manager for balance (good trade-off to name).",
+          "check": "Engine-scored."
+        },
+        {
+          "title": "Say it like a senior",
+          "sub": "Scale it and extend it",
+          "teaches": "Free recall.",
+          "interaction": "Q.drill(): 'The interviewer says: the trie no longer fits on one machine, and we're going global with trending results. Go.'",
+          "check": "Checklist: shard by first letter (2: a–m/n–z, 3: a–i/j–r/s–z, up to 26), deeper levels beyond 26; uneven letters → shard map manager with historical distribution (s alone vs u–z); Unicode nodes for languages; per-country tries on CDNs; trending: weekly workers too slow → recency weighting, smaller shards, streaming (Kafka, Spark Streaming, Storm)."
+        }
+      ],
+      "caveats": [
+        "The letter-frequency bars in the sim are illustrative. Real query distributions vary by product and language.",
+        "The book's ideas for trending are deliberately sketchy ('beyond the scope of this book'). Production systems typically run a separate real-time path for fresh queries and blend it with the batch trie, rather than rebuilding the whole trie from a stream.",
+        "Unicode makes the 'one byte per character' estimate from 13.1 wrong. UTF-8 uses 1–4 bytes per character, so storage estimates grow for non-Latin scripts.",
+        "Per-country tries on CDNs multiply storage by the number of countries. It's a latency-vs-storage trade-off."
+      ],
+      "sources": [
+        { "label": "ByteByteGo — Design a Search Autocomplete System (book chapter)", "url": "https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system" },
+        { "label": "Unicode — Frequently Asked Questions (basic)", "url": "https://www.unicode.org/faq/basic_q.html" },
+        { "label": "Apache Hadoop", "url": "https://hadoop.apache.org/" },
+        { "label": "Apache Spark Streaming", "url": "https://spark.apache.org/streaming/" },
+        { "label": "Apache Storm", "url": "https://storm.apache.org/" },
+        { "label": "Apache Kafka documentation", "url": "https://kafka.apache.org/documentation/" }
+      ]
+    },
+    {
+      "n": "BOSS",
+      "slug": "boss-autocomplete-live",
+      "t": "Autocomplete Live",
+      "d": "Full mock interview: design search autocomplete",
+      "boss": true,
+      "badge": "👑 Badge: Typeahead Tyrant",
+      "winTitle": "Interview cleared: top 5 in under 100 ms",
+      "goal": "Your win today: you can run a full 45-minute autocomplete interview from memory: scope and estimates, two-service high-level design, trie deep dive with the final architecture, answers to failure and scaling curveballs, and a strong close with the book's three extensions.",
+      "bookSections": "Whole chapter: Step 1 scope + estimation, Step 2 high-level design, Step 3 deep dive (trie, data gathering, query service, trie operations, scale the storage), Step 4 wrap up",
+      "stages": [
+        {
+          "title": "Scope it",
+          "sub": "Step 1 · understand the problem (3–10 min)",
+          "teaches": "Same 4-step framework and game clock as 0008: every move costs game-minutes and earns or loses 'signal' (the evidence an interviewer writes down). The requirements to recover: prefix match only, 5 suggestions, ranked by historical frequency, no spell check, English, lowercase, 10M DAU, <100 ms, relevant, sorted, scalable, highly available. Then the numbers: ~24,000 QPS, ~48,000 peak, 0.4 GB/day.",
+          "interaction": "Requirements board like 0008: 10 question cards (7 good, 3 time-wasters such as 'What's the logo?', 'Which programming language?', 'Do we need a mobile app?'). Good questions fill the board; time-wasters cost 3 game-minutes and signal. Then a quick 3-field estimate panel (QPS, peak, storage/day) with ±10% tolerance; a wrong answer costs 2 minutes and shows the formula.",
+          "check": "All 7 key requirements on the board; 3 estimates within tolerance."
+        },
+        {
+          "title": "Sketch it",
+          "sub": "Step 2 · high-level design and buy-in (10–15 min)",
+          "teaches": "Two services: data gathering (queries → frequency table) and query service (prefix → top 5 via SQL LIKE 'prefix%' ORDER BY frequency DESC LIMIT 5). Then name its limit out loud before the interviewer does: it doesn't scale to tens of thousands of keystroke requests a second.",
+          "interaction": "Blank whiteboard; tap components into place (User, Data gathering service, Frequency table, Query service). The arrows draw themselves when dependencies are already present; placing a component before what it depends on costs a minute. Decoy tiles ('Spell checker', 'Recommendation ML model', 'Message queue between user and query service') cost a heart. Then a buy-in moment: the interviewer asks 'Will this hold at 48k QPS?' with 3 replies; the best one says no, and why, and proposes moving to a trie.",
+          "check": "4 components placed, no decoys; buy-in answer = 'No: prefix scan + sort per keystroke; I'll replace the table with a trie and cache top-k'."
+        },
+        {
+          "title": "Draw the final design",
+          "sub": "Step 3 · deep dive (10–25 min)",
+          "teaches": "The chapter's final architecture. Write side: Analytics logs → Aggregators → Aggregated data → Workers → Trie DB → Trie Cache (weekly snapshot). Read side: Browser (AJAX + browser cache) → Load balancer → API servers → Filter layer → Trie Cache → Trie DB on a miss. Plus a shard map manager across sharded tries. The trie lookup is O(1) thanks to the prefix cap + top-k cached per node.",
+          "interaction": "Two-lane whiteboard (write path on top, read path below) with 11 shuffled component tiles. The learner taps each tile in its lane's flow order. Then the 'technique map' (like 0008 stage 3): for each requirement/problem the learner picks the mechanism: Fast lookup → trie with top-k per node + prefix cap; Fewer requests → browser caching; Huge logs → aggregation + sampling; Fresh-enough data → weekly rebuild by workers; Harmful suggestions → filter layer + async delete; Doesn't fit on one box → sharding + shard map manager; Survive cache loss → persistent Trie DB.",
+          "check": "Both lanes in the right order; all 7 technique-map rows correct (some mechanisms used twice is fine)."
+        },
+        {
+          "title": "Boss: the curveball barrage",
+          "sub": "Step 3 · 'what happens when…?'",
+          "teaches": "Mixed follow-ups from 13.1–13.5.",
+          "interaction": "Q.boss()-style barrage of 9 curveballs, each right answer costs 1.5 minutes, wrong costs a heart + 1 minute: (1) Trie Cache server crashes → misses fall through to Trie DB, replenish the cache; DB is the source of truth. (2) Monday-morning latency spike after the weekly swap → pre-warm the new cache before switching. (3) 'beer' count changes mid-week → wait for the rebuild, or patch the node + all ancestors. (4) The 's' shard is hot → shard map manager, split on the second letter. (5) Harmful suggestion goes viral → filter rule now, async DB purge. (6) Logs too big → aggregate weekly + sample 1 in N. (7) Query service DB melts with LIKE queries → that's why we moved to the trie. (8) Users hammer the same prefixes → browser cache, max-age=3600. (9) Typing 'peak' doesn't suggest 'twin peak' → by design: prefix-only matching.",
+          "check": "Engine-scored; scorecard stored under a separate key like 0008 (sdq:v1:<id>-interview)."
+        },
+        {
+          "title": "Wrap it up",
+          "sub": "Step 4 · the last 3–5 minutes",
+          "teaches": "The book's closing follow-ups: multi-language (Unicode nodes), country-specific results (per-country tries on CDNs), and real-time trending (weekly rebuild too slow → recency weighting, shard to shrink data, streaming with Kafka / Spark Streaming / Storm). A strong close also names the design's honest weak spots: ranking by frequency only (no personalization or freshness), no spell correction, up to a week stale, and an uneven letter distribution.",
+          "interaction": "Pick exactly 3 closing moves from 7 cards, then 'Deliver my close'. Strong cards: 'Extend to other languages with Unicode trie nodes', 'Per-country tries on CDNs', 'Trending: add a streaming path and recency weighting', 'Name the bottleneck: weekly staleness and hot shards'. Weak cards: 'Rewrite the trie in Rust for speed', 'Add more servers' (no reasoning), 'Say we're done'. The scorecard rolls up time used, hearts and signal into a hire / lean-hire / no-hire verdict with per-step feedback.",
+          "check": "3 strong cards = full signal; the verdict screen lists any missed requirement or technique-map row to review, with links to 13.1–13.5."
+        }
+      ],
+      "caveats": [
+        "The 4-step minute ranges are the book's guide for a ~45-minute session; the game clock is our framing. Real interviews vary.",
+        "The book's design ranks by popularity only. In a real interview, mentioning personalization, freshness and location as future ranking signals is a strong close, but don't build them unless asked.",
+        "Weekly rebuild + browser cache with max-age=3600 means suggestions can be up to a week (plus an hour) stale. Own that trade-off rather than hiding it."
+      ],
+      "sources": [
+        { "label": "ByteByteGo — Design a Search Autocomplete System (book chapter)", "url": "https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system" },
+        { "label": "ByteByteGo — A Framework for System Design Interviews", "url": "https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" },
+        { "label": "Facebook Engineering — The Life of a Typeahead Query", "url": "https://www.facebook.com/notes/facebook-engineering/the-life-of-a-typeahead-query/389105248919/" },
+        { "label": "Prefixy team — How We Built Prefixy", "url": "https://medium.com/@prefixyteam/how-we-built-prefixy-a-scalable-prefix-search-service-for-powering-autocomplete-c20f98e2eff1" }
+      ]
+    }
+  ],
+  "cheatsheetOutline": "One page, 'Typeahead Tower' cheat sheet. Header strip of KEY NUMBERS: 10M DAU · 10 searches/user/day · 20 bytes/query (~4 words × 5 chars) · ~20 requests per search (one per keystroke) · ~24,000 QPS · ~48,000 peak · 20% new → 0.4 GB/day · <100 ms response · top 5 suggestions · prefix cap ~50 · k = 5–10 cached per node · Cache-Control: private, max-age=3600 (1 h) · up to 26 first-letter shards. Section 13.1 Every Keystroke Counts: requirements list (prefix-only, top 5, by frequency, no spell check, English lowercase) + non-functional (fast, relevant, sorted, scalable, HA) + the frequency-table SQL and why it fails. Section 13.2 Grow the Trie: mini trie diagram (tree 10, try 29, true 35, toy 14, wish 25, win 50); naive O(p)+O(c)+O(c log c); two optimizations → O(1); space-for-time cost, a query is copied into up to L+1 ancestor lists. Section 13.3 The Weekly Harvest: pipeline diagram analytics logs → aggregators → aggregated data → workers → Trie DB → Trie Cache; why not real-time; document store vs prefix→top-k key-value; weekly swap vs in-place update (ancestors ripple, beer 10→30 example). Section 13.4 Faster Than a Keystroke: read path LB → API → filter → Trie Cache → (miss) Trie DB + replenish; AJAX, browser caching, sampling 1-in-N; filter layer + async delete. Section 13.5 Split the Alphabet: a–m/n–z, a–i/j–r/s–z, up to 26, then 2nd-level (aa–ag…); shard map manager (s vs u–z); Unicode nodes; per-country tries on CDNs; trending → recency weighting + streaming (Kafka, Spark Streaming, Storm, Hadoop). FINAL DESIGN: two-lane diagram (write lane + read lane + shard map manager). Footer: honest caveats in one line each (O(1) = bounded by prefix cap; debounce lowers real QPS; weekly is an example interval; the Google cache header is a dated snapshot; sampling loses the long tail)."
+}

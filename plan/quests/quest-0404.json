@@ -1,0 +1,142 @@
+{
+ "n": "4.4",
+ "slug": "counters-rules-and-429s",
+ "t": "The Counter Room",
+ "d": "Redis counters, rule files, 429 headers, and the detailed design",
+ "boss": false,
+ "badge": "🧮 Badge: Counter Keeper",
+ "winTitle": "Counters under control",
+ "goal": "Your win today: you can explain why counters live in Redis (INCR, EXPIRE), write a Lyft-style rule, list the three rate-limit headers and what the client should do with a 429, and draw the book's detailed design from memory.",
+ "bookSections": "Step 2 'High-level architecture' (Redis, INCR, EXPIRE); Step 3 deep dive: rate limiting rules, exceeding the rate limit, rate limiter headers, detailed design; Step 4 wrap-up point on client best practices",
+ "stages": [
+  {
+   "title": "Where do counters live?",
+   "sub": "Redis, INCR and EXPIRE",
+   "teaches": "Basic idea of every algorithm: keep a counter of how many requests came from the same user, IP, etc.; if it exceeds the limit, disallow. Store counters in an in-memory cache, not a database: databases are slow because of disk access; an in-memory cache is fast and supports time-based expiration. Redis is the popular choice. Two commands: INCR increases the stored counter by 1; EXPIRE sets a timeout so the counter is deleted automatically. Flow: client → rate limiting middleware; middleware fetches the counter from the corresponding bucket in Redis and checks whether the limit is reached; if reached, reject; if not, send the request to API servers, increment the counter and save it back to Redis.",
+   "interaction": "Redis console sim. Left: a client button 'Send request'. Right: a Redis key panel showing key 'rl:user42:14:03' (user + current minute), its value and a TTL countdown. Limit 5/min. Each send runs the shown commands with a typing effect (INCR rl:user42:14:03 → 1; EXPIRE … 60 on first increment). The 6th request returns 429. Then 'Spot the bug': a code card shows `n = INCR key; if n > LIMIT: reject; EXPIRE key 60` and a 'kill server' button. The learner presses it between INCR and EXPIRE, then advances the clock 2 minutes: the key never expires and the user is locked out forever. The learner picks the fix from 3 options: (a) run INCR+EXPIRE atomically (MULTI transaction or Lua script) or only call EXPIRE when INCR returns 1 inside one script — correct; (b) increase the TTL; (c) store counters in MySQL.",
+   "check": "Fix chosen; quiz: 'Why Redis and not the database for counters?' → in-memory is fast + built-in expiration."
+  },
+  {
+   "title": "Write the rules",
+   "sub": "Lyft-style rule config",
+   "teaches": "Lyft open-sourced its rate-limiting component; rules are written in configuration files and saved on disk. Book example 1: domain: messaging; descriptor key: message_type, value: marketing; rate_limit unit: day, requests_per_unit: 5 — at most 5 marketing messages per day. Example 2: domain: auth; key: auth_type, value: login; unit: minute, requests_per_unit: 5 — clients can't log in more than 5 times in 1 minute.",
+   "interaction": "YAML builder. Three English rules are presented one at a time: (1) 'No more than 5 marketing messages per day' (book), (2) 'No more than 5 logins per minute' (book), (3) a new one: 'No more than 100 search requests per hour'. A YAML skeleton has dropdown blanks for domain, key, value, unit (second/minute/hour/day), requests_per_unit. Once filled correctly the YAML turns green and a 'Test it' button fires 6 (or 101) simulated events; the last one bounces with 429. Wrong unit is the common trap and gets a hint ('per day ≠ per minute').",
+   "check": "All three rules built and tested."
+  },
+  {
+   "title": "Tell the client",
+   "sub": "429, headers, and how a good client backs off",
+   "teaches": "When a request is rate limited, the API returns HTTP 429 Too Many Requests. Depending on the use case, rate-limited requests may instead be enqueued to process later (e.g. orders rate limited due to system overload). The client learns its status from headers: X-Ratelimit-Remaining (remaining allowed requests in the window), X-Ratelimit-Limit (how many calls the client can make per window), X-Ratelimit-Retry-After (seconds to wait before retrying without being throttled). On a 429, X-Ratelimit-Retry-After is returned. Client best practices (book wrap-up): use a client cache to avoid frequent API calls; understand the limit and don't send too many requests in a short time; catch exceptions/errors so the client recovers gracefully; add sufficient back-off time to retry logic.",
+   "interaction": "HTTP response inspector. Limit 5 per minute. The learner steps through 6 requests at t = 0, 5, 10, 15, 20, 25 s. For each response, they fill in a small form: status code (200/429), X-Ratelimit-Limit, X-Ratelimit-Remaining, and on the 429 X-Ratelimit-Retry-After (window resets at t=60 → 35). Correct fields light green. Then a 'Client behavior' mini-sim: a client that retries instantly on 429 vs one that waits Retry-After plus random jitter; a counter shows wasted requests (instant retry: dozens; backoff: 0). Learner taps the 4 best-practice cards that are real from 6 (two distractors: 'retry immediately in a loop', 'open more connections to go faster').",
+   "check": "All six responses correct (hints allowed); best-practice pick correct."
+  },
+  {
+   "title": "Draw the detailed design",
+   "sub": "Rebuild the book's final diagram",
+   "teaches": "Book's detailed design: rules are stored on disk; workers frequently pull rules from disk and store them in the cache. A client request goes to the rate limiter middleware first. The middleware loads rules from the cache, and fetches counters and last request timestamp from Redis. If not rate limited, the request is forwarded to API servers. If rate limited, the middleware returns 429 to the client, and meanwhile the request is either dropped or forwarded to a message queue for later processing.",
+   "interaction": "Whiteboard builder (like 0008 stage 2). Tiles: Client, Rate limiter middleware, API servers, Redis (counters), Rules (disk), Workers, Cache (rules), Message queue, plus 2 distractors (CDN for static images, SQL database for counters). The learner taps tiles in a valid build order; each placed tile draws its arrows. Dependency rule: a tile whose upstream isn't drawn yet costs a 'minute' on a small clock; a distractor costs a heart with an explanation. Then predict-then-watch with three requests: (1) under limit → path lights Client → middleware → Redis check → API servers; (2) over limit, 'drop' mode → 429 back to client; (3) over limit, an order request with 'enqueue' mode on → 429 to client and the request goes to the queue (processed later). Learner predicts the path for each before it lights up.",
+   "check": "Diagram complete with no distractors; 3 path predictions; quiz: 'Why do workers copy rules into a cache?' → so the middleware doesn't read disk on every request."
+  },
+  {
+   "title": "Boss: The Header Golem",
+   "sub": "Counters, rules and responses under pressure",
+   "teaches": "Mixed scenarios on the high-level and detailed design.",
+   "interaction": "Q.boss with 5 scenarios. Examples: 'A user is locked out for days; their key has no TTL. Most likely bug?' → crash between INCR and EXPIRE / non-atomic commands; 'Ops edits a rule on disk; how does the middleware see it?' → workers pull rules into the cache periodically; 'An order request hits the limit during a sale. Best handling?' → enqueue for later processing and tell the client; 'Client gets 429 with X-Ratelimit-Retry-After: 30. Ideal client?' → wait ≥30 s with a little jitter, then retry; 'Why not keep counters in PostgreSQL?' → disk access is slow; cache gives speed and expiry.",
+   "check": "Boss defeated."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "The request's journey in 60 seconds",
+   "teaches": "Narrating the detailed design.",
+   "interaction": "Q.drill. Prompt: 'Walk me through what happens to one request in your rate limiter, from the client to the API server or back.' Model answer: rules in config files on disk, workers cache them; request hits middleware; middleware loads the rule from cache and the counter from Redis (INCR with EXPIRE, done atomically); under limit → forward to API servers and update the counter; over → 429 with X-Ratelimit-Limit/Remaining/Retry-After, request dropped or queued; clients cache, back off, and handle errors. Checks: rules + workers + cache; Redis with INCR/EXPIRE; 429 + at least two headers; drop vs queue.",
+   "check": "Self-graded drill completed."
+  }
+ ],
+ "caveats": [
+  "The X-Ratelimit-* headers are a convention, not a standard, and names vary: GitHub sends x-ratelimit-limit, x-ratelimit-remaining and x-ratelimit-reset (a timestamp). The standard header for 'wait this long' is plain Retry-After (RFC 9110), and the IETF is drafting standard RateLimit / RateLimit-Policy headers.",
+  "INCR then EXPIRE as two separate commands is not atomic: a crash between them leaves a counter that never expires. Use a Lua script or a MULTI transaction, or set the TTL only when INCR returns 1 inside the same script.",
+  "The book's flow increments the counter only for allowed requests; many real implementations INCR first and then compare, which is simpler and atomic but also counts rejected attempts.",
+  "Queueing rate-limited requests only makes sense for work that can safely run later (orders, emails). For interactive reads, a fast 429 is kinder than a long hidden wait.",
+  "Lyft's ratelimit service now lives under the Envoy project (github.com/envoyproxy/ratelimit)."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo — Design a Rate Limiter (book chapter)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter"
+  },
+  {
+   "label": "Redis — INCR command (includes a rate limiter pattern)",
+   "url": "https://redis.io/docs/latest/commands/incr/"
+  },
+  {
+   "label": "Redis — EXPIRE command",
+   "url": "https://redis.io/docs/latest/commands/expire/"
+  },
+  {
+   "label": "Envoy/Lyft ratelimit service (rule config format)",
+   "url": "https://github.com/envoyproxy/ratelimit"
+  },
+  {
+   "label": "RFC 9110 — Retry-After header",
+   "url": "https://www.rfc-editor.org/rfc/rfc9110#name-retry-after"
+  },
+  {
+   "label": "IETF draft — RateLimit header fields for HTTP",
+   "url": "https://datatracker.ietf.org/doc/draft-ietf-httpapi-ratelimit-headers/"
+  },
+  {
+   "label": "GitHub — Rate limits for the REST API (real-world headers)",
+   "url": "https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api"
+  },
+  {
+   "label": "AWS Architecture Blog — Exponential backoff and jitter",
+   "url": "https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/"
+  }
+ ],
+ "id": "0404",
+ "file": "0404-counters-rules-and-429s.html",
+ "world": 4,
+ "chapterTitle": "Design a Rate Limiter",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter",
+ "cheatsheet": "../reference/ch04-rate-limiter-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "0401",
+   "n": "4.1",
+   "t": "Bouncer at the Door",
+   "d": "What a rate limiter is, why you need one, how to scope it, and where it should sit"
+  },
+  {
+   "id": "0402",
+   "n": "4.2",
+   "t": "Token Tycoon",
+   "d": "The two bucket algorithms: token bucket and leaking bucket"
+  },
+  {
+   "id": "0403",
+   "n": "4.3",
+   "t": "Windows of Time",
+   "d": "Fixed window, sliding window log, and sliding window counter"
+  },
+  {
+   "id": "0404",
+   "n": "4.4",
+   "t": "The Counter Room",
+   "d": "Redis counters, rule files, 429 headers, and the detailed design"
+  },
+  {
+   "id": "0405",
+   "n": "4.5",
+   "t": "Many Doors, One Count",
+   "d": "Race conditions, syncing many limiters, multi-data-center speed, and monitoring"
+  },
+  {
+   "id": "0406",
+   "n": "BOSS",
+   "t": "Throttle It Live",
+   "d": "Full mock interview: design a rate limiter"
+  }
+ ]
+}

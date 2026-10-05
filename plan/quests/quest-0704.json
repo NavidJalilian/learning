@@ -1,0 +1,126 @@
+{
+ "n": "7.4",
+ "slug": "snowflake-clocks-and-tuning",
+ "t": "When Clocks Lie",
+ "d": "Sequence overflow, clocks running backwards, rough ordering, re-tuning the bits, keeping it available",
+ "boss": false,
+ "badge": "⏱️ Badge: Time Keeper",
+ "winTitle": "The clock can't fool you now",
+ "goal": "Your win today: you can answer the follow-ups that come after the Snowflake sketch: what happens past 4,096 IDs in a millisecond, what happens when a clock jumps back, why the order is only rough, how you'd re-split the bits, and how you keep the generator available.",
+ "bookSections": "Step 3 - Design deep dive (datacenter/machine IDs fixed at startup, sequence number); Step 4 - Wrap up (clock synchronization, section length tuning, high availability)",
+ "stages": [
+  {
+   "title": "The 4,097th ID",
+   "sub": "What happens when the sequence runs out?",
+   "teaches": "12 bits gives 4,096 sequence values (0–4095) per millisecond per machine. The book stops at 'max 4,096 per ms'. What real code does: if the sequence would wrap back to 0 within the same millisecond, the generator waits (spins) until the clock reaches the next millisecond, then resets the sequence to 0. Wrapping without waiting would reissue IDs already handed out in that millisecond, which means duplicates. Cost: a tiny stall under extreme bursts, never a duplicate.",
+   "interaction": "Predict-then-watch. On screen: one machine with a 4,096-cell sequence meter (drawn as a 64×64 dot grid filling up), a frozen millisecond clock, and a burst slider (1,000 / 4,096 / 5,000 requests in one ms). Before firing 5,000, the learner picks what request #4,097 should do: (a) wrap sequence to 0 now, (b) wait for the next millisecond, (c) borrow bits from the machine ID. Then they toggle a 'naive mode' switch to see (a) play out: the log shows request #4,097 receiving the exact same ID as request #1, flashing red. With (b), the clock ticks, the meter empties, and the remaining 904 get fresh IDs in the next ms.",
+   "check": "Q.quiz: (1) Max IDs per ms per machine? → 4,096. (2) Correct behaviour past that? → wait for next ms. (3) Why is wrapping wrong? → reissues IDs from the same ms."
+  },
+  {
+   "title": "Time runs backwards",
+   "sub": "NTP corrections and duplicate IDs",
+   "teaches": "The book assumes all ID servers share the same clock, and admits that isn't true with multiple machines (or even multiple cores); Network Time Protocol (NTP, defined: a protocol where machines periodically ask time servers for the correct time and correct their clocks) is the most popular fix. But NTP can STEP a clock backwards to correct drift, and leap seconds have caused similar jumps. If the clock goes back 5 ms, the generator re-enters milliseconds it already used and can reissue IDs. Fixes: remember the last timestamp used; if now < last, refuse or wait until the clock catches up (Twitter's original code throws 'Clock moved backwards. Refusing to generate id for N milliseconds'); configure NTP to slew (speed up/slow down gradually) rather than step; alert on large jumps.",
+   "interaction": "Driven sim. On screen: a machine with its local clock, a 'last timestamp' register, a log of minted IDs, and an 'NTP correction: −5 ms' button. The learner generates a few IDs, then presses the NTP button, then predicts: 'Next ID will be: (a) fine, (b) possibly a duplicate of an earlier ID, (c) larger than all previous'. Watch: with the guard OFF the new ID collides with one already in the log (red). Then the learner flips the 'clock guard' toggle ON and repeats: generation pauses with 'waiting 5 ms for clock to catch up', then resumes with fresh IDs.",
+   "check": "Q.quiz: (1) What does NTP do? (2) Why can it break Snowflake? → it can move the clock backwards. (3) Pick two valid defences (multi-select): refuse/wait while now < last timestamp; slew instead of step. Distractor: 'reset the sequence to 0'."
+  },
+  {
+   "title": "Roughly in order",
+   "sub": "Clock skew between machines",
+   "teaches": "Even with NTP, machines' clocks differ by a few milliseconds (skew). Twitter's own announcement calls Snowflake IDs 'roughly sortable' (k-sorted: each ID is close to its correct position, not exactly there). So 'ordered by date' really means ordered within about the clock skew; inside one millisecond, order follows datacenter/machine bits, not real time. That's fine for 'newest first' feeds; it's not fine for 'who clicked first' contests or strict event ordering, where you need a single sequencer or a logical clock.",
+   "interaction": "Sort/order mechanic. On screen: a real-time timeline with 6 events (E1–E6) happening on 3 machines; machine B's clock runs 3 ms fast. Each event shows its minted ID. Step 1: learner drags the IDs into ascending order. Step 2: the sim draws lines from ID order to real-time order; the learner taps the pairs that 'cross' (events that happened earlier but got a larger ID). Correct answer: the pairs involving machine B's events that happened within 3 ms before an event on A or C. A skew slider (0–10 ms) then shows more crossings as skew grows and none at 0.",
+   "check": "All crossing pairs identified (no false ones); 1-question quiz: 'Twitter's word for this ordering?' → roughly sortable (k-sorted)."
+  },
+  {
+   "title": "Tune the bits",
+   "sub": "Section length tuning",
+   "teaches": "Wrap-up talking point from the book: section lengths aren't sacred. Example from the book: fewer sequence bits and more timestamp bits suit low-concurrency, long-lived applications. The 63 usable bits are a budget shared by lifetime (timestamp), fleet size (datacenter+machine) and burst size (sequence). Numbers: 42 timestamp bits ≈ 139 years; 39 bits in 10 ms units ≈ 174 years (Sonyflake); 11 sequence bits = 2,048/ms. Also from the deep dive: datacenter and machine IDs are chosen at startup and generally fixed; changing them needs careful review because an accidental change (two machines with the same ID) causes ID conflicts. Real systems hand out machine IDs from a coordinator (Twitter's original used ZooKeeper) or config.",
+   "interaction": "Slider lab. On screen: 63-bit budget bar with 4 draggable boundaries (timestamp, datacenter, machine, sequence) plus a 'timestamp unit' toggle (1 ms / 10 ms). Live readouts: lifetime in years, max datacenters, max machines per DC, max IDs/ms/machine, and a red warning if the total ≠ 63. Three missions, each checked live: (1) 'A billing system with 20 servers, 50 IDs/second, must last 100+ years' (valid if lifetime ≥ 100 and machines ≥ 20 and sequence ≥ 1/ms); (2) 'A flash-sale service: 8 machines, bursts of 20,000 IDs in a single millisecond on one machine' (needs sequence ≥ 15 bits, any valid lifetime ≥ 10 years); (3) 'Back to the book's default' (1|41|5|5|12).",
+   "check": "All three missions satisfied; then a quiz: 'Two machines boot with the same machine ID. What happens?' → they can mint identical IDs in the same ms."
+  },
+  {
+   "title": "Boss: The Chrono Lich",
+   "sub": "Diagnose the incident",
+   "teaches": "Final book wrap-up point: an ID generator is a mission-critical system, so it must be highly available. Running the generator as a library inside every app server (no network hop, no central box) avoids a SPOF; a separate ID service needs multiple instances, each with a unique machine ID, behind a load balancer.",
+   "interaction": "Q.boss with choices: { k: 'clock', label: 'Clock guard / NTP', sub: 'time went wrong' }, { k: 'bits', label: 'Re-tune the bits', sub: 'budget is wrong' }, { k: 'ids', label: 'Fix machine-ID assignment', sub: 'two nodes share an ID' }, { k: 'ha', label: 'Add redundancy', sub: 'single point of failure' }. Scenarios (7): duplicate IDs right after an NTP sync → clock; duplicates after a VM was cloned from a snapshot and both copies kept running → ids; the company needs IDs valid until 2120 → bits; the single ID-service box restarts and every write fails for 40 s → ha; a leap-second event coincides with a burst of duplicates → clock; one machine needs 10,000 IDs per millisecond → bits; autoscaling launches 40 machines in one datacenter → bits (only 32 fit with 5 machine bits; or ids, but 'bits' is the structural fix — explain).",
+   "check": "Boss HP bar, 'why' line per card."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "Survive the follow-ups",
+   "teaches": "Model answer: 'Past 4,096 IDs in a millisecond the generator waits for the next millisecond rather than wrap. Clocks are the real risk: NTP keeps them close, but if a clock steps backwards I refuse or wait until it passes the last timestamp I used. Ordering is only rough across machines, within the clock skew. If our needs differ I'd re-split the bits, say more timestamp bits for a long-lived low-traffic system. Machine IDs are assigned once at startup and must never be duplicated. And since every write depends on IDs, I'd run the generator inside each service or as a replicated service, never one box.'",
+   "interaction": "Q.drill: prompt 'The interviewer asks: what can go wrong with Snowflake, and what do you do about it?' Self-grade checklist: sequence overflow → wait; clock backwards → guard; NTP; roughly sorted; section tuning example; unique machine IDs; high availability.",
+   "check": "Self-grade checklist (7 items)."
+  }
+ ],
+ "caveats": [
+  "The book never says what happens past 4,096 IDs in a millisecond or when a clock moves backwards; the behaviour taught here comes from Twitter's original implementation (wait for the next millisecond; refuse while the clock is behind).",
+  "NTP keeps clocks within milliseconds on a good network, not perfectly together. Systems that need tight bounds use special hardware (e.g. Google's TrueTime with GPS and atomic clocks), which is far beyond what this prompt needs.",
+  "'Multiple cores' in the book: on one machine all cores normally read the same system clock; the real issue is separate processes or threads sharing one machine ID. Each process needs its own worker ID or a shared, locked generator."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo: Design a Unique ID Generator in Distributed Systems (book chapter 7)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems"
+  },
+  {
+   "label": "Wikipedia: Network Time Protocol (book reference [4])",
+   "url": "https://en.wikipedia.org/wiki/Network_Time_Protocol"
+  },
+  {
+   "label": "Twitter Engineering: Announcing Snowflake ('roughly sortable')",
+   "url": "https://blog.twitter.com/engineering/en_us/a/2010/announcing-snowflake.html"
+  },
+  {
+   "label": "twitter-archive/snowflake (clock-moved-backwards and next-millisecond handling)",
+   "url": "https://github.com/twitter-archive/snowflake"
+  },
+  {
+   "label": "Cloudflare: How and why the leap second affected Cloudflare DNS",
+   "url": "https://blog.cloudflare.com/how-and-why-the-leap-second-affected-cloudflare-dns/"
+  },
+  {
+   "label": "sony/sonyflake (alternative bit split: 39-bit time in 10 ms units)",
+   "url": "https://github.com/sony/sonyflake"
+  }
+ ],
+ "id": "0704",
+ "file": "0704-snowflake-clocks-and-tuning.html",
+ "world": 7,
+ "chapterTitle": "Design a Unique ID Generator",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-unique-id-generator-in-distributed-systems",
+ "cheatsheet": "../reference/ch07-unique-id-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "0701",
+   "n": "7.1",
+   "t": "Numbers Nobody Repeats",
+   "d": "Why auto_increment breaks across servers, the 5 requirements, and multi-master 'count by k'"
+  },
+  {
+   "id": "0702",
+   "n": "7.2",
+   "t": "Dice or the Ticket Booth",
+   "d": "UUIDs (random, no coordination) vs a central ticket server (numeric, single point of failure)"
+  },
+  {
+   "id": "0703",
+   "n": "7.3",
+   "t": "Anatomy of a Snowflake",
+   "d": "Twitter Snowflake's 64-bit layout: mint an ID, decode one, and do the 69-year math"
+  },
+  {
+   "id": "0704",
+   "n": "7.4",
+   "t": "When Clocks Lie",
+   "d": "Sequence overflow, clocks running backwards, rough ordering, re-tuning the bits, keeping it available"
+  },
+  {
+   "id": "0705",
+   "n": "BOSS",
+   "t": "Mint It Live",
+   "d": "Full mock interview: design a unique ID generator in distributed systems"
+  }
+ ]
+}

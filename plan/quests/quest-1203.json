@@ -1,0 +1,133 @@
+{
+ "n": "12.3",
+ "slug": "chat-storage-and-ids",
+ "t": "The Message Vault",
+ "d": "Where chat history lives, the message tables, and how to mint message IDs",
+ "boss": false,
+ "badge": "🗄️ Badge: Vault Keeper",
+ "winTitle": "Every message filed in order",
+ "goal": "Your win today: you can say why chat history goes in a key-value store, draw the 1-on-1 and group message tables with their keys, and explain why created_at can't order messages and which message ID scheme the book picks.",
+ "bookSections": "Step 2 Storage (generic data vs chat history; read/write pattern: 60 billion messages/day, recent chats, random access, ~1:1 read:write; key-value store rationale: HBase at Facebook, Cassandra at Discord); Data models (message table for 1-on-1 chat, message table for group chat; figures 12-9, 12-10); Message ID (auto_increment, global Snowflake-style generator, local sequence number generator)",
+ "stages": [
+  {
+   "title": "Two kinds of data",
+   "sub": "Know the read/write pattern first",
+   "teaches": "A chat system stores two kinds of data. Generic data (user profiles, settings, friend lists) goes in robust, reliable relational databases, with replication and sharding for availability and scale. Chat history is the special part, so look at its read/write pattern: (1) the data is huge; Facebook Messenger and WhatsApp handle 60 billion messages a day (2016 figure); (2) only recent chats are read often, and users rarely look up old ones; (3) users still sometimes need random access: search, viewing their mentions, jumping to a specific message; (4) read:write is about 1:1 for 1-on-1 chat.",
+   "interaction": "Sort-into-bins: 8 cards: User profile, Notification settings, Friend list, Messages in a 1-on-1 chat, Messages in a group, Group member list, Last-seen timestamp, Profile photo URL. Bins: Relational DB / Key-value store (chat history + presence status). (Last-seen goes to the KV store because the book stores status and last_active_at there in the presence section.) Then 'pattern bingo': four statements, the learner marks each true or false for chat history: 'Writes are rare compared to reads' (false, ~1:1), 'Old messages are read as often as new ones' (false), 'Users sometimes jump to a random old message' (true), 'Volume is in the tens of billions per day' (true).",
+   "check": "Bins correct and bingo all correct. Quiz Q: 'What read:write ratio does the book give for 1-on-1 chat?' (about 1:1)."
+  },
+  {
+   "title": "Why a key-value store?",
+   "sub": "The long tail problem",
+   "teaches": "The book recommends key-value stores for chat history for four reasons: (1) easy horizontal scaling; (2) very low latency access; (3) relational databases don't handle the long tail of data well: when indexes grow large, random access gets expensive; (4) proven chat apps use them: Facebook Messenger used HBase and Discord used Cassandra. 'Long tail' here means the huge mass of old, rarely read messages that still has to stay reachable.",
+   "interaction": "Predict-then-watch. A chart: x-axis = message age (today -> 5 years), bars = how often messages of that age are read (a steep head and a long flat tail). A 'Years of history' slider (1 -> 10) grows the data. A side panel shows a single-node relational index with a RAM box: as data grows, the index bar outgrows RAM and a 'random lookup latency' gauge jumps from green to red. Before sliding past the RAM line, the learner predicts what happens to the cost of jumping to an old message (stays flat / rises sharply). Answer: rises sharply. Then a toggle 'Partition by channel in a KV store' splits the bar into many small shards spread across nodes, and the gauge returns to green because each lookup hits one small partition by key.",
+   "check": "Prediction correct; quiz Q: 'Name two reasons the book gives for KV stores' (any two of the four). Second Q: 'Which store did Discord use (per the book)?' (Cassandra)."
+  },
+  {
+   "title": "Design the tables",
+   "sub": "1-on-1 and group message tables",
+   "teaches": "1-on-1 message table (figure 12-9): message_id bigint (primary key), message_from bigint, message_to bigint, content text, created_at timestamp. The primary key is message_id, and it alone decides message order. Why not created_at? Two messages can be created at the same moment, so the timestamp can't break ties. Group message table (figure 12-10): channel_id bigint, message_id bigint, user_id bigint, content text, created_at timestamp. The primary key is the composite (channel_id, message_id). channel_id is the partition key, because every query in a group chat works inside one channel, so the whole channel's history sits in one partition, sorted by message_id. Jargon: partition key = the column that decides which node stores the row; channel = a group chat.",
+   "interaction": "Two parts. (1) Schema builder: column chips (message_id, message_from, message_to, channel_id, user_id, content, created_at, plus distractors read_receipt_list and avatar_url). The learner fills two empty table cards (1-on-1 and Group), then clicks a key icon to pick the primary key / partition key for each. Feedback explains each choice. (2) Spot-the-bug: a mini feed sorted 'ORDER BY created_at' shows two messages stamped 12:00:00.000, 'Are you free?' and 'Yes!', rendered in the wrong order. The learner taps the bug (the ORDER BY line). The fix button swaps to ORDER BY message_id and the feed reorders.",
+   "check": "Both tables correct with the right keys; bug spotted. Quiz Q: 'Why is channel_id the partition key for group messages?' (all queries for a group run within one channel)."
+  },
+  {
+   "title": "Mint the IDs",
+   "sub": "Unique and sortable by time",
+   "teaches": "message_id must be (1) unique and (2) sortable by time: newer rows get higher IDs than older ones. Options: (a) auto_increment, as in MySQL, but NoSQL databases usually don't offer it; (b) a global 64-bit sequence number generator like Snowflake (Chapter 7); (c) a local sequence number generator: IDs only unique within a group or 1-on-1 channel. The book picks (c) because keeping order within a channel is all chat needs, and it's easier to implement than a global generator.",
+   "interaction": "ID-minting sim. Two channels side by side, 'Alice-Bob' and 'Book club', each with a counter badge. The learner taps 'send' in either channel; messages get IDs 1, 2, 3... per channel. A toggle switches to 'Global Snowflake' mode: one shared 64-bit-looking counter (timestamp | machine | sequence) hands IDs to both. A 'Merge both channels into one list' button shows that local IDs collide across channels (two messages with ID 3) while global ones don't. Then the question: 'Does a collision across channels matter for chat?' (No: you only ever order messages within one channel, and channel_id + message_id is unique.) Final 3-way pick: which option would you choose with Cassandra and why.",
+   "check": "Quiz (3 Qs): two requirements for message_id (unique, time-sortable); why not auto_increment (NoSQL usually lacks it); why the book's local generator is enough (order only matters inside a channel)."
+  },
+  {
+   "title": "Boss: The Shuffle Imp",
+   "sub": "Keep the vault in order",
+   "teaches": "Apply storage and ID choices to new situations.",
+   "interaction": "Q.boss with one fixed choice set: Key-value store / Relational DB / Local per-channel sequence ID / Global Snowflake ID. Scenarios: (1) 'Store each user's display name, email and friend list' -> Relational DB. (2) 'Store 60 billion new messages a day and let users jump to one from 3 years ago' -> Key-value store. (3) 'Two messages in one chat land in the same millisecond and show up swapped' -> Local per-channel sequence ID (order by ID, not timestamp). (4) 'Product wants one ID that's unique and roughly time-ordered across all channels, for a global audit log' -> Global Snowflake ID. (5) 'Order messages within a group chat on Cassandra, the simplest way' -> Local per-channel sequence ID. (6) 'Join users to groups and query \"which groups is Bob in?\" with transactions' -> Relational DB.",
+   "check": "Boss defeated."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "Defend your storage",
+   "teaches": "Pull it together.",
+   "interaction": "Q.drill. Prompt: 'Where do you store messages, and how do you keep them in order?' Model answer: 'User profiles and friend lists go in a relational DB with replication and sharding. Chat history is different: tens of billions of writes a day, read:write about 1:1, mostly recent reads with some random access for search and jump-to-message. So I'd use a key-value store like HBase or Cassandra: it scales horizontally, has low latency, and handles the long tail better than one huge relational index. For groups the key is (channel_id, message_id), with channel_id as the partition key. I'd order by message_id, not created_at, because timestamps collide. IDs must be unique and time-sortable, and a per-channel sequence is enough because order only matters within a channel. A Snowflake-style global ID also works.'",
+   "check": "Self-grade checks: 'I justified the KV store from the read/write pattern', 'I gave the group table key (channel_id partition, message_id order)', 'I explained why not created_at and which ID scheme'."
+  }
+ ],
+ "caveats": [
+  "Plenty of chat systems run on sharded relational storage. Facebook moved Messenger off HBase onto MyRocks (a MySQL engine built on RocksDB) around 2018, and Discord moved from Cassandra to ScyllaDB in 2022. 'KV store' is a sensible default, not a law.",
+  "A local per-channel sequence still needs someone to hand out the next number safely, e.g. one owner per channel, or an atomic counter in Redis or the database. If two chat servers both mint the 'next' ID for the same channel, you get duplicates. The book calls this 'easier' but skips the details.",
+  "Per-channel IDs and the single cur_max_message_id cursor used for multi-device sync (12.4) don't mix cleanly: if IDs only rise within a channel, a device needs one cursor per channel, or each user's inbox needs its own sequence. Point this out if an interviewer pushes.",
+  "Discord's partition key is actually (channel_id, bucket), where a bucket is a time window, so one busy channel doesn't become a giant partition. The book's plain channel_id key would create very hot, very large partitions for huge channels."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo: Design a Chat System (book chapter)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-chat-system"
+  },
+  {
+   "label": "Discord: How Discord Stores Billions of Messages (Cassandra)",
+   "url": "https://discord.com/blog/how-discord-stores-billions-of-messages"
+  },
+  {
+   "label": "Discord: How Discord Stores Trillions of Messages (move to ScyllaDB)",
+   "url": "https://discord.com/blog/how-discord-stores-trillions-of-messages"
+  },
+  {
+   "label": "Meta Engineering: The Underlying Technology of Messages (HBase)",
+   "url": "https://engineering.fb.com/2010/11/15/core-infra/the-underlying-technology-of-messages/"
+  },
+  {
+   "label": "The Verge: Messenger and WhatsApp process 60 billion messages a day",
+   "url": "https://www.theverge.com/2016/4/12/11415198/facebook-messenger-whatsapp-number-messages-vs-sms-f8-2016"
+  },
+  {
+   "label": "Twitter Snowflake (archived repo)",
+   "url": "https://github.com/twitter-archive/snowflake"
+  }
+ ],
+ "id": "1203",
+ "file": "1203-chat-storage-and-ids.html",
+ "world": 12,
+ "chapterTitle": "Design a Chat System",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-chat-system",
+ "cheatsheet": "../reference/ch12-chat-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "1201",
+   "n": "12.1",
+   "t": "Open the Pipe",
+   "d": "What a chat service does, and polling vs long polling vs WebSocket"
+  },
+  {
+   "id": "1202",
+   "n": "12.2",
+   "t": "The Switchboard",
+   "d": "Stateless vs stateful services, the scaled design, and service discovery"
+  },
+  {
+   "id": "1203",
+   "n": "12.3",
+   "t": "The Message Vault",
+   "d": "Where chat history lives, the message tables, and how to mint message IDs"
+  },
+  {
+   "id": "1204",
+   "n": "12.4",
+   "t": "Special Delivery",
+   "d": "The 1-on-1 message flow, syncing many devices, and small-group fan-out"
+  },
+  {
+   "id": "1205",
+   "n": "12.5",
+   "t": "The Green Dot",
+   "d": "Online presence: login/logout, heartbeats, and fanning out status changes"
+  },
+  {
+   "id": "1206",
+   "n": "BOSS",
+   "t": "Design It Live: Chat",
+   "d": "Full mock interview: design a chat system for 50 million daily users"
+  }
+ ]
+}

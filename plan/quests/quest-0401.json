@@ -1,0 +1,129 @@
+{
+ "n": "4.1",
+ "slug": "rate-limiter-why-and-where",
+ "t": "Bouncer at the Door",
+ "d": "What a rate limiter is, why you need one, how to scope it, and where it should sit",
+ "boss": false,
+ "badge": "🚪 Badge: Head Bouncer",
+ "winTitle": "The door is guarded",
+ "goal": "Your win today: you can explain in one breath what a rate limiter does, give three reasons to have one, ask the five scoping questions, and defend where you'd put it (middleware or API gateway, not the client).",
+ "bookSections": "Ch. 4 intro (benefits of an API rate limiter); Step 1 (understand the problem: candidate/interviewer dialogue + requirements); Step 2 'Where to put the rate limiter?' including API gateway and the build-vs-buy guidelines; Step 4 wrap-up point on rate limiting at different OSI layers",
+ "stages": [
+  {
+   "title": "Why bounce anyone?",
+   "sub": "Three reasons every big API has a limiter",
+   "teaches": "Definition: in a network system, a rate limiter controls the rate of traffic a client or a service sends. For HTTP it limits how many requests a client may send in a time period; requests over the threshold are blocked. Book examples of rules: a user can write no more than 2 posts per second; at most 10 accounts per day from the same IP address; rewards can be claimed no more than 5 times per week from the same device. Three benefits from the book: (1) Prevent resource starvation caused by a Denial of Service (DoS) attack, meaning flooding a service so real users can't get in. Almost every big tech API has limits; the book cites Twitter capping tweets at 300 per 3 hours and the Google Docs API defaulting to 300 read requests per user per 60 seconds. (2) Reduce cost: fewer excess requests means fewer servers, and capacity goes to high-priority APIs. This matters most when you pay per call to a third-party API (checking credit, making a payment, retrieving health records). (3) Prevent servers from being overloaded by bots or users' misbehavior.",
+   "interaction": "'Sort the incident' card game. Six incident cards appear one at a time, for example: 'A script tries 50,000 passwords per minute on /login'; 'A buggy mobile release retries every failed call in a tight loop'; 'Your bill from the credit-check vendor tripled overnight'; 'A scraper bot crawls every product page 20 times a second'; 'Free-tier users' batch jobs crowd out paying customers'; 'A botnet sends 2 Tbps of junk UDP packets at your data center'. The learner taps one of three bins: Starvation (DoS), Cost, Overload. Correct = +XP and the card flies into the bin; wrong = shake + one-line explanation. The botnet card's correct bin is a fourth hidden option revealed on tap of any bin: 'Not the limiter's job' — the explanation says an HTTP rate limiter can't absorb a volumetric network flood; that needs network-level DDoS protection upstream. End with Q.quiz: 'Which is NOT one of the book's three benefits?' (options: prevent resource starvation / reduce cost / prevent server overload / guarantee every request is answered within 100 ms — correct is the last).",
+   "check": "Q.quiz on the three benefits; the card sort must be completed (all six cards placed) to clear the stage."
+  },
+  {
+   "title": "Scope it in five questions",
+   "sub": "Step 1: what the interviewer actually wants",
+   "teaches": "The book's scoping dialogue and its answers: client-side or server-side? Server-side API rate limiter. Throttle by IP, user ID, or something else? Flexible enough to support different sets of throttle rules. Scale? Must handle a large number of requests (startup or big company). Distributed environment? Yes. Separate service or inside application code? Design decision up to you. Inform throttled users? Yes. Resulting requirements (six): accurately limit excessive requests; low latency (must not slow down HTTP response time); use as little memory as possible; distributed rate limiting (one limiter shared across many servers or processes); exception handling (show clear exceptions to throttled users); high fault tolerance (if the limiter has a problem, e.g. a cache server goes offline, it must not take down the whole system).",
+   "interaction": "Chat-style interview. A deck of 9 question cards: 6 good ones (the book's six questions) and 3 time-wasters ('Which frontend framework do you use?', 'What color should the error page be?', 'Should we run it on Kubernetes?'). Tapping a good question appends the interviewer's answer to the chat and pins a requirement card onto a 'Requirements board' (6 slots). Tapping a time-waster costs one heart and the interviewer replies 'Let's not go there yet.' When the board is full, a mini-match: the learner drags each of the six requirement names onto a one-line consequence ('one cache outage must not 500 every API' → high fault tolerance; 'adds no noticeable time to each call' → low latency; 'two servers must agree on one user's count' → distributed; etc.).",
+   "check": "All six requirement cards pinned and matched; Q.quiz: 'The interviewer says the limiter must keep working when a cache node dies. Which requirement is that?' → high fault tolerance."
+  },
+  {
+   "title": "Where does the bouncer stand?",
+   "sub": "Client, server, or middleware — predict, then watch",
+   "teaches": "Client-side limiting is unreliable: client requests can easily be forged by malicious actors, and you may not control the client implementation. Server-side: inside the API servers. Middleware: a separate rate limiter that sits between client and API servers and throttles requests before they reach them. Book example: API allows 2 requests per second; a client sends 3 within one second; the first two are routed to API servers, the third is rejected with HTTP status 429 Too Many Requests. API gateway: a fully managed service (cloud) that supports rate limiting plus SSL termination, authentication, IP whitelisting, serving static content. In a microservice architecture, the limiter usually lives in the API gateway. Also (from wrap-up): you can limit at different OSI layers — the book's design limits at the application layer (HTTP, layer 7); you can also limit by IP address with iptables at the network layer (IP, layer 3).",
+   "interaction": "Diagram sim: Client → [slot A] → [slot B: middleware] → API servers [slot C inside]. A rate limiter token can be dragged into slot A (in client), B (middleware), or C (inside API server). Rule: 2 requests/second. Before pressing 'Send 3 requests in 1 second', the learner predicts how many reach the API servers (input 0–3). Watch: packets animate; with B or C, 2 pass and the 3rd bounces back red with '429'. Then a toggle 'Attacker patches the app' appears: with the limiter in slot A, all 3 (then 30) requests reach the servers because the attacker removed the client check; with B the attacker still gets 429s. Correct predictions = XP. Then a callout box shows the layer-3 vs layer-7 idea with a tiny OSI ladder (7 Application … 3 Network) highlighting where the book's limiter (L7) and iptables (L3) act.",
+   "check": "Predict-then-watch scored (2 reach the servers); Q.quiz: 'Why is a client-side rate limiter not enough?' → requests can be forged / you don't control the client."
+  },
+  {
+   "title": "Build it or buy it?",
+   "sub": "The book's four guidelines, applied",
+   "teaches": "No absolute answer; it depends on the company's tech stack, engineering resources, priorities, goals. Book guidelines: (1) evaluate your current tech stack (programming language, cache service) and make sure the language is efficient enough to implement rate limiting on the server side; (2) pick a rate limiting algorithm that fits business needs — implementing it yourself gives full control, a third-party gateway may limit your choice of algorithm; (3) if you already use microservices with an API gateway (doing authentication, IP whitelisting, etc.), you may add the limiter to the gateway; (4) building your own takes time — if you lack engineering resources, a commercial API gateway is a better option.",
+   "interaction": "Four company profile cards, one at a time. Learner chooses 'Build my own middleware' or 'Use the API gateway' and then picks the guideline that justifies it from 4 chips. Profiles: (a) 3-person startup already on a cloud API gateway with auth there → gateway, guideline 3/4; (b) fintech that needs a custom per-merchant sliding-window rule the vendor gateway doesn't offer → build, guideline 2; (c) team of 40 with an in-house Redis cluster and Go services, wants full control → build, guideline 1/2; (d) small team, tight deadline, no gateway yet → buy a commercial gateway, guideline 4. Both the choice and the justification must be right for full XP; choice right but justification wrong = half XP.",
+   "check": "All four profiles answered; quiz: 'A third-party API gateway's main downside per the book?' → it may limit your choice of algorithm."
+  },
+  {
+   "title": "Boss: The Gatecrasher",
+   "sub": "Placement and scoping curveballs",
+   "teaches": "Applies stages 1–4 to tricky cases, plus: limiting by IP hurts users behind NAT (a whole office or mobile carrier shares one public IP), so key by user ID or API key when users are authenticated; the 429 status code; limits at different layers.",
+   "interaction": "Q.boss with 5 scenarios, 3 choices each. Examples: 'The PM says we can just rate-limit inside the mobile app. You say…' (correct: server-side too, clients can be forged); 'Throttled requests should get which HTTP status?' (429 / 503 / 403 → 429); 'All 2,000 employees of a customer share one office IP and get blocked together. Fix?' (key the limit on user ID / API key); 'You already route all traffic through an API gateway doing auth. Where does the limiter go?' (the gateway); 'Interviewer: what does the limiter do when its own cache is down?' (choices: block everything / let traffic through and alert / crash — correct: let traffic through and alert, tying to the high-fault-tolerance requirement; explanation flags this is a choice called failing open, revisited in 4.5).",
+   "check": "Boss defeated (engine rules)."
+  },
+  {
+   "title": "Say it like a senior",
+   "sub": "Why and where, in 60 seconds",
+   "teaches": "Pulls it together into an interview answer.",
+   "interaction": "Q.drill. Prompt: 'The interviewer asks: why do we need a rate limiter, and where would you put it?' Model answer mentions: limits requests per client per window, returns 429; three benefits (DoS/starvation, cost, overload); server-side because clients can be forged; as middleware or in the API gateway if one exists; choice depends on stack and team resources. Checks: mentions 429; names at least two benefits; rejects client-side with the reason; names middleware or API gateway; mentions a trade-off (control vs time/resources).",
+   "check": "Self-graded drill completed."
+  }
+ ],
+ "caveats": [
+  "The book's example limits (Twitter 300 tweets per 3 hours, Google Docs 300 reads per user per 60 s) were real when written but platform limits change often; treat them as illustrations, not current facts.",
+  "An HTTP rate limiter does not stop a large network-level DDoS: by the time a request is parsed as HTTP, the bandwidth is already spent. Real systems layer network DDoS protection (often at the CDN or edge) in front.",
+  "Rate-limiting by IP is blunt: many users can share one IP (offices, mobile carriers using NAT), and attackers can rotate IPs. Prefer user ID or API key when requests are authenticated.",
+  "Client-side limiting is still worth having as politeness (fewer wasted calls), just never as the only protection."
+ ],
+ "sources": [
+  {
+   "label": "ByteByteGo — Design a Rate Limiter (book chapter)",
+   "url": "https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter"
+  },
+  {
+   "label": "Google Cloud — Rate-limiting strategies and techniques",
+   "url": "https://cloud.google.com/architecture/rate-limiting-strategies-techniques"
+  },
+  {
+   "label": "RFC 6585 — defines HTTP 429 Too Many Requests",
+   "url": "https://www.rfc-editor.org/rfc/rfc6585"
+  },
+  {
+   "label": "AWS — Throttle requests to your REST APIs (API Gateway)",
+   "url": "https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-request-throttling.html"
+  },
+  {
+   "label": "Wikipedia — OSI model",
+   "url": "https://en.wikipedia.org/wiki/OSI_model"
+  }
+ ],
+ "id": "0401",
+ "file": "0401-rate-limiter-why-and-where.html",
+ "world": 4,
+ "chapterTitle": "Design a Rate Limiter",
+ "bookUrl": "https://bytebytego.com/courses/system-design-interview/design-a-rate-limiter",
+ "cheatsheet": "../reference/ch04-rate-limiter-cheatsheet.html",
+ "prev": null,
+ "next": null,
+ "siblings": [
+  {
+   "id": "0401",
+   "n": "4.1",
+   "t": "Bouncer at the Door",
+   "d": "What a rate limiter is, why you need one, how to scope it, and where it should sit"
+  },
+  {
+   "id": "0402",
+   "n": "4.2",
+   "t": "Token Tycoon",
+   "d": "The two bucket algorithms: token bucket and leaking bucket"
+  },
+  {
+   "id": "0403",
+   "n": "4.3",
+   "t": "Windows of Time",
+   "d": "Fixed window, sliding window log, and sliding window counter"
+  },
+  {
+   "id": "0404",
+   "n": "4.4",
+   "t": "The Counter Room",
+   "d": "Redis counters, rule files, 429 headers, and the detailed design"
+  },
+  {
+   "id": "0405",
+   "n": "4.5",
+   "t": "Many Doors, One Count",
+   "d": "Race conditions, syncing many limiters, multi-data-center speed, and monitoring"
+  },
+  {
+   "id": "0406",
+   "n": "BOSS",
+   "t": "Throttle It Live",
+   "d": "Full mock interview: design a rate limiter"
+  }
+ ]
+}
