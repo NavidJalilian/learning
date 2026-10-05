@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Majority Rules</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: the quorum simulator (stages 1–3), config table, consistency chips */
+.qsim svg { max-height: 400px; }
+.qsim svg text { font-family: var(--font); }
+.qsim .wire { stroke: var(--line); stroke-width: 2.5; transition: stroke .3s, opacity .3s; }
+.qsim .wire.dead { stroke: var(--bad); stroke-dasharray: 5 6; opacity: .75; }
+.qsim .client rect { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+.qsim .client text { fill: var(--accent); font-weight: 700; font-size: 14px; text-anchor: middle; }
+.qsim .coord rect { fill: var(--panel); stroke: var(--ink); stroke-width: 2; transition: fill .2s; }
+.qsim .coord.ping rect { fill: var(--accent-soft); }
+.qsim .coord text { fill: var(--ink); font-weight: 700; font-size: 14px; text-anchor: middle; }
+.qsim .reply { font-family: var(--mono) !important; font-size: 13px; font-weight: 700; }
+.qsim .reply.good { fill: var(--good); } .qsim .reply.bad { fill: var(--bad); } .qsim .reply.warn { fill: var(--warn); }
+.qsim .rep { transition: opacity .3s; }
+.qsim .rep.click { cursor: pointer; }
+.qsim .rep.click:focus { outline: none; }
+.qsim .rep.click:focus-visible circle.body { stroke-width: 5; }
+.qsim .rep circle.body { fill: var(--panel); stroke: var(--accent); stroke-width: 3; transition: stroke .3s, fill .3s; }
+.qsim .rep.flash circle.body { fill: var(--accent-soft); }
+.qsim .rep.slow circle.body { stroke: var(--warn); }
+.qsim .rep.down circle.body, .qsim .rep.cut circle.body { stroke: var(--muted); stroke-dasharray: 4 5; fill: var(--bg-2); }
+.qsim .rep.down .ver, .qsim .rep.cut .ver { opacity: .5; }
+.qsim .rep text { text-anchor: middle; fill: var(--ink); }
+.qsim .rep .nm { font-size: 12px; fill: var(--muted); font-weight: 600; }
+.qsim.compact .rep .ver { font-size: 17px; }
+.qsim .rep .ver { font-size: 19px; font-weight: 700; font-family: var(--mono); transition: fill .3s; }
+.qsim .rep.stale .ver { fill: var(--warn); }
+.qsim .rep .lat { font-size: 13px; font-family: var(--mono); fill: var(--muted); }
+.qsim .rep.slow .lat { fill: var(--warn); font-weight: 700; }
+.qsim .rep .st { font-size: 11px; font-weight: 700; letter-spacing: .04em; }
+.qsim .rep.slow .st { fill: var(--warn); } .qsim .rep.down .st, .qsim .rep.cut .st { fill: var(--bad); }
+.qsim .rep .ring { fill: none; stroke-width: 3; opacity: 0; transition: opacity .3s, stroke .3s; }
+.qsim .rep.inW .ring { opacity: 1; stroke: var(--accent); stroke-dasharray: 6 5; }
+.qsim .rep.inR .ring { opacity: 1; stroke: var(--teal); stroke-dasharray: none; }
+.qsim .rep.inW.inR .ring { stroke: var(--xp); stroke-width: 5; }
+.qsim .rep .tag { font-size: 11.5px; font-weight: 700; opacity: 0; transition: opacity .3s; }
+.qsim .rep.inW .tag, .qsim .rep.inR .tag { opacity: 1; }
+.qsim .rep.inW .tag { fill: var(--accent); } .qsim .rep.inR .tag { fill: var(--teal); } .qsim .rep.inW.inR .tag { fill: var(--warn); }
+.qsim .pk circle { stroke: var(--panel); stroke-width: 1.5; }
+.qsim .pk text { font-family: var(--mono) !important; font-size: 11px; font-weight: 700; text-anchor: middle; }
+.qsim .pk.w circle { fill: var(--accent); } .qsim .pk.w text { fill: var(--accent); }
+.qsim .pk.ack circle { fill: var(--good); } .qsim .pk.ack text { fill: var(--good); }
+.qsim .pk.rq circle { fill: var(--teal); } .qsim .pk.rq text { fill: var(--teal); }
+.qsim .pk.rs circle { fill: var(--good); } .qsim .pk.rs text { fill: var(--good); }
+.qsim .pk.rs.old circle { fill: var(--warn); } .qsim .pk.rs.old text { fill: var(--warn); }
+.qsim .pk.drop circle { fill: var(--bad); } .qsim .pk.drop text { fill: var(--bad); }
+.qsim .pk.err circle { fill: var(--bad); } .qsim .pk.err text { fill: var(--bad); }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; padding: 0 14px 10px; font-size: 12.5px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 14px; height: 14px; border-radius: 50%; border: 3px solid var(--accent); display: inline-block; }
+.sw.w { border-style: dashed; } .sw.r { border-color: var(--teal); } .sw.b { border-color: var(--xp); border-width: 4px; }
+.dials { display: flex; gap: 8px; flex-wrap: wrap; }
+.dial { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--bg); }
+.dial .dk { padding: 4px 8px; font-weight: 700; font-size: 13px; color: var(--muted); }
+.dial button { border: 0; background: var(--bg-2); width: 30px; height: 30px; font-size: 17px; font-weight: 700; line-height: 1; }
+.dial button:hover:not([disabled]) { background: var(--accent-soft); color: var(--accent); }
+.dial button[disabled] { opacity: .35; cursor: not-allowed; }
+.dial b { min-width: 26px; text-align: center; font-family: var(--mono); font-size: 15px; }
+.clockbox { font-family: var(--mono); font-size: 14px; font-weight: 600; white-space: nowrap; }
+.clockbox .clk { font-size: 17px; color: var(--accent); }
+.clockbox .acks { color: var(--muted); margin-left: 8px; font-size: 12.5px; }
+.rule { padding: 9px 14px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 13px; font-weight: 600; background: var(--panel); }
+.rule.ok { color: var(--good); } .rule.no { color: var(--warn); }
+.acts .btn { padding: 8px 12px; font-size: 14px; }
+.acts .btn.primary { box-shadow: 0 3px 0 color-mix(in srgb, var(--accent) 60%, #000); }
+.acts .hint { font-size: 12.5px; color: var(--muted); flex-basis: 100%; }
+.cfg { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14.5px; }
+.cfg th, .cfg td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.cfg th { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.cfg td:first-child { font-family: var(--mono); font-weight: 600; white-space: nowrap; }
+.cfg tr.hl td { background: var(--good-soft); }
+.lvl { margin-top: 12px; border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--bg); }
+.lvl .row .chip { font-size: 13px; }
+.lvl .chip.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.lvl .out { margin-top: 10px; font-size: 15px; min-height: 48px; }
+.overlapviz { display: flex; gap: 6px; justify-content: center; margin: 12px 0 4px; flex-wrap: wrap; }
+.overlapviz span { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-family: var(--mono); font-size: 13px; font-weight: 700; border: 3px solid var(--line); background: var(--bg); }
+.overlapviz .w { border-color: var(--accent); border-style: dashed; }
+.overlapviz .r { border-color: var(--teal); }
+.overlapviz .b { border-color: var(--xp); border-width: 5px; }
+@media (max-width: 480px) { .stage-b { padding: 18px 16px 22px; } .cfg { font-size: 13.5px; } .cfg th, .cfg td { padding: 7px 6px; } }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 6.4 · Design a Key-Value Store</div>
+    <h1>Majority Rules</h1>
+    <p class="lede">Three numbers — N, W and R — decide whether your reads are fast, your writes are fast, or your data is never stale. Turn the dials, race the clock, and find the overlap.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> when an interviewer asks "how do your replicas stay consistent?", you can explain N, W and R in plain words, say why <b>W + R &gt; N</b> guarantees a fresh read, name what it costs (waiting), and pick a setting for a given product.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Meet the coordinator</h2><div class="sub">N replicas, and what W really means</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>In Quest 6.3 every key got copied to several servers. Copies only help if they <b>agree</b>, so the book uses <b>quorum consensus</b> — a voting rule that says how many copies must answer before a request counts.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noopener">[1]</a> It has three numbers:</p>
+      <ul>
+        <li><b>N</b> — how many replicas (copies) each key has. Usually 3.</li>
+        <li><b>W</b> — the <i>write quorum</i>: a write counts as successful once <b>W</b> replicas confirm ("ack") it.</li>
+        <li><b>R</b> — the <i>read quorum</i>: a read waits for answers from at least <b>R</b> replicas.</li>
+      </ul>
+      <p>The client never talks to the replicas directly. It talks to a <b>coordinator</b> — the node that receives the request and forwards it to the replicas, like a proxy.<a class="cite" href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf" target="_blank" rel="noopener">[2]</a> Change <b>W</b> and send a few writes. Watch where the data goes, and when the client hears "OK".</p>
+
+      <div id="sim1"></div>
+      <ul class="checklist" id="s1goals">
+        <li data-g="1"><span class="box">✓</span><span>Send a write with <b>W = 1</b></span></li>
+        <li data-g="2"><span class="box">✓</span><span>Send a write with <b>W = 2</b></span></li>
+        <li data-g="3"><span class="box">✓</span><span>Send a write with <b>W = 3</b></span></li>
+      </ul>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Race the clock</h2><div class="sub">Speed vs. freshness</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Every replica sits at a different distance from the coordinator, so its answer takes a different time (shown under each node in milliseconds). The coordinator can only reply once it has heard from enough replicas — so <b>a request is as slow as the slowest replica it has to wait for</b>.<a class="cite" href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf" target="_blank" rel="noopener">[2]</a></p>
+      <p>That is the trade-off: <b>W = 1</b> or <b>R = 1</b> is fast (wait for anyone). Bigger W or R gives better consistency, but you wait longer.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noopener">[1]</a> Now you have all three dials. Tap a replica to make it slow or knock it out.</p>
+      <div id="sim2"></div>
+      <ul class="checklist" id="s2goals">
+        <li data-g="fast"><span class="box">✓</span><span>Write with <b>W = 1</b> and note the clock</span></li>
+        <li data-g="all"><span class="box">✓</span><span>Write with <b>W = N</b> (all replicas) and compare</span></li>
+        <li data-g="slow"><span class="box">✓</span><span>Make a replica 🐢 slow, then write with <b>W = N</b> again</span></li>
+        <li data-g="read"><span class="box">✓</span><span>Do a read with <b>R = 2</b> or more</span></li>
+      </ul>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Find the overlap</h2><div class="sub">Why W + R &gt; N means a fresh read</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Here's the core rule: <b>if W + R &gt; N, every read sees the latest successful write.</b><a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noopener">[1]</a> Why? The W replicas that confirmed the write and the R replicas you read from can't all be different people — there aren't enough replicas. At least one replica is in <b>both</b> groups, and it holds the new value.</p>
+      <div class="overlapviz" aria-label="N=3, W=2, R=2: one replica is in both groups"><span class="w">W</span><span class="b">W+R</span><span class="r">R</span></div>
+      <p class="small muted" style="text-align:center;margin-top:0">N = 3, W = 2, R = 2 → 2 + 2 = 4 seats for 3 replicas → one must sit in both.</p>
+      <table class="cfg">
+        <thead><tr><th>Setting</th><th>What you get</th></tr></thead>
+        <tbody>
+          <tr><td>R = 1, W = N</td><td>Fast reads (writes wait for everyone)</td></tr>
+          <tr><td>W = 1, R = N</td><td>Fast writes (reads wait for everyone)</td></tr>
+          <tr class="hl"><td>W + R &gt; N</td><td>Strong consistency — usually N = 3, W = R = 2</td></tr>
+          <tr><td>W + R ≤ N</td><td>Strong consistency <b>not</b> guaranteed</td></tr>
+        </tbody>
+      </table>
+      <p>Five rounds. Read the setup, <b>predict</b>, then watch. When the coordinator gets several answers, it returns the one with the <b>highest version number</b>. (How real systems compare versions is Quest 6.5.)</p>
+      <div id="sim3"></div>
+      <div class="challenge" id="challenge"></div>
+      <div class="callout tip" id="payoff" style="display:none"><b>🔁 Remember Quest 6.1's caveat?</b> There, the book's CP system blocked <i>every</i> node during a split. You were promised that many real systems keep the <b>majority</b> side working. You just saw it: with N = 3, W = 2, R = 2, the side with s0 + s1 can still gather 2 acks and 2 answers, so it keeps serving. A client stuck on s2's side can never collect 2 votes, so its requests fail. That side can't serve data it can't vouch for.</div>
+      <div class="callout warn" id="quorumCaveat" style="display:none"><b>Honest caveat — "W + R &gt; N" is the ideal case.</b> Kleppmann's <i>Designing Data-Intensive Applications</i> (ch. 5, "Limitations of Quorum Consistency") lists edge cases where even W + R &gt; N can return a stale value:<a class="cite" href="https://dataintensive.net/" target="_blank" rel="noopener">[4]</a> a <b>sloppy quorum</b> may write to stand-in nodes outside the usual N (Quest 6.6). <b>Concurrent writes</b> need a rule to pick a winner (Quest 6.5). And a write that <b>failed</b> (too few acks) is <b>not rolled back</b> on the replicas that did store it, like s0 and s1 in round 4. So treat the rule as a strong guarantee about overlap, not an absolute promise.</div>
+      <div class="sandbox" id="sandbox3">
+        <div class="callout tip"><b>🧪 Sandbox unlocked.</b> Try to break the rule: set N = 3, W = 1, R = 2, knock out <b>s0 and s1</b>, write, bring them back, and read. Is the answer fresh? Then raise R by one and read again.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>How fresh is fresh?</h2><div class="sub">Consistency models &amp; tunable consistency</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>A <b>consistency model</b> is the promise a store makes about what a read can return. The book names three:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noopener">[1]</a></p>
+      <div class="cards" id="cmCards">
+        <div class="card"><div class="card-in"><div class="face"><div class="L">💪</div><h3>Strong</h3><p>A read <b>always</b> returns the most recent write. A client never sees old data.</p></div><div class="face back"><div class="L">?</div></div></div></div>
+        <div class="card"><div class="card-in"><div class="face"><div class="L">🌫️</div><h3>Weak</h3><p>Later reads <b>may not</b> see the newest value, with no promise about when they will.</p></div><div class="face back"><div class="L">?</div></div></div></div>
+        <div class="card"><div class="card-in"><div class="face"><div class="L">⏳</div><h3>Eventual</h3><p>A kind of weak: given <b>enough time</b>, every update reaches every replica and they all agree.</p></div><div class="face back"><div class="L">?</div></div></div></div>
+      </div>
+      <p>Strong consistency usually means a replica won't accept new reads or writes until <b>every</b> replica agrees on the current write. That stalls requests whenever a node is slow or unreachable, so it's a poor fit for a highly available store. <b>Dynamo and Cassandra choose eventual consistency</b>, and so does the book for this design.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noopener">[1]</a></p>
+      <div class="row" id="flipRow"><button class="btn primary" id="flipBtn">I've got it — flip the cards face-down</button><span class="muted small">Recall beats re-reading.</span></div>
+      <div id="sortWrap" style="display:none">
+        <p class="small muted" style="margin-top:16px">Which model is each story describing? From memory.</p>
+        <div class="sort" id="sort"></div>
+      </div>
+      <div id="tunable" style="display:none">
+        <h3 style="margin:22px 0 6px">Tunable consistency: choose per request</h3>
+        <p>Real stores don't hard-wire W and R. The caller picks them <b>per request</b>. This is called <b>tunable consistency</b>. In Cassandra you set a <i>consistency level</i>: <code>ONE</code>, <code>QUORUM</code> (a majority, N/2 + 1, rounded down) or <code>ALL</code>.<a class="cite" href="https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html#tunable-consistency" target="_blank" rel="noopener">[3]</a> Tap one (3 replicas):</p>
+        <div class="lvl">
+          <div class="row" id="lvlChips"><button class="chip" data-l="ONE">ONE</button><button class="chip" data-l="QUORUM">QUORUM</button><button class="chip" data-l="ALL">ALL</button></div>
+          <div class="out" id="lvlOut"><span class="muted">Pick a level.</span></div>
+        </div>
+        <p class="small">Eventual consistency lets <b>conflicting</b> values into the system, and the client has to <b>reconcile</b> them (merge them into one) when it reads. How it even <i>notices</i> a conflict is next: Quest 6.5, <i>Who Wrote Last?</i></p>
+      </div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Dial Master</h2><div class="sub">Pick W and R for real products</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Every product below stores its data on <b>N = 3</b> replicas. For each one, pick the quorum setting that fits best. Think about it in this order: <i>is a stale read harmful?</i> Then: <i>which side is busier, or has to be faster: reads or writes?</i></p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">The interview answer, in your words</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 6 — Design a Key-Value Store</a>, sections "Consistency" and "Consistency models". Then read §4.5 of the <a href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf" target="_blank" rel="noopener">Dynamo paper</a> (how the coordinator runs get and put, one page) and the start of §6. It names (3,2,2) as Dynamo's common setting and "R = 1, W = N" for read-heavy services like the product catalog.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      The book says "quorum <i>consensus</i>", but Dynamo-style quorums are not a consensus algorithm like Raft or Paxos. They don't make all replicas agree on one order of writes, and Kleppmann shows that even W + R &gt; N isn't enough for the strictest kind of consistency (called <i>linearizability</i>) when network delays vary (DDIA ch. 9).<a class="cite" href="https://dataintensive.net/" target="_blank" rel="noopener">[4]</a> If an interviewer pushes on "is it really strongly consistent?", that's the senior answer: "the overlap guarantees you see the latest acknowledged write in normal operation, but not under every race."
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"why does Cassandra's QUORUM use N/2 + 1?"</i> or <i>"if W + R &gt; N, how can I still read stale data?"</i>. Follow-up questions are part of the quest.
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 6, "Consistency" and "Consistency models" (ByteByteGo).</li>
+        <li>DeCandia et al., "Dynamo: Amazon's Highly Available Key-value Store", SOSP 2007. See §4.5 (coordinator, R + W &gt; N, latency set by the slowest of R or W) and §6 ((3,2,2) and R = 1, W = N).</li>
+        <li>Apache Cassandra documentation, "Dynamo → Tunable Consistency" (consistency levels ONE / QUORUM / ALL, W + R &gt; RF).</li>
+        <li>Martin Kleppmann, <i>Designing Data-Intensive Applications</i>, O'Reilly 2017. Ch. 5 "Limitations of Quorum Consistency"; ch. 9 "Linearizability and quorums".</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0004',
+  winTitle: 'Quorum reached',
+  badge: '⚖️ Badge: Quorum Keeper',
+  cheatsheet: '../reference/kv-store-cap-cheatsheet.html',
+});
+const { sleep, shuffle } = Q;
+
+/* =====================================================================
+   Quorum simulator — one factory, one independent instance per stage.
+   Model: the coordinator sends every request to all reachable replicas
+   in parallel. A replica’s answer takes 2 × its one-way latency. The
+   coordinator replies once W acks (write) / R answers (read) are in;
+   with too few reachable replicas it gives up after TIMEOUT.
+   ===================================================================== */
+const NS = 'http://www.w3.org/2000/svg';
+const SLOW = 200, TIMEOUT = 700, SCALE = Q.reduced ? 0.12 : 3.2;  // real ms per simulated ms
+function el(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+
+function makeSim(mount, opt = {}) {
+  const o = Object.assign({ N: 3, W: 2, R: 2, lat: [30, 20, 45, 40, 55], dials: ['N', 'W', 'R'], read: true, toggle: true, rule: true, onWrite: null, onRead: null }, opt);
+  const st = { N: o.N, W: o.W, R: o.R, nodes: [], wset: new Set(), rset: new Set(), busy: false, locked: false };
+  mount.classList.add('sim', 'qsim');
+  mount.innerHTML = `
+    <svg viewBox="0 0 520 318" role="img" aria-label="A client, a coordinator and replica nodes">
+      <line class="wire top"/>
+      <g class="wires"></g>
+      <g class="client"><rect y="10" width="110" height="38" rx="11"/><text y="34">💻 client</text></g>
+      <text class="reply" y="34"></text>
+      <g class="coord"><rect y="88" width="160" height="44" rx="12"/><text y="115">⚙️ coordinator</text></g>
+      <g class="reps"></g>
+      <g class="pks"></g>
+    </svg>
+    <div class="legend"><span><i class="sw w"></i>write quorum (counted acks)</span>${o.read ? '<span><i class="sw r"></i>read quorum</span><span><i class="sw b"></i>in both = overlap</span>' : ''}</div>
+    <div class="sim-bar"><div class="dials">${o.dials.map(k => `<span class="dial" data-k="${k}"><span class="dk">${k}</span><button data-d="-1" aria-label="Decrease ${k}">−</button><b></b><button data-d="1" aria-label="Increase ${k}">+</button></span>`).join('')}</div>
+      <div class="clockbox">⏱ <b class="clk">0</b> ms<span class="acks"></span></div></div>
+    ${o.rule ? '<div class="rule"></div>' : ''}
+    <div class="sim-bar acts"><div class="row"><button class="btn primary b-w"></button>${o.read ? '<button class="btn b-r">👁️ Read</button>' : ''}<button class="btn b-x">↻ Reset</button></div>${o.toggle ? '<span class="hint">Tap a replica to cycle it: normal → 🐢 slow → ✖ down.</span>' : ''}</div>
+    <div class="simlog"></div>`;
+  const svg = $('svg', mount), reps = $('.reps', svg), wires = $('.wires', svg), pks = $('.pks', svg);
+
+  const isOut = i => st.nodes[i].s === 'down' || st.nodes[i].s === 'cut';
+  const lat = i => st.nodes[i].s === 'slow' ? SLOW : st.nodes[i].base;
+  const maxV = () => Math.max(...st.nodes.map(n => n.v));
+  // Two layouts: wide (520 units) and compact (360 units, for phones) so labels stay readable.
+  let G;
+  const layout = () => {
+    const c = mount.clientWidth > 0 && mount.clientWidth < 520;
+    return c ? { c, VW: 360, cx: 180, m: 40, r: 26, ring: 32 } : { c, VW: 520, cx: 260, m: 60, r: 30, ring: 37 };
+  };
+  const posOf = i => [G.m + ((G.VW - 2 * G.m) * i) / (st.N - 1), 240];
+  const anchor = p => p === 'c' ? [G.cx, 132] : p === 'client' ? [G.cx, 48] : [posOf(p)[0], 240 - G.r];
+  function log(t, cls) { const l = $('.simlog', mount); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${t}</div>`); l.scrollTop = l.scrollHeight; }
+  function freshNodes(list) {
+    st.nodes = Array.from({ length: st.N }, (_, i) => ({ v: 1, s: 'ok', base: o.lat[i % o.lat.length], ...(list && list[i] || {}) }));
+  }
+  function build() {
+    G = layout();
+    svg.setAttribute('viewBox', `0 0 ${G.VW} 318`); mount.classList.toggle('compact', G.c);
+    const top = $('.wire.top', svg); top.setAttribute('x1', G.cx); top.setAttribute('y1', 48); top.setAttribute('x2', G.cx); top.setAttribute('y2', 88);
+    $('.client rect', svg).setAttribute('x', G.cx - 55); $('.client text', svg).setAttribute('x', G.cx);
+    $('.coord rect', svg).setAttribute('x', G.cx - 80); $('.coord text', svg).setAttribute('x', G.cx);
+    $('.reply', svg).setAttribute('x', G.cx + 64);
+    reps.innerHTML = ''; wires.innerHTML = '';
+    for (let i = 0; i < st.N; i++) {
+      const [x, y] = posOf(i);
+      el('line', { class: 'wire', x1: G.cx, y1: 132, x2: x, y2: y - G.r }, wires);
+      const g = el('g', { class: 'rep' + (o.toggle ? ' click' : ''), 'data-i': i }, reps);
+      if (o.toggle) { g.setAttribute('tabindex', '0'); g.setAttribute('role', 'button'); g.setAttribute('aria-label', `Replica s${i}: change its state`); }
+      el('circle', { class: 'ring', cx: x, cy: y, r: G.ring }, g);
+      el('circle', { class: 'body', cx: x, cy: y, r: G.r }, g);
+      el('text', { class: 'nm', x, y: y - 8 }, g).textContent = 's' + i;
+      el('text', { class: 'ver', x, y: y + 13 }, g);
+      el('text', { class: 'lat', x, y: y + G.r + 23 }, g);
+      el('text', { class: 'st', x, y: y + G.r + 40 }, g);
+      el('text', { class: 'tag', x, y: y - G.ring - 7 }, g);
+      if (o.toggle) {
+        const go = () => cycle(i);
+        g.addEventListener('click', go);
+        g.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+      }
+    }
+  }
+  function render() {
+    const top = maxV();
+    $$('.rep', reps).forEach((g, i) => {
+      const n = st.nodes[i]; if (!n) return;
+      g.classList.toggle('slow', n.s === 'slow'); g.classList.toggle('down', n.s === 'down'); g.classList.toggle('cut', n.s === 'cut');
+      g.classList.toggle('stale', n.v < top);
+      g.classList.toggle('inW', st.wset.has(i)); g.classList.toggle('inR', st.rset.has(i));
+      $('.ver', g).textContent = 'v' + n.v;
+      $('.lat', g).textContent = isOut(i) ? '— ms' : `${lat(i)} ms`;
+      $('.st', g).textContent = n.s === 'slow' ? '🐢 SLOW' : n.s === 'down' ? '✖ DOWN' : n.s === 'cut' ? '✂ CUT OFF' : (n.v < top ? 'stale' : '');
+      if (!['slow', 'down', 'cut'].includes(n.s)) $('.st', g).style.fill = n.v < top ? 'var(--warn)' : ''; else $('.st', g).style.fill = '';
+      $('.tag', g).textContent = st.wset.has(i) && st.rset.has(i) ? '★ overlap' : st.wset.has(i) ? 'write' : st.rset.has(i) ? 'read' : '';
+    });
+    $$('.wire', wires).forEach((w, i) => w.classList.toggle('dead', !!st.nodes[i] && isOut(i)));
+    $$('.dial', mount).forEach(d => {
+      const k = d.dataset.k, v = st[k], lo = k === 'N' ? 3 : 1, hi = k === 'N' ? 5 : st.N;
+      $('b', d).textContent = v;
+      const [dn, up] = $$('button', d);
+      dn.disabled = st.busy || st.locked || v <= lo; up.disabled = st.busy || st.locked || v >= hi;
+    });
+    const r = $('.rule', mount);
+    if (r) {
+      const s = st.W + st.R, ok = s > st.N;
+      r.className = 'rule ' + (ok ? 'ok' : 'no');
+      r.textContent = ok ? `W + R = ${s} > N = ${st.N} → read & write groups must overlap ✓` : `W + R = ${s} ≤ N = ${st.N} → no overlap guarantee — reads can be stale ⚠`;
+    }
+    const bw = $('.b-w', mount); bw.textContent = `✍️ Write v${top + 1}`;
+    $$('.acts .btn', mount).forEach(b => b.disabled = st.busy || st.locked);
+  }
+  function setReply(t, cls) { const r = $('.reply', svg); r.textContent = t; r.setAttribute('class', 'reply ' + (cls || '')); }
+  function setClock(t) { $('.clk', mount).textContent = Math.round(t); }
+  function setAcks(t) { $('.acks', mount).textContent = t; }
+  function flash(i) { const g = $$('.rep', reps)[i]; if (!g) return; g.classList.add('flash'); setTimeout(() => g.classList.remove('flash'), 350); }
+  function cycle(i) {
+    if (st.busy || st.locked) return;
+    const n = st.nodes[i], nx = { ok: 'slow', slow: 'down', down: 'ok', cut: 'ok' }[n.s];
+    n.s = nx; render();
+    log(nx === 'slow' ? `🐢 s${i} is now slow (${SLOW} ms away)` : nx === 'down' ? `✖ s${i} is down: it will miss requests` : `✓ s${i} is back${n.v < maxV() ? ` — still holding the old v${n.v}` : ''}`, nx === 'ok' ? '' : 'w');
+  }
+  // Animate packets on a simulated clock. packets: {a, b, t0, t1, cls, label, drop}; events: {t, fn}
+  function play(packets, events, tEnd, stopAt) {
+    return new Promise(res => {
+      const items = packets.map(p => {
+        const g = el('g', { class: 'pk ' + p.cls }, pks); g.style.opacity = 0;
+        const c = el('circle', { r: 7 }, g), tx = el('text', {}, g); tx.textContent = p.label || '';
+        return { p, g, c, tx };
+      });
+      events.sort((a, b) => a.t - b.t);
+      let ei = 0; const t0 = performance.now();
+      const frame = now => {
+        const t = (now - t0) / SCALE;
+        while (ei < events.length && events[ei].t <= t) events[ei++].fn();
+        setClock(Math.min(t, stopAt.t == null ? t : stopAt.t));
+        items.forEach(({ p, g, c, tx }) => {
+          if (t < p.t0 || t > p.t1) { g.style.opacity = 0; return; }
+          let k = (t - p.t0) / Math.max(1, p.t1 - p.t0);
+          const [x1, y1] = anchor(p.a), [x2, y2] = anchor(p.b);
+          if (p.drop) { g.style.opacity = String(1 - k); k *= 0.5; } else g.style.opacity = 1;
+          const x = x1 + (x2 - x1) * k, y = y1 + (y2 - y1) * k;
+          c.setAttribute('cx', x); c.setAttribute('cy', y); tx.setAttribute('x', x + 16); tx.setAttribute('y', y + 4);
+        });
+        if (t < tEnd) requestAnimationFrame(frame);
+        else { while (ei < events.length) events[ei++].fn(); items.forEach(it => it.g.remove()); res(); }
+      };
+      requestAnimationFrame(frame);
+    });
+  }
+  // A write starts a new write quorum; a read keeps the last write's quorum visible so the overlap shows.
+  function begin(isWrite) { st.busy = true; if (isWrite) st.wset = new Set(); st.rset = new Set(); setReply(''); setClock(0); setAcks(''); render(); }
+  function end() { st.busy = false; render(); }
+
+  async function write() {
+    if (st.busy) return null;
+    begin(true);
+    const nv = maxV() + 1, W = st.W, ids = st.nodes.map((_, i) => i);
+    const up = ids.filter(i => !isOut(i)).sort((a, b) => lat(a) - lat(b) || a - b);
+    const ok = up.length >= W, tq = ok ? 2 * lat(up[W - 1]) : TIMEOUT, quorum = ok ? up.slice(0, W) : [];
+    log(`client → put(v${nv}). The coordinator sends it to all ${up.length} reachable replica${up.length === 1 ? '' : 's'} and replies after ${W} ack${W > 1 ? 's' : ''} (W = ${W}).`);
+    const pk = [], ev = [], stopAt = { t: null }; let acks = 0;
+    ids.forEach(i => {
+      const L = lat(i);
+      if (isOut(i)) { pk.push({ a: 'c', b: i, t0: 0, t1: Math.max(60, L), cls: 'drop', label: 'v' + nv, drop: true }); return; }
+      pk.push({ a: 'c', b: i, t0: 0, t1: L, cls: 'w', label: 'v' + nv });
+      ev.push({ t: L, fn: () => { st.nodes[i].v = nv; flash(i); render(); } });
+      pk.push({ a: i, b: 'c', t0: L, t1: 2 * L, cls: 'ack', label: '✓' });
+      ev.push({ t: 2 * L, fn: () => { acks++; setAcks(`acks ${acks} · need ${W}`); } });
+    });
+    ev.push({ t: tq, fn: () => {
+      stopAt.t = tq; setClock(tq);
+      if (ok) { st.wset = new Set(quorum); setReply(`← OK v${nv}`, 'good'); } else setReply('← ERR timeout', 'bad');
+      render();
+    } });
+    pk.push({ a: 'c', b: 'client', t0: tq, t1: tq + 45, cls: ok ? 'ack' : 'err', label: ok ? 'OK' : 'ERR' });
+    const tEnd = Math.max(tq + 45, ...ev.map(e => e.t)) + 10;
+    await play(pk, ev, tEnd, stopAt);
+    const missed = ids.filter(isOut);
+    if (ok) {
+      log(`✓ OK after ${tq} ms — ${W === 1 ? 'the fastest ack was enough' : W === up.length ? 'it had to wait for the slowest reachable replica' : `the ${W} fastest acks were enough`} (${quorum.map(i => 's' + i).join(', ')}). ${up.length > W ? `The other replica${up.length - W > 1 ? 's' : ''} stored v${nv} too; ${up.length - W > 1 ? 'their acks' : 'its ack'} just arrived after the OK.` : ''}`, 'g');
+    } else {
+      log(`✖ Only ${up.length} of the ${W} acks it needs can ever arrive → gave up after ${TIMEOUT} ms. ${up.length ? `But ${up.map(i => 's' + i).join(', ')} already stored v${nv} — a failed write is not rolled back.` : ''}`, 'e');
+    }
+    if (missed.length) log(`${missed.map(i => 's' + i).join(', ')} ${missed.length > 1 ? 'were' : 'was'} unreachable and missed v${nv} (repairing that is Quest 6.6).`, 'w');
+    end();
+    const res = { ok, t: tq, W, N: st.N, v: nv, slow: up.some(i => st.nodes[i].s === 'slow') };
+    o.onWrite && o.onWrite(res);
+    return res;
+  }
+
+  async function read() {
+    if (st.busy) return null;
+    begin(false);
+    const R = st.R, ids = st.nodes.map((_, i) => i), top = maxV();
+    const up = ids.filter(i => !isOut(i)).sort((a, b) => lat(a) - lat(b) || a - b);
+    const ok = up.length >= R, tq = ok ? 2 * lat(up[R - 1]) : TIMEOUT, used = ok ? up.slice(0, R) : [];
+    const val = ok ? Math.max(...used.map(i => st.nodes[i].v)) : null, stale = ok && val < top;
+    log(`client → get(). The coordinator asks all ${up.length} reachable replica${up.length === 1 ? '' : 's'} and uses the first ${R} answer${R > 1 ? 's' : ''} (R = ${R}).`);
+    const pk = [], ev = [], stopAt = { t: null }; let got = 0;
+    ids.forEach(i => {
+      const L = lat(i), v = st.nodes[i].v;
+      if (isOut(i)) { pk.push({ a: 'c', b: i, t0: 0, t1: Math.max(60, L), cls: 'drop', label: '?', drop: true }); return; }
+      pk.push({ a: 'c', b: i, t0: 0, t1: L, cls: 'rq', label: '?' });
+      pk.push({ a: i, b: 'c', t0: L, t1: 2 * L, cls: 'rs' + (v < top ? ' old' : ''), label: 'v' + v });
+      ev.push({ t: 2 * L, fn: () => { got++; setAcks(`answers ${got} · need ${R}`); } });
+    });
+    ev.push({ t: tq, fn: () => {
+      stopAt.t = tq; setClock(tq);
+      if (ok) { st.rset = new Set(used); setReply(`← v${val}${stale ? ' stale!' : ''}`, stale ? 'warn' : 'good'); } else setReply('← ERR timeout', 'bad');
+      render();
+    } });
+    pk.push({ a: 'c', b: 'client', t0: tq, t1: tq + 45, cls: ok ? (stale ? 'rs old' : 'rs') : 'err', label: ok ? 'v' + val : 'ERR' });
+    const tEnd = Math.max(tq + 45, ...ev.map(e => e.t)) + 10;
+    await play(pk, ev, tEnd, stopAt);
+    if (!ok) log(`✖ Only ${up.length} replica${up.length === 1 ? '' : 's'} can answer, but R = ${R} → gave up after ${TIMEOUT} ms.`, 'e');
+    else if (stale) log(`⚠ Read returned v${val} after ${tq} ms: STALE. v${top} exists, but none of the replicas asked (${used.map(i => 's' + i).join(', ')}) had it.`, 'w');
+    else log(`✓ Read returned v${val} after ${tq} ms — the newest version among ${used.map(i => 's' + i).join(', ')}.`, 'g');
+    end();
+    const res = { ok, t: tq, R, N: st.N, v: val, stale };
+    o.onRead && o.onRead(res);
+    return res;
+  }
+
+  function load(cfg = {}) {
+    st.N = cfg.N || st.N; st.W = Math.min(cfg.W || st.W, st.N); st.R = Math.min(cfg.R || st.R, st.N);
+    freshNodes(cfg.nodes); build();
+    st.wset = new Set(cfg.wset || []); st.rset = new Set(cfg.rset || []);
+    setReply(''); setClock(0); setAcks(''); render();
+  }
+  function set(cfg) { Object.assign(st, cfg); render(); }
+  function setNode(i, s) { st.nodes[i].s = s; render(); }
+  function lock(b) { st.locked = b; render(); }
+  function clearLog(t) { $('.simlog', mount).innerHTML = t ? `<div>${t}</div>` : ''; }
+
+  $$('.dial', mount).forEach(d => $$('button', d).forEach(b => b.onclick = () => {
+    if (st.busy || st.locked) return;
+    const k = d.dataset.k, nv = st[k] + +b.dataset.d;
+    if (k === 'N') { st.N = nv; st.W = Math.min(st.W, nv); st.R = Math.min(st.R, nv); freshNodes(); build(); st.wset = new Set(); st.rset = new Set(); log(`N = ${nv}: ${nv} fresh replicas, all holding v1.`); }
+    else { st[k] = nv; }
+    render();
+  }));
+  addEventListener('resize', () => { if (!st.busy && G && layout().c !== G.c) { build(); render(); } });
+  $('.b-w', mount).onclick = () => write();
+  if (o.read) $('.b-r', mount).onclick = () => read();
+  $('.b-x', mount).onclick = () => { if (st.busy || st.locked) return; load({ N: st.N }); clearLog('Reset: every replica holds v1 and is healthy.'); };
+
+  load({}); clearLog('Every replica holds v1. Send a write.');
+  return { write, read, load, set, setNode, lock, log, clearLog, get st() { return st; } };
+}
+
+/* ================= STAGE 1: W ≠ "one copy" ================= */
+const goals1 = new Set();
+function goal1(w, res) {
+  if (!res.ok || goals1.has(w)) return;
+  goals1.add(w);
+  const li = $(`#s1goals [data-g="${w}"]`); li.classList.add('done'); Q.addXP(10, li);
+  if (goals1.size === 3) setTimeout(stage1Quiz, 700);
+}
+const sim1 = makeSim($('#sim1'), { N: 3, W: 1, dials: ['W'], read: false, toggle: false, rule: false, onWrite: r => goal1(r.W, r) });
+sim1.clearLog('Every replica holds v1. N = 3 is fixed here. Pick W and send a write.');
+function stage1Quiz() {
+  if ($('#s1quiz').children.length) return;
+  Q.quiz($('#s1quiz'), {
+    q: 'N = 3 and W = 1. How many replicas receive the new value?',
+    options: ['All three — the coordinator waits for one ack', 'Only one — the others never get a copy', 'Two of them — a majority must store it'],
+    correct: 0,
+    good: 'W = 1 does <b>not</b> mean "write one copy". The data still goes to s0, s1 and s2. W only decides how many acks the coordinator waits for before it tells the client "OK".',
+    bad: 'Look at the simulation again: the data flies to s0, s1 <i>and</i> s2 every time. W only decides how many acks the coordinator waits for before it says "OK".',
+    onDone: () => setTimeout(() => Q.clearStage(1), 1000)
+  });
+}
+
+/* ================= STAGE 2: latency vs consistency ================= */
+Q.onStage(2, () => {
+  const goals = new Set();
+  const goal = g => {
+    if (goals.has(g)) return; goals.add(g);
+    const li = $(`#s2goals [data-g="${g}"]`); li.classList.add('done'); Q.addXP(10, li);
+    if (goals.size === 4) setTimeout(stage2Quiz, 700);
+  };
+  makeSim($('#sim2'), {
+    N: 3, W: 1, R: 1,
+    onWrite: r => { if (!r.ok) return; if (r.W === 1) goal('fast'); if (r.W === r.N) { goal('all'); if (r.slow) goal('slow'); } },
+    onRead: r => { if (r.ok && r.R >= 2) goal('read'); },
+  });
+  function stage2Quiz() {
+    if ($('#s2quiz').children.length) return;
+    Q.quiz($('#s2quiz'), {
+      q: 'With a slow replica, a W = N write took hundreds of milliseconds, but W = 1 took about 40. Why?',
+      options: ['It waits for the slowest replica it needs', 'It writes the data three separate times over', 'It contacts the replicas one after the other'],
+      correct: 0,
+      good: 'The write goes to every replica <i>in parallel</i> either way. W = N just means the coordinator must wait for the last ack, which comes from the slowest replica. Dynamo puts it the same way: latency is set by "the slowest of the R (or W) replicas".',
+      bad: 'In both cases the coordinator sends to every replica <i>in parallel</i>. The difference is only how many acks it waits for. With W = N, the last one comes from the slowest replica.',
+      onDone: () => setTimeout(() => Q.clearStage(2), 1000)
+    });
+  }
+});
+
+/* ================= STAGE 3: predict-then-watch ================= */
+Q.onStage(3, () => {
+  const sim = makeSim($('#sim3'), { N: 3, W: 2, R: 2 });
+  const CH = [
+    { title: 'N = 3, W = 1, R = 1. Watch the setup: s1 and s2 are down, so v2 lands on s0 only. That still counts as success, because W = 1. Then s1 and s2 come back, still holding v1. Now you read with R = 1.',
+      setup: async () => {
+        sim.load({ N: 3, W: 1, R: 1, nodes: [{}, { s: 'down' }, { s: 'down' }] });
+        sim.clearLog('Setup: s1 and s2 are unreachable.');
+        await sleep(300); await sim.write(); await sleep(300);
+        sim.setNode(1, 'ok'); sim.setNode(2, 'ok'); sim.log('s1 and s2 are back, still holding v1. W + R = 2 ≤ 3.', 'w');
+      },
+      options: ['Yes, it can return old v1', 'No, it always returns new v2', 'No, the read gets refused entirely'],
+      q: 'Can this read return the stale v1?',
+      correct: 0, act: async () => { await sim.read(); },
+      explain: 'R = 1 takes the <b>first</b> answer. Here that’s s1, the closest replica, which never got v2. W + R = 2 is not greater than N = 3, so the write group {s0} and the read group {s1} don’t overlap. Nothing forces them to.' },
+    { title: 'Same replicas (s0 = v2, s1 = v1, s2 = v1). Now read with R = 3, so W + R = 4 > 3.',
+      setup: async () => { sim.load({ N: 3, W: 1, R: 3, nodes: [{ v: 2 }, { v: 1 }, { v: 1 }], wset: [0] }); sim.log('Same state as before. R raised to 3.'); },
+      q: 'What does the coordinator return?',
+      options: ['It returns v2, the newest version', 'It returns v1, the majority version', 'It refuses, since the replicas disagree'],
+      correct: 0, act: async () => { await sim.read(); },
+      explain: 'Two replicas say v1 and one says v2, but this isn’t a popularity vote. The coordinator returns the <b>newest version</b> it sees. s0 sits in both groups (the gold ring), and that guaranteed overlap is the whole trick.' },
+    { title: 'All replicas hold v2, but s2 is slow (200 ms away). You want the fastest possible reads <i>and</i> still W + R &gt; N.',
+      setup: async () => { sim.load({ N: 3, W: 3, R: 1, nodes: [{ v: 2 }, { v: 2 }, { v: 2, s: 'slow' }] }); sim.log('s2 is slow. We will time reads with R = 1, 2 and 3.'); },
+      q: 'Which setting gives the fastest reads?',
+      options: ['R = 1 and W = 3', 'R = 3 and W = 1', 'R = 2 and W = 2'],
+      correct: 0,
+      act: async () => {
+        const t = [];
+        for (const R of [1, 2, 3]) { sim.set({ R }); t.push((await sim.read()).t); await sleep(200); }
+        sim.log(`Read times → R = 1: ${t[0]} ms · R = 2: ${t[1]} ms · R = 3: ${t[2]} ms`, 'g');
+        sim.set({ R: 1 });
+      },
+      explain: 'R = 1 only waits for the single fastest replica. W = 3 keeps W + R = 4 &gt; 3, so reads stay fresh. The cost moves to <b>writes</b>, which must wait for the slow s2. Dynamo used exactly this, R = 1 and W = N, for read-heavy services like the product catalog.<a class="cite" href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf" target="_blank" rel="noopener">[2]</a>' },
+    { title: 's2 is down. The config is W = 3 (wait for every replica). You write v3.',
+      setup: async () => { sim.load({ N: 3, W: 3, R: 1, nodes: [{ v: 2 }, { v: 2 }, { v: 2, s: 'down' }] }); sim.log('s2 is down. W = 3.', 'w'); },
+      q: 'Can the write succeed?',
+      options: ['No — it fails after a timeout', 'Yes — two acks are good enough', 'Yes — s2 confirms it once back'],
+      correct: 0, act: async () => { await sim.write(); },
+      explain: 'W = N means one dead replica blocks <b>every</b> write. That’s the price of W = N. Notice something sneaky too: s0 and s1 <i>did</i> store v3 even though the client got an error. Failed writes aren’t rolled back (see the caveat below).' },
+    { title: 'Back to the usual N = 3, W = 2, R = 2. A network partition cuts s2 off. The coordinator is on the s0 + s1 side. You write v4, then read it back.',
+      setup: async () => { sim.load({ N: 3, W: 2, R: 2, nodes: [{ v: 3 }, { v: 3 }, { v: 3, s: 'cut' }] }); sim.log('✂ Partition: s2 is cut off from the coordinator.', 'e'); },
+      q: 'What happens?',
+      options: ['Both succeed — s0, s1 form a majority', 'Both fail — every replica must be reachable', 'Write succeeds, but the read is stale'],
+      correct: 0, act: async () => { await sim.write(); await sleep(250); await sim.read(); },
+      explain: 'Two out of three is a majority, so the s0 + s1 side can still reach W = 2 and R = 2 and keeps serving fresh data. This is why N = 3, W = R = 2 is so popular: it is strongly consistent <i>and</i> survives one node down.' },
+  ];
+  let ci = 0, busy = false;
+  async function show() {
+    const c = CH[ci], box = $('#challenge');
+    sim.lock(true);
+    box.innerHTML = `<div class="step">Round ${ci + 1} of ${CH.length}</div><h3>${c.title}</h3><p class="small muted q-wait">⏳ Setting up…</p><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+    await c.setup();
+    sim.lock(true);
+    $('.q-wait', box).outerHTML = `<p style="font-weight:600;margin:0 0 10px">${c.q}</p>`;
+    const opts = $('.opts', box);
+    shuffle(c.options.map((t, i) => ({ t, i }))).forEach(({ t, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = t; b.dataset.i = i;
+      b.onclick = async () => {
+        if (busy) return; busy = true;
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        b.classList.add('picked');
+        sim.log(`— your prediction: “${t}”`);
+        sim.lock(false); await c.act(); sim.lock(true);
+        const ok = i === c.correct;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-i="${c.correct}"]`, opts).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + c.explain;
+        ok ? Q.addXP(20, b) : Q.loseHeart(b);
+        if (ci === 3) $('#quorumCaveat').style.display = 'block';
+        if (ci === 4) $('#payoff').style.display = 'block';
+        const nx = document.createElement('button'); nx.className = 'btn primary';
+        nx.textContent = ci < CH.length - 1 ? 'Next round →' : 'Finish the rounds →';
+        nx.onclick = () => {
+          ci++; busy = false;
+          if (ci < CH.length) return show();
+          box.innerHTML = `<div class="row"><button class="btn" id="replay3">↻ Replay the ${CH.length} rounds</button></div>`;
+          $('#replay3').onclick = () => { ci = 0; $('#sandbox3').classList.remove('on'); show(); };
+          sim.lock(false); sim.log('🧪 Sandbox: the dials are yours.', 'g');
+          $('#sandbox3').classList.add('on');
+          Q.clearStage(3);
+        };
+        $('.row', box).appendChild(nx);
+      };
+      opts.appendChild(b);
+    });
+  }
+  show();
+  if (Q.isCleared(3)) { $('#quorumCaveat').style.display = 'block'; $('#payoff').style.display = 'block'; }
+});
+
+/* ================= STAGE 4: consistency models + tunable ================= */
+Q.onStage(4, () => {
+  const SORT = [
+    { t: 'You change your profile photo and refresh. For a few seconds you still see the old one. After that, the new one shows up everywhere.', a: 'E', why: 'Stale for a moment, then every replica converges: that is eventual consistency.' },
+    { t: 'The moment a write is acknowledged, every read from any client returns that value. Never anything older.', a: 'S', why: 'Always the most recent write, never stale data: strong consistency.' },
+    { t: 'After a write, later reads might miss it, and the system makes no promise about when (or if) they will see it.', a: 'W', why: 'No promise that reads see the newest value: weak consistency. Eventual adds the promise that replicas converge in time.' },
+  ];
+  const NAMES = { S: 'Strong', W: 'Weak', E: 'Eventual' };
+  $('#flipBtn').onclick = () => {
+    let sorted = 0;
+    $$('#cmCards .card').forEach((c, i) => setTimeout(() => c.classList.add('down'), i * 120));
+    $('#flipRow').style.display = 'none'; $('#sortWrap').style.display = 'block'; $('#s4quiz').innerHTML = '';
+    $('#sort').innerHTML = shuffle(SORT).map(s => `<div class="sort-item" data-a="${s.a}"><p>${s.t}</p><div class="row">${['S', 'W', 'E'].map(k => `<button class="opt" data-k="${k}">${NAMES[k]}</button>`).join('')}</div><div class="explain"></div></div>`).join('');
+    $$('#sort .sort-item').forEach(item => {
+      const s = SORT.find(x => x.a === item.dataset.a);
+      $$('.opt', item).forEach(b => b.onclick = () => {
+        $$('.opt', item).forEach(x => x.disabled = true);
+        const ok = b.dataset.k === s.a;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-k="${s.a}"]`, item).classList.add('right');
+        const ex = $('.explain', item); ex.className = 'explain show ' + (ok ? 'good' : 'bad'); ex.textContent = s.why;
+        ok ? Q.addXP(15, b) : Q.loseHeart(b);
+        if (++sorted === SORT.length) setTimeout(afterSort, 600);
+      });
+    });
+  };
+  const LV = {
+    ONE: '<b>ONE</b> → wait for <b>1</b> of 3 replicas. Fastest, and still works with two replicas down. Reads may be stale unless writes used ALL.',
+    QUORUM: '<b>QUORUM</b> → wait for <b>2</b> of 3 (3/2 + 1, rounded down). QUORUM writes plus QUORUM reads give 2 + 2 &gt; 3: overlap. Survives one replica down.',
+    ALL: '<b>ALL</b> → wait for <b>3</b> of 3. Freshest, slowest, and a single dead replica makes the request fail.',
+  };
+  $$('#lvlChips .chip').forEach(c => c.onclick = () => {
+    $$('#lvlChips .chip').forEach(x => x.classList.toggle('on', x === c));
+    $('#lvlOut').innerHTML = LV[c.dataset.l];
+  });
+  function afterSort() {
+    $('#tunable').style.display = 'block';
+    if ($('#s4quiz').children.length) return;
+    Q.quiz($('#s4quiz'), {
+      tag: 'Final check',
+      q: 'Why do highly available stores like Dynamo and Cassandra avoid strong consistency by default?',
+      options: ['Replicas must agree, so requests block during failures', 'Strong consistency needs far more disk space overall', 'Clients cannot read data that is strongly consistent'],
+      correct: 0,
+      good: 'Strong consistency makes requests wait until replicas agree. When a node is slow or cut off, that means waiting or failing, which is the opposite of "always available". So they default to eventual consistency and let the caller turn the dial up per request.',
+      bad: 'It isn’t about storage. Strong consistency makes requests <i>wait until replicas agree</i>. When a node is slow or cut off, requests stall or fail. Highly available stores default to eventual consistency instead.',
+      onDone: () => {
+        $('#flipRow').style.display = ''; $('#flipBtn').textContent = '↻ Flip them back up and try again';
+        $$('#cmCards .card').forEach(c => c.classList.remove('down'));
+        setTimeout(() => Q.clearStage(4), 1000);
+      }
+    });
+  }
+  if (Q.isCleared(4)) $('#tunable').style.display = 'block';
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss'), {
+  name: '👾 The Stale Read Wraith',
+  xp: 15,
+  choices: [
+    { k: 'R1', label: 'R=1 · W=3', sub: 'fast reads, fresh' },
+    { k: 'W1', label: 'W=1 · R=3', sub: 'fast writes, fresh' },
+    { k: 'MAJ', label: 'W=2 · R=2', sub: 'fresh, survives 1 down' },
+    { k: 'ONE', label: 'W=1 · R=1', sub: 'fastest, may be stale' },
+  ],
+  scenarios: [
+    { e: '🏦', t: 'Bank balance before a transfer', d: 'Must never show an old balance, and must keep working if one server dies.', a: 'MAJ', why: 'Fresh reads need W + R &gt; N, and surviving a dead node rules out W = 3 or R = 3. 2 + 2 &gt; 3, with one spare replica. It’s the book’s default strong setting.' },
+    { e: '🚩', t: 'Feature flags', d: 'Read on every single request across the fleet; changed a few times a week by an engineer.', a: 'R1', why: 'Reads massively outnumber writes, so make reads wait for just one replica. A slow flag update (W = 3) is fine. That’s Dynamo’s "high performance read engine" setting.' },
+    { e: '📡', t: 'IoT sensor ingest', d: '100,000 readings per second pour in; a nightly report reads them once.', a: 'W1', why: 'Writes are the hot path, so ack after one replica. The rare report can afford to wait for all three, and 1 + 3 &gt; 3 keeps it accurate.' },
+    { e: '⌨️', t: '"Alex is typing…" indicator', d: 'Flickers on and off many times per second.', a: 'ONE', why: 'A stale indicator is harmless and gone in a moment. Speed is everything, so wait for one replica on both sides and accept eventual consistency.' },
+    { e: '🔑', t: 'Password change, then log in', d: 'After a reset, the old password must stop working immediately — even if a server is down.', a: 'MAJ', why: 'A stale read here is a security hole: the old password would still work. You need overlap <i>and</i> tolerance of one dead node, so W = 2, R = 2.' },
+    { e: '🛍️', t: 'Product catalog page', d: 'Millions of views; prices updated by a nightly batch job.', a: 'R1', why: 'Read-heavy with rare writes: the exact example Dynamo gives for R = 1, W = N.<a class="cite" href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf" target="_blank" rel="noopener">[2]</a> The batch job can wait for all three acks.' },
+    { e: '❤️', t: 'Like count on a post', d: 'Shown under every post; exact numbers don’t matter.', a: 'ONE', why: '10,412 vs 10,409 for a few seconds hurts nobody. Take the fastest path on both sides and let replicas converge (eventual consistency).' },
+  ],
+  outro: 'The pattern: if a stale read causes harm, make W + R &gt; N; then push the waiting onto the rarer side (reads or writes). If staleness is harmless, take W = R = 1.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: interview drill ================= */
+Q.onStage(6, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer asks: <i>"Each key lives on three replicas. How do you make sure a read sees the latest write — and what does that cost you?"</i>',
+  placeholder: 'I would use a quorum…',
+  model: '"I\'d use quorum consensus. N is the number of replicas (3). W is how many must acknowledge a write before it counts, and R is how many must answer a read. If W + R > N, the write group and the read group must share at least one replica, so the read sees the latest acknowledged write. The usual choice is W = R = 2, which also survives one node down. The cost is latency: the coordinator waits for the slowest replica it needs. For read-heavy data I\'d use R = 1, W = N, and if staleness is harmless I\'d drop to W = R = 1 and accept eventual consistency. Ideally it\'s tunable per request, like Cassandra\'s ONE / QUORUM / ALL. One caveat: edge cases like sloppy quorums or concurrent writes can still return stale data."',
+  checks: ['I defined N, W and R in plain words', 'I said W + R > N and <i>why</i> it works (the groups overlap)', 'I named the cost: waiting for slower replicas (latency) or failing when too many are down', 'I mentioned tuning it per product or per request (or eventual consistency)'],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

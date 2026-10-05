@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Key-Value Store Cheat Sheet</title>
+<link rel="icon" href="data:,">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root { --bg: #fbfaf7; --ink: #1c1a26; --muted: #6a6778; --line: #e2ddd2; --accent: #5a48f0; --soft: #f1efe9; --good: #1d9a52; --bad: #d4423f;
+  --font: "Space Grotesk", ui-sans-serif, system-ui, sans-serif; --mono: "JetBrains Mono", ui-monospace, Menlo, monospace; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #0e0f1d; --ink: #ecebf6; --muted: #9a98b4; --line: #2a2d4a; --accent: #8f82ff; --soft: #181a30; --good: #43d98a; --bad: #ff6d6a; } }
+:root[data-theme="dark"] { --bg: #0e0f1d; --ink: #ecebf6; --muted: #9a98b4; --line: #2a2d4a; --accent: #8f82ff; --soft: #181a30; --good: #43d98a; --bad: #ff6d6a; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.5; }
+main { max-width: 860px; margin: 0 auto; padding: 32px 16px 60px; }
+.kicker { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+h1 { margin: 4px 0 4px; font-size: 30px; letter-spacing: -.01em; }
+.lede { color: var(--muted); margin: 0 0 22px; }
+h2 { font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 26px 0 8px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+code { font-family: var(--mono); font-size: .9em; background: var(--soft); padding: .1em .35em; border-radius: 5px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.box { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--soft); }
+.box b.L { font-size: 22px; color: var(--accent); margin-right: 6px; }
+table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.cp { color: var(--bad); font-weight: 700; } .ap { color: var(--good); font-weight: 700; }
+.say { border-left: 4px solid var(--accent); padding: 10px 14px; background: var(--soft); border-radius: 0 10px 10px 0; font-style: italic; }
+ul { padding-left: 20px; margin: 6px 0; } li { margin: 3px 0; }
+.toc { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+.toc a { font-size: 13px; font-weight: 600; text-decoration: none; color: var(--accent); border: 1px solid var(--line); border-radius: 99px; padding: 4px 10px; }
+section { break-inside: auto; }
+section + section { margin-top: 30px; padding-top: 6px; border-top: 2px solid var(--line); }
+.box ul { margin: 4px 0 0; padding-left: 18px; } .box li { margin: 2px 0; }
+p.say { margin-top: 12px; }
+.foot { margin-top: 28px; font-size: 13px; color: var(--muted); }
+.foot a { color: var(--accent); }
+.wide { overflow-x: auto; }
+@media print { .toc { display: none; } section + section { break-before: page; } body { background: #fff; color: #000; font-size: 12px; } main { padding: 0; } .box, code, .say { background: #f4f4f4; } a { color: inherit; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="kicker">Cheat sheet · Chapter 6</div>
+  <h1>Design a Key-Value Store</h1>
+  <p class="lede">Every quest in World 6 on one printable page. <a href="quest-map.html" style="color:var(--accent)">← Quest map</a></p>
+
+  <nav class="toc"><a href="#q61">6.1 KV &amp; CAP</a><a href="#q62">6.2 Partition</a><a href="#q63">6.3 Replication</a><a href="#q64">6.4 Quorum</a><a href="#q65">6.5 Vector clocks</a><a href="#q66">6.6 Failures</a><a href="#q67">6.7 Write/read path</a><a href="#boss">Boss: interview</a></nav>
+  <section id="q61">
+  <h2>6.1 The store</h2>
+  <div class="grid">
+    <div class="box"><b>Key-value pair</b><br>Unique key → one value. API: <code>put(key, value)</code>, <code>get(key)</code>.</div>
+    <div class="box"><b>Keys</b><br>Plain text (<code>last_logged_in_at</code>) or hashed (<code>253DDEC4</code>). Short = faster, less memory.</div>
+    <div class="box"><b>Values</b><br>Anything (string, list, object). Treated as an <b>opaque blob</b> — never inspected. e.g. Dynamo, Memcached, Redis.</div>
+  </div>
+
+  <h2>Book's design requirements</h2>
+  <ul>
+    <li>Pairs are small (&lt; 10 KB), but total data is big.</li>
+    <li>High availability, high scalability, automatic scaling, low latency.</li>
+    <li><b>Tunable consistency</b> — the caller can trade correctness for speed per request.</li>
+  </ul>
+
+  <h2>Single server → distributed</h2>
+  <p>One server = an in-memory hash table. Stretch it with <b>compression</b> and <b>hot data in memory, cold on disk</b> — but it still hits a ceiling. Big data needs a <b>distributed key-value store</b> (a distributed hash table), with each piece of data copied to several <b>replicas</b>.</p>
+
+  <h2>CAP — pick what survives a split</h2>
+  <div class="grid">
+    <div class="box"><b class="L">C</b><b>Consistency</b><br>All clients see the same, latest data from any node.</div>
+    <div class="box"><b class="L">A</b><b>Availability</b><br>Every request gets a response, even with nodes down.</div>
+    <div class="box"><b class="L">P</b><b>Partition tolerance</b><br>Keeps working when the network between nodes breaks.</div>
+  </div>
+  <p>You can't have all three. Networks <i>will</i> break, so P is mandatory → <b>CA can't exist in practice</b>. The real choice during a partition: <b>CP or AP</b>.</p>
+
+  <h2>What happens when n3 is cut off from n1 + n2</h2>
+  <div class="wide"><table>
+    <tr><th></th><th>Writes</th><th>Reads from n3</th><th>When the network heals</th><th>Use for</th></tr>
+    <tr><td class="cp">CP</td><td>Refused (error) — can't copy to every replica</td><td>Refused — can't vouch it's latest</td><td>Nothing to fix; never diverged</td><td>Bank balances, seat booking, unique usernames</td></tr>
+    <tr><td class="ap">AP</td><td>Accepted on the reachable side</td><td>Answered — possibly <b>stale</b></td><td>Missed writes synced to n3 ("eventually consistent"); conflicts if both sides were written</td><td>Shopping carts, likes, presence dots, view counts</td></tr>
+  </table></div>
+  <p style="font-size:13.5px;color:var(--muted)"><b>Caveat:</b> the book's CP blocks n1 + n2 too. Many real CP systems (majority voting / Raft) keep the majority side working and only stop the minority. Real databases often don't fit a single CP/AP label (Kleppmann).</p>
+
+  <h2>Rule of thumb</h2>
+  <p>If a <b>wrong answer</b> causes real harm → <span class="cp">CP</span>. If a <b>missing answer</b> hurts more → <span class="ap">AP</span>.</p>
+
+  <h2>Say it in the interview</h2>
+  <p class="say">"It depends which guarantee we keep during a partition. CP refuses writes it can't replicate — errors, but never wrong data, like a bank. AP keeps every node answering; the cut-off replica may be stale and syncs when the network heals — fine for a shopping cart. For a general key-value store I'd make it tunable per request."</p>
+
+  </section>
+  <section id="q62">
+<h2>6.2 Data partition: consistent hashing</h2>
+<div class="grid">
+  <div class="box"><b>Goals</b><ul><li>Spread data evenly across servers</li><li>Move as little data as possible when servers join/leave</li></ul></div>
+  <div class="box"><b>Hash ring</b><ul><li>Hash servers and keys onto one ring (SHA-1: 0…2<sup>160</sup>−1, ends joined)</li><li>Key → first server <b>clockwise</b></li><li>Join/leave moves only one slice ≈ <b>k/n</b> keys</li></ul></div>
+  <div class="box"><b>Virtual nodes</b><ul><li>Each server at many ring points → even slices (book: ~10% spread at 100, ~5% at 200)</li><li>Dead server's load spreads to all</li><li>Points ∝ capacity (heterogeneity)</li></ul></div>
+</div>
+<table>
+  <tr><th></th><th>hash % N</th><th>Ring</th><th>Ring + vnodes</th></tr>
+  <tr><td>Even spread</td><td>✓</td><td>✗ lumpy</td><td>✓</td></tr>
+  <tr><td>Keys moved when N changes</td><td>most (4→5: ~80%)</td><td>~k/n</td><td>~k/n, taken from many servers</td></tr>
+  <tr><td>Server dies</td><td>almost all keys remap</td><td>one neighbour gets it all</td><td>shared by all</td></tr>
+</table>
+<ul><li>Used by Dynamo, Cassandra, Discord, Akamai, Maglev.</li><li>Caveat: one very hot key still lives on one server.</li></ul>
+<p class="say">"I'd partition with consistent hashing: keys go to the first server clockwise on a hash ring, so adding a server moves only ~k/n keys, and virtual nodes keep load even and let bigger servers take more."</p>
+  </section>
+  <section id="q63">
+<h2>6.3 Data replication — which N servers hold a key</h2>
+<div class="grid">
+  <div class="box"><b>Walk clockwise</b><br>Hash the key to a spot on the ring, walk clockwise, take the first N servers = the <i>preference list</i>. Every node can compute it — no directory.</div>
+  <div class="box"><b>Unique machines</b><br>With virtual nodes the walk can hit the same machine twice. Skip positions whose machine is already listed — N copies must mean N machines.</div>
+  <div class="box"><b>Spread data centers</b><br>Servers in one DC fail together (power, network, disasters). Place replicas in distinct DCs linked by fast networks.</div>
+</div>
+<table>
+  <tr><th>Plan</th><th>Survives</th><th>Cost</th></tr>
+  <tr><td>1 copy</td><td>nothing</td><td>1× disk</td></tr>
+  <tr><td>3 copies, one DC</td><td>dead servers, rolling restarts</td><td>3× disk</td></tr>
+  <tr><td>3 copies, many DCs</td><td>a whole-DC outage</td><td>3× disk + slower cross-DC copies</td></tr>
+</table>
+<ul>
+  <li><b>Asynchronous:</b> "OK" can return before every copy lands → brief window of stale reads. How many must confirm = W (Quest 6.4).</li>
+  <li>Real systems: Dynamo's list holds &gt; N nodes to route around failures; Cassandra's NetworkTopologyStrategy sets a count per DC and spreads copies across racks.</li>
+</ul>
+<p class="say">"I hash the key onto the ring, walk clockwise and take the first N distinct physical machines, spread across data centers so one outage can't take every copy."</p>
+  </section>
+  <section id="q64">
+<h2>6.4 Quorum consensus (N, W, R)</h2>
+<div class="grid">
+  <div class="box"><b>N</b> = replicas per key (usually 3). <b>W</b> = acks needed before a write counts. <b>R</b> = answers needed before a read returns.</div>
+  <div class="box"><b>Coordinator</b> = the node that takes the client request, sends it to all N replicas in parallel, and replies after W acks / R answers. W=1 still sends to all N.</div>
+  <div class="box"><b>Cost:</b> latency is set by the slowest replica you wait for. Bigger W/R → fresher but slower, and fails if too many nodes are down.</div>
+  <div class="box"><b>W + R &gt; N</b> → the write group and read group share at least one replica → the read sees the latest write (return the newest version).</div>
+</div>
+<table>
+  <tr><th>Setting (N=3)</th><th>Gives you</th></tr>
+  <tr><td>R=1, W=3</td><td>Fast reads (feature flags, product catalog)</td></tr>
+  <tr><td>W=1, R=3</td><td>Fast writes (heavy ingest, rare reads)</td></tr>
+  <tr><td>W=2, R=2</td><td>Strong + survives 1 node down (Dynamo's (3,2,2))</td></tr>
+  <tr><td>W=1, R=1 (W+R ≤ N)</td><td>Fastest, may be stale → eventual</td></tr>
+</table>
+<ul>
+  <li><b>Strong</b>: always the latest write. <b>Weak</b>: may miss it. <b>Eventual</b>: replicas converge given time (Dynamo, Cassandra, the book's choice).</li>
+  <li><b>Tunable</b>: caller picks per request, e.g. Cassandra ONE / QUORUM (n/2+1) / ALL.</li>
+  <li>Partition with W=R=2: the majority side keeps serving; the lone node can't reach a quorum.</li>
+  <li>Caveat: sloppy quorums, concurrent writes, and failed writes that aren't rolled back can still give stale reads.</li>
+</ul>
+<p class="say">"With N=3, W=R=2, every read overlaps the last write's replicas, so it sees the latest value, at the cost of waiting for the second-slowest replica; I'd make W and R tunable per request."</p>
+  </section>
+  <section id="q65">
+<h2>6.5 Versioning &amp; vector clocks</h2>
+<div class="grid">
+  <div class="box"><b>Versioning</b><br>Every write creates a new, unchangeable version. Without extra info, two replicas holding different values can't tell which is newer, or that they conflict.</div>
+  <div class="box"><b>Vector clock</b><br><code>D([S1,v1],[S2,v2],…)</code>. A write handled by Si adds 1 to vi if the pair exists, otherwise adds <code>[Si,1]</code>.</div>
+  <div class="box"><b>Compare</b><br>Missing pair = 0. X ≤ Y on every server → X is an <b>ancestor</b> (drop it). Each side ahead somewhere → <b>siblings</b> (conflict).</div>
+</div>
+<table>
+  <tr><th>Step</th><th>Read from</th><th>Handled by</th><th>Clock</th></tr>
+  <tr><td>D1</td><td>—</td><td>Sx</td><td><code>[Sx,1]</code></td></tr>
+  <tr><td>D2</td><td>D1</td><td>Sx</td><td><code>[Sx,2]</code></td></tr>
+  <tr><td>D3</td><td>D2</td><td>Sy</td><td><code>[Sx,2],[Sy,1]</code></td></tr>
+  <tr><td>D4</td><td>D2</td><td>Sz</td><td><code>[Sx,2],[Sz,1]</code> ← sibling of D3</td></tr>
+  <tr><td>D5</td><td>D3 + D4, merged</td><td>Sx</td><td><code>[Sx,3],[Sy,1],[Sz,1]</code></td></tr>
+</table>
+<ul>
+  <li><b>Who resolves:</b> the store keeps both siblings; the next client reads both, merges them (cart = union) and writes back.</li>
+  <li><b>Costs:</b> merge logic in the client; clocks grow → cap them (Dynamo's example: 10) and drop the oldest pair, which can cause false conflicts (Dynamo: never seen in production).</li>
+  <li><b>Side effect:</b> union merges never lose an add, but deleted items can come back (Dynamo §4.4).</li>
+  <li><b>Alternative: last-write-wins</b> (Cassandra): keep the newest timestamp. Simple, but silently drops one concurrent write and trusts drifting clocks. Fine when only the latest value matters (sessions, sensor readings).</li>
+</ul>
+<p class="say">"Each version carries a vector clock; if neither clock is ≤ the other, the writes were concurrent, so we keep both siblings and let the client merge — or, where only the latest value matters, use last-write-wins and accept the dropped write."</p>
+  </section>
+  <section id="q66">
+<h2>6.6 Handling failures</h2>
+<div class="grid">
+  <div class="box"><b>📡 Detect — gossip</b><ul><li>Each node bumps its own heartbeat counter, sends its membership list to a few random peers</li><li>Counter not rising past a timeout → suspect; down only when ≥2 independent sources agree</li><li>All-to-all pinging is N×(N−1) messages; gossip ≈ N×k</li></ul></div>
+  <div class="box"><b>🔀 Cover — sloppy quorum + hinted handoff</b><ul><li>Use the first W/R <i>healthy</i> servers clockwise, skipping dead ones</li><li>The stand-in stores a hint ("belongs to s2") and hands the data back on recovery</li><li>Cost: W+R&gt;N no longer guarantees the latest read; hints are best effort</li></ul></div>
+  <div class="box"><b>🌳 Repair — anti-entropy with Merkle trees</b><ul><li>Buckets → hash keys → hash per bucket → hash up to the root</li><li>Equal roots = identical; otherwise descend only into differing children</li><li>Data synced ∝ differences (e.g. 1M buckets for 1B keys ≈ 1,000 keys/bucket)</li></ul></div>
+  <div class="box"><b>🌍 Survive a site — multi-DC replication</b><ul><li>Each key's replicas span data centers</li><li>Trade-off: cross-DC latency (e.g. Cassandra LOCAL_QUORUM)</li></ul></div>
+</div>
+<table><tr><th>Failure</th><th>Mechanism</th></tr><tr><td>Is it dead?</td><td>Gossip + timeout + confirmation</td></tr><tr><td>Short outage</td><td>Sloppy quorum + hinted handoff</td></tr><tr><td>Lost data / drift</td><td>Merkle-tree anti-entropy</td></tr><tr><td>Whole data center down</td><td>Cross-DC replication</td></tr></table>
+<p class="say">"Detect with gossip, cover with a sloppy quorum and hinted handoff, repair with Merkle-tree anti-entropy, and replicate across data centers to survive a site loss."</p>
+  </section>
+  <section id="q67">
+<h2>6.7 Write &amp; read path (one node's storage engine)</h2>
+<div class="grid">
+  <div class="box"><b>Architecture</b><ul>
+    <li>Clients call get(key) / put(key, value) on any node; that node is the <b>coordinator</b> (proxy to the replicas).</li>
+    <li>Ring + consistent hashing, data replicated, fully decentralized.</li>
+    <li>Every node has the same jobs: client API, failure detection, conflict resolution, failure repair, replication, storage engine → no single point of failure.</li></ul></div>
+  <div class="box"><b>Write path</b><ul>
+    <li>1. Append to <b>commit log</b> (disk, append-only) — replayed after a crash.</li>
+    <li>2. Insert into <b>memtable</b> (RAM, sorted by key) → ack client.</li>
+    <li>3. Memtable hits threshold → <b>flush</b> to an <b>SSTable</b>: immutable file of sorted &lt;key, value&gt;.</li>
+    <li>Fast because every disk write is sequential.</li></ul></div>
+  <div class="box"><b>Read path</b><ul>
+    <li>1. Check memtable → hit? return.</li>
+    <li>2. Ask each SSTable's <b>Bloom filter</b>, newest first.</li>
+    <li>3. Read only the "maybe" SSTables; first (newest) hit wins.</li>
+    <li>4. Return result to client.</li></ul></div>
+</div>
+<table><tr><th>Skip this…</th><th>…and this breaks</th></tr>
+  <tr><td>Commit log</td><td>Acknowledged writes lost on crash</td></tr>
+  <tr><td>Memtable</td><td>Random disk writes; no sorted flush</td></tr>
+  <tr><td>Bloom filter</td><td>Every get opens every SSTable</td></tr></table>
+<ul><li><b>Bloom filter</b> = bit array + k hash functions. Any bit 0 → definitely not; all 1 → maybe. False positives yes, false negatives never.</li>
+  <li>SSTables are never edited: updates = newer copy, deletes = tombstone, <b>compaction</b> merges.</li></ul>
+<p class="say">"Writes go to an append-only commit log for durability, then a sorted in-memory memtable that's flushed to immutable SSTables; reads check the memtable, then use per-SSTable Bloom filters to skip files that definitely don't have the key."</p>
+  </section>
+  <section id="boss">
+<h2>BOSS · Design it live: the 45-minute interview</h2>
+<div class="grid">
+  <div class="box"><b>1 · Scope (3–10 min)</b><ul><li>Pairs &lt; 10 KB, big data</li><li>High availability, high scalability, auto-scaling</li><li>Tunable consistency, low latency</li></ul></div>
+  <div class="box"><b>2 · High-level (10–15 min)</b><ul><li>get/put API → any node is coordinator</li><li>Consistent-hashing ring + virtual nodes</li><li>Replicate to next N unique servers clockwise</li><li>AP / eventual, tunable via N, W, R</li></ul></div>
+  <div class="box"><b>3 · Deep dive (10–25 min)</b><ul><li>Walk the goal → technique table below</li><li>Answer "what if X fails?" with a mechanism</li></ul></div>
+  <div class="box"><b>4 · Wrap (3–5 min)</b><ul><li>Recap + trade-offs; bottlenecks (hot keys, compaction)</li><li>Error cases; ops: metrics, alerts, logs</li><li>Never say it's perfect</li></ul></div>
+</div>
+<table>
+  <tr><th>Goal / problem</th><th>Technique</th></tr>
+  <tr><td>Big data · partition · incremental scale · heterogeneity</td><td>Consistent hashing (virtual nodes)</td></tr>
+  <tr><td>High-availability reads</td><td>Replication + multi-data-center</td></tr>
+  <tr><td>Highly available writes</td><td>Versioning + vector clocks</td></tr>
+  <tr><td>Tunable consistency</td><td>Quorum consensus (W + R &gt; N ⇒ strong)</td></tr>
+  <tr><td>Temporary / permanent failures</td><td>Sloppy quorum + hinted handoff / Merkle-tree anti-entropy</td></tr>
+  <tr><td>Data-center outage</td><td>Cross-data-center replication</td></tr>
+</table>
+<p class="say">"I'd scope first, then sketch a decentralized ring of replicated nodes that's AP by default with tunable N/W/R — and for every failure you name, I'll point to the mechanism that handles it."</p>
+  </section>
+
+  <div class="foot">Sources: Alex Xu, <i>System Design Interview</i> Ch. 6 · <a href="https://groups.csail.mit.edu/tds/papers/Gilbert/Brewer2.pdf">Gilbert &amp; Lynch 2002</a> · <a href="https://www.infoq.com/articles/cap-twelve-years-later-how-the-rules-have-changed/">Brewer 2012</a> · <a href="https://martin.kleppmann.com/2015/05/11/please-stop-calling-databases-cp-or-ap.html">Kleppmann 2015</a> · <a href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf">Dynamo 2007</a> · <a href="https://bytebytego.com/courses/system-design-interview/design-consistent-hashing">Xu Ch. 5 (consistent hashing)</a> · <a href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews">Xu Ch. 3 (interview framework)</a> · <a href="https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html">Cassandra architecture docs</a> · <a href="https://dataintensive.net/">DDIA</a></div>
+</main>
+</body>
+</html>

@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Key-Value Vault</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: stage 1 buckets, stage 2 memory meter, stage 4 replica sim */
+.kv-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 16px; margin-top: 16px; }
+@media (max-width: 680px) { .kv-grid { grid-template-columns: 1fr; } }
+.term { min-height: 260px; }
+.buckets { display: grid; gap: 5px; }
+.bucket { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 10px; padding: 5px 8px; min-height: 34px; background: var(--bg); transition: background .3s, border-color .3s; flex-wrap: wrap; }
+.bucket .i { font-family: var(--mono); font-size: 11px; color: var(--muted); width: 22px; }
+.bucket.flash { border-color: var(--accent); background: var(--accent-soft); }
+.pair { font-family: var(--mono); font-size: 11.5px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; animation: rise .3s; }
+.pair b { color: var(--accent); font-weight: 600; }
+.hashnote { font-family: var(--mono); font-size: 12px; color: var(--muted); min-height: 18px; margin-bottom: 8px; }
+.server { border: 1px solid var(--line); border-radius: 16px; padding: 16px; background: var(--bg); margin-top: 14px; }
+.server-top { display: flex; justify-content: space-between; font-weight: 600; font-size: 14px; margin-bottom: 8px; gap: 8px; flex-wrap: wrap; }
+.meter { position: relative; height: 26px; background: var(--bg-2); border-radius: 8px; overflow: hidden; border: 1px solid var(--line); }
+.meter-fill { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, var(--teal), var(--accent)); transition: width .9s cubic-bezier(.2,.8,.2,1), background .3s; }
+.meter.over .meter-fill { background: repeating-linear-gradient(45deg, var(--bad), var(--bad) 10px, color-mix(in srgb, var(--bad) 70%, #000) 10px, color-mix(in srgb, var(--bad) 70%, #000) 20px); }
+.meter-label { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--mono); font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.disk { margin-top: 10px; font-size: 13px; color: var(--muted); font-family: var(--mono); }
+.status { margin-top: 12px; font-weight: 600; font-size: 15px; min-height: 24px; }
+.status.bad { color: var(--bad); }
+.status.good { color: var(--good); }
+.power { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+.power .btn.used { border-color: var(--good); background: var(--good-soft); }
+.sim .link { stroke: var(--muted); stroke-width: 3; opacity: .55; transition: stroke .3s, opacity .3s; }
+.sim .link.cut { stroke: var(--bad); stroke-dasharray: 6 8; opacity: .9; }
+.sim .clink { stroke: var(--line); stroke-width: 2; stroke-dasharray: 3 5; }
+.sim .scissor { opacity: 0; transition: opacity .3s; }
+.sim.cut .scissor { opacity: 1; }
+.sim .node circle.body { fill: var(--panel); stroke: var(--accent); stroke-width: 3; transition: stroke .3s, fill .3s; }
+.sim .node.stale circle.body { stroke: var(--warn); fill: var(--warn-soft); }
+.sim .node.err circle.body { stroke: var(--bad); fill: var(--bad-soft); }
+.sim .node text { fill: var(--ink); font-family: var(--font); text-anchor: middle; }
+.sim .node .nm { font-size: 13px; fill: var(--muted); font-weight: 600; }
+.sim .node .val { font-size: 20px; font-weight: 700; font-family: var(--mono); }
+.sim .client rect { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+.sim .client text { fill: var(--accent); font-weight: 700; font-size: 14px; text-anchor: middle; font-family: var(--font); }
+.sim .badge { font-size: 11px; font-weight: 700; fill: var(--warn); text-anchor: middle; opacity: 0; transition: opacity .3s; }
+.sim .node.stale .badge { opacity: 1; }
+.net { font-weight: 600; }
+.net.cut { color: var(--bad); }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 6.1 · Design a Key-Value Store</div>
+    <h1>The Key-Value Vault</h1>
+    <p class="lede">Build a tiny database, overflow it, split it across servers — then cut the network and decide what breaks.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> when an interviewer asks "what happens when one replica gets cut off?", you can answer in two sentences: what a <b>CP</b> system does, what an <b>AP</b> system does, and which one a given product needs.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Meet the vault</h2><div class="sub">What a key-value store is</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>A <b>key-value store</b> is the simplest database there is: one giant dictionary. Every <b>key</b> is unique, and it points to exactly one <b>value</b>. It speaks two commands:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noopener">[1]</a></p>
+      <ul>
+        <li><code>put(key, value)</code> — store this value under this key</li>
+        <li><code>get(key)</code> — give me back whatever is under this key</li>
+      </ul>
+      <p><b>Keys</b> can be plain text (<code>last_logged_in_at</code>) or a hash (<code>253DDEC4</code>). Shorter keys are better — less memory, faster to compare. <b>Values</b> can be anything (a string, a list, an object) and the store treats them as an <i>opaque blob</i>: it never looks inside. Redis, Memcached and Amazon's Dynamo all work this way.</p>
+      <p>On one server, the obvious build is a <b>hash table</b> in memory: run the key through a hash function, which turns it into a number that picks a "bucket" to put the pair in. Try it 👇</p>
+
+      <div class="kv-grid">
+        <div>
+          <div class="term">
+            <div class="term-log" id="termLog"><span class="muted">// type a command, or tap one below</span>
+</div>
+            <form class="term-in" id="termForm" autocomplete="off"><span>❯</span><input id="termInput" placeholder="put user:42 navid" aria-label="Command"></form>
+          </div>
+          <div class="chips" id="chips">
+            <button class="chip" data-cmd="put user:42 navid">put user:42 navid</button>
+            <button class="chip" data-cmd="get user:42">get user:42</button>
+            <button class="chip" data-cmd="get user:99">get user:99</button>
+            <button class="chip" data-cmd='put cart:7 ["book","pen"]'>put cart:7 [...]</button>
+          </div>
+        </div>
+        <div>
+          <div class="hashnote" id="hashNote">hash(key) % 8 → bucket</div>
+          <div class="buckets" id="buckets"></div>
+        </div>
+      </div>
+      <ul class="checklist" id="s1goals">
+        <li data-g="put"><span class="box">✓</span>Store a pair with <code>put</code></li>
+        <li data-g="hit"><span class="box">✓</span>Read it back with <code>get</code></li>
+        <li data-g="miss"><span class="box">✓</span><code>get</code> a key that was never stored</li>
+      </ul>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>The vault fills up</h2><div class="sub">Why one server isn't enough</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Memory is fast, but small. Your app gets popular and the data keeps coming. The book gives two tricks to squeeze more into one server:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noopener">[1]</a></p>
+      <ul>
+        <li><b>Compression</b> — shrink the values.</li>
+        <li><b>Hot in memory, cold on disk</b> — keep only frequently used data in fast memory; park the rest on the slower, bigger disk.</li>
+      </ul>
+      <p>Hit <b>Traffic surge</b>, then use your power-ups.</p>
+      <div class="server">
+        <div class="server-top"><span>🖥️ server-01 · memory</span><span class="mono" id="memCap">64 GB</span></div>
+        <div class="meter" id="meter"><div class="meter-fill" id="meterFill"></div><div class="meter-label" id="meterLabel">0 / 64 GB</div></div>
+        <div class="disk" id="disk">disk: 0 GB of cold data</div>
+        <div class="power">
+          <button class="btn primary" id="surge">⚡ Traffic surge</button>
+          <button class="btn" id="pCompress" disabled>🗜️ Compress values</button>
+          <button class="btn" id="pTier" disabled>❄️ Move cold data to disk</button>
+        </div>
+        <div class="status" id="memStatus"></div>
+      </div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Three promises: CAP</h2><div class="sub">The rule every distributed store lives by</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Spreading key-value pairs across many servers gives you a <b>distributed key-value store</b> (also called a distributed hash table). To make it survive crashes, each piece of data is copied to several servers — these copies are called <b>replicas</b>. Now three promises compete:</p>
+      <div class="cards" id="capCards">
+        <div class="card"><div class="card-in"><div class="face"><div class="L">C</div><h3>Consistency</h3><p>Every client sees the <b>same, latest data</b>, no matter which node it asks.</p></div><div class="face back"><div class="L">C</div></div></div></div>
+        <div class="card"><div class="card-in"><div class="face"><div class="L">A</div><h3>Availability</h3><p>Every request <b>gets an answer</b>, even if some nodes are down.</p></div><div class="face back"><div class="L">A</div></div></div></div>
+        <div class="card"><div class="card-in"><div class="face"><div class="L">P</div><h3>Partition tolerance</h3><p>The system <b>keeps running</b> when the network between nodes breaks (a "partition").</p></div><div class="face back"><div class="L">P</div></div></div></div>
+      </div>
+      <p><b>The CAP theorem:</b> a distributed system can't guarantee all three at once.<a class="cite" href="https://groups.csail.mit.edu/tds/papers/Gilbert/Brewer2.pdf" target="_blank" rel="noopener">[2]</a> And since networks <i>do</i> break, P isn't optional — so the real question is: <b>when the network splits, do you keep C or keep A?</b></p>
+      <div class="row" id="flipRow"><button class="btn primary" id="flipBtn">I've got it — flip the cards face-down</button><span class="muted small">Recall beats re-reading.</span></div>
+      <div id="sortWrap" style="display:none">
+        <p class="small muted" style="margin-top:16px">Which promise is each sentence describing? From memory.</p>
+        <div class="sort" id="sort"></div>
+      </div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>The Split</h2><div class="sub">Predict, then watch it happen</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Your data — a bank balance — is copied to three replicas: <b>n1</b>, <b>n2</b>, <b>n3</b>. Each round, <b>predict</b> what happens, then watch. Right calls earn XP; wrong ones cost a heart.</p>
+      <div class="sim" id="sim">
+        <svg viewBox="0 0 600 350" role="img" aria-label="Three replica nodes and a client">
+          <line class="clink" x1="300" y1="62" x2="150" y2="168"/>
+          <line class="clink" x1="300" y1="62" x2="450" y2="168"/>
+          <line class="clink" x1="300" y1="62" x2="300" y2="270" />
+          <line class="link" id="l12" x1="150" y1="190" x2="450" y2="190"/>
+          <line class="link" id="l13" x1="150" y1="190" x2="300" y2="290"/>
+          <line class="link" id="l23" x1="450" y1="190" x2="300" y2="290"/>
+          <g class="scissor"><text x="210" y="250" font-size="20">✂️</text><text x="372" y="250" font-size="20">✂️</text>
+            <text x="300" y="232" text-anchor="middle" font-size="12" font-weight="700" style="fill:var(--bad)" font-family="Space Grotesk, sans-serif">PARTITION</text></g>
+          <g class="client" id="client"><rect x="250" y="18" width="100" height="44" rx="12"/><text x="300" y="45">💻 client</text></g>
+          <g class="node" id="n1"><circle class="body" cx="150" cy="190" r="40"/><text class="nm" x="150" y="174">n1</text><text class="val" x="150" y="203">100</text><text class="badge" x="150" y="248">STALE</text></g>
+          <g class="node" id="n2"><circle class="body" cx="450" cy="190" r="40"/><text class="nm" x="450" y="174">n2</text><text class="val" x="450" y="203">100</text><text class="badge" x="450" y="248">STALE</text></g>
+          <g class="node" id="n3"><circle class="body" cx="300" cy="290" r="40"/><text class="nm" x="300" y="274">n3</text><text class="val" x="300" y="303">100</text><text class="badge" x="374" y="295">STALE</text></g>
+          <g id="packets"></g>
+        </svg>
+        <div class="sim-bar"><span>Mode <span class="mode" id="modeUI"><span data-m="CP">CP</span><span data-m="AP" class="on">AP</span></span></span><span class="net" id="netUI">🟢 network healthy</span></div>
+        <div class="simlog" id="simlog"><div>balance = 100 on all replicas.</div></div>
+      </div>
+      <div class="challenge" id="challenge"></div>
+      <div class="callout warn" id="cpCaveat" style="display:none"><b>Honest caveat — the book simplifies here.</b> The book's CP system blocks writes on n1 and n2 too. Many real CP systems (ones using majority voting, like Raft) let the <i>majority side</i> (n1 + n2) keep working and only make the cut-off minority (n3) refuse. Same principle — never serve data you can't vouch for — but less downtime. You'll meet majority voting ("quorum") in Quest 6.4.</div>
+      <div class="sandbox" id="sandbox">
+        <div class="callout tip"><b>🧪 Sandbox unlocked.</b> Break things on purpose. Try writing to <i>both</i> sides during a split in AP mode, then heal — what does the system do with two different values?</div>
+        <div class="row">
+          <button class="btn" data-act="mode">⇄ Switch mode</button>
+          <button class="btn" data-act="net">✂️ Cut / heal n3</button>
+          <button class="btn" data-act="w1">✍️ Write to n1</button>
+          <button class="btn" data-act="w3">✍️ Write to n3</button>
+          <button class="btn" data-act="r3">👁️ Read from n3</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Architect's Gauntlet</h2><div class="sub">Pick CP or AP for real products</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Seven products. Each one is about to hit a network split. For each, decide: <b>refuse requests to stay correct (CP)</b>, or <b>keep answering and maybe be stale (AP)</b>?</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">The interview answer, in your words</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 6 — Design a Key-Value Store</a>. You've now covered everything up to "System components". Then skim §4.4 of the <a href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf" target="_blank" rel="noopener">Dynamo paper</a> to see the real shopping-cart reasoning.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      "Pick 2 of 3" is a useful first model, not the whole truth. Its own author says it's misleading<a class="cite" href="https://www.infoq.com/articles/cap-twelve-years-later-how-the-rules-have-changed/" target="_blank" rel="noopener">[3]</a>, and real databases rarely fit cleanly in a CP or AP box<a class="cite" href="https://martin.kleppmann.com/2015/05/11/please-stop-calling-databases-cp-or-ap.html" target="_blank" rel="noopener">[4]</a> — many let you choose per request. That's the "tunable consistency" requirement in the book, and it's coming in Quest 6.4.
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat) — e.g. <i>"why can't the cut-off node just guess?"</i> or <i>"is Redis CP or AP?"</i>. Follow-up questions are part of the quest.
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 6 (ByteByteGo).</li>
+        <li>Gilbert &amp; Lynch, "Brewer's Conjecture and the Feasibility of Consistent, Available, Partition-Tolerant Web Services", 2002.</li>
+        <li>Eric Brewer, "CAP Twelve Years Later: How the 'Rules' Have Changed", 2012.</li>
+        <li>Martin Kleppmann, "Please stop calling databases CP or AP", 2015.</li>
+        <li>DeCandia et al., "Dynamo: Amazon's Highly Available Key-value Store", SOSP 2007.</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0001',
+  winTitle: 'Vault secured',
+  badge: '🛡️ Badge: Partition Survivor',
+  cheatsheet: '../reference/kv-store-cap-cheatsheet.html',
+});
+const { sleep, shuffle, esc } = Q;
+
+/* ================= STAGE 1: hash table console ================= */
+const NB = 8, store = new Map(), goals = new Set();
+function djb2(s) { let h = 5381; for (const c of s) h = ((h << 5) + h + c.codePointAt(0)) >>> 0; return h; }
+function renderBuckets(flash) {
+  const rows = Array.from({ length: NB }, () => []);
+  store.forEach((v, k) => rows[djb2(k) % NB].push([k, v]));
+  $('#buckets').innerHTML = rows.map((r, i) =>
+    `<div class="bucket${i === flash ? ' flash' : ''}"><span class="i">[${i}]</span>${r.map(([k, v]) => `<span class="pair"><b>${esc(k)}</b> → ${esc(v.length > 14 ? v.slice(0, 13) + '…' : v)}</span>`).join('')}</div>`).join('');
+}
+function log(html) { const l = $('#termLog'); l.insertAdjacentHTML('beforeend', html + '\n'); l.scrollTop = l.scrollHeight; }
+function goal(g) {
+  if (goals.has(g)) return;
+  goals.add(g);
+  const li = $(`#s1goals [data-g="${g}"]`); li.classList.add('done'); Q.addXP(10, li);
+  if (goals.size === 3) setTimeout(stage1Quiz, 500);
+}
+function run(cmd) {
+  cmd = cmd.trim(); if (!cmd) return;
+  log(`<span class="in">❯ ${esc(cmd)}</span>`);
+  const m = cmd.match(/^(put|get)\s+(\S+)(?:\s+([\s\S]+))?$/i);
+  if (!m) return log('<span class="err">ERR use: put &lt;key&gt; &lt;value&gt;  or  get &lt;key&gt;</span>');
+  const op = m[1].toLowerCase(), key = m[2];
+  const b = djb2(key) % NB;
+  $('#hashNote').textContent = `hash("${key}") % ${NB} = ${b}`;
+  if (op === 'put') {
+    if (m[3] == null) return log('<span class="err">ERR put needs a value</span>');
+    const val = m[3].replace(/^["']|["']$/g, '');
+    const existed = store.has(key);
+    store.set(key, val); renderBuckets(b);
+    log(`<span class="ok">OK${existed ? ' (overwrote old value — keys are unique)' : ''}</span>`);
+    goal('put');
+  } else {
+    renderBuckets(b);
+    if (store.has(key)) { log(`<span class="ok">"${esc(store.get(key))}"</span>`); goal('hit'); }
+    else { log('<span class="nil">(nil) — nothing stored under that key</span>'); goal('miss'); }
+  }
+}
+$('#termForm').onsubmit = e => { e.preventDefault(); run($('#termInput').value); $('#termInput').value = ''; };
+$$('#chips .chip').forEach(c => c.onclick = () => run(c.dataset.cmd));
+renderBuckets(-1);
+function stage1Quiz() {
+  Q.quiz($('#s1quiz'), {
+    q: 'You store a user profile object as a value. How does the key-value store treat it?',
+    options: ['As an opaque blob it never inspects', 'As a table with typed columns inside', 'As a document indexed by every field'],
+    correct: 0,
+    good: 'The store only knows the key. The value is a sealed box — which is exactly why lookups by key are so fast and simple.',
+    bad: 'That is how relational or document databases behave. A key-value store only knows the key; the value is a sealed box it never opens.',
+    onDone: () => setTimeout(() => Q.clearStage(1), 900)
+  });
+}
+
+/* ================= STAGE 2: memory pressure ================= */
+const CAP = 64; let raw = 0, ratio = 1, hotShare = 1, surges = 0;
+function renderMem() {
+  const used = raw * ratio * hotShare, pct = (used / CAP) * 100;
+  $('#meterFill').style.width = Math.min(100, pct) + '%';
+  $('#meter').classList.toggle('over', pct > 100);
+  $('#meterLabel').textContent = `${Math.round(used)} / ${CAP} GB${pct > 100 ? '  ·  OUT OF MEMORY' : ''}`;
+  $('#disk').textContent = `disk: ${Math.round(raw * ratio * (1 - hotShare))} GB of cold data`;
+}
+function status(t, cls) { const s = $('#memStatus'); s.textContent = t; s.className = 'status ' + (cls || ''); }
+function resetMem() {
+  raw = 0; ratio = 1; hotShare = 1; surges = 0; renderMem(); status('');
+  $('#surge').textContent = '⚡ Traffic surge'; $('#surge').disabled = false;
+  ['#pCompress', '#pTier'].forEach(s => { $(s).disabled = true; $(s).classList.remove('used'); });
+  $('#s2quiz').innerHTML = '';
+}
+$('#surge').onclick = () => {
+  surges++;
+  if (surges === 1) {
+    raw = 90; renderMem(); status('💥 90 GB of data, 64 GB of memory. The server is out of memory.', 'bad');
+    $('#pCompress').disabled = false; $('#pTier').disabled = false; $('#surge').disabled = true;
+  } else {
+    raw = 900; renderMem(); status('💥 10× more users. Even compressed, even with cold data on disk, the hot data alone overflows. One machine has a ceiling.', 'bad');
+    $('#surge').textContent = '↻ Reset the server'; $('#surge').disabled = false;
+    if (!$('#s2quiz').children.length) setTimeout(stage2Quiz, 700);
+  }
+  if (surges > 2) resetMem();
+};
+function powerUsed() {
+  if (!$('#pCompress').disabled || !$('#pTier').disabled) return;
+  status('✅ Fits again. Problem solved… for now. Your app keeps growing.', 'good');
+  $('#surge').textContent = '⚡ Traffic surge ×10'; $('#surge').disabled = false;
+}
+$('#pCompress').onclick = e => { ratio = 0.55; renderMem(); e.currentTarget.disabled = true; e.currentTarget.classList.add('used'); Q.addXP(10, e.currentTarget); status('🗜️ Values compressed to ~55% of their size.'); powerUsed(); };
+$('#pTier').onclick = e => { hotShare = 0.25; renderMem(); e.currentTarget.disabled = true; e.currentTarget.classList.add('used'); Q.addXP(10, e.currentTarget); status('❄️ Only the hot 25% stays in memory; the rest lives on disk.'); powerUsed(); };
+renderMem();
+function stage2Quiz() {
+  Q.quiz($('#s2quiz'), {
+    q: 'You have squeezed every trick out of one server and it still overflows. What is the real fix?',
+    options: ['Spread the keys across many servers', 'Buy one much bigger server instead', 'Compress the data a second time'],
+    correct: 0,
+    good: 'Optimizations only delay the ceiling. To store big data, you split it across many machines — a <b>distributed</b> key-value store. That brings a new problem…',
+    bad: 'A bigger server (or more compression) only moves the ceiling up a bit. The book’s answer: spread the data across many servers — a <b>distributed</b> key-value store.',
+    onDone: () => setTimeout(() => Q.clearStage(2), 900)
+  });
+}
+
+/* ================= STAGE 3: CAP recall ================= */
+const SORT = [
+  { t: 'A client asks n2 right after a write to n1 — and gets the new value, not the old one.', a: 'C', why: 'Same, latest data from every node = Consistency.' },
+  { t: 'Two nodes have crashed, yet a request to a surviving node still gets an answer.', a: 'A', why: 'Getting a response even when nodes are down = Availability.' },
+  { t: 'The cable between two data centers is cut, and the system keeps operating.', a: 'P', why: 'Surviving a broken link between nodes = Partition tolerance.' },
+];
+const NAMES = { C: 'Consistency', A: 'Availability', P: 'Partition tolerance' };
+$('#flipBtn').onclick = () => {
+  let sorted = 0;
+  $$('#capCards .card').forEach((c, i) => setTimeout(() => c.classList.add('down'), i * 120));
+  $('#flipRow').style.display = 'none'; $('#sortWrap').style.display = 'block'; $('#s3quiz').innerHTML = '';
+  $('#sort').innerHTML = shuffle(SORT).map(s => `<div class="sort-item" data-a="${s.a}"><p>${s.t}</p><div class="row">${['C', 'A', 'P'].map(k => `<button class="opt" data-k="${k}">${NAMES[k]}</button>`).join('')}</div><div class="explain"></div></div>`).join('');
+  $$('#sort .sort-item').forEach(item => {
+    const s = SORT.find(x => x.a === item.dataset.a);
+    $$('.opt', item).forEach(b => b.onclick = () => {
+      $$('.opt', item).forEach(x => x.disabled = true);
+      const ok = b.dataset.k === s.a;
+      b.classList.add(ok ? 'right' : 'wrong');
+      if (!ok) $(`.opt[data-k="${s.a}"]`, item).classList.add('right');
+      const ex = $('.explain', item); ex.className = 'explain show ' + (ok ? 'good' : 'bad'); ex.textContent = s.why;
+      ok ? Q.addXP(15, b) : Q.loseHeart(b);
+      if (++sorted === SORT.length) setTimeout(stage3Quiz, 600);
+    });
+  });
+};
+function stage3Quiz() {
+  Q.quiz($('#s3quiz'), {
+    tag: 'Final check',
+    q: 'The book says a "CA" system (consistent + available, no partition tolerance) cannot exist in the real world. Why?',
+    options: ['Networks fail, so partitions will happen', 'Fast systems cannot also be correct', 'Three replicas are never quite enough'],
+    correct: 0,
+    good: 'You cannot opt out of network failures. Since a split <i>will</i> happen, every real distributed store must tolerate it — leaving the choice between CP and AP.',
+    bad: 'The reason is simpler: networks break, whether you like it or not. A system that can’t tolerate partitions isn’t an option, so the real choice is CP or AP.',
+    onDone: () => {
+      $('#flipRow').style.display = ''; $('#flipBtn').textContent = '↻ Flip them back up and try again';
+      $$('#capCards .card').forEach(c => c.classList.remove('down'));
+      setTimeout(() => Q.clearStage(3), 900);
+    }
+  });
+}
+
+/* ================= STAGE 4: partition simulator ================= */
+const POS = { client: [300, 62], n1: [150, 190], n2: [450, 190], n3: [300, 290] };
+const S = { mode: 'AP', cut: false, clock: 0, nodes: {}, sideWrites: { main: false, n3: false } };
+const NS = 'http://www.w3.org/2000/svg';
+function simLog(t, cls) { const l = $('#simlog'); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${t}</div>`); l.scrollTop = l.scrollHeight; }
+function renderSim() {
+  const latest = Math.max(...Object.values(S.nodes).map(n => n.t));
+  for (const id of ['n1', 'n2', 'n3']) {
+    const g = $('#' + id); $('.val', g).textContent = S.nodes[id].v;
+    g.classList.toggle('stale', S.nodes[id].t < latest);
+  }
+  $$('#modeUI span').forEach(s => s.classList.toggle('on', s.dataset.m === S.mode));
+  $('#sim').classList.toggle('cut', S.cut);
+  ['l13', 'l23'].forEach(l => $('#' + l).classList.toggle('cut', S.cut));
+  $('#netUI').textContent = S.cut ? '🔴 n3 cut off' : '🟢 network healthy';
+  $('#netUI').className = 'net' + (S.cut ? ' cut' : '');
+}
+function flashErr(id) { const g = $('#' + id); g.classList.add('err'); setTimeout(() => g.classList.remove('err'), 1100); }
+function packet(from, to, { color = 'var(--accent)', bounce = false, label = '' } = {}) {
+  const [x1, y1] = POS[from], [x2, y2] = POS[to];
+  const c = document.createElementNS(NS, 'circle'); c.setAttribute('r', 9); c.style.fill = color;
+  const tx = document.createElementNS(NS, 'text'); tx.setAttribute('font-size', 11); tx.setAttribute('font-weight', 700); tx.setAttribute('text-anchor', 'middle'); tx.style.fill = color; tx.setAttribute('font-family', 'JetBrains Mono, monospace'); tx.textContent = label;
+  $('#packets').append(c, tx);
+  const dur = Q.reduced ? 1 : 620;
+  return new Promise(res => {
+    const t0 = performance.now();
+    const frame = now => {
+      const p = Math.min(1, (now - t0) / dur);
+      let k = bounce ? (p < .5 ? p : 1 - p) : (p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2);
+      const x = x1 + (x2 - x1) * k, y = y1 + (y2 - y1) * k;
+      c.setAttribute('cx', x); c.setAttribute('cy', y); tx.setAttribute('x', x); tx.setAttribute('y', y - 14);
+      if (bounce && p >= .5) c.style.fill = 'var(--bad)';
+      if (p < 1) requestAnimationFrame(frame); else { c.remove(); tx.remove(); res(); }
+    };
+    requestAnimationFrame(frame);
+  });
+}
+function setNode(id, v, t) { S.nodes[id] = { v, t }; renderSim(); }
+const canReach = (a, b) => !S.cut || (a !== 'n3' && b !== 'n3');
+async function write(target, v) {
+  const t = ++S.clock, others = ['n1', 'n2', 'n3'].filter(n => n !== target);
+  simLog(`client → ${target}: put(balance, ${v})`);
+  await packet('client', target, { label: v });
+  if (S.cut && S.mode === 'CP') {
+    const blocked = others.find(o => !canReach(target, o));
+    await packet(target, blocked, { bounce: true, label: v });
+    flashErr(target); await packet(target, 'client', { color: 'var(--bad)', label: 'ERR' });
+    simLog(`✖ ${target} can't reach every replica → write REFUSED (CP keeps data consistent, gives up availability)`, 'e');
+    return 'refused';
+  }
+  setNode(target, v, t);
+  await Promise.all(others.map(async o => {
+    if (canReach(target, o)) { await packet(target, o, { label: v }); setNode(o, v, t); }
+    else await packet(target, o, { bounce: true, label: v });
+  }));
+  if (S.cut) S.sideWrites[target === 'n3' ? 'n3' : 'main'] = true;
+  await packet(target, 'client', { color: 'var(--good)', label: 'OK' });
+  simLog(S.cut ? `✓ accepted — but couldn't reach the other side of the split (AP: stay available, accept divergence)` : `✓ copied to all three replicas`, S.cut ? 'w' : 'g');
+  return 'ok';
+}
+async function read(target) {
+  simLog(`client → ${target}: get(balance)`);
+  await packet('client', target, { label: '?' });
+  if (S.cut && S.mode === 'CP' && target === 'n3') {
+    flashErr('n3'); await packet('n3', 'client', { color: 'var(--bad)', label: 'ERR' });
+    simLog('✖ n3 is cut off and can\'t confirm it has the latest value → refuses to answer (CP)', 'e'); return 'refused';
+  }
+  const latest = Math.max(...Object.values(S.nodes).map(n => n.t)), n = S.nodes[target], stale = n.t < latest;
+  await packet(target, 'client', { color: stale ? 'var(--warn)' : 'var(--good)', label: n.v });
+  simLog(stale ? `⚠ ${target} answered ${n.v} — a STALE value (the latest is elsewhere)` : `✓ ${target} answered ${n.v}`, stale ? 'w' : 'g');
+  return n.v;
+}
+async function setCut(cut) {
+  S.cut = cut; renderSim();
+  if (cut) { S.sideWrites = { main: false, n3: false }; simLog('✂ network partition: n3 can no longer talk to n1 or n2', 'e'); return; }
+  simLog('🔗 network healed');
+  const ids = ['n1', 'n2', 'n3'], latestId = ids.reduce((a, b) => S.nodes[b].t > S.nodes[a].t ? b : a);
+  if (S.sideWrites.main && S.sideWrites.n3) simLog(`⚔ CONFLICT: both sides were written during the split. Keeping the most recent write (${S.nodes[latestId].v}) — real systems use version tracking for this (Quest 6.5: vector clocks).`, 'w');
+  const best = S.nodes[latestId], behind = ids.filter(i => S.nodes[i].t < best.t);
+  await Promise.all(behind.map(async i => { await packet(latestId, i, { label: best.v }); setNode(i, best.v, best.t); }));
+  if (behind.length) simLog(`✓ ${behind.join(', ')} caught up to ${best.v}`, 'g');
+  S.sideWrites = { main: false, n3: false };
+}
+function setMode(m) { S.mode = m; renderSim(); simLog(`mode → ${m}`); }
+function resetSim() { S.mode = 'AP'; S.cut = false; S.clock = 0; ['n1', 'n2', 'n3'].forEach(n => S.nodes[n] = { v: 100, t: 0 }); renderSim(); }
+
+const CHALLENGES = [
+  { title: 'The network is healthy. The client writes balance = 80 to n1.',
+    setup: async () => {},
+    options: ['All three replicas end up holding 80', 'Only n1 holds 80; others keep 100', 'The write is refused with an error'],
+    correct: 0, act: async () => { await write('n1', 80); },
+    explain: 'With no partition, n1 copies the write to n2 and n3. Both consistent <i>and</i> available — the ideal world.' },
+  { title: 'Cut! n3 is now isolated. Mode = CP. The client writes balance = 50 to n1.',
+    setup: async () => { await setCut(true); setMode('CP'); },
+    options: ['All three replicas end up holding 50', 'n1, n2 hold 50; n3 keeps 80', 'The write is refused with an error'],
+    correct: 2, act: async () => { await write('n1', 50); },
+    explain: 'n1 can’t copy the write to n3, so accepting it would make the replicas disagree. A CP system refuses instead — <b>correct but unavailable</b>. This is the bank: an error beats showing the wrong balance.' },
+  { title: 'Still cut. Switch to AP. The client writes 50 to n1, then reads the balance from n3.',
+    setup: async () => { setMode('AP'); },
+    options: ['n3 answers 50, the newest value', 'n3 answers 80, an outdated value', 'n3 refuses and returns an error'],
+    correct: 1, act: async () => { await write('n1', 50); await sleep(250); await read('n3'); },
+    explain: 'AP keeps every node answering. n1 and n2 accept the write, but it can’t reach n3 — so n3 serves <b>stale</b> data. <b>Available but inconsistent.</b>' },
+  { title: 'The network heals (still AP). What happens to n3?',
+    setup: async () => {},
+    options: ['n3 syncs up and now holds 50', 'n3 stays stuck on 80 for good', 'n1 rolls back to match n3’s 80'],
+    correct: 0, act: async () => { await setCut(false); },
+    explain: 'When the partition is resolved, the missed writes are copied over and n3 catches up. AP systems promise to become consistent <i>eventually</i> — not immediately.' },
+];
+let ci = 0, busy = false;
+async function showChallenge() {
+  const c = CHALLENGES[ci], box = $('#challenge');
+  box.innerHTML = `<div class="step">Round ${ci + 1} of ${CHALLENGES.length}</div><h3>${c.title}</h3><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+  await c.setup();
+  const opts = $('.opts', box);
+  shuffle(c.options.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+    const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+    b.onclick = async () => {
+      if (busy) return; busy = true;
+      $$('.opt', opts).forEach(x => x.disabled = true);
+      b.classList.add('picked');
+      simLog(`— your prediction: “${o}”`);
+      await c.act();
+      const ok = i === c.correct;
+      b.classList.add(ok ? 'right' : 'wrong');
+      if (!ok) $(`.opt[data-i="${c.correct}"]`, opts).classList.add('right');
+      const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+      ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + c.explain;
+      ok ? Q.addXP(25, b) : Q.loseHeart(b);
+      if (ci === 1) $('#cpCaveat').style.display = 'block';
+      const nx = document.createElement('button'); nx.className = 'btn primary';
+      nx.textContent = ci < CHALLENGES.length - 1 ? 'Next round →' : 'Finish the simulation →';
+      nx.onclick = () => {
+        ci++; busy = false;
+        if (ci < CHALLENGES.length) return showChallenge();
+        box.innerHTML = `<div class="row"><button class="btn" id="replaySim">↻ Replay the 4 rounds</button></div>`;
+        $('#replaySim').onclick = () => { ci = 0; resetSim(); $('#simlog').innerHTML = '<div>balance = 100 on all replicas.</div>'; showChallenge(); };
+        $('#sandbox').classList.add('on'); Q.clearStage(4);
+      };
+      $('.row', box).appendChild(nx);
+    };
+    opts.appendChild(b);
+  });
+}
+let sbBusy = false, sbVal = 50;
+$$('#sandbox [data-act]').forEach(b => b.onclick = async () => {
+  if (sbBusy || busy) return; sbBusy = true;
+  const a = b.dataset.act;
+  if (a === 'mode') setMode(S.mode === 'CP' ? 'AP' : 'CP');
+  if (a === 'net') await setCut(!S.cut);
+  if (a === 'w1') await write('n1', sbVal = sbVal + 10);
+  if (a === 'w3') await write('n3', sbVal = sbVal + 10);
+  if (a === 'r3') await read('n3');
+  sbBusy = false;
+});
+resetSim();
+Q.onStage(4, () => { resetSim(); showChallenge(); if (Q.isCleared(4)) $('#sandbox').classList.add('on'); });
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss'), {
+  name: '👾 Inconsistency Hydra',
+  choices: [{ k: 'CP', label: 'CP', sub: 'refuse when unsure' }, { k: 'AP', label: 'AP', sub: 'answer, maybe stale' }],
+  scenarios: [
+    { e: '🏦', t: 'Bank balance before a transfer', d: 'A customer is about to move money out of their account.', a: 'CP', why: 'A stale balance could let someone spend the same money twice. An error is better than a wrong number — the book’s own example.' },
+    { e: '🛒', t: 'Add to shopping cart', d: 'A shopper taps "Add to cart" during peak sales.', a: 'AP', why: 'Amazon built Dynamo so the cart is "always writeable": a lost add-to-cart is lost revenue, while two cart versions can be merged later.<a class="cite" href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf" target="_blank" rel="noopener">[5]</a>' },
+    { e: '❤️', t: 'Like counter on a viral post', d: 'Thousands of likes per second, shown under the post.', a: 'AP', why: 'If one viewer sees 10,412 likes and another sees 10,409 for a few seconds, nobody is harmed. A page that fails to load is worse.' },
+    { e: '✈️', t: 'Booking the last seat on a flight', d: 'Two travelers click "Book 14F" at the same moment.', a: 'CP', why: 'If both sides of a split accept a booking, two people own one seat. Refuse until the replicas agree.' },
+    { e: '🟢', t: '"Online now" dot in a chat app', d: 'The little green dot next to a friend’s name.', a: 'AP', why: 'A dot that’s a few seconds out of date is harmless. A chat app that won’t load because one node is unreachable is not.' },
+    { e: '🪪', t: 'Claiming a unique username', d: 'Two people sign up as "navid" at the same moment.', a: 'CP', why: 'Uniqueness needs every replica to agree. If both sides accept "navid", you have two accounts with one name — painful to undo.' },
+    { e: '📈', t: 'Video view counts for a dashboard', d: 'Counting plays to show creators their stats.', a: 'AP', why: 'Counts can be added up later. Dropping views because one node is unreachable loses data for no good reason.' },
+  ],
+  outro: 'The pattern: if a wrong answer causes real harm, go CP; if a missing answer hurts more, go AP.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: interview drill ================= */
+Q.onStage(6, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer leans in: <i>"Our key-value store keeps three replicas. One gets cut off from the other two. What happens?"</i>',
+  placeholder: 'It depends on what we promise…',
+  model: '"It depends on which guarantee we keep during the partition. If we choose consistency, the system refuses writes it can\'t copy to every replica — users see errors, but never wrong data, which is what a bank needs. If we choose availability, every node keeps answering; the cut-off replica may serve stale data, and we sync it when the network heals — fine for a shopping cart. For a general key-value store I\'d make this tunable per request."',
+  checks: ['I named the trade-off: consistency <i>vs</i> availability', 'I said what the user experiences in each case (errors vs stale data)', 'I tied the choice to a kind of product'],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

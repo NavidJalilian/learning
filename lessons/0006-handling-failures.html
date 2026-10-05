@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>When Nodes Die</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: s1 witness cases + scale slider, s2 gossip sim, s3 ring sim, s4 Merkle tree, s5 data centers */
+.pkt { font: 700 12px var(--mono); }
+/* stage 1 */
+.cases { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+.case { border: 2px solid var(--line); background: var(--panel); border-radius: 12px; padding: 9px 6px; font-weight: 600; font-size: 14px; text-align: center; transition: border-color .2s, background .2s; }
+.case:hover { border-color: var(--accent); }
+.case.seen { border-color: color-mix(in srgb, var(--good) 60%, var(--line)); }
+.case.on { border-color: var(--accent); background: var(--accent-soft); }
+.casebox { margin-top: 10px; border: 1px solid var(--line); border-radius: 16px; background: var(--bg); overflow: hidden; }
+.casebox svg { display: block; width: 100%; height: auto; max-height: 200px; }
+.casebox p { margin: 0; padding: 10px 14px; font-size: 15px; border-top: 1px solid var(--line); background: var(--panel); min-height: 50px; animation: rise .3s; }
+.wit .n circle { fill: var(--panel); stroke: var(--accent); stroke-width: 3; transition: fill .3s, stroke .3s; }
+.wit .n.dead circle { fill: var(--bad-soft); stroke: var(--bad); }
+.wit .n.slow circle { fill: var(--warn-soft); stroke: var(--warn); }
+.wit .n text { fill: var(--ink); font: 700 16px var(--font); text-anchor: middle; }
+.wit .n .tag { font: 700 12px var(--font); fill: var(--muted); }
+.wit .n.dead .tag { fill: var(--bad); }
+.wit .n.slow .tag { fill: var(--warn); }
+.wit .ln { stroke: var(--muted); stroke-width: 3; opacity: .45; transition: stroke .3s, opacity .3s; }
+.wit .ln.cut { stroke: var(--bad); stroke-dasharray: 6 6; opacity: .9; }
+.wit .ln.q { stroke: var(--warn); stroke-dasharray: 3 6; opacity: .9; }
+.wit .say { fill: var(--muted); font: 600 13px var(--font); text-anchor: middle; }
+.scale { margin-top: 18px; border: 1px solid var(--line); border-radius: 18px; background: var(--bg); padding: 14px; }
+.scale label { font-weight: 600; font-size: 15px; display: flex; justify-content: space-between; gap: 8px; }
+.scale input[type=range] { width: 100%; accent-color: var(--accent); margin: 10px 0 4px; }
+.vs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+.vs .side { text-align: center; border-radius: 14px; padding: 10px 8px; background: var(--panel); border: 1px solid var(--line); }
+.vs svg { width: 100%; max-width: 160px; height: auto; display: block; margin: 0 auto 6px; }
+.vs .t { font-size: 13px; font-weight: 700; color: var(--muted); }
+.vs .big { font: 700 21px var(--mono); line-height: 1.2; }
+.vs .side.a2a .big { color: var(--bad); }
+.vs .side.gos .big { color: var(--good); }
+.vs .f { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+.mini line { stroke-width: 1; }
+.mini.a2a line { stroke: var(--bad); opacity: .3; }
+.mini.gos line { stroke: var(--teal); opacity: .85; }
+.mini circle { fill: var(--accent); }
+/* stage 2: gossip */
+.sim svg.gs, .sim svg.rs { max-width: 500px; margin: 0 auto; }
+.sim svg.mk { max-width: 600px; margin: 0 auto; }
+.gs .chord { stroke: var(--line); stroke-width: 1.5; }
+.gs .node { cursor: default; }
+.gs.play .node { cursor: pointer; }
+.gs .node .body { fill: var(--panel); stroke: var(--accent); stroke-width: 3; transition: fill .3s, stroke .3s; }
+.gs .node.v-sus .body { stroke: var(--warn); }
+.gs .node.v-down .body { stroke: var(--bad); }
+.gs .node.v-ok .body { stroke: var(--good); }
+.gs .node.dead .body { fill: var(--bg-2); stroke: var(--muted); stroke-dasharray: 5 5; }
+.gs .node .nm { fill: var(--muted); font: 600 13px var(--font); text-anchor: middle; }
+.gs .node .hb { fill: var(--ink); font: 700 22px var(--mono); text-anchor: middle; }
+.gs .node.dead .hb { fill: var(--muted); }
+.gs .node .skull { font-size: 16px; text-anchor: middle; opacity: 0; transition: opacity .3s; }
+.gs .node.dead .skull { opacity: 1; }
+.gs .node .pip { opacity: 0; transition: opacity .3s; }
+.gs .node.v-ok .pip, .gs .node.v-sus .pip, .gs .node.v-down .pip { opacity: 1; }
+.gs .node .pip circle { stroke: var(--bg); stroke-width: 2.5; }
+.gs .node.v-ok .pip circle { fill: var(--good); }
+.gs .node.v-sus .pip circle { fill: var(--warn); }
+.gs .node.v-down .pip circle { fill: var(--bad); }
+.gs .node .pip text { fill: #fff; font: 700 13px var(--font); text-anchor: middle; }
+.gs .node.bump .hb { animation: bump .45s; transform-box: fill-box; transform-origin: center; }
+@keyframes bump { 40% { transform: scale(1.25); } }
+.legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; }
+.mwrap { padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+.mwrap .cap { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+.mtable { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12.5px; }
+.mtable th { text-align: left; color: var(--muted); font-weight: 600; font-size: 11px; padding: 3px 6px; border-bottom: 1px solid var(--line); }
+.mtable td { padding: 3px 6px; border-bottom: 1px solid var(--line); transition: background .4s; }
+.mtable tr.rose td { background: var(--accent-soft); }
+.st { font-weight: 700; }
+.st.ok { color: var(--good); } .st.sus { color: var(--warn); } .st.down { color: var(--bad); } .st.self { color: var(--muted); }
+/* stage 3: ring */
+.rs .ring { fill: none; stroke: var(--line); stroke-width: 8; }
+.rs .home-arc { fill: none; stroke: var(--accent); stroke-width: 8; opacity: .3; stroke-linecap: round; }
+.rs .srv { cursor: default; }
+.rs.play .srv { cursor: pointer; }
+.rs .srv .body { fill: var(--panel); stroke: var(--muted); stroke-width: 2.5; transition: fill .3s, stroke .3s; }
+.rs .srv.home .body { stroke: var(--accent); stroke-width: 3.5; }
+.rs .srv.down .body { fill: var(--bad-soft); stroke: var(--bad); stroke-dasharray: 5 4; }
+.rs .srv .nm { font: 700 18px var(--font); fill: var(--ink); text-anchor: middle; }
+.rs .srv.down .nm { fill: var(--bad); }
+.rs .tag { transition: opacity .3s; }
+.rs .tag rect { fill: var(--good-soft); stroke: var(--good); stroke-width: 1.5; }
+.rs .tag text { fill: var(--good); font: 700 15px var(--mono); text-anchor: middle; }
+.rs .tag.old rect { fill: var(--bg-2); stroke: var(--line); }
+.rs .tag.old text { fill: var(--muted); }
+.rs .tag.hint rect { fill: var(--warn-soft); stroke: var(--warn); }
+.rs .tag.hint text { fill: var(--warn); }
+.rs .key path { fill: var(--accent); }
+.rs .key text { font: 700 16px var(--mono); fill: var(--accent); text-anchor: middle; }
+.rs .coord rect { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; transition: fill .3s, stroke .3s; }
+.rs .coord.err rect { fill: var(--bad-soft); stroke: var(--bad); }
+.rs .coord text { fill: var(--accent); font: 700 16px var(--font); text-anchor: middle; }
+.rs .coord.err text { fill: var(--bad); }
+/* stage 4: merkle */
+.mk .edge { stroke: var(--line); stroke-width: 2.5; transition: stroke .3s, opacity .5s; }
+.mk .edge.bad { stroke: var(--bad); }
+.mk .edge.ok { stroke: var(--good); }
+.mk .tn, .mk .edge, .mk .bbox, .mk .kh { transition: opacity .5s; }
+.mk .hide { opacity: 0; pointer-events: none; }
+.mk .tn rect { fill: var(--panel); stroke: var(--accent); stroke-width: 2.5; transition: fill .3s, stroke .3s; }
+.mk .tn.can { cursor: pointer; }
+.mk .tn.can rect { animation: glow 1.4s infinite; }
+@keyframes glow { 50% { stroke-width: 5; } }
+.mk .tn.match rect { fill: var(--good-soft); stroke: var(--good); }
+.mk .tn.miss rect { fill: var(--bad-soft); stroke: var(--bad); }
+.mk .tn.fixed rect { fill: var(--teal-soft); stroke: var(--teal); }
+.mk .tn .lb { fill: var(--muted); font: 600 12px var(--font); text-anchor: middle; }
+.mk .tn .ha { fill: var(--ink); font: 700 16px var(--mono); text-anchor: middle; }
+.mk .tn .hb { fill: var(--muted); font: 600 13px var(--mono); text-anchor: middle; opacity: 0; transition: opacity .3s; }
+.mk.hunt .tn .hb { opacity: 1; }
+.mk .tn.miss .hb { fill: var(--bad); }
+.mk .tn.match .hb { fill: var(--good); }
+.mk .key { transition: transform .8s cubic-bezier(.3,.7,.2,1); }
+.mk .key circle { fill: var(--bg-2); stroke: var(--muted); stroke-width: 2; transition: fill .3s, stroke .3s; }
+.mk .key .k { font: 700 13px var(--mono); fill: var(--ink); text-anchor: middle; }
+.mk .key .kh { font: 600 10.5px var(--mono); fill: var(--muted); text-anchor: middle; }
+.mk .key.diff circle { fill: var(--bad-soft); stroke: var(--bad); }
+.mk .key.synced circle { fill: var(--teal-soft); stroke: var(--teal); }
+.mk .bbox { fill: none; stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.stepper { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+.stepnote { font-size: 15px; min-height: 24px; margin-top: 10px; }
+.mkstats { display: flex; gap: 14px; flex-wrap: wrap; font-family: var(--mono); font-size: 13px; }
+.mkstats b { color: var(--ink); }
+.statgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
+@media (max-width: 640px) { .statgrid { grid-template-columns: repeat(2, 1fr); } }
+.stat { border: 1px solid var(--line); border-radius: 12px; padding: 10px; background: var(--panel); text-align: center; }
+.stat b { display: block; font: 700 19px var(--mono); }
+.stat span { font-size: 12px; color: var(--muted); }
+.stat.hi b { color: var(--good); }
+.stat.lo b { color: var(--bad); }
+/* stage 5: data centers */
+.dcs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+.dc { border: 2px solid var(--teal); border-radius: 16px; padding: 12px; background: var(--teal-soft); transition: background .4s, border-color .4s, opacity .4s; text-align: center; }
+.dc .dch { font-weight: 700; font-size: 15px; }
+.dc .dcsrv { display: flex; gap: 6px; justify-content: center; margin: 8px 0; }
+.dc .dcsrv span { font: 600 12px var(--mono); border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 3px 7px; }
+.dc .dcst { font: 600 12.5px var(--mono); color: var(--good); }
+.dc.off { background: var(--bg-2); border-color: var(--line); opacity: .6; }
+.dc.off .dcst { color: var(--bad); }
+.dc.serve { box-shadow: 0 0 0 4px color-mix(in srgb, var(--good) 35%, transparent); }
+.dcmsg { font-family: var(--mono); font-size: 13px; margin-top: 10px; min-height: 40px; }
+.dcmsg div { animation: rise .3s; }
+.cards.four { grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 640px) { .cards.four { grid-template-columns: 1fr; } .cards.four .card, .cards.four .card-in { min-height: 158px; } }
+.face .L.e { font-size: 30px; }
+.sort-item .row .opt { padding: 7px 10px; font-size: 13.5px; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 6.6 · Design a Key-Value Store</div>
+    <h1>When Nodes Die</h1>
+    <p class="lede">Servers crash, reboot, lose disks — sometimes a whole building goes dark. Notice it, cover for it, repair it, and keep the store answering the whole time.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> when an interviewer asks "a node just died — now what?", you can walk through <b>detect</b> (gossip) → <b>cover</b> (sloppy quorum + hinted handoff) → <b>repair</b> (Merkle-tree anti-entropy) → <b>survive a lost site</b> (cross-data-center copies), and name the trade-off in each step.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Is s2 really dead?</h2><div class="sub">Why one witness isn't enough</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Before a cluster can work around a dead server, it has to <b>notice</b> it died. Sounds easy: if s2 stops answering, it's dead. But from the outside, "dead", "unreachable" and "just slow" all look exactly the same.</p>
+      <p>Same symptom in all three cases below: <b>s1 gets no reply from s2</b>. Tap each case to see what was really going on.</p>
+      <div class="cases" id="cases">
+        <button class="case" data-c="0">📁 Case A</button>
+        <button class="case" data-c="1">📁 Case B</button>
+        <button class="case" data-c="2">📁 Case C</button>
+      </div>
+      <div class="casebox">
+        <svg viewBox="0 0 360 160" class="wit" id="wit" role="img" aria-label="Three servers: s1, s2, s3">
+          <text class="say" x="180" y="20" id="witSay">s1: "No reply from s2…"</text>
+          <line class="ln q" id="w12" x1="60" y1="70" x2="300" y2="70"/>
+          <line class="ln" id="w13" x1="60" y1="70" x2="180" y2="128"/>
+          <line class="ln" id="w32" x1="180" y1="128" x2="300" y2="70"/>
+          <g class="n" id="wn1"><circle cx="60" cy="70" r="24"/><text x="60" y="76">s1</text></g>
+          <g class="n" id="wn2"><circle cx="300" cy="70" r="24"/><text x="300" y="76">s2</text><text class="tag" x="300" y="112" id="wTag">?</text></g>
+          <g class="n" id="wn3"><circle cx="180" cy="128" r="24"/><text x="180" y="134">s3</text></g>
+        </svg>
+        <p id="caseText">Pick a case above.</p>
+      </div>
+      <p style="margin-top:16px">That's why the book's rule is: <b>don't believe a server is down just because one other server says so</b> — wait for at least <b>two independent sources</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noopener">[1]</a> So servers need to hear about each other constantly. The obvious design: <b>everyone pings everyone</b> (the book calls it <i>all-to-all multicasting</i>). Drag the slider.</p>
+      <div class="scale">
+        <label><span>Servers in the cluster</span><span class="mono" id="nOut">8</span></label>
+        <input type="range" id="nRange" min="0" max="5" step="1" value="1" aria-label="Number of servers">
+        <div class="vs">
+          <div class="side a2a"><svg viewBox="0 0 160 160" class="mini a2a" id="miniA"></svg><div class="t">Everyone pings everyone</div><div class="big" id="aOut">56</div><div class="f" id="aF">8 × 7 per round</div></div>
+          <div class="side gos"><svg viewBox="0 0 160 160" class="mini gos" id="miniG"></svg><div class="t">Each tells 2 random peers</div><div class="big" id="gOut">16</div><div class="f" id="gF">8 × 2 per round</div></div>
+        </div>
+        <div class="small muted" id="drawnNote" style="text-align:center;margin-top:6px;font-size:13px"></div>
+      </div>
+      <ul class="checklist" id="s1goals">
+        <li data-g="cases"><span class="box">✓</span>Open all three case files</li>
+        <li data-g="big"><span class="box">✓</span>Scale the cluster to 1,000 servers</li>
+      </ul>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Pass it on: gossip</h2><div class="sub">Predict, then watch a crash get detected</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book's fix is a <b>gossip protocol</b>: servers spread news the way rumours spread in an office — tell a few people, who tell a few more.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noopener">[1]</a><a class="cite" href="https://www.cs.cornell.edu/home/rvr/papers/GossipFD.pdf" target="_blank" rel="noopener">[3]</a> Each server keeps a <b>membership list</b>: every member's ID plus its <b>heartbeat counter</b> — a number that member bumps by 1, over and over, to say "still alive".</p>
+      <ul class="small">
+        <li>Every tick, each server adds 1 to <b>its own</b> counter.</li>
+        <li>Each server sends its whole list to <b>2 random peers</b>, who pass it on next tick.</li>
+        <li>On receipt, keep whichever counter is <b>higher</b>, and note when it last rose.</li>
+        <li>A counter that hasn't risen for <b>3 ticks</b> (the timeout) makes that member a suspect.</li>
+      </ul>
+      <div class="sim" id="gsim">
+        <svg viewBox="0 0 480 400" class="gs" id="gsvg" role="img" aria-label="Eight servers in a circle gossiping heartbeat counters"></svg>
+        <div class="sim-bar"><span class="mono" id="gbar">tick 0</span><span class="legend"><span><i style="background:var(--good)"></i>sees s2 alive</span><span><i style="background:var(--warn)"></i>suspects</span><span><i style="background:var(--bad)"></i>marks down</span></span></div>
+        <div class="mwrap"><div class="cap" id="mcap">s0's membership list</div><table class="mtable" id="mtable"></table></div>
+        <div class="simlog" id="glog"></div>
+      </div>
+      <div class="challenge" id="gch"></div>
+      <div class="callout warn" id="gCaveat" style="display:none"><b>Honest caveat — detection is a well-informed guess.</b> The timeout is a dial: set it short and a slow server (say, one paused for memory clean-up) gets falsely declared dead; set it long and real crashes go unnoticed for longer.<a class="cite" href="https://www.cs.cornell.edu/home/rvr/papers/GossipFD.pdf" target="_blank" rel="noopener">[3]</a> And because gossip spreads randomly, every node learns the news <i>eventually</i>, not at one exact moment. Also, in this sim a rebooted server keeps counting from where it stopped; a real reboot starts again from zero, so Cassandra pairs the counter with a "generation" number (when the server started) to tell new heartbeats from old ones.<a class="cite" href="https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html" target="_blank" rel="noopener">[6]</a></div>
+      <div class="sandbox" id="gsand">
+        <div class="callout tip"><b>🧪 Sandbox unlocked.</b> Tap any server to crash or reboot it. Crash two at once. Crash s0 and watch its list freeze. How many ticks until everyone agrees?</div>
+        <div class="row">
+          <button class="btn" id="gAuto">▶ Auto-play</button>
+          <button class="btn" id="gOne">⏭ One tick</button>
+          <button class="btn" id="gRst">↻ Reset</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Cover for a friend</h2><div class="sub">Sloppy quorum + hinted handoff</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Failure spotted. Now keep serving. Recall quorums (Quest 6.4): each key has <b>N = 3 home servers</b> — the first 3 you meet walking clockwise round the hash ring — and a write must be confirmed by <b>W</b> of them. A <b>strict quorum</b> only counts those home servers, so if too many are down, reads and writes get <b>blocked</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noopener">[1]</a></p>
+      <p>A <b>sloppy quorum</b> relaxes that: skip the dead servers and use the <b>first W healthy servers</b> clockwise for writes (first R for reads).<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noopener">[1]</a><a class="cite" href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf" target="_blank" rel="noopener">[2]</a> The stand-in keeps a <b>hint</b> — a note saying "this really belongs to s2" — and when s2 is back, it hands the data over and deletes its copy. That's <b>hinted handoff</b>. (In the book's picture, s2 is down and s3 covers for it.)</p>
+      <p>Here, <code>cart:7</code> lives on s0, s1, s2. Settings: <b>N=3, W=2, R=2</b>. Predict each round, then watch.</p>
+      <div class="sim" id="rsim">
+        <svg viewBox="0 0 480 444" class="rs" id="rsvg" role="img" aria-label="Hash ring with eight servers and a coordinator in the middle"></svg>
+        <div class="sim-bar"><span>Quorum <span class="seg" id="rMode"><span data-m="strict">strict</span><span data-m="sloppy">sloppy</span></span></span><span class="small muted">🟣 home servers: s0, s1, s2</span></div>
+        <div class="simlog" id="rlog"></div>
+      </div>
+      <div class="challenge" id="rch"></div>
+      <div class="callout warn" id="rCaveat" style="display:none"><b>Honest caveat — a sloppy quorum isn't really a quorum.</b> W + R &gt; N (2 + 2 &gt; 3) normally guarantees a read overlaps the latest write. With a sloppy quorum the write may land on stand-ins outside the home servers, so a read can miss it entirely — exactly what you just saw. Dynamo accepts this for availability; Kleppmann calls a sloppy quorum "an assurance of durability", not a guarantee of fresh reads.<a class="cite" href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf" target="_blank" rel="noopener">[2]</a><a class="cite" href="https://dataintensive.net/" target="_blank" rel="noopener">[4]</a> Hints are also <b>best effort</b>: Cassandra stops saving them once a server has been down for 3 hours (its default), and after that only a full repair can fix the replica.<a class="cite" href="https://cassandra.apache.org/doc/latest/cassandra/managing/operating/hints.html" target="_blank" rel="noopener">[7]</a></div>
+      <div class="sandbox" id="rsand">
+        <div class="callout tip"><b>🧪 Sandbox unlocked.</b> Tap any server to crash or revive it. Crash all three homes, write in sloppy mode, then revive them one by one. Try a strict write with only one home down — does it still pass?</div>
+        <div class="row">
+          <button class="btn" id="rWriteBtn">✍️ Write cart:7</button>
+          <button class="btn" id="rModeBtn">⇄ Switch quorum mode</button>
+          <button class="btn" id="rRst">↻ Reset</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Spot the difference</h2><div class="sub">Anti-entropy with Merkle trees</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Hinted handoff covers <i>short</i> outages. But what if a disk dies, or the stand-in holding the hints crashes too? Then replicas have quietly drifted apart. The fix is <b>anti-entropy</b>: compare two replicas piece by piece and update each piece to the newest version.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noopener">[1]</a><a class="cite" href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf" target="_blank" rel="noopener">[2]</a></p>
+      <p>Comparing a billion keys one by one is hopeless. The trick is a <b>Merkle tree</b> (hash tree): every parent's label is the <b>hash of its children</b>, so one hash at the top sums up everything below it.<a class="cite" href="https://doi.org/10.1007/3-540-48184-2_32" target="_blank" rel="noopener">[5]</a> (A hash is a short fingerprint of some data: change one byte, and the fingerprint changes.) Build one the book's way, with keys 1–12:</p>
+      <div id="stepWrap"><div class="stepper" id="stepper"><button class="btn primary" id="stepBtn">Step 1: divide keys into buckets →</button></div>
+      <div class="stepnote" id="stepNote"></div></div>
+      <div class="challenge" id="mkplay" style="margin-bottom:14px"></div>
+      <div class="sim" id="mksim">
+        <svg viewBox="0 0 480 376" class="mk" id="mksvg" role="img" aria-label="Merkle tree over 12 keys in 4 buckets"></svg>
+        <div class="sim-bar"><span class="mkstats" id="mkstats"><span>replica <b>A</b>'s tree</span></span></div>
+        <div class="simlog" id="mklog"></div>
+      </div>
+      <div class="row" id="mkNext" style="margin-top:12px"></div>
+      <div id="scaleWrap" style="display:none">
+        <p style="margin-top:18px"><b>Why bother with a tree for 4 buckets?</b> You wouldn't. The win shows up at scale. The book's real-world example: <b>1 million buckets for 1 billion keys</b>, about 1,000 keys per bucket.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noopener">[1]</a> Pick a size:</p>
+        <div class="seg" id="szSeg"><button data-s="0" class="on">12 keys</button><button data-s="1">1 million</button><button data-s="2">1 billion</button></div>
+        <div class="statgrid" id="szStats"></div>
+        <div class="callout warn"><b>Honest caveat — the book's tree is simplified.</b> In Dynamo, the leaves are hashes of individual keys, and each server keeps a separate tree per key range it holds. When servers join or leave, key ranges shift and those trees must be rebuilt — a real cost Dynamo calls out.<a class="cite" href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf" target="_blank" rel="noopener">[2]</a> And with buckets, one changed key means re-sending its whole bucket, so the data moved tracks the <i>differences</i>, not the total.</div>
+        <div class="row" id="mkFinishRow"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Lights out + recall</h2><div class="sub">Data-center outage, then the toolkit from memory</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Last failure: the whole building. Power cuts, cooling failures, network outages and natural disasters can take out an entire <b>data center</b>.<a class="cite" href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf" target="_blank" rel="noopener">[2]</a> The fix is blunt: <b>replicate across data centers</b>, so users can still reach their data when one site is completely offline.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noopener">[1]</a> Dynamo builds each key's replica list so the copies sit in more than one data center.<a class="cite" href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf" target="_blank" rel="noopener">[2]</a></p>
+      <div class="dcs">
+        <div class="dc" id="dcA"><div class="dch">🏢 us-east</div><div class="dcsrv"><span>s0</span><span>s1</span><span>s2</span></div><div class="dcst" id="dcAst">cart:7 = v2 ✓</div></div>
+        <div class="dc" id="dcB"><div class="dch">🏢 eu-west</div><div class="dcsrv"><span>s3</span><span>s4</span><span>s5</span></div><div class="dcst">cart:7 = v2 ✓</div></div>
+      </div>
+      <div class="row" style="margin-top:10px"><button class="btn primary" id="dcBtn">⚡ Knock out us-east</button></div>
+      <div class="dcmsg" id="dcMsg"></div>
+      <div class="callout tip"><b>The price:</b> data centers are far apart, so waiting for a far-away copy is slow. Cassandra lets you ask for <code>LOCAL_QUORUM</code> — a quorum inside your own data center only — and copies to the other site in the background.<a class="cite" href="https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html" target="_blank" rel="noopener">[6]</a></div>
+      <p>Your failure toolkit, on four cards. Read them, then flip them face-down and sort from memory.</p>
+      <div class="cards four" id="kitCards">
+        <div class="card"><div class="card-in"><div class="face"><div class="L e">📡</div><h3>Gossip</h3><p>Heartbeat counters spread to random peers. A frozen counter, confirmed by a second node, means down.</p></div><div class="face back"><div class="L">📡</div></div></div></div>
+        <div class="card"><div class="card-in"><div class="face"><div class="L e">🔀</div><h3>Sloppy quorum</h3><p>Skip dead servers: use the first W (writes) or R (reads) <b>healthy</b> servers on the ring.</p></div><div class="face back"><div class="L">🔀</div></div></div></div>
+        <div class="card"><div class="card-in"><div class="face"><div class="L e">📝</div><h3>Hinted handoff</h3><p>The stand-in stores the data with a note saying whose it is, and hands it back when the owner returns.</p></div><div class="face back"><div class="L">📝</div></div></div></div>
+        <div class="card"><div class="card-in"><div class="face"><div class="L e">🌳</div><h3>Merkle anti-entropy</h3><p>Compare hash trees from the root down. Only branches that differ get explored; only differing buckets get sent.</p></div><div class="face back"><div class="L">🌳</div></div></div></div>
+      </div>
+      <div class="row" id="kitRow"><button class="btn primary" id="kitFlip">I've got it — flip the cards face-down</button><span class="muted small">Recall beats re-reading.</span></div>
+      <div id="kitSortWrap" style="display:none">
+        <p class="small muted" style="margin-top:16px">Which tool is each sentence describing? From memory.</p>
+        <div class="sort" id="kitSort"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Boss: Incident Commander</h2><div class="sub">Diagnose the failure, pick the mechanism</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Your pager is going off. Seven incidents. For each one, pick the mechanism that handles it: <b>gossip</b> (detect), <b>sloppy quorum + hints</b> (cover a short outage), <b>Merkle sync</b> (repair drifted replicas), or <b>multi-DC</b> (survive a lost site).</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 7 ================= -->
+  <section class="stage" data-stage="7" id="s7">
+    <div class="stage-h"><div class="num">7</div><div><h2>Say it like a senior</h2><div class="sub">The interview answer, in your words</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 6 — Design a Key-Value Store</a>, section "Handling failures". Then read §4.6–4.8 of the <a href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf" target="_blank" rel="noopener">Dynamo paper</a> — two pages that cover hinted handoff, Merkle trees and gossip as Amazon actually built them. Next quest: <b>6.7 The Write &amp; Read Path</b> — what a single server does with each write.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      Real systems moved past the book's simple timeout. Cassandra uses a "phi accrual" failure detector, which turns "how late is this heartbeat?" into a suspicion score instead of a yes/no.<a class="cite" href="https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html" target="_blank" rel="noopener">[6]</a> And Dynamo itself dropped its cluster-wide failure view: each node just notices when a peer stops answering, and admins add or remove servers explicitly (§4.8.3).<a class="cite" href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf" target="_blank" rel="noopener">[2]</a> Mentioning either one in an interview signals depth.
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat) — e.g. <i>"why not just use one central health-checker like ZooKeeper?"</i> or <i>"if hinted handoff exists, why do we still need Merkle trees?"</i>. Follow-up questions are part of the quest.
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 6, "Handling failures" (ByteByteGo).</li>
+        <li>DeCandia et al., "Dynamo: Amazon's Highly Available Key-value Store", SOSP 2007 — §4.6 hinted handoff &amp; multi-DC, §4.7 Merkle trees, §4.8 gossip &amp; failure detection.</li>
+        <li>van Renesse, Minsky &amp; Hayden, "A Gossip-Style Failure Detection Service", Middleware 1998.</li>
+        <li>Martin Kleppmann, <i>Designing Data-Intensive Applications</i>, Ch. 5, "Sloppy Quorums and Hinted Handoff".</li>
+        <li>Ralph Merkle, "A Digital Signature Based on a Conventional Encryption Function", CRYPTO '87.</li>
+        <li>Apache Cassandra docs, "Dynamo" architecture page (gossip, failure detection, repair, multi-DC).</li>
+        <li>Apache Cassandra docs, "Hints" (hinted handoff, max hint window).</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0006',
+  winTitle: 'Cluster stabilised',
+  badge: '🚑 Badge: Field Medic',
+  cheatsheet: '../reference/kv-store-cap-cheatsheet.html',
+});
+const { sleep, shuffle, esc } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+const polar = (c, r, deg) => { const a = deg * Math.PI / 180; return [c[0] + r * Math.cos(a), c[1] + r * Math.sin(a)]; };
+function mulberry(seed) { return () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function logTo(el, html, cls) { el.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); el.scrollTop = el.scrollHeight; }
+// Animated packet between two points. lost = fizzles out before arriving; bounce = hits a wall and comes back red.
+function fly(layer, a, b, { color = 'var(--accent)', label = '', lost = false, bounce = false, dur = 620, r = 7 } = {}) {
+  const c = S('circle', { r }, layer); c.style.fill = color;
+  let t = null;
+  if (label) { t = S('text', { 'text-anchor': 'middle', class: 'pkt' }, layer); t.style.fill = color; t.textContent = label; }
+  const d = Q.reduced ? 1 : dur;
+  return new Promise(res => {
+    const t0 = performance.now();
+    const step = now => {
+      const p = Math.min(1, (now - t0) / d);
+      let k = bounce ? (p < .5 ? p * 1.6 : (1 - p) * 1.6) : ease(p);
+      if (lost) k = ease(p) * .8;
+      const x = a[0] + (b[0] - a[0]) * k, y = a[1] + (b[1] - a[1]) * k;
+      c.setAttribute('cx', x); c.setAttribute('cy', y);
+      if (t) { t.setAttribute('x', x); t.setAttribute('y', y - 12); }
+      if (lost) { const o = p > .55 ? Math.max(0, 1 - (p - .55) / .45) : 1; c.style.opacity = o; if (t) t.style.opacity = o; }
+      if (bounce && p >= .5) { c.style.fill = 'var(--bad)'; if (t) t.style.fill = 'var(--bad)'; }
+      if (p < 1) requestAnimationFrame(step); else { c.remove(); if (t) t.remove(); res(); }
+    };
+    requestAnimationFrame(step);
+  });
+}
+// Predict-then-watch rounds (shared by stages 2 and 3).
+function rounds(box, list, { xp = 20, log, onFinish, onReplay }) {
+  let ci = 0;
+  const st = { busy: false };
+  async function show() {
+    const c = list[ci];
+    st.busy = true;
+    box.innerHTML = `<div class="step">Round ${ci + 1} of ${list.length}</div><h3>${c.title}</h3><div class="opts"><p class="small muted" style="margin:0">Setting the scene…</p></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+    await c.setup();
+    st.busy = false;
+    const opts = $('.opts', box); opts.innerHTML = '';
+    shuffle(c.options.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = async () => {
+        if (st.busy) return; st.busy = true;
+        $$('.opt', opts).forEach(x => x.disabled = true); b.classList.add('picked');
+        log(`— your prediction: “${esc(o)}”`);
+        await c.act();
+        const ok = i === c.correct;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-i="${c.correct}"]`, opts).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + c.explain;
+        ok ? Q.addXP(xp, b) : Q.loseHeart(b);
+        if (c.after) c.after();
+        const nx = document.createElement('button'); nx.className = 'btn primary';
+        nx.textContent = ci < list.length - 1 ? 'Next round →' : 'Finish the simulation →';
+        nx.onclick = () => {
+          ci++; st.busy = false;
+          if (ci < list.length) return show();
+          box.innerHTML = `<div class="row"><button class="btn q-replay">↻ Replay the ${list.length} rounds</button></div>`;
+          $('.q-replay', box).onclick = () => { ci = 0; onReplay(); show(); };
+          onFinish();
+        };
+        $('.row', box).appendChild(nx);
+      };
+      opts.appendChild(b);
+    });
+  }
+  return { start() { ci = 0; show(); }, st };
+}
+
+/* ================= STAGE 1: witnesses + all-to-all vs gossip ================= */
+const CASES = [
+  { s2: 'dead', tag: '💀 crashed', cut: ['w12', 'w32'], text: '<b>Case A — it really crashed.</b> s3 can’t reach s2 either. Two independent witnesses agree: this one is safe to call.' },
+  { s2: '', tag: '🙂 fine', cut: ['w12'], text: '<b>Case B — one broken cable.</b> Only the link between s1 and s2 failed; s3 talks to s2 happily. Calling s2 dead on s1’s word would be a false alarm.' },
+  { s2: 'slow', tag: '⏸ paused', cut: [], text: '<b>Case C — just slow.</b> s2 froze for a few seconds while cleaning up memory (a "garbage-collection pause"). It will answer again soon. From outside, slow looks exactly like dead.' },
+];
+const seenCases = new Set(), s1goals = new Set();
+function s1goal(g) {
+  if (s1goals.has(g)) return;
+  s1goals.add(g);
+  const li = $(`#s1goals [data-g="${g}"]`); li.classList.add('done'); Q.addXP(10, li);
+  if (s1goals.size === 2) setTimeout(stage1Quiz, 500);
+}
+$$('#cases .case').forEach(b => b.onclick = () => {
+  const c = CASES[+b.dataset.c];
+  $$('#cases .case').forEach(x => x.classList.remove('on')); b.classList.add('on', 'seen');
+  $('#wn2').setAttribute('class', 'n ' + c.s2); $('#wTag').textContent = c.tag;
+  ['w12', 'w13', 'w32'].forEach(id => $('#' + id).setAttribute('class', 'ln' + (c.cut.includes(id) ? ' cut' : '')));
+  $('#witSay').textContent = c.s2 === 'dead' ? 's1 and s3: "No reply from s2"' : 's1: "No reply from s2…"';
+  const p = $('#caseText'); p.innerHTML = c.text; p.style.animation = 'none'; void p.offsetWidth; p.style.animation = '';
+  seenCases.add(b.dataset.c);
+  if (seenCases.size === 3) s1goal('cases');
+});
+const SIZES = [4, 8, 16, 100, 500, 1000];
+function drawMini(svg, n, gossip) {
+  svg.innerHTML = '';
+  const k = Math.min(n, 20), pts = Array.from({ length: k }, (_, i) => polar([80, 80], 64, -90 + i * 360 / k));
+  const g = S('g', {}, svg);
+  if (gossip) { const R = mulberry(n); pts.forEach((p, i) => { const seen = new Set(); while (seen.size < 2) { const j = Math.floor(R() * k); if (j !== i) seen.add(j); } seen.forEach(j => S('line', { x1: p[0], y1: p[1], x2: pts[j][0], y2: pts[j][1] }, g)); }); }
+  else pts.forEach((p, i) => pts.forEach((q, j) => { if (j > i) S('line', { x1: p[0], y1: p[1], x2: q[0], y2: q[1] }, g); }));
+  pts.forEach(p => S('circle', { cx: p[0], cy: p[1], r: k > 12 ? 3.5 : 5 }, svg));
+}
+function renderScale() {
+  const n = SIZES[+$('#nRange').value];
+  $('#nOut').textContent = n.toLocaleString();
+  $('#aOut').textContent = (n * (n - 1)).toLocaleString(); $('#aF').textContent = `${n.toLocaleString()} × ${(n - 1).toLocaleString()} per round`;
+  $('#gOut').textContent = (n * 2).toLocaleString(); $('#gF').textContent = `${n.toLocaleString()} × 2 per round`;
+  drawMini($('#miniA'), n, false); drawMini($('#miniG'), n, true);
+  $('#drawnNote').textContent = n > 20 ? `(only 20 of the ${n.toLocaleString()} servers are drawn)` : '';
+  if (n >= 1000) s1goal('big');
+}
+$('#nRange').addEventListener('input', renderScale);
+renderScale();
+function stage1Quiz() {
+  if ($('#s1quiz').children.length) return;
+  Q.quiz($('#s1quiz'), {
+    q: 's1 has had no reply from s2 for ten seconds. What should the cluster do before declaring s2 dead?',
+    options: ['Wait for a second node to agree', 'Trust s1 and declare it dead now', 'Ask s2 to confirm it is alive'],
+    correct: 0, xp: 15,
+    good: 'One witness can’t tell a crash from a broken cable or a slow pause. A second, independent source makes the verdict trustworthy. (Asking s2 doesn’t help — a dead or cut-off server can’t answer.) And with 1,000 servers, everyone pinging everyone is ~1 million messages a round; telling a few random peers is ~2,000. That’s gossip — next stage.',
+    bad: 'One witness can’t tell a crash from a broken cable or a slow pause, and a dead or cut-off s2 can’t answer for itself. The book’s rule: wait for at least two independent sources.',
+    onDone: () => setTimeout(() => Q.clearStage(1), 900),
+  });
+}
+
+/* ================= STAGE 2: gossip simulator ================= */
+const GN = 8, GT = 3, FAN = 2, GC = [240, 200], GRAD = 150;
+const gpos = i => polar(GC, GRAD, -90 + i * 45);
+const G = { tick: 0, nodes: [], victim: null, rng: null, msgs: 0, auto: false, ticking: false, risen: new Set() };
+function gBuild() {
+  const svg = $('#gsvg'); svg.innerHTML = '';
+  const ch = S('g', {}, svg);
+  for (let i = 0; i < GN; i++) for (let j = i + 1; j < GN; j++) { const a = gpos(i), b = gpos(j); S('line', { class: 'chord', x1: a[0], y1: a[1], x2: b[0], y2: b[1] }, ch); }
+  S('g', { id: 'gpk' }, svg);
+  for (let i = 0; i < GN; i++) {
+    const [x, y] = gpos(i), g = S('g', { class: 'node', id: 'gn' + i }, svg);
+    S('circle', { class: 'body', cx: x, cy: y, r: 32 }, g);
+    S('text', { class: 'nm', x, y: y - 11 }, g).textContent = 's' + i;
+    S('text', { class: 'hb', x, y: y + 15 }, g);
+    S('text', { class: 'skull', x, y: y - 38 }, g).textContent = '💀';
+    const pip = S('g', { class: 'pip' }, g); S('circle', { cx: x + 24, cy: y - 24, r: 11 }, pip); S('text', { x: x + 24, y: y - 19.5 }, pip);
+    g.onclick = () => gToggle(i);
+  }
+}
+function gReset() {
+  G.tick = 0; G.victim = null; G.rng = mulberry(11); G.msgs = 0; G.risen = new Set();
+  G.nodes = Array.from({ length: GN }, (_, i) => ({ alive: true, hb: 20 + i * 3 }));
+  G.nodes.forEach(n => n.list = G.nodes.map(m => ({ hb: m.hb, seen: 0, sus: new Set(), down: false })));
+  $('#glog').innerHTML = '<div>8 healthy servers. Each keeps a membership list with every member’s heartbeat counter.</div>';
+  gRender();
+}
+function opinion(i, m) {
+  if (i === m) return 'self';
+  const e = G.nodes[i].list[m];
+  return e.down ? 'down' : e.sus.has(i) ? 'sus' : 'ok';
+}
+const glog = (t, c) => logTo($('#glog'), t, c);
+function gRender(bump) {
+  const v = G.victim;
+  G.nodes.forEach((n, i) => {
+    const g = $('#gn' + i);
+    let cls = 'node' + (n.alive ? '' : ' dead');
+    if (v != null && i !== v && n.alive) cls += ' v-' + opinion(i, v);
+    if (bump && n.alive) cls += ' bump';
+    g.setAttribute('class', cls);
+    $('.hb', g).textContent = n.hb;
+    if (v != null && i !== v) $('.pip text', g).textContent = { ok: '✓', sus: '?', down: '✗' }[opinion(i, v)] || '';
+  });
+  $('#gbar').textContent = `tick ${G.tick} · ${G.msgs} gossip messages (all-to-all: ${GN * (GN - 1)})`;
+  const s0 = G.nodes[0];
+  $('#mcap').textContent = s0.alive ? 's0’s membership list' : 's0 is down — its list is frozen';
+  $('#mtable').innerHTML = '<tr><th>member</th><th>heartbeat</th><th>quiet for</th><th>s0 thinks</th></tr>' + s0.list.map((e, m) => {
+    const op = opinion(0, m), lab = { self: 'me', ok: 'alive', sus: 'suspect', down: 'DOWN' }[op];
+    const quiet = m === 0 ? '—' : `${G.tick - e.seen} tick${G.tick - e.seen === 1 ? '' : 's'}`;
+    return `<tr class="${G.risen.has(m) ? 'rose' : ''}"><td>s${m}</td><td>${e.hb}</td><td>${quiet}</td><td class="st ${op}">${lab}</td></tr>`;
+  }).join('');
+}
+async function gTick() {
+  if (G.ticking) return [];
+  G.ticking = true;
+  const t = ++G.tick, R = G.rng;
+  G.nodes.forEach((n, i) => { if (n.alive) { n.hb++; n.list[i].hb = n.hb; n.list[i].seen = t; } });
+  const msgs = [];
+  G.nodes.forEach((n, i) => {
+    if (!n.alive) return;
+    const peers = [];
+    while (peers.length < FAN) { const j = Math.floor(R() * GN); if (j !== i && !peers.includes(j)) peers.push(j); }
+    const payload = n.list.map((e, m) => ({ hb: e.hb, sus: m !== i && e.sus.has(i) }));
+    peers.forEach(j => msgs.push({ from: i, to: j, payload }));
+  });
+  G.msgs = msgs.length; G.risen = new Set();
+  gRender(true);
+  await Promise.all(msgs.map(m => fly($('#gpk'), gpos(m.from), gpos(m.to), { color: 'var(--teal)', lost: !G.nodes[m.to].alive, r: 5, dur: 700 })));
+  const prev = G.nodes.map((n, i) => n.list.map((_, m) => opinion(i, m)));
+  const s0before = G.nodes[0].list.map(e => e.hb);
+  msgs.forEach(m => {
+    const rc = G.nodes[m.to]; if (!rc.alive) return;
+    m.payload.forEach((p, k) => {
+      if (k === m.to) return;
+      const e = rc.list[k];
+      if (p.hb > e.hb) { e.hb = p.hb; e.seen = t; e.sus.clear(); e.down = false; }
+      else if (p.sus && p.hb >= e.hb) e.sus.add(m.from);
+    });
+  });
+  G.nodes[0].list.forEach((e, m) => { if (m !== 0 && e.hb > s0before[m]) G.risen.add(m); });
+  const events = [];
+  G.nodes.forEach((n, i) => {
+    if (!n.alive) return;
+    n.list.forEach((e, m) => {
+      if (m === i) return;
+      if (t - e.seen >= GT) e.sus.add(i);
+      if (e.sus.has(i) && e.sus.size >= 2) e.down = true;
+      const now = opinion(i, m);
+      if (now !== prev[i][m]) events.push({ i, m, from: prev[i][m], to: now, others: [...e.sus].filter(x => x !== i) });
+    });
+  });
+  gRender();
+  gNarrate(events);
+  G.ticking = false;
+  return events;
+}
+function gNarrate(events) {
+  const v = G.victim;
+  events.filter(e => e.i === 0).forEach(e => {
+    if (e.to === 'sus') glog(`s0: s${e.m}’s counter hasn’t risen for ${GT} ticks → <b>suspect</b> (one source: itself)`, 'w');
+    if (e.to === 'down') glog(`s0: s${e.others[0]} independently suspects s${e.m} too → s${e.m} marked <b>DOWN</b>`, 'e');
+    if (e.to === 'ok') glog(`s0: s${e.m}’s counter is rising again → <b>alive</b>`, 'g');
+  });
+  if (v == null) return;
+  const alive = G.nodes.map((n, i) => i).filter(i => i !== v && G.nodes[i].alive);
+  const changed = events.some(e => e.m === v);
+  if (!changed) return;
+  const cnt = st => alive.filter(i => opinion(i, v) === st).length;
+  glog(`tick ${G.tick}: about s${v} → ${cnt('ok')} alive · ${cnt('sus')} suspect · ${cnt('down')} down`, cnt('down') ? 'e' : cnt('sus') ? 'w' : 'g');
+}
+const allSee = (m, st) => G.nodes.every((n, i) => i === m || !n.alive || opinion(i, m) === st);
+function gKill(i) { G.nodes[i].alive = false; G.victim = i; gRender(); glog(`💀 s${i} crashed (its counter is stuck at ${G.nodes[i].hb})`, 'e'); }
+function gRevive(i) {
+  const n = G.nodes[i]; n.alive = true;
+  n.list.forEach(e => { e.seen = G.tick; e.sus.clear(); e.down = false; });
+  G.victim = i; gRender(); glog(`🔌 s${i} rebooted and starts beating again`, 'g');
+}
+function gToggle(i) {
+  if (!$('#gsand').classList.contains('on') || gR.st.busy || G.ticking) return;
+  G.nodes[i].alive ? gKill(i) : gRevive(i);
+}
+const G_ROUNDS = [
+  { title: 'All 8 servers are healthy and gossiping. Now <b>s2 crashes</b>. What happens to s2’s heartbeat counter in everyone’s lists?',
+    setup: async () => { gReset(); for (let k = 0; k < 3; k++) await gTick(); },
+    options: ['It freezes at its last value', 'It drops straight back to zero', 'It keeps rising, just more slowly'],
+    correct: 0,
+    act: async () => { gKill(2); for (let k = 0; k < 2; k++) await gTick(); glog(`s2’s counter is still ${G.nodes[2].hb} everywhere — only s2 can bump it`, 'w'); },
+    explain: 'Only s2 ever adds to s2’s counter. A dead server doesn’t beat, so every copy of its counter just <b>stops rising</b>. Nothing announces the crash — the silence <i>is</i> the signal.' },
+  { title: 'The timeout is 3 ticks. Who declares s2 <b>down</b>, and when?',
+    setup: async () => {},
+    options: ['s0 alone, the moment it notices', 's0, once another node also agrees', 'A central master server decides alone'],
+    correct: 1,
+    act: async () => { for (let k = 0; k < 16 && !allSee(2, 'down'); k++) await gTick(); },
+    explain: 'Each server first <b>suspects</b> s2 on its own (amber). It marks s2 <b>down</b> (red) only once gossip shows another server independently suspects it too — the book’s "at least two independent sources". No master needed: every server reaches the verdict itself.' },
+  { title: 'An engineer reboots s2. It starts bumping its counter and gossiping again. What do the others do?',
+    setup: async () => {},
+    options: ['They see it rise, mark it alive', 'It stays down until an admin acts', 'They ignore it; down means down forever'],
+    correct: 0,
+    act: async () => { gRevive(2); for (let k = 0; k < 12 && !allSee(2, 'ok'); k++) await gTick(); },
+    after: () => { $('#gCaveat').style.display = 'block'; },
+    explain: 'A rising counter is proof of life. The moment a server sees a <b>higher</b> heartbeat for s2 than it had, it drops the suspicion. (But s2 missed every write while it was gone — that’s the next stage.)' },
+];
+const gR = rounds($('#gch'), G_ROUNDS, {
+  log: t => glog(t),
+  onFinish: () => { $('#gsand').classList.add('on'); $('#gsim').querySelector('svg').classList.add('play'); Q.clearStage(2); },
+  onReplay: () => { G.auto = false; $('#gAuto').textContent = '▶ Auto-play'; $('#gsand').classList.remove('on'); $('#gsvg').classList.remove('play'); },
+});
+async function gAutoLoop() {
+  while (G.auto) { await gTick(); await sleep(Q.reduced ? 600 : 250); }
+}
+$('#gAuto').onclick = () => { G.auto = !G.auto; $('#gAuto').textContent = G.auto ? '⏸ Pause' : '▶ Auto-play'; if (G.auto) gAutoLoop(); };
+$('#gOne').onclick = () => { if (!G.auto) gTick(); };
+$('#gRst').onclick = async () => { G.auto = false; $('#gAuto').textContent = '▶ Auto-play'; while (G.ticking) await sleep(50); gReset(); };
+Q.onStage(2, () => { gBuild(); gReset(); gR.start(); });
+
+/* ================= STAGE 3: sloppy quorum + hinted handoff ring ================= */
+const RN = 8, RW = 2, RREP = 3, RC = [240, 222], RRAD = 146, HOMES = [0, 1, 2];
+const rpos = (i, rad = RRAD) => polar(RC, rad, -90 + i * 45);
+const RS = { srv: [], mode: 'strict', ver: 1 };
+const rlog = (t, c) => logTo($('#rlog'), t, c);
+function rBuild() {
+  const svg = $('#rsvg'); svg.innerHTML = '';
+  S('circle', { class: 'ring', cx: RC[0], cy: RC[1], r: RRAD }, svg);
+  const a = polar(RC, RRAD, -112), b = polar(RC, RRAD, 0);
+  S('path', { class: 'home-arc', d: `M ${a[0]} ${a[1]} A ${RRAD} ${RRAD} 0 0 1 ${b[0]} ${b[1]}` }, svg);
+  const kp = polar(RC, RRAD, -112), kl = polar(RC, RRAD - 42, -110);
+  const key = S('g', { class: 'key' }, svg);
+  S('path', { d: `M ${kp[0]} ${kp[1] - 10} l 10 10 l -10 10 l -10 -10 z` }, key);
+  S('text', { x: kl[0] + 10, y: kl[1] + 8 }, key).textContent = '🔑 cart:7';
+  const co = S('g', { class: 'coord', id: 'rco' }, svg);
+  S('rect', { x: RC[0] - 74, y: RC[1] - 22, width: 148, height: 44, rx: 12 }, co);
+  S('text', { x: RC[0], y: RC[1] + 6 }, co).textContent = '📨 coordinator';
+  S('g', { id: 'rpk' }, svg);
+  for (let i = 0; i < RN; i++) {
+    const [x, y] = rpos(i), g = S('g', { class: 'srv', id: 'rs' + i }, svg);
+    S('circle', { class: 'body', cx: x, cy: y, r: 28 }, g);
+    S('text', { class: 'nm', x, y: y + 6 }, g).textContent = 's' + i;
+    g.onclick = () => rToggle(i);
+    const [tx, ty] = rpos(i, RRAD + 48), tg = S('g', { class: 'tag', id: 'rt' + i, transform: `translate(${tx} ${ty})` }, svg);
+    S('rect', { x: -30, y: -15, width: 60, height: 30, rx: 9 }, tg);
+    S('text', { x: 0, y: 5.5 }, tg);
+  }
+}
+function rReset() {
+  RS.srv = Array.from({ length: RN }, (_, i) => ({ up: true, val: HOMES.includes(i) ? 1 : null, hint: null }));
+  RS.ver = 1; RS.mode = 'strict';
+  $('#rlog').innerHTML = '<div>cart:7 = v1, stored on its 3 home servers: s0, s1, s2.</div>';
+  rRender();
+}
+function rRender() {
+  const latest = Math.max(...RS.srv.map(s => s.val || 0));
+  RS.srv.forEach((s, i) => {
+    $('#rs' + i).setAttribute('class', 'srv' + (HOMES.includes(i) ? ' home' : '') + (s.up ? '' : ' down'));
+    const tg = $('#rt' + i);
+    if (s.val == null) { tg.style.opacity = 0; return; }
+    tg.style.opacity = 1;
+    const txt = `v${s.val}` + (s.hint != null ? ` 📝s${s.hint}` : '');
+    $('text', tg).textContent = txt;
+    const w = s.hint != null ? 88 : 44;
+    const r = $('rect', tg); r.setAttribute('x', -w / 2); r.setAttribute('width', w);
+    tg.setAttribute('class', 'tag' + (s.hint != null ? ' hint' : s.val < latest ? ' old' : ''));
+  });
+  $$('#rMode span').forEach(x => x.classList.toggle('on', x.dataset.m === RS.mode));
+}
+function rSetMode(m) { RS.mode = m; rRender(); rlog(`quorum mode → <b>${m}</b>`); }
+function rErr() { const c = $('#rco'); c.classList.add('err'); setTimeout(() => c.classList.remove('err'), 1200); }
+async function rWrite() {
+  const v = RS.ver + 1, layer = $('#rpk');
+  rlog(`client → coordinator: put(cart:7, v${v})`);
+  if (RS.mode === 'strict') {
+    const res = await Promise.all(HOMES.map(async h => { const up = RS.srv[h].up; await fly(layer, RC, rpos(h), { label: 'v' + v, bounce: !up }); return up; }));
+    const acks = res.filter(Boolean).length;
+    if (acks < RW) { rErr(); rlog(`✖ only ${acks} of the 3 home servers answered — W=${RW} can’t be met → write <b>REJECTED</b>`, 'e'); return false; }
+    RS.ver = v; HOMES.forEach(h => { if (RS.srv[h].up) RS.srv[h].val = v; }); rRender();
+    rlog(`✓ ${acks} home servers stored v${v} (W=${RW} met)${acks < 3 ? ' — one copy is missing until repair' : ''}`, 'g');
+    return true;
+  }
+  const targets = [], skipped = HOMES.filter(h => !RS.srv[h].up);
+  for (let i = 0; i < RN && targets.length < RREP; i++) if (RS.srv[i].up) targets.push(i);
+  if (targets.length < RW) { rErr(); rlog('✖ fewer than W healthy servers in the whole ring → write rejected', 'e'); return false; }
+  let si = 0;
+  const plan = targets.map(t => ({ t, hint: HOMES.includes(t) ? null : (si < skipped.length ? skipped[si++] : null) }));
+  await Promise.all(plan.map(p => fly(layer, RC, rpos(p.t), { label: 'v' + v, color: p.hint != null ? 'var(--warn)' : 'var(--accent)' })));
+  RS.ver = v;
+  plan.forEach(p => { const s = RS.srv[p.t]; s.val = v; s.hint = p.hint; });
+  rRender();
+  const hints = plan.filter(p => p.hint != null);
+  rlog(`✓ stored on ${plan.map(p => 's' + p.t).join(', ')}` + (hints.length ? ` — ${hints.map(p => `s${p.t} keeps a hint “belongs to s${p.hint}”`).join('; ')}` : ''), 'g');
+  return true;
+}
+async function rRead(ids) {
+  const layer = $('#rpk');
+  rlog(`client → coordinator: get(cart:7) — the R=${ids.length} answers come from ${ids.map(i => 's' + i).join(' & ')}`);
+  await Promise.all(ids.map(i => fly(layer, RC, rpos(i), { label: '?' })));
+  const vals = ids.map(i => RS.srv[i].val || 0), best = Math.max(...vals), newest = Math.max(...RS.srv.map(s => s.val || 0));
+  await Promise.all(ids.map(i => fly(layer, rpos(i), RC, { label: RS.srv[i].val ? 'v' + RS.srv[i].val : '∅', color: (RS.srv[i].val || 0) < newest ? 'var(--warn)' : 'var(--good)' })));
+  if (best < newest) rlog(`⚠ client gets v${best} — <b>STALE</b>. The newest, v${newest}, sits on ${RS.srv.map((s, i) => s.val === newest ? 's' + i : null).filter(Boolean).join(', ')} — none of them were asked`, 'w');
+  else rlog(`✓ client gets v${best}, the newest value`, 'g');
+  return best;
+}
+async function rHandoff(home) {
+  const layer = $('#rpk');
+  const holders = RS.srv.map((s, j) => ({ s, j })).filter(x => x.s.hint === home && x.s.up && x.s.val != null);
+  await Promise.all(holders.map(async ({ s, j }) => {
+    await fly(layer, rpos(j), rpos(home), { label: 'v' + s.val, color: 'var(--warn)', dur: 800 });
+    const h = RS.srv[home];
+    if (h.val == null || h.val < s.val) h.val = s.val;
+    rlog(`↩ s${j} hands v${s.val} back to s${home} and deletes its own copy`, 'g');
+    s.val = null; s.hint = null; rRender();
+  }));
+  return holders.length;
+}
+async function rHandoffAll() { let n = 0; for (const h of HOMES) if (RS.srv[h].up) n += await rHandoff(h); return n; }
+async function rSetUp(i, up, hand = true) {
+  RS.srv[i].up = up; rRender();
+  rlog(up ? `🔌 s${i} is back online` : `💥 s${i} went down`, up ? '' : 'e');
+  if (up && hand) { await sleep(300); await rHandoff(i); }
+}
+let rSandBusy = false;
+async function rToggle(i) {
+  if (!$('#rsand').classList.contains('on') || rR.st.busy || rSandBusy) return;
+  rSandBusy = true; await rSetUp(i, !RS.srv[i].up); rSandBusy = false;
+}
+const R_ROUNDS = [
+  { title: 'A rack loses power: <b>s1 and s2 go down</b>. Strict quorum — only the 3 home servers count. The client writes <code>cart:7 = v2</code>.',
+    setup: async () => { rReset(); await sleep(200); await rSetUp(1, false); await rSetUp(2, false); },
+    options: ['The write fails: too few homes answer', 'It succeeds on s0, s3 and s4', 'It succeeds on s0 alone for now'],
+    correct: 0,
+    act: async () => { await rWrite(); },
+    explain: 'W=2, but only s0 of the three home servers is up. A strict quorum refuses to count anyone else, so the write is <b>blocked</b> — a shopper’s add-to-cart just failed even though 6 servers are healthy.' },
+  { title: 'Same outage. Switch to a <b>sloppy quorum</b>: the write goes to the first 3 <i>healthy</i> servers clockwise from the key. Where does v2 land?',
+    setup: async () => { rSetMode('sloppy'); },
+    options: ['On s0, s3 and s4', 'On s0, s1 and s2', 'On s3, s4 and s5'],
+    correct: 0,
+    act: async () => { await rWrite(); },
+    explain: 'Walk clockwise from the key: s0 ✓, s1 ✗ skip, s2 ✗ skip, s3 ✓, s4 ✓. s3 and s4 are <b>stand-ins</b>: each stores v2 with a hint naming the home it is covering for (📝s1, 📝s2). The write succeeds.' },
+  { title: 's1 and s2 reboot. Before any handoff happens, a read (R=2) gets its two answers from <b>s1 and s2</b>. What does the client get?',
+    setup: async () => { await rSetUp(1, true, false); await rSetUp(2, true, false); rlog('(handoff hasn’t run yet)'); },
+    options: ['The old v1 — a stale read', 'The new v2 — a fresh read', 'An error — the homes are empty'],
+    correct: 0,
+    act: async () => { await rRead([1, 2]); },
+    after: () => { $('#rCaveat').style.display = 'block'; },
+    explain: 'W + R = 4 &gt; N = 3, which normally guarantees overlap. But the write went to {s0, s3, s4} and the read asked {s1, s2} — <b>no overlap</b>, so the read is stale. That’s the price of a sloppy quorum (see the caveat below).' },
+  { title: 's3 and s4 notice that s1 and s2 are back. What happens to their hinted copies of v2?',
+    setup: async () => {},
+    options: ['They send them home, then delete them', 'They keep them forever as extra copies', 'They drop them without sending them back'],
+    correct: 0,
+    act: async () => { await sleep(200); await rHandoffAll(); },
+    explain: 'That’s <b>hinted handoff</b>: the stand-in pushes the data to its rightful owner, then removes its own copy, so the key is back on exactly its 3 home servers.' },
+];
+const rR = rounds($('#rch'), R_ROUNDS, {
+  log: t => rlog(t),
+  onFinish: () => { $('#rsand').classList.add('on'); $('#rsvg').classList.add('play'); Q.clearStage(3); },
+  onReplay: () => { $('#rsand').classList.remove('on'); $('#rsvg').classList.remove('play'); },
+});
+$('#rWriteBtn').onclick = async () => { if (rSandBusy || rR.st.busy) return; rSandBusy = true; await rWrite(); rSandBusy = false; };
+$('#rModeBtn').onclick = () => { if (rSandBusy || rR.st.busy) return; rSetMode(RS.mode === 'strict' ? 'sloppy' : 'strict'); };
+$('#rRst').onclick = () => { if (rSandBusy || rR.st.busy) return; rReset(); RS.mode = 'sloppy'; rRender(); };
+Q.onStage(3, () => { rBuild(); rReset(); rR.start(); });
+
+/* ================= STAGE 4: Merkle tree ================= */
+function fnv(s) { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return (((h >>> 16) ^ (h & 0xffff)) >>> 0).toString(16).padStart(4, '0'); }
+const BASE = { 1: 'ana', 2: 'ben', 3: 'cy', 4: 'dee', 5: 'eli', 6: 'fay', 7: 'gus', 8: 'hal', 9: 'ivy', 10: 'jo', 11: 'kai', 12: 'lu' };
+function tree(data) {
+  const kh = {}; for (let k = 1; k <= 12; k++) kh[k] = fnv(k + '=' + data[k]);
+  const T = { kh };
+  [0, 1, 2, 3].forEach(i => T['b' + i] = fnv(kh[3 * i + 1] + kh[3 * i + 2] + kh[3 * i + 3]));
+  T.L = fnv(T.b0 + T.b1); T.R = fnv(T.b2 + T.b3); T.r = fnv(T.L + T.R);
+  return T;
+}
+const TN = {
+  r: { x: 240, y: 40, w: 132, lb: 'root', par: null },
+  L: { x: 122, y: 140, w: 132, lb: 'keys 1–6', par: 'r' }, R: { x: 358, y: 140, w: 132, lb: 'keys 7–12', par: 'r' },
+  b0: { x: 63, y: 242, w: 108, lb: 'bucket 1–3', par: 'L' }, b1: { x: 181, y: 242, w: 108, lb: 'bucket 4–6', par: 'L' },
+  b2: { x: 299, y: 242, w: 108, lb: 'bucket 7–9', par: 'R' }, b3: { x: 417, y: 242, w: 108, lb: 'bucket 10–12', par: 'R' },
+};
+const NH = 62;
+const keyHome = k => { const b = Math.floor((k - 1) / 3), o = (k - 1) % 3; return [TN['b' + b].x + (o - 1) * 35, 330]; };
+const keyStart = k => [24 + (k - 1) * 39.3, 330];
+const PUZZLES = [
+  { name: 'Replica B', data: { ...BASE, 7: 'gus*' },
+    q: 'Replica B’s root hash is different from replica A’s. What does that tell you?',
+    options: ['Something below differs — keep digging down', 'Every bucket differs — resend all twelve', 'Nothing yet — roots always differ anyway'],
+    good: 'A different root only says "somewhere below, something differs". Now descend: compare the two children, and only open the one that differs.',
+    bad: 'A different root only says "somewhere below, something differs" — maybe one key, maybe many. You find out by descending into the children that differ.',
+    hunt: 'Your turn: tap the <b>root</b> to compare it, then tap your way down — only into nodes whose parent differed.' },
+  { name: 'Replica C', data: { ...BASE },
+    q: 'Replica C’s root hash is exactly the same as replica A’s. What do you do next?',
+    options: ['Stop — both replicas hold identical data', 'Check all four buckets, just in case', 'Compare every key, one at a time'],
+    good: 'Same root hash ⇒ same data underneath (a hash changes if anything below changes). One comparison, zero data sent.',
+    bad: 'Matching roots mean everything below matches — any change to any key would have changed the root. One comparison and you’re done.',
+    hunt: 'Confirm it: tap the <b>root</b>.' },
+  { name: 'Replica D', data: { ...BASE, 2: 'ben*', 11: 'kai*' },
+    q: 'Replica D’s root differs. Unknown to you, keys 2 and 11 were changed. How much data gets re-sent?',
+    options: ['Just the two buckets that differ', 'Every key in the whole replica', 'Half the keys: the left subtree'],
+    good: 'Only the buckets that differ are synced: 2 buckets × 3 keys = 6 keys, not 12. Data moved tracks the <i>differences</i>, not the total size.',
+    bad: 'Only the buckets whose hashes differ get synced — here buckets 1–3 and 10–12, so 6 keys. Data moved tracks the differences, not the total.',
+    hunt: 'Two branches to chase this time. Start at the <b>root</b>.' },
+];
+const MK = { step: 0, p: 0, A: tree(BASE), B: null, st: {}, cmp: 0, hunting: false, synced: new Set() };
+const mklog = (t, c) => logTo($('#mklog'), t, c);
+function mkBuild() {
+  const svg = $('#mksvg'); svg.innerHTML = '';
+  const edges = S('g', {}, svg);
+  Object.entries(TN).forEach(([id, n]) => { if (!n.par) return; const p = TN[n.par]; S('line', { class: 'edge hide', id: 'me-' + id, x1: p.x, y1: p.y + NH / 2, x2: n.x, y2: n.y - NH / 2 }, edges); });
+  for (let k = 1; k <= 12; k++) { const b = Math.floor((k - 1) / 3), [kx] = keyHome(k); S('line', { class: 'edge hide kedge', 'data-b': b, x1: TN['b' + b].x, y1: TN['b' + b].y + NH / 2, x2: kx, y2: 330 - 16 }, edges); }
+  [0, 1, 2, 3].forEach(b => S('rect', { class: 'bbox hide', x: TN['b' + b].x - 56, y: 308, width: 112, height: 62, rx: 12 }, svg));
+  Object.entries(TN).forEach(([id, n]) => {
+    const g = S('g', { class: 'tn hide', id: 'mn-' + id }, svg);
+    S('rect', { x: n.x - n.w / 2, y: n.y - NH / 2, width: n.w, height: NH, rx: 12 }, g);
+    S('text', { class: 'lb', x: n.x, y: n.y - 13 }, g).textContent = n.lb;
+    S('text', { class: 'ha', x: n.x, y: n.y + 6 }, g);
+    S('text', { class: 'hb', x: n.x, y: n.y + 23 }, g);
+    g.onclick = () => mkClick(id, g);
+  });
+  for (let k = 1; k <= 12; k++) {
+    const g = S('g', { class: 'key', id: 'mk' + k }, svg);
+    S('circle', { cx: 0, cy: 0, r: 15 }, g);
+    S('text', { class: 'k', x: 0, y: 5 }, g).textContent = k;
+    S('text', { class: 'kh hide', x: 0, y: 32 }, g).textContent = MK.A.kh[k];
+  }
+}
+function mkPlaceKeys(grouped) {
+  for (let k = 1; k <= 12; k++) { const [x, y] = grouped ? keyHome(k) : keyStart(k); $('#mk' + k).style.transform = `translate(${x}px, ${y}px)`; }
+}
+const STEPS = [
+  { btn: 'Step 1: divide keys into buckets →', note: '<b>Step 1.</b> Split the key space into buckets — here 4 buckets of 3 keys.',
+    run: () => { mkPlaceKeys(true); $$('#mksvg .bbox').forEach(e => e.classList.remove('hide')); } },
+  { btn: 'Step 2: hash each key →', note: '<b>Step 2.</b> Hash every key (with its value). Each key now has a short fingerprint.',
+    run: () => { $$('#mksvg .kh').forEach(e => e.classList.remove('hide')); } },
+  { btn: 'Step 3: one hash node per bucket →', note: '<b>Step 3.</b> Each bucket gets one node: the hash of its keys’ hashes.',
+    run: () => { ['b0', 'b1', 'b2', 'b3'].forEach(id => $('#mn-' + id).classList.remove('hide')); $$('#mksvg .kedge').forEach(e => e.classList.remove('hide')); } },
+  { btn: 'Step 4: build up to the root →', note: '<b>Step 4.</b> Keep hashing pairs of children upward until one <b>root</b> hash sums up all 12 keys. Replica B builds its own tree the exact same way.',
+    run: () => { ['L', 'R', 'r'].forEach(id => $('#mn-' + id).classList.remove('hide')); $$('#mksvg .edge:not(.kedge)').forEach(e => e.classList.remove('hide')); } },
+];
+function mkRender() {
+  Object.keys(TN).forEach(id => {
+    const g = $('#mn-' + id), s = MK.st[id];
+    $('.ha', g).textContent = 'A ' + MK.A[id];
+    $('.hb', g).textContent = s ? 'B ' + (MK.synced.has(id) ? MK.A[id] : MK.B[id]) : 'B ····';
+    const can = MK.hunting && !s && (id === 'r' || MK.st[TN[id].par] === 'miss');
+    const hid = g.classList.contains('hide') ? ' hide' : '';
+    g.setAttribute('class', 'tn' + hid + (s === 'match' ? ' match' : s === 'miss' ? (MK.synced.has(id) ? ' fixed' : ' miss') : '') + (can ? ' can' : ''));
+    const e = $('#me-' + id); if (e) e.setAttribute('class', 'edge' + (e.classList.contains('hide') ? ' hide' : '') + (s === 'match' ? ' ok' : s === 'miss' ? ' bad' : ''));
+  });
+  for (let k = 1; k <= 12; k++) {
+    const b = 'b' + Math.floor((k - 1) / 3), g = $('#mk' + k);
+    const diff = MK.B && MK.st[b] === 'miss' && MK.A.kh[k] !== MK.B.kh[k];
+    g.setAttribute('class', 'key' + (MK.synced.has(b) && diff ? ' synced' : diff ? ' diff' : ''));
+  }
+  const sent = [...MK.synced].length * 3;
+  $('#mkstats').innerHTML = MK.B
+    ? `<span>🔍 hashes compared <b>${MK.cmp}</b></span><span>📦 keys sent <b>${sent}</b>/12</span><span>naive scan: <b>12</b> keys</span>`
+    : `<span>replica <b>A</b>'s tree</span>`;
+}
+function mkClick(id, el) {
+  if (!MK.hunting || MK.st[id]) return;
+  const par = TN[id].par;
+  if (par && MK.st[par] !== 'miss') {
+    Q.toast(MK.st[par] === 'match' ? '✓ parent matched — nothing below differs' : '🔒 compare its parent first', el, 'practice');
+    return;
+  }
+  const same = MK.A[id] === MK.B[id];
+  MK.st[id] = same ? 'match' : 'miss'; MK.cmp++;
+  mklog(`compare ${TN[id].lb}: A ${MK.A[id]} vs B ${MK.B[id]} → ${same ? '✓ same' : '✗ different'}`, same ? 'g' : 'e');
+  mkRender();
+  mkCheckDone();
+}
+async function mkCheckDone() {
+  const bad = ['b0', 'b1', 'b2', 'b3'].filter(b => MK.A[b] !== MK.B[b]);
+  // Done when nothing is left to open: every child of a differing node has been compared.
+  const pending = Object.keys(TN).filter(id => !MK.st[id] && (id === 'r' || MK.st[TN[id].par] === 'miss'));
+  const done = !pending.length;
+  if (!done) return;
+  MK.hunting = false; mkRender();
+  if (!bad.length) mklog(`✓ roots match → replicas identical. ${MK.cmp} comparison, 0 keys sent.`, 'g');
+  else {
+    await sleep(400);
+    for (const b of bad) { MK.synced.add(b); mkRender(); mklog(`↻ synced ${TN[b].lb}: 3 keys sent, newest version wins`, 'g'); await sleep(Q.reduced ? 0 : 450); }
+    mklog(`Done: ${MK.cmp} hashes compared, ${bad.length * 3} of 12 keys sent.`, 'g');
+  }
+  const last = MK.p === PUZZLES.length - 1;
+  const row = $('#mkNext');
+  const b = document.createElement('button'); b.className = 'btn primary';
+  b.textContent = last ? 'See it at real scale →' : 'Next replica →';
+  b.onclick = () => { b.disabled = true; if (last) { $('#scaleWrap').style.display = 'block'; renderSize(0); $('#scaleWrap').scrollIntoView({ behavior: Q.reduced ? 'auto' : 'smooth', block: 'start' }); } else { MK.p++; mkPuzzle(); $('#mkplay').scrollIntoView({ behavior: Q.reduced ? 'auto' : 'smooth', block: 'start' }); } };
+  row.appendChild(b);
+}
+function mkPuzzle() {
+  const P = PUZZLES[MK.p];
+  MK.B = tree(P.data); MK.st = {}; MK.cmp = 0; MK.hunting = false; MK.synced = new Set();
+  $('#mksvg').classList.add('hunt');
+  mklog(`— ${P.name}: comparing its tree with replica A’s —`);
+  mkRender();
+  const box = $('#mkplay');
+  box.innerHTML = `<div class="step">Replica ${MK.p + 1} of ${PUZZLES.length} · ${P.name}</div><div class="q-quiz"></div><p class="q-hunt small" style="display:none;margin:12px 0 0"></p>`;
+  $('#mkNext').innerHTML = '';
+  Q.quiz($('.q-quiz', box), { tag: 'Predict', q: P.q, options: P.options, correct: 0, xp: 15, good: P.good, bad: P.bad,
+    onDone: () => { const h = $('.q-hunt', box); h.innerHTML = '👉 ' + P.hunt; h.style.display = 'block'; MK.hunting = true; mkRender(); } });
+}
+function mkStepInit() {
+  MK.step = 0; $('#stepper').style.display = '';
+  $('#stepBtn').textContent = STEPS[0].btn; $('#stepBtn').disabled = false; $('#stepNote').innerHTML = '';
+  $('#stepBtn').onclick = e => {
+    const s = STEPS[MK.step]; s.run(); $('#stepNote').innerHTML = s.note; Q.addXP(5, e.currentTarget);
+    MK.step++;
+    if (MK.step < STEPS.length) { $('#stepBtn').textContent = STEPS[MK.step].btn; return; }
+    $('#stepBtn').disabled = true; $('#stepBtn').textContent = 'Tree built ✓';
+    mklog('Replica A’s tree is built. Root = ' + MK.A.r);
+    setTimeout(() => { $('#stepper').style.display = 'none'; MK.p = 0; mkPuzzle(); }, 1400);
+  };
+}
+const SIZES4 = [
+  { keys: 12, buckets: 4, per: 3, lab: '12 keys' },
+  { keys: 1e6, buckets: 1e3, per: 1e3, lab: '1 million' },
+  { keys: 1e9, buckets: 1e6, per: 1e3, lab: '1 billion' },
+];
+let bigSeen = false;
+function renderSize(i) {
+  const s = SIZES4[i], lv = Math.ceil(Math.log2(s.buckets)), cmp = 1 + 2 * lv;
+  $$('#szSeg button').forEach(b => b.classList.toggle('on', +b.dataset.s === i));
+  $('#szStats').innerHTML = `<div class="stat"><b>${s.buckets.toLocaleString()}</b><span>buckets (${s.per.toLocaleString()} keys each)</span></div>
+    <div class="stat"><b>${lv}</b><span>tree levels below the root</span></div>
+    <div class="stat hi"><b>~${cmp}</b><span>hashes compared to find 1 bad bucket</span></div>
+    <div class="stat lo"><b>${s.keys.toLocaleString()}</b><span>keys a naive scan compares (vs ${s.per.toLocaleString()} sent)</span></div>`;
+}
+$$('#szSeg button').forEach(b => b.onclick = () => {
+  const i = +b.dataset.s; renderSize(i);
+  if (i === 2 && !bigSeen) {
+    bigSeen = true; Q.addXP(5, b);
+    const row = $('#mkFinishRow');
+    if (!row.children.length) {
+      const f = document.createElement('button'); f.className = 'btn primary'; f.textContent = Q.isCleared(4) ? '↻ Replay the three replicas' : 'Finish the stage →';
+      f.onclick = () => { if (!Q.isCleared(4)) { Q.clearStage(4); f.textContent = '↻ Replay the three replicas'; return; } MK.p = 0; mkPuzzle(); $('#mkplay').scrollIntoView({ behavior: Q.reduced ? 'auto' : 'smooth', block: 'start' }); };
+      row.appendChild(f);
+    }
+  }
+});
+Q.onStage(4, () => {
+  mkBuild(); mkPlaceKeys(false); mkRender(); $('#mklog').innerHTML = '<div>12 keys on replica A. Build its Merkle tree, step by step.</div>';
+  mkStepInit();
+});
+
+/* ================= STAGE 5: data-center outage + recall ================= */
+let dcOff = false;
+$('#dcBtn').onclick = async e => {
+  const btn = e.currentTarget; btn.disabled = true;
+  const msg = $('#dcMsg');
+  if (!dcOff) {
+    dcOff = true; $('#dcA').classList.add('off'); $('#dcAst').textContent = 'OFFLINE ✖';
+    msg.innerHTML = '<div>⚡ us-east: power and cooling gone. 3 servers offline at once.</div>';
+    await sleep(700); msg.insertAdjacentHTML('beforeend', '<div style="color:var(--bad)">client → us-east: get(cart:7) … no answer ✖</div>');
+    await sleep(700); $('#dcB').classList.add('serve'); msg.insertAdjacentHTML('beforeend', '<div style="color:var(--good)">client → eu-west: get(cart:7) → v2 ✓ the cart survives</div>');
+    Q.addXP(10, btn); btn.textContent = '↻ Restore us-east';
+  } else {
+    dcOff = false; $('#dcA').classList.remove('off'); $('#dcB').classList.remove('serve'); $('#dcAst').textContent = 'cart:7 = v2 ✓';
+    msg.innerHTML = '<div>us-east is back; it catches up on anything it missed (hints + anti-entropy).</div>';
+    btn.textContent = '⚡ Knock out us-east';
+  }
+  btn.disabled = false;
+};
+const KIT = [
+  { t: 'Every server bumps its own counter and passes its list to a couple of random peers.', a: 'G', why: 'Heartbeat counters spreading peer to peer = gossip.' },
+  { t: 'Home server s1 is down, so the write goes to the next healthy server on the ring instead.', a: 'S', why: 'Using the first W healthy servers instead of insisting on the homes = sloppy quorum.' },
+  { t: 's3 keeps a note “this belongs to s1” and pushes the data to s1 once it’s back.', a: 'H', why: 'A stand-in returning data to its owner = hinted handoff.' },
+  { t: 'Two replicas compare their top hashes, then only explore the branches that disagree.', a: 'M', why: 'Root-down hash comparison = Merkle-tree anti-entropy.' },
+];
+const KN = { G: 'Gossip', S: 'Sloppy quorum', H: 'Hinted handoff', M: 'Merkle tree' };
+function kitInit() {
+  $('#kitFlip').onclick = () => {
+    let sorted = 0;
+    $$('#kitCards .card').forEach((c, i) => setTimeout(() => c.classList.add('down'), i * 120));
+    $('#kitRow').style.display = 'none'; $('#kitSortWrap').style.display = 'block';
+    $('#kitSort').innerHTML = shuffle(KIT).map(s => `<div class="sort-item" data-a="${s.a}"><p>${s.t}</p><div class="row">${Object.keys(KN).map(k => `<button class="opt" data-k="${k}">${KN[k]}</button>`).join('')}</div><div class="explain"></div></div>`).join('');
+    $$('#kitSort .sort-item').forEach(item => {
+      const s = KIT.find(x => x.a === item.dataset.a);
+      $$('.opt', item).forEach(b => b.onclick = () => {
+        $$('.opt', item).forEach(x => x.disabled = true);
+        const ok = b.dataset.k === s.a;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-k="${s.a}"]`, item).classList.add('right');
+        const ex = $('.explain', item); ex.className = 'explain show ' + (ok ? 'good' : 'bad'); ex.textContent = s.why;
+        ok ? Q.addXP(10, b) : Q.loseHeart(b);
+        if (++sorted === KIT.length) setTimeout(() => {
+          $('#kitRow').style.display = ''; $('#kitFlip').textContent = '↻ Flip them back up and try again';
+          $$('#kitCards .card').forEach(c => c.classList.remove('down'));
+          Q.clearStage(5);
+        }, 900);
+      });
+    });
+  };
+}
+Q.onStage(5, kitInit);
+
+/* ================= STAGE 6: boss ================= */
+Q.onStage(6, () => Q.boss($('#boss'), {
+  name: '👾 The Pager Storm',
+  xp: 15,
+  choices: [
+    { k: 'G', label: '📡 Gossip', sub: 'detect the failure' },
+    { k: 'H', label: '🩹 Sloppy + hints', sub: 'cover a short outage' },
+    { k: 'M', label: '🌳 Merkle sync', sub: 'repair drifted replicas' },
+    { k: 'D', label: '🌍 Multi-DC', sub: 'survive a lost site' },
+  ],
+  scenarios: [
+    { e: '🔌', t: 'Silent network card failure', d: 'A server’s network card died. Nobody has noticed — requests keep timing out against it.', a: 'G', why: 'First you have to <i>know</i>. Its heartbeat counter stops rising; gossip spreads that, and once a second node independently agrees, everyone marks it down and routes around it.' },
+    { e: '🔄', t: 'Three-minute reboot during checkout', d: 's4 is restarting for a kernel patch. Cart writes must keep flowing meanwhile.', a: 'H', why: 'A short, temporary outage: a sloppy quorum sends s4’s writes to the next healthy server with a hint, and that server hands them back when s4 returns.' },
+    { e: '💽', t: 'Replaced disk, lost hints', d: 'A server came back with a blank disk for half its keys, and the stand-in holding its hints also crashed.', a: 'M', why: 'Hints can’t help — they’re gone. This is a <b>permanent</b> failure: run anti-entropy, comparing Merkle trees with healthy replicas and copying only the buckets that differ.' },
+    { e: '🌪️', t: 'Hurricane hits us-east', d: 'Power, cooling and network for the entire site are gone for hours.', a: 'D', why: 'Every server in the building is down together, so in-site tricks can’t help. Only copies in <b>another data center</b> keep the data reachable.' },
+    { e: '🕵️', t: '“s7 is dead!” says one server', d: 's2 reports s7 unreachable, but s7 is happily serving everyone else.', a: 'G', why: 'One witness isn’t proof (maybe one broken cable). Gossip only marks s7 down once independent sources agree — here they won’t, so no false alarm.' },
+    { e: '🐢', t: 'Months of silent drift', d: 'An audit suspects a few keys differ between replicas. Copying everything would take days.', a: 'M', why: 'Merkle trees find the few differing buckets with a handful of hash comparisons, then move only those — proportional to the differences, not the data size.' },
+    { e: '🧯', t: 'Strict quorum is blocking writes', d: 'Two of a key’s three home servers are down; every add-to-cart for those keys fails.', a: 'H', why: 'A strict quorum only counts home servers. A sloppy quorum uses the first W healthy servers instead, with hinted handoff to return the data later — at the cost that W + R &gt; N no longer guarantees fresh reads.' },
+  ],
+  outro: 'The pattern: detect (gossip) → cover a short outage (sloppy quorum + hints) → repair lasting damage (Merkle) → survive a lost building (multi-DC).',
+  onDone: () => Q.clearStage(6),
+}));
+
+/* ================= STAGE 7: interview drill ================= */
+Q.onStage(7, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer leans in: <i>"One of the servers in your key-value store just died. Walk me through what happens."</i>',
+  placeholder: 'First, the cluster has to notice…',
+  model: '"First, detection: every node gossips heartbeat counters to a few random peers; if a node’s counter stops rising past a timeout and another node independently confirms it, it’s marked down — no single node’s word, no central master. While it’s down, a sloppy quorum sends its reads and writes to the next healthy servers on the ring, and the stand-in keeps a hint so it can hand the data back when the node returns. That keeps us available, though W + R &gt; N no longer guarantees fresh reads. If the outage is permanent or the hints are lost, anti-entropy repairs the replica: we compare Merkle trees root-down and sync only the buckets that differ. And to survive a whole data center going dark, each key is replicated across data centers."',
+  checks: ['I explained detection: heartbeats + gossip, confirmed by another node', 'I covered temporary failures: sloppy quorum + hinted handoff', 'I covered permanent failures: Merkle-tree anti-entropy syncing only differences', 'I mentioned replicating across data centers for a site outage'],
+  onDone: () => Q.clearStage(7),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

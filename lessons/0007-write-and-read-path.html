@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Write &amp; Read Path</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* ---- lesson-specific: stage 1 ring + node blueprint ---- */
+.ring-sim svg { max-height: 400px; margin: 0 auto; }
+.ring-sim .ringline { fill: none; stroke: var(--line); stroke-width: 4; }
+.ring-sim .nd { cursor: pointer; outline: none; }
+.ring-sim .nd circle { fill: var(--panel); stroke: var(--muted); stroke-width: 2.5; transition: fill .3s, stroke .3s, stroke-width .3s; }
+.ring-sim .nd:hover circle, .ring-sim .nd:focus-visible circle { stroke: var(--accent); stroke-width: 4; }
+.ring-sim .nd text { fill: var(--ink); font: 700 15px var(--mono); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.ring-sim .nd.rep circle { fill: var(--teal-soft); stroke: var(--teal); stroke-width: 4; }
+.ring-sim .nd.coord circle { fill: var(--accent); stroke: var(--accent); }
+.ring-sim .nd.coord text { fill: #fff; }
+.ring-sim .keymark { fill: var(--xp); stroke: var(--panel); stroke-width: 2; }
+.ring-sim .keylab { fill: var(--ink); font: 700 14px var(--mono); }
+.ring-sim .cl rect { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+.ring-sim .cl text { fill: var(--accent); font: 700 15px var(--font); text-anchor: middle; dominant-baseline: central; }
+.ring-sim .hint { fill: var(--muted); font: 600 15px var(--font); text-anchor: middle; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; vertical-align: -1px; margin-right: 5px; }
+.blueprint { margin-top: 14px; border: 2px dashed var(--line); border-radius: 18px; padding: 14px; background: var(--bg); }
+.bp-top { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+.bp-top b { font-size: 15px; }
+.job { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 0 12px 12px 0; padding: 10px 14px; font-weight: 600; margin-bottom: 12px; min-height: 46px; animation: rise .3s; }
+.job small { display: block; font-weight: 500; color: var(--muted); font-size: 12.5px; }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+@media (max-width: 560px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
+.tile { border: 2px solid var(--line); background: var(--panel); border-radius: 12px; padding: 10px 6px; text-align: center; font-weight: 600; font-size: 14px; line-height: 1.25; transition: border-color .2s, background .2s; }
+.tile .ic { display: block; font-size: 22px; margin-bottom: 2px; }
+.tile:hover:not([disabled]) { border-color: var(--accent); }
+.tile.on { border-color: var(--good); background: var(--good-soft); cursor: default; }
+.tile.on::after { content: "✓ installed"; display: block; font-size: 11px; color: var(--good); margin-top: 2px; }
+.tile.no { border-color: var(--bad); animation: shake .4s; }
+
+/* ---- stages 2–3: write pipeline ---- */
+.pipe { position: relative; margin-top: 14px; border: 1px solid var(--line); border-radius: 18px; background: var(--bg); }
+.pipe-client { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; min-height: 50px; }
+.pipe-client .who { font-weight: 700; color: var(--accent); background: var(--accent-soft); padding: 4px 10px; border-radius: 10px; font-size: 14px; }
+.pipe-client .ack { font-family: var(--mono); font-size: 12.5px; font-weight: 600; opacity: 0; transition: opacity .3s; }
+.pipe-client .ack.show { opacity: 1; }
+.pipe-client .ack.ok { color: var(--good); }
+.pipe-grid { display: grid; grid-template-columns: 1fr 18px 1fr 18px 1.1fr; gap: 6px; padding: 12px; align-items: stretch; }
+.parrow { display: grid; place-items: center; color: var(--muted); font-weight: 700; font-size: 18px; }
+@media (max-width: 700px) { .pipe-grid { grid-template-columns: 1fr; } .parrow { height: 16px; transform: rotate(90deg); } }
+.pcol { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px; min-height: 150px; position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 8px; transition: border-color .3s; }
+.ph { display: flex; gap: 8px; align-items: center; }
+.ph .pn { width: 22px; height: 22px; border-radius: 7px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-size: 12px; font-weight: 700; flex: none; }
+.ph b { display: block; font-size: 15px; line-height: 1.15; }
+.ph small { color: var(--muted); font-size: 11.5px; }
+.p-mem .ph .pn { background: var(--teal-soft); color: var(--teal); }
+.tape { list-style: none; margin: 0; padding: 0; font-family: var(--mono); font-size: 12px; display: grid; gap: 4px; max-height: 172px; overflow-y: auto; align-content: start; }
+.tape li { border-left: 3px solid var(--accent); background: var(--bg); padding: 3px 6px; border-radius: 0 6px 6px 0; animation: rise .3s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: opacity .4s, background .3s; }
+.tape li .seq { color: var(--muted); margin-right: 5px; }
+.tape li.pend { visibility: hidden; }
+.tape li.flushed { opacity: .45; border-left-color: var(--muted); }
+.tape li.flushed::after { content: " ✓ in SSTable"; color: var(--muted); font-size: 10.5px; }
+.tape li.replay { background: var(--teal-soft); }
+.none { color: var(--muted); font-size: 12px; font-style: italic; }
+.off-note { display: none; }
+.p-log.off { border-color: var(--bad); }
+.p-log.off .tape { opacity: .2; }
+.p-log.off .off-note { display: block; text-align: center; font-weight: 700; color: var(--bad); background: var(--bad-soft); border-radius: 10px; padding: 8px; font-size: 13px; }
+.cap { position: relative; height: 18px; background: var(--bg-2); border-radius: 6px; overflow: hidden; border: 1px solid var(--line); flex: none; }
+.capfill { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, var(--teal), var(--accent)); transition: width .4s; }
+.cap.full .capfill { background: var(--warn); }
+.caplab { position: absolute; inset: 0; display: grid; place-items: center; font: 600 11px var(--mono); color: var(--ink); }
+.mrows { display: grid; gap: 4px; align-content: start; }
+.mrow { display: flex; justify-content: space-between; gap: 8px; font-family: var(--mono); font-size: 13px; background: var(--teal-soft); border-radius: 8px; padding: 3px 8px; }
+.mrow.fresh { animation: flashrow 1s; }
+@keyframes flashrow { 0%, 30% { background: color-mix(in srgb, var(--xp) 55%, var(--panel)); } }
+.boom { position: absolute; inset: 0; display: none; place-items: center; text-align: center; font-weight: 700; font-size: 17px; color: var(--bad); background: color-mix(in srgb, var(--bad-soft) 88%, transparent); z-index: 2; }
+.p-mem.crashed { border-color: var(--bad); animation: shake .4s; }
+.p-mem.crashed .boom { display: grid; }
+.stack { display: grid; gap: 6px; align-content: start; }
+.sst { border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; background: var(--bg); animation: rise .35s; transition: box-shadow .3s; }
+.sst-h { display: flex; justify-content: space-between; gap: 6px; font-size: 12px; font-weight: 700; color: var(--muted); }
+.sst-rows { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.sst.guard { box-shadow: 0 0 0 3px var(--good); }
+.sst.guard .sst-h span:last-child { color: var(--good); }
+.kv { font-family: var(--mono); font-size: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; white-space: nowrap; transition: background .3s, color .3s, border-color .3s; }
+.flyer { position: absolute; left: 0; top: 0; z-index: 6; pointer-events: none; font: 600 12px var(--mono); background: var(--accent); color: #fff; padding: 3px 8px; border-radius: 8px; white-space: nowrap; box-shadow: var(--shadow); }
+.flyer.teal { background: var(--teal); color: #0b1d1c; }
+.flyer.good { background: var(--good); color: #0b1d12; }
+.flyer.bad { background: var(--bad); }
+.flyer.warn { background: var(--warn); color: #1c1a26; }
+.pipe .simlog, .rp .simlog { border-radius: 0 0 18px 18px; }
+.chiprow { padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.chiprow:empty { display: none; }
+.chiprow .chip:disabled { opacity: .45; cursor: not-allowed; }
+
+/* ---- stage 4: Bloom filter ---- */
+.bloom { margin-top: 14px; border: 1px solid var(--line); border-radius: 18px; padding: 14px; background: var(--bg); }
+.bits { display: grid; grid-template-columns: repeat(16, 1fr); gap: 4px; }
+@media (max-width: 600px) { .bits { grid-template-columns: repeat(8, 1fr); gap: 5px; } }
+.bit { border: 2px solid var(--line); border-radius: 8px; background: var(--panel); text-align: center; padding: 5px 0 2px; transition: background .35s, border-color .35s, transform .25s, box-shadow .25s; }
+.bit .b { display: block; font: 700 18px var(--mono); color: var(--muted); line-height: 1.2; }
+.bit small { display: block; font: 10px var(--mono); color: var(--muted); }
+.bit.on { background: var(--accent); border-color: var(--accent); }
+.bit.on .b, .bit.on small { color: #fff; }
+.bit.probe { box-shadow: 0 0 0 3px var(--xp); transform: translateY(-3px); }
+.bit.hit1 { box-shadow: 0 0 0 3px var(--good); transform: translateY(-3px); }
+.bit.hit0 { box-shadow: 0 0 0 3px var(--bad); transform: translateY(-3px); }
+.bf-calc { margin-top: 12px; min-height: 30px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 14px; }
+.hchip { font: 600 13px var(--mono); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 3px 8px; animation: rise .3s; }
+.bf-set { margin-top: 8px; font-size: 14px; color: var(--muted); }
+.bf-set .kv { margin-left: 4px; }
+.verdict-big { font-weight: 700; padding: 8px 12px; border-radius: 10px; margin-top: 10px; display: none; animation: rise .3s; font-size: 15px; }
+.verdict-big.show { display: block; }
+.verdict-big.no { background: var(--bg-2); }
+.verdict-big.maybe { background: var(--warn-soft); }
+.verdict-big.fp { background: var(--bad-soft); }
+
+/* ---- stage 5: read path ---- */
+.rp { position: relative; margin-top: 14px; border: 1px solid var(--line); border-radius: 18px; background: var(--bg); }
+.rp-in { padding: 12px; display: grid; gap: 8px; }
+.rp-top { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; align-items: center; }
+.rp-top .who { font-weight: 700; color: var(--accent); background: var(--accent-soft); padding: 4px 10px; border-radius: 10px; font-size: 14px; }
+.rp-top .q { font-family: var(--mono); font-weight: 600; margin-left: 6px; }
+.diskctr { font-size: 13px; color: var(--muted); font-weight: 600; }
+.diskctr b { font-family: var(--mono); color: var(--ink); font-size: 15px; }
+.diskctr.bump b { color: var(--warn); }
+.zone { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-top: 2px; }
+.tier { border: 2px solid var(--line); border-radius: 12px; background: var(--panel); padding: 8px 10px; transition: opacity .35s, border-color .3s, background .3s; }
+.tier-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; font-weight: 700; }
+.mini { display: inline-grid; grid-template-columns: repeat(16, 9px); gap: 2px; }
+.mini i { height: 12px; border-radius: 2px; background: var(--bg-2); border: 1px solid var(--line); transition: outline-color .2s; outline: 2px solid transparent; outline-offset: 1px; }
+.mini i.on { background: var(--accent); border-color: var(--accent); }
+.mini i.p0 { outline-color: var(--bad); }
+.mini i.p1 { outline-color: var(--good); }
+.verdict { margin-left: auto; font-size: 12.5px; font-weight: 700; }
+.verdict.no { color: var(--muted); }
+.verdict.maybe { color: var(--warn); }
+.verdict.hit { color: var(--good); }
+.verdict.fp { color: var(--bad); }
+.tier.skipped { opacity: .45; }
+.tier.opened { border-color: var(--warn); }
+.tier.found { border-color: var(--good); background: var(--good-soft); }
+.keys { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; min-height: 22px; align-items: center; }
+.sealed { font-size: 12px; color: var(--muted); }
+.kv.match { background: var(--good); color: #fff; border-color: var(--good); }
+.rp-res { font-family: var(--mono); font-weight: 600; font-size: 14px; min-height: 22px; }
+.rp-res.good { color: var(--good); }
+.rp-res.nil { color: var(--warn); }
+.rp-free { display: none; margin-top: 12px; }
+.rp-free.on { display: block; }
+.rp-free form { display: flex; gap: 8px; flex-wrap: wrap; }
+.rp-free input, .bf-free input { font: 15px var(--mono); padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); width: 130px; }
+
+/* ---- recall: tap-in-order ---- */
+.order { margin-top: 18px; border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.order .tag { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); display: block; margin-bottom: 4px; }
+.order .q { font-weight: 600; margin: 0 0 10px; }
+.oslots { display: grid; gap: 6px; margin-bottom: 12px; }
+.oslot { border: 2px dashed var(--line); border-radius: 10px; padding: 7px 12px; min-height: 40px; font-size: 15px; color: var(--muted); display: flex; gap: 8px; align-items: center; }
+.oslot .n { font: 700 13px var(--mono); }
+.oslot.filled { border-style: solid; border-color: var(--good); background: var(--good-soft); color: var(--ink); animation: rise .3s; }
+.opool { display: flex; flex-wrap: wrap; gap: 8px; }
+.opool .opt { padding: 8px 12px; font-size: 14px; }
+.opool .opt.used { display: none; }
+.bf-free { display: none; margin-top: 14px; }
+.bf-free.on { display: block; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 6.7 · Design a Key-Value Store</div>
+    <h1>The Write &amp; Read Path</h1>
+    <p class="lede">Zoom into one node. Follow a write from the network down to the disk, pull the plug mid-flight, then chase a read through memory, a Bloom filter and a stack of files.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can draw the write path (<b>commit log → memtable → SSTable</b>) and the read path (<b>memtable → Bloom filter → SSTable</b>) from memory — and say exactly what breaks if any step is skipped.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Every node, same job</h2><div class="sub">The whole architecture in one picture</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>First, a 60-second recap of quests 6.2–6.6 as one diagram.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noopener">[1]</a> Clients talk to the store with just two calls: <code>get(key)</code> and <code>put(key, value)</code>. Whichever node the client reaches becomes the <b>coordinator</b> — the node that acts as a middleman (a <i>proxy</i>) between the client and the store: it forwards the request to the replicas and sends the answer back.</p>
+      <p>Nodes sit on a <b>ring</b> (consistent hashing), each key is copied to several nodes, and there is no boss node — the system is fully <b>decentralized</b>, so adding or moving nodes can happen automatically. <b>Tap any node</b> to make it the coordinator for <code>put(cat, 🐱)</code>.</p>
+      <div class="sim ring-sim" id="ringSim">
+        <svg viewBox="30 2 380 348" role="img" aria-label="Eight nodes on a hash ring, a client, and the key cat">
+          <circle class="ringline" cx="220" cy="190" r="120"/>
+          <g id="ringKey"></g>
+          <g id="ringNodes"></g>
+          <g class="cl" id="ringClient"><rect x="36" y="8" width="104" height="40" rx="12"/><text x="88" y="28">💻 client</text></g>
+          <text class="hint" x="220" y="195" id="ringHint">tap a node</text>
+          <g id="ringPk"></g>
+        </svg>
+        <div class="sim-bar"><span class="legend"><span><i style="background:var(--accent)"></i>coordinator</span><span><i style="background:var(--teal)"></i>replica of cat</span><span><i style="background:var(--xp)"></i>cat's spot on the ring</span></span></div>
+        <div class="simlog" id="ringLog"><div>Key <b>cat</b> hashes to the ◆ spot. Its 3 replicas are the first 3 nodes clockwise: n2, n3, n4.</div></div>
+      </div>
+      <ul class="checklist" id="s1goals">
+        <li data-g="a"><span class="box">✓</span><span>Send <code>put(cat)</code> through one node</span></li>
+        <li data-g="b"><span class="box">✓</span><span>…then through a <i>different</i> node — does it still work?</span></li>
+      </ul>
+      <div id="bpWrap" style="display:none">
+        <p style="margin-top:18px">Any node can coordinate because <b>every node carries the same set of jobs</b> — the Dynamo paper calls this <i>symmetry</i>.<a class="cite" href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf" target="_blank" rel="noopener">[2]</a> No special node means no <b>single point of failure</b> (one machine whose death takes everything down). Install each job into the node 👇</p>
+        <div class="blueprint" id="bp"></div>
+      </div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>The write path</h2><div class="sub">Commit log → memtable → SSTable</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Now zoom into the <b>storage engine</b> of one node. The book's write path is based on Apache Cassandra's.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noopener">[1]</a><a class="cite" href="https://cassandra.apache.org/doc/latest/cassandra/architecture/storage-engine.html" target="_blank" rel="noopener">[3]</a> When a <code>put</code> lands on a node:</p>
+      <ol>
+        <li><b>Commit log</b> — the write is added to the end of a log file on disk. It's <i>append-only</i>: nothing is ever edited, new lines only go at the end.</li>
+        <li><b>Memtable</b> — the write goes into a table in memory (the "memory cache"), kept sorted by key. Now the client gets its <code>OK</code>.</li>
+        <li><b>Flush</b> — when the memtable is full (hits a size threshold), it's written to disk in one go as an <b>SSTable</b> — a <i>sorted-string table</i>: a file of <code>&lt;key, value&gt;</code> pairs sorted by key. Then a fresh, empty memtable takes over.</li>
+      </ol>
+      <p><b>Why the log first?</b> Memory is fast but forgets everything when the power dies. The log is the safety net: after a crash, the node re-reads it and rebuilds the memtable. <b>Why is it fast?</b> Every disk write is an <i>append</i> — written at the end of a file, one after another (sequential) — never a hunt for an old record to change. Fire some writes 👇</p>
+      <div id="pipe1"></div>
+      <ul class="checklist" id="s2goals">
+        <li data-g="w"><span class="box">✓</span><span>Send a write — watch it hit the log <i>before</i> memory</span></li>
+        <li data-g="o"><span class="box">✓</span><span>Overwrite a key that's in the memtable (tap <code>cat</code> twice) — compare the log and the memtable</span></li>
+        <li data-g="f"><span class="box">✓</span><span>Fill the memtable to 4 keys and trigger a flush</span></li>
+      </ul>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Crash test</h2><div class="sub">Predict, then pull the plug</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Four rounds on a fresh node. Each time, <b>predict</b> what happens, then watch the machine do it. Right calls earn XP; wrong ones cost a heart.</p>
+      <div id="pipe2"></div>
+      <div class="challenge" id="crashRounds"></div>
+      <div class="callout warn" id="syncCaveat" style="display:none"><b>Honest caveat — "in the log" isn't always "on the disk" yet.</b> Operating systems buffer file writes in memory. Cassandra's default (<code>commitlog_sync: periodic</code>) acknowledges the write right away and forces the log to disk every 10 seconds.<a class="cite" href="https://cassandra.apache.org/doc/latest/cassandra/managing/configuration/cass_yaml_file.html" target="_blank" rel="noopener">[5]</a> So one node crashing can lose the last few seconds — the copies on other replicas (quest 6.3) cover that. The stricter <code>batch</code>/<code>group</code> modes wait for the disk before saying OK: safer, slower.</div>
+      <div id="s3order"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>The Bloom filter</h2><div class="sub">A tiny "definitely not / maybe" oracle</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Reads have a problem. After a few flushes, a key could be in <i>any</i> of many SSTables — and every file you open is a slow disk read. You want to skip the files that definitely don't have the key.</p>
+      <p>A <b>Bloom filter</b> does exactly that.<a class="cite" href="https://dl.acm.org/doi/10.1145/362686.362692" target="_blank" rel="noopener">[4]</a> It's a short row of <b>bits</b> (all 0 at the start) plus a few <b>hash functions</b> — functions that turn a key into a number, here a bit position 0–15.</p>
+      <ul>
+        <li><b>Insert</b> a key: compute its positions, set those bits to 1.</li>
+        <li><b>Check</b> a key: if <i>any</i> of its positions is 0 → <b>definitely not</b> in the set. If <i>all</i> are 1 → <b>maybe</b> (other keys could have set those bits).</li>
+      </ul>
+      <p>Each SSTable gets its own filter, built when the file is written.<a class="cite" href="https://cassandra.apache.org/doc/latest/cassandra/managing/operating/bloom_filters.html" target="_blank" rel="noopener">[6]</a> This one uses 16 bits and 2 hash functions. Insert three keys:</p>
+      <div class="bloom" id="bloom">
+        <div class="bits" id="bits"></div>
+        <div class="bf-calc" id="bfCalc"><span class="muted small">h₁ and h₂ will show here</span></div>
+        <div class="bf-set" id="bfSet">Inserted: <span class="none">nothing yet</span></div>
+        <div class="row" id="bfIns" style="margin-top:12px"></div>
+        <div class="verdict-big" id="bfVerdict"></div>
+      </div>
+      <div class="challenge" id="bfRounds"></div>
+      <div id="s4quiz"></div>
+      <div class="bf-free" id="bfFree">
+        <div class="callout tip"><b>🧪 Free play.</b> Type any key. Insert lots of them and watch the false positives climb — that's why real filters use many more bits per key.</div>
+        <form class="row" id="bfForm" autocomplete="off"><input id="bfIn" placeholder="any key" aria-label="Key" maxlength="12"><button class="btn" type="submit" data-a="q">🔍 Check</button><button class="btn" type="button" id="bfInsFree">➕ Insert</button><button class="btn" type="button" id="bfReset">↻ Clear bits</button></form>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>The read path</h2><div class="sub">Chase a get() through the node</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Put it together. The book's read path:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noopener">[1]</a></p>
+      <ol>
+        <li>Check the <b>memtable</b>. Key there? Return it — done.</li>
+        <li>Not there? Ask each SSTable's <b>Bloom filter</b>, newest file first.</li>
+        <li>Open only the files that say <b>maybe</b>, and look for the key.</li>
+        <li>Return the result to the client.</li>
+      </ol>
+      <p>This node has a memtable and three SSTables, each with its own Bloom filter (the little bit strip). Watch the <b>disk reads</b> counter — that's what we're trying to keep low.</p>
+      <div class="rp" id="rp"></div>
+      <div class="challenge" id="readRounds"></div>
+      <div class="callout warn" id="readCaveat" style="display:none"><b>Honest caveat — real Cassandra merges.</b> The book's read path stops at the first file that has the key, newest first (the simple model in DDIA, too<a class="cite" href="https://dataintensive.net/" target="_blank" rel="noopener">[7]</a>). Real Cassandra can store one row's columns across several files, so it <i>merges</i> the pieces from the memtable and every "maybe" SSTable, keeping the newest timestamp for each.<a class="cite" href="https://cassandra.apache.org/doc/latest/cassandra/managing/operating/bloom_filters.html" target="_blank" rel="noopener">[6]</a> Same idea, more bookkeeping — and the reason background <b>compaction</b> keeps the file count low.</div>
+      <div id="s5order"></div>
+      <div class="rp-free" id="rpFree">
+        <div class="callout tip"><b>🧪 Free play.</b> Chase any key. Try <code>yak</code>, <code>owl</code>, <code>elk</code> or a key that isn't stored, like <code>hen</code>.</div>
+        <form class="row" id="rpForm" autocomplete="off"><input id="rpIn" placeholder="key" aria-label="Key to get" maxlength="12"><button class="btn primary" type="submit">get(key)</button></form>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Boss: The Data Gremlin</h2><div class="sub">Where does it go next? What breaks?</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Eight situations inside one node. For each, name the piece that's responsible — or the one that's missing.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 7 ================= -->
+  <section class="stage" data-stage="7" id="s7">
+    <div class="stage-h"><div class="num">7</div><div><h2>Say it like a senior</h2><div class="sub">The interview answer, in your words</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <p class="small muted" style="margin-top:16px">🔜 <b>Next up — the BOSS quest, "Design It Live":</b> a full mock interview that interleaves everything from 6.1 to 6.7.</p>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 6</a> — the "System architecture diagram", "Write path" and "Read path" sections, then the chapter summary table. For the deeper "why", read the <b>SSTables and LSM-Trees</b> section of chapter 3 in Kleppmann's <a href="https://dataintensive.net/" target="_blank" rel="noopener"><i>Designing Data-Intensive Applications</i></a>.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note — updates, deletes and compaction</h4>
+      Because SSTables are <b>immutable</b> (never edited after they're written)<a class="cite" href="https://cassandra.apache.org/doc/latest/cassandra/architecture/storage-engine.html" target="_blank" rel="noopener">[3]</a>, an update just writes a newer copy of the key into a newer file, and a delete writes a <b>tombstone</b> — a time-stamped "this key is deleted" marker.<a class="cite" href="https://cassandra.apache.org/doc/latest/cassandra/managing/operating/compaction/tombstones.html" target="_blank" rel="noopener">[8]</a> Old copies pile up, so a background job called <b>compaction</b> merges SSTables, keeps only the newest version of each key and eventually drops tombstones (after a grace period, default 10 days, so every replica hears about the delete). That's the LSM-tree family: cheap writes, paid for with background merging.<a class="cite" href="https://dataintensive.net/" target="_blank" rel="noopener">[7]</a>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat) — e.g. <i>"why not write straight into an SSTable and skip the memtable?"</i> or <i>"how many bits does a Bloom filter need for a 1% false-positive rate?"</i>. Follow-up questions are part of the quest.
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 6 "Design a Key-Value Store" (ByteByteGo).</li>
+        <li>DeCandia et al., "Dynamo: Amazon's Highly Available Key-value Store", SOSP 2007 (§2.3 "Symmetry").</li>
+        <li>Apache Cassandra docs, "Storage Engine" (commit log, memtables, SSTables).</li>
+        <li>Burton H. Bloom, "Space/Time Trade-offs in Hash Coding with Allowable Errors", <i>Communications of the ACM</i> 13(7), 1970.</li>
+        <li>Apache Cassandra docs, "cassandra.yaml" (<code>commitlog_sync</code>, <code>commitlog_sync_period</code>).</li>
+        <li>Apache Cassandra docs, "Bloom Filters".</li>
+        <li>Martin Kleppmann, <i>Designing Data-Intensive Applications</i>, Ch. 3 "SSTables and LSM-Trees", O'Reilly 2017.</li>
+        <li>Apache Cassandra docs, "Tombstones".</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0007',
+  winTitle: 'Paths mapped',
+  badge: '🛤️ Badge: Pathfinder',
+  cheatsheet: '../reference/kv-store-cap-cheatsheet.html',
+});
+const { sleep, shuffle, esc } = Q;
+const wait = ms => sleep(Q.reduced ? 0 : ms);
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ---------- shared helpers ---------- */
+// Fly a little label from one element to another. `host` must be position:relative.
+function fly(host, fromEl, toEl, html, cls = '') {
+  if (Q.reduced || !fromEl || !toEl) return Promise.resolve();
+  const hr = host.getBoundingClientRect(), a = fromEl.getBoundingClientRect(), b = toEl.getBoundingClientRect();
+  const t = document.createElement('div'); t.className = 'flyer ' + cls; t.innerHTML = html; host.appendChild(t);
+  const tw = t.offsetWidth, th = t.offsetHeight;
+  const x1 = a.left - hr.left + a.width / 2 - tw / 2, y1 = a.top - hr.top + a.height / 2 - th / 2;
+  const x2 = b.left - hr.left + b.width / 2 - tw / 2, y2 = b.top - hr.top + b.height / 2 - th / 2;
+  const an = t.animate([
+    { transform: `translate(${x1}px,${y1}px) scale(.85)`, opacity: 0 },
+    { opacity: 1, offset: .15 },
+    { transform: `translate(${x2}px,${y2}px) scale(1)`, opacity: 1 }
+  ], { duration: 620, easing: 'cubic-bezier(.45,.05,.25,1)' });
+  return an.finished.then(() => t.remove(), () => t.remove());
+}
+function logTo(el, html, cls) { el.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); el.scrollTop = el.scrollHeight; }
+function checklist(ul, onAll) {
+  const done = new Set();
+  return g => {
+    if (done.has(g)) return;
+    done.add(g);
+    const li = $(`[data-g="${g}"]`, ul); li.classList.add('done'); Q.addXP(10, li);
+    if (done.size === $$('li', ul).length) onAll();
+  };
+}
+// Predict-then-watch rounds. Each round: { title, setup?, options, correct, act, explain }
+function rounds(box, list, { xp = 15, onPick, onAll, onReplay } = {}) {
+  let i = 0, busy = false;
+  async function show() {
+    const c = list[i];
+    box.innerHTML = `<div class="step">Round ${i + 1} of ${list.length}</div><h3>${c.title}</h3><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+    busy = true; if (c.setup) await c.setup(); busy = false;
+    const opts = $('.opts', box);
+    shuffle(c.options.map((o, k) => ({ o, k }))).forEach(({ o, k }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = k;
+      b.onclick = async () => {
+        if (busy) return; busy = true;
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        b.classList.add('picked');
+        if (onPick) onPick(o);
+        await c.act();
+        const ok = k === c.correct;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-i="${c.correct}"]`, opts).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + c.explain;
+        ok ? Q.addXP(xp, b) : Q.loseHeart(b);
+        if (c.after) c.after(ok);
+        const nx = document.createElement('button'); nx.className = 'btn primary';
+        nx.textContent = i < list.length - 1 ? 'Next round →' : 'Finish the rounds →';
+        nx.onclick = () => {
+          i++; busy = false;
+          if (i < list.length) return show();
+          box.innerHTML = `<div class="row"><button class="btn q-again">↻ Replay the ${list.length} rounds</button></div>`;
+          $('.q-again', box).onclick = () => { i = 0; if (onReplay) onReplay(); show(); };
+          if (onAll) onAll();
+        };
+        $('.row', box).appendChild(nx);
+      };
+      opts.appendChild(b);
+    });
+  }
+  show();
+}
+// Recall: tap the steps in order (one decoy). First mistake costs a heart; a clean run earns XP.
+function orderGame(mount, { q, steps, decoy, why, xp = 15, onDone }) {
+  if (mount.dataset.on) return; mount.dataset.on = '1';
+  let next = 0, mistakes = 0;
+  mount.innerHTML = `<div class="order"><span class="tag">Recall — from memory</span><p class="q">${q}</p>
+    <div class="oslots">${steps.map((_, k) => `<div class="oslot"><span class="n">${k + 1}.</span><span>…</span></div>`).join('')}</div>
+    <div class="opool"></div><div class="explain"></div></div>`;
+  const pool = $('.opool', mount), slots = $$('.oslot', mount), ex = $('.explain', mount);
+  shuffle([...steps.map((s, k) => ({ s, k })), { s: decoy, k: -1 }]).forEach(({ s, k }) => {
+    const b = document.createElement('button'); b.className = 'opt'; b.textContent = s;
+    b.onclick = () => {
+      if (k === next) {
+        b.classList.add('used'); b.disabled = true;
+        slots[next].classList.add('filled'); slots[next].lastElementChild.textContent = s;
+        next++;
+        if (next === steps.length) {
+          $$('.opt', pool).forEach(x => x.disabled = true);
+          ex.className = 'explain show good'; ex.innerHTML = (mistakes ? '<b>Got there.</b> ' : '<b>Flawless.</b> ') + why;
+          if (!mistakes) Q.addXP(xp, b); else Q.toast('done', b, 'practice');
+          if (onDone) setTimeout(onDone, 900);
+        }
+      } else {
+        b.classList.remove('wrong'); void b.offsetWidth; b.classList.add('wrong');
+        setTimeout(() => b.classList.remove('wrong'), 450);
+        ex.className = 'explain show bad';
+        ex.innerHTML = k === -1 ? `<b>That's the trap.</b> “${esc(s)}” isn't a step at all.` : `<b>Not yet.</b> “${esc(s)}” comes later. What happens before it?`;
+        if (!mistakes++) Q.loseHeart(b);
+      }
+    };
+    pool.appendChild(b);
+  });
+}
+
+/* ================= STAGE 1: ring + node blueprint ================= */
+const RING = { cx: 220, cy: 190, r: 120, n: 8 };
+const nodePos = i => { const a = (-90 + i * 45) * Math.PI / 180; return [RING.cx + RING.r * Math.cos(a), RING.cy + RING.r * Math.sin(a)]; };
+const KEY_ANGLE = (-90 + 1.5 * 45) * Math.PI / 180;
+const REPLICAS = [2, 3, 4];
+const CLIENT = [88, 28];
+function ringPacket(from, to, { label = '', color = 'var(--accent)' } = {}) {
+  const c = document.createElementNS(NS, 'circle'); c.setAttribute('r', 8); c.style.fill = color;
+  const tx = document.createElementNS(NS, 'text'); tx.setAttribute('text-anchor', 'middle'); tx.style.fill = color; tx.style.font = '700 12px "JetBrains Mono", monospace'; tx.textContent = label;
+  $('#ringPk').append(c, tx);
+  const dur = Q.reduced ? 1 : 560;
+  return new Promise(res => {
+    const t0 = performance.now();
+    const frame = now => {
+      const p = Math.min(1, (now - t0) / dur), k = p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+      const x = from[0] + (to[0] - from[0]) * k, y = from[1] + (to[1] - from[1]) * k;
+      c.setAttribute('cx', x); c.setAttribute('cy', y); tx.setAttribute('x', x); tx.setAttribute('y', y - 13);
+      if (p < 1) requestAnimationFrame(frame); else { c.remove(); tx.remove(); res(); }
+    };
+    requestAnimationFrame(frame);
+  });
+}
+let ringBusy = false;
+const coordsUsed = new Set();
+const s1goal = checklist($('#s1goals'), () => setTimeout(showBlueprint, 500));
+async function coordinate(i) {
+  if (ringBusy) return; ringBusy = true;
+  const log = $('#ringLog');
+  $('#ringHint').textContent = '';
+  $$('#ringNodes .nd').forEach(g => g.classList.remove('coord'));
+  const g = $(`#ringNodes .nd[data-i="${i}"]`); g.classList.add('coord');
+  const me = nodePos(i);
+  logTo(log, `n${i} is the coordinator → forwards put(cat) to replicas n2, n3, n4${REPLICAS.includes(i) ? ` (n${i} is one of them, so it also stores it)` : ''}`);
+  await ringPacket(CLIENT, me, { label: 'put' });
+  await Promise.all(REPLICAS.filter(r => r !== i).map(async r => {
+    await ringPacket(me, nodePos(r), { label: 'cat', color: 'var(--teal)' });
+    await ringPacket(nodePos(r), me, { label: 'ack', color: 'var(--good)' });
+  }));
+  await ringPacket(me, CLIENT, { label: 'OK', color: 'var(--good)' });
+  logTo(log, `✓ client got OK via n${i}`, 'g');
+  coordsUsed.add(i);
+  s1goal('a');
+  if (coordsUsed.size >= 2) { s1goal('b'); logTo(log, 'Different entry point, same result: any node can coordinate.', 'g'); }
+  ringBusy = false;
+}
+function buildRing() {
+  const [kx, ky] = [RING.cx + RING.r * Math.cos(KEY_ANGLE), RING.cy + RING.r * Math.sin(KEY_ANGLE)];
+  $('#ringKey').innerHTML = `<rect class="keymark" x="${kx - 8}" y="${ky - 8}" width="16" height="16" transform="rotate(45 ${kx} ${ky})"/><text class="keylab" x="${kx + 14}" y="${ky - 10}">cat</text>`;
+  $('#ringNodes').innerHTML = Array.from({ length: RING.n }, (_, i) => {
+    const [x, y] = nodePos(i);
+    return `<g class="nd${REPLICAS.includes(i) ? ' rep' : ''}" data-i="${i}" tabindex="0" role="button" aria-label="Make n${i} the coordinator"><circle cx="${x}" cy="${y}" r="25"/><text x="${x}" y="${y}">n${i}</text></g>`;
+  }).join('');
+  $$('#ringNodes .nd').forEach(g => {
+    g.addEventListener('click', () => coordinate(+g.dataset.i));
+    g.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); coordinate(+g.dataset.i); } });
+  });
+}
+const JOBS = [
+  { k: 'api', ic: '🔌', name: 'Client API', job: 'Receive get(key) and put(key, value) from clients', q: 'this quest' },
+  { k: 'fd', ic: '💓', name: 'Failure detection', job: 'Notice that a neighbour has stopped answering', q: 'gossip, quest 6.6' },
+  { k: 'cr', ic: '⚖️', name: 'Conflict resolution', job: 'Two replicas hold different versions — sort it out', q: 'vector clocks, quest 6.5' },
+  { k: 'fr', ic: '🩹', name: 'Failure repair', job: 'A node is back after downtime — bring its data up to date', q: 'hinted handoff & Merkle trees, quest 6.6' },
+  { k: 'rep', ic: '📑', name: 'Replication', job: 'Copy each write to the next N nodes on the ring', q: 'quest 6.3' },
+  { k: 'se', ic: '💾', name: 'Storage engine', job: 'Actually save the bytes in memory and on disk', q: 'the rest of this quest!' },
+];
+function showBlueprint() {
+  const wrap = $('#bpWrap'); if (wrap.style.display !== 'none') return;
+  wrap.style.display = 'block';
+  const order = shuffle(JOBS); let j = 0, missed = false;
+  const bp = $('#bp');
+  bp.innerHTML = `<div class="bp-top"><b>🖥️ Node blueprint</b><span class="small muted q-cnt">0 / 6 installed</span></div><div class="job"></div>
+    <div class="tiles">${JOBS.map(x => `<button class="tile" data-k="${x.k}"><span class="ic">${x.ic}</span>${x.name}</button>`).join('')}</div>`;
+  const showJob = () => { $('.job', bp).innerHTML = `Job: ${order[j].job}<small>Which part of the node does this?</small>`; };
+  showJob();
+  $$('.tile', bp).forEach(t => t.onclick = () => {
+    if (t.classList.contains('on') || j >= order.length) return;
+    if (t.dataset.k !== order[j].k) { missed = true; t.classList.remove('no'); void t.offsetWidth; t.classList.add('no'); Q.toast('not that one', t, 'practice'); return; }
+    t.classList.add('on'); t.disabled = true;
+    missed ? Q.toast('✓', t, 'practice') : Q.addXP(5, t);
+    missed = false; j++;
+    $('.q-cnt', bp).textContent = `${j} / 6 installed`;
+    if (j < order.length) showJob();
+    else {
+      $('.job', bp).innerHTML = `✅ All six jobs installed — and <b>every</b> node on the ring has this same blueprint.<small>The last one, the storage engine, is what the rest of this quest zooms into.</small>`;
+      setTimeout(stage1Quiz, 600);
+    }
+  });
+}
+function stage1Quiz() {
+  if ($('#s1quiz').children.length) return;
+  Q.quiz($('#s1quiz'), {
+    q: 'Why does this design have no single point of failure?',
+    options: ['Every node can do every job', 'A master node backs up others', 'Clients cache every value they read'],
+    correct: 0,
+    good: 'If any node dies, any other node can take the client\'s request and do the same work. Nothing is special, so nothing is irreplaceable.',
+    bad: 'There is no master — that would <i>be</i> a single point of failure. The trick is symmetry: every node can do every job, so losing one never stops the system.',
+    onDone: () => setTimeout(() => Q.clearStage(1), 900),
+  });
+}
+Q.onStage(1, () => {
+  buildRing();
+  if (Q.isCleared(1)) { $$('#s1goals li').forEach(li => li.classList.add('done')); }
+});
+
+/* ================= STAGES 2–3: write-path pipeline ================= */
+function Pipe(root, { cap = 4, onEvent = () => {} } = {}) {
+  root.className = 'pipe';
+  root.innerHTML = `
+    <div class="pipe-client"><span class="who">💻 client</span><span class="ack" aria-live="polite"></span></div>
+    <div class="chiprow"></div>
+    <div class="pipe-grid">
+      <div class="pcol p-log"><div class="ph"><span class="pn">1</span><div><b>Commit log</b><small>💾 disk · append-only</small></div></div><div class="off-note">⛔ commit log switched off</div><ol class="tape"></ol></div>
+      <div class="parrow" aria-hidden="true">→</div>
+      <div class="pcol p-mem"><div class="ph"><span class="pn">2</span><div><b>Memtable</b><small>⚡ RAM · sorted by key</small></div></div><div class="cap"><div class="capfill"></div><span class="caplab"></span></div><div class="mrows"></div><div class="boom">💥 power lost<br>RAM wiped</div></div>
+      <div class="parrow" aria-hidden="true">→</div>
+      <div class="pcol p-sst"><div class="ph"><span class="pn">3</span><div><b>SSTables</b><small>💾 disk · sorted · immutable</small></div></div><div class="stack"></div></div>
+    </div>
+    <div class="simlog"></div>`;
+  const S = { log: [], mem: new Map(), ssts: [], logOn: true, seq: 0 };
+  const el = { tape: $('.tape', root), mem: $('.p-mem', root), rows: $('.mrows', root), cap: $('.cap', root), stack: $('.stack', root), log: $('.p-log', root), who: $('.who', root), ack: $('.ack', root), slog: $('.simlog', root) };
+  let fresh = null, ackT = 0;
+  const say = (h, c) => logTo(el.slog, h, c);
+  function render() {
+    el.log.classList.toggle('off', !S.logOn);
+    el.tape.innerHTML = S.log.length ? S.log.map(e => `<li class="${e.pend ? 'pend' : ''}${e.flushed ? ' flushed' : ''}${e.replay ? ' replay' : ''}"><span class="seq">#${e.n}</span>put ${esc(e.k)}=${e.v}</li>`).join('') : '<li class="none" style="border:0;background:none">empty</li>';
+    el.tape.scrollTop = el.tape.scrollHeight;
+    const keys = [...S.mem.keys()].sort();
+    el.rows.innerHTML = keys.length ? keys.map(k => `<div class="mrow${k === fresh ? ' fresh' : ''}" data-k="${esc(k)}"><b>${esc(k)}</b><span>${S.mem.get(k)}</span></div>`).join('') : '<div class="none">empty</div>';
+    $('.capfill', root).style.width = (S.mem.size / cap * 100) + '%';
+    $('.caplab', root).textContent = `${S.mem.size} / ${cap} keys before flush`;
+    el.cap.classList.toggle('full', S.mem.size >= cap);
+    el.stack.innerHTML = S.ssts.length ? S.ssts.slice().reverse().map(t => `<div class="sst${t.guard ? ' guard' : ''}" data-id="${t.id}"><div class="sst-h"><span>SSTable-${t.id}${t.id === S.ssts.length ? ' · newest' : ''}</span><span>${t.guard ? '🔒 untouched' : '🔒'}</span></div><div class="sst-rows">${t.rows.map(([k, v]) => `<span class="kv">${esc(k)} ${v}</span>`).join('')}</div></div>`).join('') : '<div class="none">no files yet</div>';
+    fresh = null;
+  }
+  function ack(text, ok = true) {
+    el.ack.textContent = text; el.ack.className = 'ack show ' + (ok ? 'ok' : '');
+    clearTimeout(ackT); ackT = setTimeout(() => el.ack.classList.remove('show'), 1800);
+  }
+  async function flush() {
+    const rows = [...S.mem.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1);
+    say(`📦 memtable reached ${cap} keys → flush: write them to disk, sorted, as SSTable-${S.ssts.length + 1}`, 'w');
+    await wait(350);
+    S.ssts.forEach(t => t.guard = false);
+    const t = { id: S.ssts.length + 1, rows, pending: true };
+    await fly(root, el.rows, el.stack, `${rows.length} keys, sorted ↓`, 'warn');
+    delete t.pending; S.ssts.push(t);
+    S.mem.clear();
+    S.log.forEach(e => e.flushed = true);
+    render();
+    say(`✓ SSTable-${t.id} written (sequential write). Memtable empty again. Log entries up to here are now safe to recycle.`, 'g');
+    onEvent('flush');
+  }
+  async function write(k, v, fromEl) {
+    const src = fromEl || el.who;
+    const existed = S.mem.has(k);
+    let from = src;
+    if (S.logOn) {
+      const e = { n: ++S.seq, k, v, pend: true };
+      S.log.push(e); render();
+      const li = el.tape.lastElementChild;
+      await fly(root, src, li, `put ${esc(k)}=${v}`);
+      e.pend = false; render();
+      say(`① appended #${e.n} to the commit log (end of file, no seeking)`);
+      from = el.tape.lastElementChild;
+      await wait(150);
+    } else {
+      say(`① ⛔ no commit log — straight to memory`, 'w');
+    }
+    const target = existed ? $(`.mrow[data-k="${CSS.escape(k)}"]`, el.rows) : el.rows;
+    await fly(root, from, target, `${esc(k)}=${v}`, 'teal');
+    const old = S.mem.get(k);
+    S.mem.set(k, v); fresh = k; render();
+    say(existed ? `② memtable: ${esc(k)} ${old} → ${v} (overwritten in RAM; the log still has both lines)` : `② memtable: inserted ${esc(k)} in sorted position`);
+    ack(`OK ✓ put(${k})`);
+    onEvent(existed ? 'overwrite' : 'write', k);
+    if (S.mem.size >= cap) { await wait(300); await flush(); }
+  }
+  async function crash() {
+    say('💥 CRASH — the process dies; everything in RAM is gone', 'e');
+    el.mem.classList.add('crashed');
+    await wait(900);
+    S.mem.clear(); render();
+    await wait(500);
+    el.mem.classList.remove('crashed');
+    onEvent('crash');
+  }
+  async function replay() {
+    say('🔄 restarting… rebuilding the memtable from the commit log');
+    await wait(300);
+    if (!S.logOn) { say('✖ there is no commit log to replay. Those writes are gone — even though the client was told OK.', 'e'); return; }
+    const todo = S.log.filter(e => !e.flushed);
+    if (!todo.length) { say('nothing to replay (everything was already flushed)'); return; }
+    for (const e of todo) {
+      e.replay = true; render();
+      const li = el.tape.children[S.log.indexOf(e)];
+      await fly(root, li, el.rows, `${esc(e.k)}=${e.v}`, 'teal');
+      S.mem.set(e.k, e.v); fresh = e.k; render();
+      await wait(120);
+    }
+    S.log.forEach(e => e.replay = false); render();
+    say(`✓ replayed ${todo.length} log entr${todo.length > 1 ? 'ies' : 'y'} — memtable restored, nothing lost`, 'g');
+  }
+  function preset({ log = [], mem = [], ssts = [], logOn = true, guard = false } = {}) {
+    S.logOn = logOn; S.seq = 0;
+    S.log = log.map(([k, v, flushed]) => ({ n: ++S.seq, k, v, flushed: !!flushed }));
+    S.mem = new Map(mem);
+    S.ssts = ssts.map((rows, i) => ({ id: i + 1, rows: rows.slice().sort((a, b) => a[0] < b[0] ? -1 : 1), guard }));
+    el.slog.innerHTML = ''; render();
+  }
+  render();
+  return { S, write, flush, crash, replay, preset, render, say, root, chips: $('.chiprow', root) };
+}
+
+/* ----- stage 2: free-play pipeline ----- */
+const WRITES = [['cat', '🐱'], ['dog', '🐶'], ['owl', '🦉'], ['cat', '😼'], ['fox', '🦊'], ['emu', '🐦'], ['yak', '🐃'], ['bee', '🐝']];
+Q.onStage(2, () => {
+  let busy = false, quizShown = false;
+  const goal = checklist($('#s2goals'), () => setTimeout(stage2Quiz, 600));
+  const P = Pipe($('#pipe1'), { onEvent: e => { if (e === 'write' || e === 'overwrite') goal('w'); if (e === 'overwrite') goal('o'); if (e === 'flush') goal('f'); } });
+  P.chips.innerHTML = '<div class="chips" style="margin-top:0">' + WRITES.map(([k, v]) => `<button class="chip" data-k="${k}" data-v="${v}">put ${k} ${v}</button>`).join('') + '<button class="chip" data-reset="1">↻ reset node</button></div>';
+  $$('.chip', P.chips).forEach(c => c.onclick = async () => {
+    if (busy) return; busy = true;
+    $$('.chip', P.chips).forEach(x => x.disabled = true);
+    if (c.dataset.reset) P.preset({}); else await P.write(c.dataset.k, c.dataset.v, c);
+    $$('.chip', P.chips).forEach(x => x.disabled = false);
+    busy = false;
+  });
+  P.say('Tap a write below. Watch the order: log first, then memory.');
+  if (Q.isCleared(2)) $$('#s2goals li').forEach(li => li.classList.add('done'));
+  function stage2Quiz() {
+    if (quizShown) return; quizShown = true;
+    Q.quiz($('#s2quiz'), {
+      q: 'Why is this write path so fast?',
+      options: ['It appends to a file and updates RAM', 'It finds the old record and edits it', 'It sorts every file on disk each time'],
+      correct: 0,
+      good: 'Appending to the end of a file is the cheapest thing a disk can do, and the memtable lives in RAM. The sorting happens in memory, and the flush is one big sequential write.',
+      bad: 'Finding and editing an old record means jumping around the disk — slow. This design never does that: it appends to the log and updates RAM, and the flush is one big sequential write.',
+      onDone: () => setTimeout(() => Q.clearStage(2), 900),
+    });
+  }
+});
+
+/* ----- stage 3: crash rounds ----- */
+Q.onStage(3, () => {
+  const P = Pipe($('#pipe2'));
+  P.chips.remove();
+  const L3 = [['cat', '🐱'], ['dog', '🐶'], ['owl', '🦉']];
+  const ROUNDS = [
+    { title: 'Three writes are in the memtable (and in the log). 💥 The node crashes and restarts. What does the memtable hold afterwards?',
+      setup: async () => { P.preset({ log: L3, mem: L3 }); P.say('3 acknowledged writes, all still in RAM. Nothing flushed yet.'); },
+      options: ['All three, replayed from the log', 'Nothing, because RAM was wiped clean', 'Only keys already flushed to disk'],
+      correct: 0, act: async () => { await P.crash(); await P.replay(); },
+      explain: 'RAM was wiped, but every write had been appended to the commit log first. On restart the node replays the log, top to bottom, and the memtable is back exactly as it was. <b>That\'s the whole job of the log.</b>' },
+    { title: 'A teammate switches the commit log off to make writes "even faster". Two writes arrive and get OK. Then 💥 crash. What happens?',
+      setup: async () => { P.preset({ logOn: false }); P.say('⚠ commit log disabled.', 'w'); },
+      options: ['Both writes are gone for good', 'Both writes replay from the log', 'Both writes were already on disk'],
+      correct: 0, act: async () => { await P.write('fox', '🦊'); await P.write('yak', '🐃'); await wait(200); await P.crash(); await P.replay(); },
+      explain: 'The client was told <code>OK</code> twice, and both writes vanished. Without the log, the only copy was in RAM. That\'s a broken promise — the database said "saved" and lied. <b>Skip the log, lose durability.</b>',
+      after: () => { $('#syncCaveat').style.display = 'block'; } },
+    { title: 'The memtable holds 3 keys; the flush threshold is 4. A write for a new key, emu, arrives. What happens?',
+      setup: async () => { P.preset({ log: L3, mem: L3 }); P.say('Memtable at 3 / 4.'); },
+      options: ['Memtable is flushed to a new SSTable', 'The write is refused until RAM frees', 'The oldest key is dropped from RAM'],
+      correct: 0, act: async () => { await P.write('emu', '🐦'); },
+      explain: 'The write is accepted as normal (log, then memtable). The memtable hits its threshold, so its sorted contents are written to disk as one new SSTable and a fresh memtable starts. Nothing is refused or dropped — the data just moves from RAM to disk.' },
+    { title: 'SSTable-1 on disk already holds cat=🐱. Now put(cat, 😼) arrives. What happens to SSTable-1?',
+      setup: async () => { P.preset({ log: [['cat', '🐱', 1], ['dog', '🐶', 1], ['emu', '🐦', 1], ['owl', '🦉', 1]], ssts: [[['cat', '🐱'], ['dog', '🐶'], ['emu', '🐦'], ['owl', '🦉']]] }); P.say('One SSTable on disk. Memtable empty.'); },
+      options: ['SSTable-1 is untouched; memtable gets 😼', 'SSTable-1 is edited in place: 😼', 'SSTable-1 is deleted, then rewritten whole'],
+      correct: 0, act: async () => { await P.write('cat', '😼'); P.S.ssts[0].guard = true; P.render(); P.say('🔒 SSTable-1 still says cat=🐱 — it is immutable. Now two versions of cat exist; the newer one is in the memtable.', 'w'); },
+      explain: 'SSTables are <b>immutable</b>: once written, never changed.<a class="cite" href="https://cassandra.apache.org/doc/latest/cassandra/architecture/storage-engine.html" target="_blank" rel="noopener">[3]</a> The update simply goes down the normal write path. Now there are two versions of <code>cat</code> — so a read must find the <i>newer</i> one first. Keep that in mind for stage 5.' },
+  ];
+  rounds($('#crashRounds'), ROUNDS, {
+    xp: 15,
+    onPick: o => P.say(`— your prediction: “${esc(o)}”`),
+    onAll: () => orderGame($('#s3order'), {
+      q: 'Tap the write path steps in order. One option is a trap.',
+      steps: ['Append to the commit log', 'Insert it into the memtable', 'Flush full memtable to SSTable'],
+      decoy: 'Edit the old SSTable directly',
+      why: 'Log for durability, memtable for speed, SSTable flush for long-term storage. SSTables are never edited — updates just become newer entries.',
+      onDone: () => Q.clearStage(3),
+    }),
+  });
+});
+
+/* ================= STAGE 4: Bloom filter ================= */
+const M = 16;
+function h1(s) { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h % M; }
+function h2(s) { let h = 7; for (const c of s) h = (h * 17 + c.charCodeAt(0) * 3) >>> 0; return h % M; }
+const posOf = k => [h1(k), h2(k)];
+function bloomBits(keys) { const b = new Array(M).fill(0); keys.forEach(k => posOf(k).forEach(p => b[p] = 1)); return b; }
+const bloomMaybe = (bits, k) => posOf(k).every(p => bits[p]);
+
+Q.onStage(4, () => {
+  const BF = { bits: new Array(M).fill(0), keys: [], setBy: Array.from({ length: M }, () => []) };
+  const bitsEl = $('#bits');
+  bitsEl.innerHTML = Array.from({ length: M }, (_, i) => `<div class="bit" data-i="${i}"><span class="b">0</span><small>${i}</small></div>`).join('');
+  const cell = i => bitsEl.children[i];
+  function renderBits() {
+    BF.bits.forEach((v, i) => { cell(i).classList.toggle('on', !!v); $('.b', cell(i)).textContent = v; });
+    $('#bfSet').innerHTML = 'Inserted: ' + (BF.keys.length ? BF.keys.map(k => `<span class="kv">${esc(k)}</span>`).join('') : '<span class="none">nothing yet</span>');
+  }
+  function clearMarks() { $$('.bit', bitsEl).forEach(c => c.classList.remove('probe', 'hit0', 'hit1')); }
+  function calc(k) {
+    const [a, b] = posOf(k);
+    $('#bfCalc').innerHTML = `<b class="mono">${esc(k)}</b> → <span class="hchip">h₁ = ${a}</span><span class="hchip">h₂ = ${b}</span>`;
+    return [a, b];
+  }
+  async function insert(k) {
+    clearMarks(); $('#bfVerdict').className = 'verdict-big';
+    const ps = calc(k);
+    ps.forEach(p => cell(p).classList.add('probe'));
+    await wait(450);
+    ps.forEach(p => { BF.bits[p] = 1; if (!BF.setBy[p].includes(k)) BF.setBy[p].push(k); });
+    if (!BF.keys.includes(k)) BF.keys.push(k);
+    renderBits();
+    await wait(500); clearMarks();
+  }
+  function probe(k) { clearMarks(); const ps = calc(k); ps.forEach(p => cell(p).classList.add('probe')); return ps; }
+  function reveal(k) {
+    clearMarks();
+    const ps = posOf(k), maybe = ps.every(p => BF.bits[p]), real = BF.keys.includes(k);
+    ps.forEach(p => cell(p).classList.add(BF.bits[p] ? 'hit1' : 'hit0'));
+    const v = $('#bfVerdict');
+    if (!maybe) { const z = ps.find(p => !BF.bits[p]); v.innerHTML = `✗ Bit ${z} is 0 → <b>${esc(k)}</b> is <b>definitely not</b> in the set. One zero is enough.`; v.className = 'verdict-big show no'; }
+    else if (real) { v.innerHTML = `? Bits ${ps.join(' and ')} are both 1 → <b>maybe</b>. (And yes, ${esc(k)} really was inserted.)`; v.className = 'verdict-big show maybe'; }
+    else { v.innerHTML = `🎯 FALSE POSITIVE. Bits ${ps.join(' and ')} are both 1 → the filter says <b>maybe</b>… but <b>${esc(k)}</b> was never inserted! (bit ${ps[0]} ← ${BF.setBy[ps[0]].join(', ')}; bit ${ps[1]} ← ${BF.setBy[ps[1]].join(', ')})`; v.className = 'verdict-big show fp'; }
+    return { maybe, real };
+  }
+  function resetBF() { BF.bits.fill(0); BF.keys = []; BF.setBy = Array.from({ length: M }, () => []); renderBits(); clearMarks(); $('#bfVerdict').className = 'verdict-big'; $('#bfCalc').innerHTML = '<span class="muted small">h₁ and h₂ will show here</span>'; }
+  renderBits();
+
+  const INS = ['cat', 'dog', 'owl'];
+  let insBusy = false;
+  function insertButtons() {
+    $('#bfIns').innerHTML = INS.map(k => `<button class="btn" data-k="${k}">➕ insert ${k}</button>`).join('');
+    $$('#bfIns .btn').forEach(b => b.onclick = async () => {
+      if (insBusy) return; insBusy = true;
+      b.disabled = true; await insert(b.dataset.k); insBusy = false;
+      if (INS.every(k => BF.keys.includes(k))) { $('#bfIns').innerHTML = '<span class="small muted">3 keys in, 16 bits. Now query it 👇</span>'; startRounds(); }
+    });
+  }
+  const QOPTS = ['Definitely not in set', 'Maybe in the set'];
+  const mk = (k, explain) => ({
+    title: `Query <code>${k}</code> — look at its two bits. What does the filter answer?`,
+    setup: async () => { $('#bfVerdict').className = 'verdict-big'; probe(k); },
+    options: QOPTS, correct: bloomMaybe(BF.bits, k) ? 1 : 0,
+    act: async () => { await wait(300); reveal(k); },
+    explain,
+  });
+  function startRounds() {
+    const R = [
+      mk('owl', 'Both of owl\'s bits are 1 → "maybe". Here it really is in the set — a true positive. The filter can\'t tell "really there" from "unlucky" though; it only ever says <i>maybe</i>.'),
+      mk('fox', 'Bit 14 is still 0. If fox had been inserted, that bit would be 1 — so fox is <b>definitely not</b> here. This is the answer that saves a disk read.'),
+      mk('bat', 'bat was <b>never inserted</b>, but dog happened to set bits 12 and 5 — exactly bat\'s two positions. The filter says "maybe" for a key that isn\'t there: a <b>false positive</b>. Cost: one wasted look in the file. Never a wrong answer — just wasted work.'),
+      mk('yak', 'Bit 3 is 0 → definitely not. Notice bit 6 was 1 (set by cat): one matching bit means nothing. <i>All</i> bits must be 1 for a "maybe".'),
+    ];
+    rounds($('#bfRounds'), R, {
+      xp: 10,
+      onAll: () => {
+        if ($('#s4quiz').children.length) return;
+        Q.quiz($('#s4quiz'), {
+          tag: 'Final check',
+          q: 'The filter says "definitely not" for a key. Could that key secretly be in the file?',
+          options: ['No — every inserted key sets its bits', 'Yes — roughly once in every hundred checks', 'Yes — if another key overwrote its bits'],
+          correct: 0,
+          good: 'Bits only ever go from 0 to 1. A key that was inserted set its bits, and nothing turns them back off — so a 0 is proof. <b>False positives: possible. False negatives: impossible.</b><a class="cite" href="https://cassandra.apache.org/doc/latest/cassandra/managing/operating/bloom_filters.html" target="_blank" rel="noopener">[6]</a>',
+          bad: 'Other keys can only flip bits <i>on</i>, never off. So an inserted key always finds its bits at 1, and a 0 is proof it was never inserted. <b>False positives: possible. False negatives: impossible.</b>',
+          onDone: () => { $('#bfFree').classList.add('on'); setTimeout(() => Q.clearStage(4), 900); },
+        });
+      },
+    });
+  }
+  // free play
+  const freeKey = () => ($('#bfIn').value || '').trim().toLowerCase().slice(0, 12);
+  $('#bfForm').onsubmit = e => { e.preventDefault(); const k = freeKey(); if (k) reveal(k), calc(k); };
+  $('#bfInsFree').onclick = async () => { const k = freeKey(); if (k && !insBusy) { insBusy = true; await insert(k); insBusy = false; } };
+  $('#bfReset').onclick = () => resetBF();
+
+  if (Q.isCleared(4)) {
+    // review mode: start with the three keys already in, rounds replayable
+    INS.forEach(k => { posOf(k).forEach(p => { BF.bits[p] = 1; BF.setBy[p].push(k); }); BF.keys.push(k); });
+    renderBits(); $('#bfIns').innerHTML = '<span class="small muted">cat, dog and owl are already inserted.</span>';
+    $('#bfFree').classList.add('on'); startRounds();
+  } else insertButtons();
+});
+
+/* ================= STAGE 5: read path ================= */
+const RP_MEM = [['cat', '😼'], ['yak', '🐃']];
+const RP_SST = [ // oldest first
+  { id: 1, rows: [['ant', '🐜'], ['dog', '🐶'], ['fox', '🦊'], ['owl', '🦉']] },
+  { id: 2, rows: [['cow', '🐄'], ['elk', '🦌'], ['ewe', '🐑']] },
+  { id: 3, rows: [['bee', '🐝'], ['dog', '🐕'], ['emu', '🐦']] },
+];
+function ReadPath(root) {
+  root.innerHTML = `<div class="rp-in">
+      <div class="rp-top"><span><span class="who">💻 client</span><span class="q"></span></span><span class="diskctr">disk reads: <b>0</b></span></div>
+      <div class="zone">⚡ RAM</div>
+      <div class="tier" data-t="mem"><div class="tier-h">Memtable<span class="verdict"></span></div><div class="keys">${RP_MEM.map(([k, v]) => `<span class="kv" data-k="${k}">${k} ${v}</span>`).join('')}</div></div>
+      <div class="zone">💾 Disk — newest file first</div>
+      ${RP_SST.slice().reverse().map(t => {
+        const bits = bloomBits(t.rows.map(r => r[0]));
+        return `<div class="tier" data-t="${t.id}"><div class="tier-h">SSTable-${t.id}<span class="mini" title="Bloom filter">${bits.map(b => `<i class="${b ? 'on' : ''}"></i>`).join('')}</span><span class="verdict"></span></div><div class="keys"><span class="sealed">🔒 on disk — not read</span></div></div>`;
+      }).join('')}
+      <div class="rp-res"></div>
+    </div><div class="simlog"></div>`;
+  const slog = $('.simlog', root), ctr = $('.diskctr', root), who = $('.who', root);
+  const say = (h, c) => logTo(slog, h, c);
+  let reads = 0;
+  function reset() {
+    reads = 0; $('b', ctr).textContent = 0; ctr.classList.remove('bump');
+    $('.q', root).textContent = ''; $('.rp-res', root).textContent = ''; $('.rp-res', root).className = 'rp-res';
+    $$('.tier', root).forEach(t => { t.className = 'tier'; $('.verdict', t).textContent = ''; $('.verdict', t).className = 'verdict'; });
+    $$('.mini i', root).forEach(i => i.classList.remove('p0', 'p1'));
+    $$('.tier[data-t="mem"] .kv', root).forEach(k => k.classList.remove('match'));
+    $$('.tier:not([data-t="mem"]) .keys', root).forEach(k => k.innerHTML = '<span class="sealed">🔒 on disk — not read</span>');
+  }
+  const verdict = (t, txt, cls) => { const v = $('.verdict', t); v.textContent = txt; v.className = 'verdict ' + cls; };
+  async function get(key) {
+    reset();
+    $('.q', root).textContent = `get(${key})`;
+    say(`→ get(${esc(key)})`);
+    const mem = $('.tier[data-t="mem"]', root);
+    await fly(root, who, mem, esc(key));
+    const mk = $(`.kv[data-k="${CSS.escape(key)}"]`, mem);
+    if (mk) {
+      mk.classList.add('match'); mem.classList.add('found'); verdict(mem, '✓ hit', 'hit');
+      say(`✓ found in the memtable — no disk touched`, 'g');
+      await fly(root, mk, who, mk.textContent, 'good');
+      return finish({ where: 'mem', value: RP_MEM.find(r => r[0] === key)[1] });
+    }
+    verdict(mem, '✗ not here', 'no');
+    say('not in the memtable → go to disk, newest SSTable first');
+    let prev = mem;
+    for (const t of RP_SST.slice().reverse()) {
+      const tier = $(`.tier[data-t="${t.id}"]`, root);
+      await wait(200);
+      await fly(root, prev, $('.mini', tier), esc(key));
+      prev = tier;
+      const bits = bloomBits(t.rows.map(r => r[0])), ps = posOf(key);
+      ps.forEach(p => $('.mini', tier).children[p].classList.add(bits[p] ? 'p1' : 'p0'));
+      await wait(450);
+      if (!ps.every(p => bits[p])) {
+        tier.classList.add('skipped'); verdict(tier, '✗ Bloom: definitely not — skip', 'no');
+        say(`SSTable-${t.id}: Bloom bit ${ps.find(p => !bits[p])} is 0 → skipped (no disk read)`);
+        continue;
+      }
+      verdict(tier, '? Bloom: maybe — open it', 'maybe'); tier.classList.add('opened');
+      reads++; $('b', ctr).textContent = reads; ctr.classList.remove('bump'); void ctr.offsetWidth; ctr.classList.add('bump');
+      say(`SSTable-${t.id}: Bloom says maybe → disk read #${reads}`, 'w');
+      await wait(300);
+      $('.keys', tier).innerHTML = t.rows.map(([k, v]) => `<span class="kv${k === key ? ' match' : ''}">${k} ${v}</span>`).join('');
+      await wait(400);
+      const row = t.rows.find(r => r[0] === key);
+      if (row) {
+        tier.classList.remove('opened'); tier.classList.add('found'); verdict(tier, '✓ found', 'hit');
+        say(`✓ found ${esc(key)}=${row[1]} in SSTable-${t.id} — newest copy wins, stop here`, 'g');
+        await fly(root, $('.kv.match', tier), who, `${esc(key)} ${row[1]}`, 'good');
+        return finish({ where: t.id, value: row[1] });
+      }
+      verdict(tier, '✗ false positive — not here', 'fp');
+      say(`✗ SSTable-${t.id} doesn't contain ${esc(key)}. False positive: a wasted disk read.`, 'e');
+    }
+    await fly(root, prev, who, '(nil)', 'warn');
+    return finish({ where: null, value: null });
+  }
+  function finish(r) {
+    const res = $('.rp-res', root);
+    res.textContent = r.value ? `→ client receives ${r.value}   (disk reads: ${reads})` : `→ (nil) — key not found   (disk reads: ${reads})`;
+    res.className = 'rp-res ' + (r.value ? 'good' : 'nil');
+    r.reads = reads; return r;
+  }
+  return { get, reset, say };
+}
+
+Q.onStage(5, () => {
+  const RP = ReadPath($('#rp'));
+  RP.say('A memtable + 3 SSTables, each with its own Bloom filter.');
+  const COUNT = ['Zero', 'One', 'Two', 'Three'];
+  const ROUNDS = [
+    { title: 'get(<code>cat</code>). Where is it found?',
+      options: ['Memtable (in RAM)', 'SSTable-3 (on disk)', 'SSTable-2 (on disk)', 'SSTable-1 (on disk)', 'Not found anywhere'],
+      correct: 0, act: async () => { await RP.get('cat'); },
+      explain: 'The memtable holds the <b>newest</b> data and lives in RAM, so it\'s always checked first. A hit there means zero disk reads — the fastest possible read.' },
+    { title: 'get(<code>ant</code>). It\'s in the oldest file. How many SSTables get <b>opened</b> (read from disk)?',
+      options: COUNT, correct: 1, act: async () => { await RP.get('ant'); },
+      explain: 'SSTable-3 and SSTable-2 each had a 0 in one of ant\'s bits → skipped for free. Only SSTable-1 said "maybe", and it really had ant. <b>One disk read instead of three</b> — that\'s the Bloom filter\'s whole job.' },
+    { title: '<code>dog</code> is in two files (it was updated later). Which value comes back?',
+      options: ['🐕 the newer copy, SSTable-3', '🐶 the older copy, SSTable-1', 'An error: duplicate key found'],
+      correct: 0, act: async () => { await RP.get('dog'); },
+      explain: 'SSTables are immutable, so an update leaves the old copy behind in an older file. Searching <b>newest first</b> means the first hit is the latest value — the older 🐶 in SSTable-1 is never even opened.',
+      after: () => { $('#readCaveat').style.display = 'block'; } },
+    { title: 'get(<code>jay</code>) — jay is <b>not stored anywhere</b>. How many SSTables get opened before the answer "not found"?',
+      options: COUNT, correct: 1, act: async () => { await RP.get('jay'); },
+      explain: 'SSTable-2\'s Bloom filter had both of jay\'s bits set by other keys → a <b>false positive</b>. The node opened that file, found nothing, and moved on. The answer is still correct — the false positive only cost one wasted disk read.' },
+  ];
+  rounds($('#readRounds'), ROUNDS, {
+    xp: 15,
+    onPick: o => RP.say(`— your prediction: “${esc(o)}”`),
+    onAll: () => orderGame($('#s5order'), {
+      q: 'Tap the read path steps in order. One option is a trap.',
+      steps: ['Check the memtable in RAM', 'Ask each SSTable\'s Bloom filter', 'Open only the "maybe" SSTables', 'Return the value to client'],
+      decoy: 'Scan every SSTable on disk',
+      why: 'Memory first (newest, fastest), then the Bloom filters decide which files are worth a disk read. Scanning every file is exactly what the filters exist to avoid.',
+      onDone: () => { $('#rpFree').classList.add('on'); Q.clearStage(5); },
+    }),
+  });
+  let fbusy = false;
+  $('#rpForm').onsubmit = async e => {
+    e.preventDefault();
+    const k = ($('#rpIn').value || '').trim().toLowerCase().slice(0, 12);
+    if (!k || fbusy) return; fbusy = true; await RP.get(k); fbusy = false;
+  };
+  if (Q.isCleared(5)) $('#rpFree').classList.add('on');
+});
+
+/* ================= STAGE 6: boss ================= */
+Q.onStage(6, () => Q.boss($('#boss'), {
+  name: '👾 The Data Gremlin',
+  choices: [
+    { k: 'log', label: 'Commit log', sub: 'append-only, disk' },
+    { k: 'mem', label: 'Memtable', sub: 'sorted, in RAM' },
+    { k: 'sst', label: 'SSTable', sub: 'sorted file, disk' },
+    { k: 'bf', label: 'Bloom filter', sub: 'no / maybe' },
+  ],
+  xp: 10,
+  scenarios: [
+    { e: '✍️', t: 'First stop for a put', d: 'put(user:7, …) has just arrived at a node. Where is it written first?', a: 'log', why: 'Durability first. The write is appended to the commit log on disk before it touches memory, so a crash can never erase an acknowledged write.' },
+    { e: '🔍', t: 'First stop for a get', d: 'get(user:7) arrives. Where does the node look first?', a: 'mem', why: 'The memtable holds the newest data and lives in RAM. A hit there needs zero disk reads.' },
+    { e: '📦', t: 'The memtable is full', d: 'It hit its size threshold. Its contents are written out as a new…', a: 'sst', why: 'The flush turns the sorted memtable into one new, immutable SSTable on disk, in one sequential write.' },
+    { e: '🐢', t: 'Reads crawl on a 40-file node', d: 'Every get opens all 40 files on disk to look for the key. Which piece is missing?', a: 'bf', why: 'Without Bloom filters, the node must open every file. With them, files that definitely don\'t hold the key are skipped for free.' },
+    { e: '🧨', t: '"OK" writes vanished after a crash', d: 'The client was told OK; after a reboot the data is gone. Which step was skipped?', a: 'log', why: 'Only the commit log survives a crash. Skip it and everything that was still in RAM dies with the process.' },
+    { e: '🧮', t: 'Random writes, sorted files', d: 'Keys arrive in random order, yet every flushed file comes out sorted. Which piece did the sorting?', a: 'mem', why: 'The memtable keeps keys sorted as they arrive, in RAM. So the flush just writes them out in order — no sorting on disk.' },
+    { e: '✏️', t: 'Never edited, only replaced', d: 'user:7 already lives in an old file; a new value arrives. Which structure is never changed in place?', a: 'sst', why: 'SSTables are immutable. The update goes down the normal write path and ends up in a newer file; compaction cleans up the old copy later.' },
+    { e: '🎭', t: 'A false alarm', d: 'get(jay) opened a file that turned out not to contain jay. Which piece said "maybe"?', a: 'bf', why: 'A Bloom filter false positive: other keys had set all of jay\'s bits. It cost one wasted read — never a wrong answer.' },
+  ],
+  outro: 'Writes: log → memtable → SSTable. Reads: memtable → Bloom filter → SSTable.',
+  onDone: () => Q.clearStage(6),
+}));
+
+/* ================= STAGE 7: drill ================= */
+Q.onStage(7, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"Zoom into one storage node. Walk me through what happens on a write — and then on a read."</i>',
+  placeholder: 'On a write, the node first…',
+  model: '"On a write, the node first appends it to a commit log on disk — that\'s the durability guarantee, because memory is lost on a crash and the log can be replayed. Then it puts the value in the memtable, an in-memory table sorted by key, and acknowledges the client. When the memtable reaches a threshold, it\'s flushed to disk as an SSTable — an immutable file of sorted key-value pairs. Writes are fast because everything on disk is a sequential append. On a read, the node checks the memtable first; if the key isn\'t there, it asks each SSTable\'s Bloom filter, newest first. The filter says \'definitely not\' or \'maybe\' — false positives are possible, false negatives aren\'t — so we only read the SSTables that might have the key, and return the newest value we find."',
+  checks: [
+    'I said the write hits the commit log <i>first</i>, and why (crash recovery)',
+    'I described memtable → flush at a threshold → sorted, immutable SSTable',
+    'I said reads check the memtable, then use Bloom filters to skip SSTables',
+    'I said Bloom filters can give false positives but never false negatives',
+  ],
+  onDone: () => Q.clearStage(7),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

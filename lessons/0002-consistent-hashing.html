@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Slice the Keyspace</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: server colours, stage 1 modulo grid, hash rings (stages 2–4), load bars */
+:root { --s0: #5a48f0; --s1: #0d9a96; --s2: #c27400; --s3: #d4423f; --s4: #2f7fd8; --s5: #b8409a; --s6: #1d9a52; --s7: #7c6a4a; --on-s: #ffffff; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --s0: #8f82ff; --s1: #31d3c8; --s2: #ffb547; --s3: #ff6d6a; --s4: #5aa9ff; --s5: #f07ad0; --s6: #43d98a; --s7: #c4a77a; --on-s: #0e0f1d; }
+}
+:root[data-theme="dark"] { --s0: #8f82ff; --s1: #31d3c8; --s2: #ffb547; --s3: #ff6d6a; --s4: #5aa9ff; --s5: #f07ad0; --s6: #43d98a; --s7: #c4a77a; --on-s: #0e0f1d; }
+
+/* stage 1: modulo grid */
+.kgrid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; padding: 14px; max-width: 460px; margin: 0 auto; }
+.kc { aspect-ratio: 1; border: 0; padding: 0; border-radius: 7px; display: grid; place-items: center; font: 600 11px var(--mono); color: var(--on-s); background: var(--line); transition: background .5s, transform .25s; }
+.kc:hover { transform: scale(1.12); }
+.kc.mv { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--ink); animation: blip .55s; }
+.kc.sel { outline: 3px solid var(--ink); outline-offset: 1px; }
+@keyframes blip { 45% { transform: scale(1.3); } }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); }
+.legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+.stepper { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; }
+.stepper .btn { padding: 4px 14px; font-size: 18px; line-height: 1.2; }
+.bignum { font-family: var(--mono); font-weight: 700; }
+.bignum.bad { color: var(--bad); }
+.bignum.good { color: var(--good); }
+.hashnote { font-family: var(--mono); font-size: 12.5px; color: var(--muted); padding: 8px 14px 0; min-height: 26px; text-align: center; word-break: break-word; }
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+
+/* hash rings */
+.ring svg { max-width: 440px; margin: 0 auto; }
+.ring .base { fill: none; stroke: var(--line); stroke-width: 18; }
+.ring .band { fill: none; stroke-width: 18; opacity: .38; }
+.ring .zero line { stroke: var(--muted); stroke-width: 2; }
+.ring .zero text { fill: var(--muted); font: 600 14px var(--mono); text-anchor: middle; }
+.ring .key { cursor: default; }
+.ring .key.tap { cursor: pointer; }
+.ring .key .hit { fill: transparent; }
+.ring .key .kdot { stroke: var(--bg); stroke-width: 2.5; transition: fill .6s; }
+.ring .key.tap:hover .kdot, .ring .key.tap:focus .kdot { stroke: var(--ink); }
+.ring .key:focus { outline: none; }
+.ring .klabel { fill: var(--ink); font: 700 15px var(--mono); text-anchor: middle; dominant-baseline: central; }
+.ring .srv { cursor: pointer; transform-box: fill-box; transform-origin: center; animation: popin .45s cubic-bezier(.3,1.6,.5,1); }
+.ring .srv.still { cursor: default; }
+.ring .srv:focus { outline: none; }
+.ring .srv:focus circle, .ring .srv:hover circle { stroke: var(--ink); }
+.ring .srv circle { stroke: var(--bg); stroke-width: 3; }
+.ring .srv text { fill: var(--on-s); font: 700 12.5px var(--font); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.ring .srv.dying { opacity: 0; transform: scale(.2); transition: opacity .4s, transform .4s; }
+.ring .srv.pulse { animation: spulse .7s; }
+@keyframes popin { from { transform: scale(0); } }
+@keyframes spulse { 40% { transform: scale(1.35); } }
+.ring .halo { fill: none; stroke: var(--ink); stroke-width: 2.5; transform-box: fill-box; transform-origin: center; animation: halo 1.3s ease-out forwards; }
+@keyframes halo { from { opacity: .95; transform: scale(1); } to { opacity: 0; transform: scale(2.8); } }
+.ring .walker { fill: var(--ink); }
+.ring .trail { fill: none; stroke: var(--ink); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 1 7; }
+.ring .ghost circle { fill: none; stroke: var(--ink); stroke-width: 2; stroke-dasharray: 4 4; animation: spin 6s linear infinite; transform-box: fill-box; transform-origin: center; }
+.ring .ghost text { fill: var(--ink); font: 700 14px var(--font); text-anchor: middle; dominant-baseline: central; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.ring .cbig { fill: var(--ink); font: 700 34px var(--mono); text-anchor: middle; }
+.ring .csmall { fill: var(--muted); font: 600 14px var(--font); text-anchor: middle; }
+.ring .tick { stroke: var(--bg); stroke-width: 1.5; }
+.sim-bar .bignum { font-size: 14px; }
+
+/* stage 4: virtual node lab */
+.vlab { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; align-items: center; padding: 6px 14px 14px; }
+@media (max-width: 680px) { .vlab { grid-template-columns: 1fr; } }
+.slider { padding: 12px 14px 0; display: grid; gap: 4px; }
+.slider label { display: flex; justify-content: space-between; font-weight: 600; font-size: 14px; gap: 8px; flex-wrap: wrap; }
+.slider input { width: 100%; accent-color: var(--accent); height: 28px; }
+.bars { display: grid; gap: 9px; }
+.lb { display: grid; grid-template-columns: 30px 1fr 74px; gap: 8px; align-items: center; font-size: 13px; transition: opacity .3s; }
+.lb .nm { font-weight: 700; font-family: var(--mono); }
+.lb .track { position: relative; height: 20px; border-radius: 6px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; }
+.lb .fill { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 5px 0 0 5px; transition: width .7s cubic-bezier(.2,.8,.2,1); }
+.lb .target { position: absolute; top: -2px; bottom: -2px; width: 3px; margin-left: -1px; background: var(--ink); border-radius: 2px; transition: left .5s; }
+.lb .pct { font-family: var(--mono); text-align: right; white-space: nowrap; }
+.lb .pct small { color: var(--good); font-weight: 700; }
+.lb.dead { opacity: .35; }
+.spread { font-size: 14px; margin-top: 4px; }
+.spread b { font-family: var(--mono); font-size: 16px; }
+.hetero { display: none; margin-top: 14px; border: 1px solid var(--line); border-radius: 14px; padding: 14px; background: var(--bg); }
+.hetero.on { display: block; animation: rise .35s; }
+.hetero .row { margin-top: 8px; }
+.seg button.on { background: var(--accent); color: #fff; }
+.hmsg { margin-top: 8px; font-size: 14px; font-weight: 600; min-height: 22px; }
+.hmsg.good { color: var(--good); }
+.hmsg.bad { color: var(--warn); }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 6.2 · Design a Key-Value Store</div>
+    <h1>Slice the Keyspace</h1>
+    <p class="lede">Your data no longer fits on one server. Cut it into slices, hand them out — then add and kill servers and see how many keys have to move.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> when an interviewer asks "how do you decide which server stores which key?", you can explain the <b>hash ring</b>, say why <code>hash % N</code> breaks when servers come and go, and explain how <b>virtual nodes</b> keep the load even.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>The modulo trap</h2><div class="sub">The obvious way to split data, and why it breaks</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>In Quest 6.1 one server ran out of room. So you cut the data into slices called <b>partitions</b> (also called <i>shards</i>) and give each server some of them. The book says a good split has to do two things:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noopener">[1]</a></p>
+      <ul>
+        <li><b>Spread data evenly</b>, so no server ends up with far more than its share.</li>
+        <li><b>Move as little data as possible</b> when servers are added or removed. Every key that moves has to be copied over the network. In a cache, a moved key is a <i>miss</i>: the data isn't where clients look for it.</li>
+      </ul>
+      <p>The obvious first try is <code>server = hash(key) % N</code>. A <b>hash function</b> turns any key into a big number that looks random. <code>% N</code> takes the remainder after dividing by N (the number of servers), which is always between 0 and N−1. Below are 100 keys spread over 4 servers. Tap one to see its math.</p>
+
+      <div class="sim" id="modSim">
+        <div class="hashnote" id="modNote">each square is a key · its colour is the server that stores it</div>
+        <div class="kgrid" id="kgrid"></div>
+        <div class="sim-bar">
+          <span class="stepper"><button class="btn" id="nMinus" aria-label="Remove a server" disabled>−</button><span id="nLabel">N = 4</span><button class="btn" id="nPlus" aria-label="Add a server" disabled>+</button></span>
+          <span>Last change: <span class="bignum" id="modMoved">—</span></span>
+        </div>
+        <div class="sim-bar"><div class="legend" id="modLegend"></div></div>
+      </div>
+      <div class="challenge boxed" id="modPredict"></div>
+      <ul class="checklist" id="s1goals">
+        <li data-g="tap"><span class="box">✓</span><span>Tap a key to see <code>hash % N</code> for it</span></li>
+        <li data-g="shrink"><span class="box">✓</span><span>Kill a server: press <b>−</b> and watch how many keys move</span></li>
+      </ul>
+      <div class="callout" id="rehashNote" style="display:none"><b>This is the rehashing problem.</b> A key stays put only if <code>hash % 4</code> happens to equal <code>hash % 5</code>, which is true for about 1 key in 5. So roughly 80% of keys move. The book's example is a cache that loses one server: most clients now look on the wrong server, and you get <i>"a storm of cache misses"</i> that all fall through to the database.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-consistent-hashing" target="_blank" rel="noopener">[2]</a> Notice the legend, though. Modulo spreads keys <b>evenly</b>, so it passes test 1 and fails test 2.</div>
+      <div class="row" style="margin-top:12px"><button class="btn" id="modReset">↻ Back to 4 servers</button></div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Bend it into a ring</h2><div class="sub">Consistent hashing, hands-on</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p><b>Consistent hashing</b> (Karger et al., 1997)<a class="cite" href="https://dl.acm.org/doi/10.1145/258533.258660" target="_blank" rel="noopener">[3]</a> fixes this with one picture. Take every number the hash function can output (for SHA-1 that's 0 to 2<sup>160</sup>−1) and bend that line into a circle, so the end meets the start. That circle is the <b>hash ring</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-consistent-hashing" target="_blank" rel="noopener">[2]</a></p>
+      <p>Hash each <b>server</b> (its name or IP address) to place it on the ring. Hash each <b>key</b> to place it on the same ring. The rule: <b>start at the key, walk clockwise, and the first server you reach stores it.</b><a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noopener">[1]</a></p>
+      <p>Tap a key to walk it. Press <b>+</b> to add a server. Tap a server to kill it. The number in the middle counts how many keys moved.</p>
+      <div class="sim ring">
+        <svg id="ring2" viewBox="0 0 400 400" role="img" aria-label="Hash ring with servers and keys"></svg>
+        <div class="sim-bar">
+          <span class="row" style="gap:8px"><button class="btn" id="r2add" style="padding:6px 12px;font-size:14px">+ Add server</button><button class="btn" id="r2reset" style="padding:6px 12px;font-size:14px">↻ Reset</button></span>
+          <span class="small">Same change with <code>% N</code>: <span class="bignum" id="r2mod">—</span></span>
+        </div>
+        <div class="simlog" id="r2log"><div>4 servers, 24 keys. Each key has the colour of the server that stores it.</div></div>
+      </div>
+      <ul class="checklist" id="s2goals">
+        <li data-g="walk"><span class="box">✓</span><span>Tap a key and follow it clockwise to its server</span></li>
+        <li data-g="add"><span class="box">✓</span><span>Add a server: which keys change colour?</span></li>
+        <li data-g="kill"><span class="box">✓</span><span>Kill a server by tapping it: where do its keys go?</span></li>
+      </ul>
+      <div class="callout tip"><b>Who uses this?</b> The book names Amazon's Dynamo, Apache Cassandra, Discord, the Akamai CDN and Google's Maglev load balancer.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-consistent-hashing" target="_blank" rel="noopener">[2]</a> <span class="muted">This toy ring uses 0–359° instead of 0–2<sup>160</sup>−1 and only 24 keys, so you can see every key.</span></div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Predict, then watch</h2><div class="sub">Three moves on the ring</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Here's a fixed ring: four servers and 14 keys. Each round, <b>predict</b> first, then watch the ring do it. A right call earns XP. A wrong one costs a heart.</p>
+      <div class="sim ring">
+        <svg id="ring3" viewBox="0 0 400 400" role="img" aria-label="Hash ring for prediction rounds"></svg>
+        <div class="simlog" id="r3log"><div>s0, s1, s2, s3 on the ring. 14 keys.</div></div>
+      </div>
+      <div class="challenge" id="r3box"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Virtual nodes</h2><div class="sub">Even out the slices, and handle bigger servers</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The basic ring has two problems, according to the book:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-consistent-hashing" target="_blank" rel="noopener">[2]</a> <b>uneven slices</b> (servers land at random spots, so one can own a huge arc and another a sliver) and <b>uneven keys</b> (even with equal arcs, keys can bunch up in one stretch). You also saw a third one in round 3: when s1 died, s2 took <i>all</i> of its load.</p>
+      <p>The fix is <b>virtual nodes</b>. Each real server is hashed onto the ring many times (<code>s0#0</code>, <code>s0#1</code>, <code>s0#2</code>…), so it owns many small slices scattered around the ring instead of one big arc. Dynamo calls these positions <i>tokens</i>.<a class="cite" href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf" target="_blank" rel="noopener">[4]</a></p>
+      <p>Drag the slider. Each bar is a server's share of the ring, and the black line marks its fair share.</p>
+      <div class="sim ring">
+        <div class="slider"><label for="vSlider"><span>Virtual nodes per server: <span class="bignum" id="vVal">1</span></span><span class="muted small">5 servers</span></label><input type="range" id="vSlider" min="0" max="8" step="1" value="0" aria-label="Virtual nodes per server"></div>
+        <div class="vlab">
+          <svg id="ring4" viewBox="0 0 400 400" role="img" aria-label="Hash ring with virtual nodes"></svg>
+          <div>
+            <div class="bars" id="bars"></div>
+            <div class="spread">Spread: <b id="spreadVal">—</b> <span class="muted small">how far a typical server is from its fair share (standard deviation)</span></div>
+          </div>
+        </div>
+        <div class="simlog" id="r4log"><div>1 virtual node each is just the basic ring. Look how uneven it is.</div></div>
+      </div>
+      <ul class="checklist" id="s4goals">
+        <li data-g="even"><span class="box">✓</span><span>Get the spread under <b>12%</b></span></li>
+        <li data-g="hetero"><span class="box">✓</span><span>Give the upgraded server its fair share</span></li>
+      </ul>
+      <div class="callout" id="vnNote" style="display:none"><b>Matches the book.</b> The book reports a spread of about 10% of the mean with 100 virtual nodes and about 5% with 200.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-consistent-hashing" target="_blank" rel="noopener">[2]</a> Your sim gives a similar result. It isn't free: every position has to be stored and shared between servers, so more virtual nodes means more <i>metadata</i> (bookkeeping data about which slice belongs to whom). That's a dial you tune.</div>
+      <div class="hetero" id="hetero">
+        <b>🖥️ New hardware.</b> s4 was upgraded and now has <b>2× the memory and disk</b> of the others, so its fair-share line just moved. The book calls this <b>heterogeneity</b>: give each server a number of virtual nodes in proportion to its capacity.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noopener">[1]</a>
+        <div class="row"><span class="small">s4 gets</span><span class="seg" id="multSeg"><button data-m="1" class="on">×1</button><button data-m="2">×2</button><button data-m="3">×3</button></span><span class="small">the virtual nodes</span></div>
+        <div class="hmsg" id="hmsg"></div>
+      </div>
+      <div class="challenge boxed" id="r4box" style="display:none"></div>
+      <div class="callout warn"><b>Honest caveat: hot keys.</b> The book's wrap-up says consistent hashing helps with the "hotspot key" problem.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-consistent-hashing" target="_blank" rel="noopener">[2]</a> That's true for <i>ranges</i> of keys. But one very hot key (say, a celebrity's profile) still hashes to exactly one spot and one server, however many virtual nodes you add. That needs other tools, such as caching or extra copies.</div>
+      <div class="row" style="margin-top:12px"><button class="btn" id="vReset">↻ Reset the lab</button></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Lock it in</h2><div class="sub">Recall beats re-reading</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Three ideas from this quest. Read them once, then flip them face-down and sort five statements from memory.</p>
+      <div class="cards" id="cards5">
+        <div class="card"><div class="card-in"><div class="face"><div class="L">%</div><h3>Rehashing problem</h3><p>With <code>hash % N</code>, changing N remaps <b>most</b> keys. Data moves in bulk, or a cache misses in bulk.</p></div><div class="face back"><div class="L">%</div></div></div></div>
+        <div class="card"><div class="card-in"><div class="face"><div class="L">◯</div><h3>Consistent hashing</h3><p>Servers and keys on one ring. A key belongs to the <b>first server clockwise</b>. A join or leave moves about <b>k/n</b> keys.</p></div><div class="face back"><div class="L">◯</div></div></div></div>
+        <div class="card"><div class="card-in"><div class="face"><div class="L">×V</div><h3>Virtual nodes</h3><p>Each server sits at <b>many</b> points on the ring. You get even slices, a failed server's load is shared out, and bigger servers get more points.</p></div><div class="face back"><div class="L">×V</div></div></div></div>
+      </div>
+      <div class="row" id="flipRow"><button class="btn primary" id="flipBtn">I've got it. Flip the cards face-down</button></div>
+      <div id="sortWrap" style="display:none">
+        <p class="small muted" style="margin-top:16px">Which idea is each statement about?</p>
+        <div class="sort" id="sort"></div>
+      </div>
+      <div id="s5quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Boss: The Rehash Kraken</h2><div class="sub">Pick the right partitioning move</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Six real situations. For each one, pick the move you'd make <b>next</b>: plain <b>hash % N</b>, switch to a <b>hash ring</b>, or add <b>virtual nodes</b> to the ring you already have.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 7 ================= -->
+  <section class="stage" data-stage="7" id="s7">
+    <div class="stage-h"><div class="num">7</div><div><h2>Say it like a senior</h2><div class="sub">The interview answer, in your words</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> The ring also decides where the <i>copies</i> of a key go. You keep walking clockwise past the first server. That's Quest 6.3, <i>Copies Everywhere</i>.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 6: "Data partition"</a> (one page). It leans on <a href="https://bytebytego.com/courses/system-design-interview/design-consistent-hashing" target="_blank" rel="noopener">Ch. 5: Design Consistent Hashing</a>, which is worth a full read. After that, try §4.2 "Partitioning" of the <a href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf" target="_blank" rel="noopener">Dynamo paper</a>. It's short.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      Real systems tuned this further. Dynamo later moved away from random positions. It now splits the ring into <b>equal-sized fixed slices</b> and hands whole slices to servers, which balanced load better and made backups simpler (§6.2, "Strategy 3").<a class="cite" href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf" target="_blank" rel="noopener">[4]</a> Cassandra cut its default from 256 virtual nodes per server to 16 in version 4.0, using a smarter way to pick positions. More virtual nodes isn't always better.<a class="cite" href="https://thelastpickle.com/blog/2021/01/29/impacts-of-changing-the-number-of-vnodes.html" target="_blank" rel="noopener">[5]</a>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"how does a client find out where the servers sit on the ring?"</i> or <i>"why not just store a lookup table of key → server?"</i> Follow-up questions are part of the quest.
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 6 "Design a Key-Value Store", Data partition (ByteByteGo).</li>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 5 "Design Consistent Hashing" (ByteByteGo).</li>
+        <li>Karger et al., "Consistent Hashing and Random Trees", STOC 1997.</li>
+        <li>DeCandia et al., "Dynamo: Amazon's Highly Available Key-value Store", SOSP 2007 (§4.2, §6.2).</li>
+        <li>The Last Pickle, "The Impacts of Changing the Number of VNodes in Apache Cassandra", 2021.</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0002',
+  winTitle: 'Keyspace sliced',
+  badge: '🍕 Badge: Ring Master',
+  cheatsheet: '../reference/kv-store-cap-cheatsheet.html',
+});
+const { sleep, shuffle } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ================= shared helpers ================= */
+// FNV-1a + murmur finaliser: a small, well-mixed 32-bit hash (stand-in for SHA-1 / MD5)
+function hash32(str) {
+  let h = 0x811c9dc5;
+  for (const c of str) { h ^= c.codePointAt(0); h = Math.imul(h, 0x01000193); }
+  h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16;
+  return h >>> 0;
+}
+const toDeg = h => h / 4294967296 * 360;
+const SC = i => `var(--s${i})`;
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function pt(cx, cy, r, deg) { const a = deg * Math.PI / 180; return [cx + r * Math.sin(a), cy - r * Math.cos(a)]; }
+const f2 = n => n.toFixed(2);
+function arcD(cx, cy, r, a0, a1) { // clockwise arc from a0 to a1 (degrees, 0 = top)
+  let sw = ((a1 - a0) % 360 + 360) % 360; if (sw < 0.001) sw = 360;
+  const [x0, y0] = pt(cx, cy, r, a0);
+  if (sw > 359.9) { const [xm, ym] = pt(cx, cy, r, a0 + 180); return `M${f2(x0)} ${f2(y0)}A${r} ${r} 0 1 1 ${f2(xm)} ${f2(ym)}A${r} ${r} 0 1 1 ${f2(x0)} ${f2(y0)}`; }
+  const [x1, y1] = pt(cx, cy, r, a0 + sw);
+  return `M${f2(x0)} ${f2(y0)}A${r} ${r} 0 ${sw > 180 ? 1 : 0} 1 ${f2(x1)} ${f2(y1)}`;
+}
+function anim(dur, f) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 1) { f(1); return res(); }
+    const t0 = performance.now();
+    const fr = now => { const p = Math.min(1, (now - t0) / dur); f(p); p < 1 ? requestAnimationFrame(fr) : res(); };
+    requestAnimationFrame(fr);
+  });
+}
+const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); Q.addXP(xp || 10, li);
+  return true;
+}
+// Predict-then-watch round. Resolves after the learner picks and the action has played.
+function predict(box, { step, title, options, correct, act, explain, xp = 25 }) {
+  box.innerHTML = `${step ? `<div class="step">${step}</div>` : ''}<h3>${title}</h3><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+  const opts = $('.opts', box);
+  let busy = false;
+  return new Promise(resolve => {
+    shuffle(options.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = async () => {
+        if (busy) return; busy = true;
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        b.classList.add('picked');
+        await act();
+        const ok = i === correct;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-i="${correct}"]`, opts).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + explain;
+        ok ? Q.addXP(xp, b) : Q.loseHeart(b);
+        resolve({ ok, row: $('.row', box) });
+      };
+      opts.appendChild(b);
+    });
+  });
+}
+function nextBtn(row, label, fn, primary = true) {
+  const b = document.createElement('button'); b.className = 'btn' + (primary ? ' primary' : ''); b.textContent = label; b.onclick = fn; row.appendChild(b); return b;
+}
+
+/* ---------- reusable hash ring (stages 2 and 3) ---------- */
+function makeRing(svg, { onKey, onServer } = {}) {
+  const cx = 200, cy = 200, R = 150;
+  svg.innerHTML = '';
+  S('circle', { class: 'base', cx, cy, r: R }, svg);
+  const zero = S('g', { class: 'zero' }, svg);
+  S('line', { x1: 200, y1: 28, x2: 200, y2: 40 }, zero);
+  S('text', { x: 200, y: 20 }, zero).textContent = '2¹⁶⁰−1 ⟲ 0';
+  const bandsG = S('g', {}, svg), trailG = S('g', {}, svg), keysG = S('g', {}, svg), ghostG = S('g', {}, svg), srvG = S('g', {}, svg), fxG = S('g', {}, svg);
+  const cBig = S('text', { x: 200, y: 200, class: 'cbig' }, svg), cSmall = S('text', { x: 200, y: 228, class: 'csmall' }, svg);
+  let servers = [], keys = [];
+  const kEl = new Map(), sEl = new Map(), owners = new Map();
+  const sorted = () => servers.slice().sort((a, b) => a.pos - b.pos);
+  const ownerOf = p => { const s = sorted(); return s.find(x => x.pos >= p) || s[0]; };
+  function drawBands() {
+    bandsG.innerHTML = '';
+    const s = sorted();
+    s.forEach((sv, i) => { const prev = s[(i - 1 + s.length) % s.length].pos; const p = S('path', { class: 'band', d: arcD(cx, cy, R, prev, sv.pos) }, bandsG); p.style.stroke = SC(sv.id); });
+  }
+  function drawServers() {
+    for (const [id, el] of [...sEl]) if (!servers.some(s => s.id === id)) { sEl.delete(id); el.classList.add('dying'); setTimeout(() => el.remove(), 450); }
+    servers.forEach(sv => {
+      if (sEl.has(sv.id)) return;
+      const [x, y] = pt(cx, cy, R, sv.pos);
+      const g = S('g', { class: 'srv' + (onServer ? '' : ' still') }, srvG);
+      if (onServer) { g.setAttribute('tabindex', 0); g.setAttribute('role', 'button'); g.setAttribute('aria-label', `Server s${sv.id}: tap to kill it`); }
+      const c = S('circle', { cx: f2(x), cy: f2(y), r: 16 }, g); c.style.fill = SC(sv.id);
+      S('text', { x: f2(x), y: f2(y) }, g).textContent = 's' + sv.id;
+      if (onServer) {
+        g.addEventListener('click', () => onServer(sv, g));
+        g.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onServer(sv, g); } });
+      }
+      sEl.set(sv.id, g);
+    });
+  }
+  function ensureKeys() {
+    for (const [id, o] of [...kEl]) if (!keys.some(k => k.id === id)) { o.g.remove(); kEl.delete(id); owners.delete(id); }
+    keys.forEach(k => {
+      if (kEl.has(k.id)) return;
+      const [x, y] = pt(cx, cy, R, k.pos);
+      const g = S('g', { class: 'key' + (onKey ? ' tap' : '') }, keysG);
+      if (onKey) { g.setAttribute('tabindex', 0); g.setAttribute('role', 'button'); g.setAttribute('aria-label', `Key ${k.name}`); }
+      S('circle', { class: 'hit', cx: f2(x), cy: f2(y), r: 14 }, g);
+      const c = S('circle', { class: 'kdot', cx: f2(x), cy: f2(y), r: k.label ? 10 : 7 }, g);
+      if (k.label) { const [lx, ly] = pt(cx, cy, R - 34, k.pos); S('text', { class: 'klabel', x: f2(lx), y: f2(ly) }, g).textContent = k.label; }
+      if (onKey) {
+        g.addEventListener('click', () => onKey(k, g));
+        g.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onKey(k, g); } });
+      }
+      kEl.set(k.id, { g, c, x, y });
+    });
+  }
+  function halo(id) { const o = kEl.get(id); if (!o) return; const h = S('circle', { class: 'halo', cx: f2(o.x), cy: f2(o.y), r: 10 }, fxG); setTimeout(() => h.remove(), 1400); }
+  function render() {
+    ensureKeys(); drawBands(); drawServers();
+    const moved = [];
+    keys.forEach(k => {
+      const o = ownerOf(k.pos).id, pr = owners.get(k.id);
+      if (pr !== undefined && pr !== o) moved.push({ k, from: pr, to: o });
+      owners.set(k.id, o); kEl.get(k.id).c.style.fill = SC(o);
+    });
+    moved.forEach(m => halo(m.k.id));
+    return moved;
+  }
+  function pulse(id) { const g = sEl.get(id); if (!g) return; g.classList.remove('pulse'); void g.getBBox(); g.classList.add('pulse'); }
+  async function walk(k) {
+    const o = ownerOf(k.pos), sw = ((o.pos - k.pos) % 360 + 360) % 360, r2 = R - 26;
+    const trail = S('path', { class: 'trail' }, trailG), w = S('circle', { class: 'walker', r: 6 }, fxG);
+    await anim(Math.max(500, sw * 7), p => {
+      const a = k.pos + sw * ease(p);
+      if (sw * ease(p) > .5) trail.setAttribute('d', arcD(cx, cy, r2, k.pos, a));
+      const [x, y] = pt(cx, cy, r2, a); w.setAttribute('cx', f2(x)); w.setAttribute('cy', f2(y));
+    });
+    pulse(o.id);
+    setTimeout(() => { trail.remove(); w.remove(); }, 900);
+    return o;
+  }
+  return {
+    ownerOf, render, walk, pulse,
+    get servers() { return servers; }, get keys() { return keys; },
+    reset(sv, ks) { servers = sv.map(s => ({ ...s })); keys = ks.map(k => ({ ...k })); srvG.innerHTML = ''; keysG.innerHTML = ''; fxG.innerHTML = ''; trailG.innerHTML = ''; ghostG.innerHTML = ''; sEl.clear(); kEl.clear(); owners.clear(); return render(); },
+    addServer(s) { servers.push({ ...s }); return render(); },
+    removeServer(id) { servers = servers.filter(s => s.id !== id); return render(); },
+    setKeys(ks) { keys = ks.map(k => ({ ...k })); return render(); },
+    ghost(pos, label) { ghostG.innerHTML = ''; const [x, y] = pt(cx, cy, R, pos); const g = S('g', { class: 'ghost' }, ghostG); S('circle', { cx: f2(x), cy: f2(y), r: 17 }, g); S('text', { x: f2(x), y: f2(y) }, g).textContent = label || '?'; },
+    clearGhost() { ghostG.innerHTML = ''; },
+    center(big, small) { cBig.textContent = big; cSmall.textContent = small || ''; },
+  };
+}
+// How many keys would change server under hash % N when N goes a → b
+const modMoves = (hs, a, b) => hs.filter(h => h % a !== h % b).length;
+
+/* ================= STAGE 1: the modulo trap ================= */
+Q.onStage(1, () => {
+  const K = Array.from({ length: 100 }, (_, i) => ({ name: 'user:' + i, h: hash32('user:' + i) }));
+  let N = 4, predicted = false, quizShown = false, sel = -1;
+  const goals = new Set();
+  const grid = $('#kgrid');
+  grid.innerHTML = K.map((k, i) => `<button class="kc" data-i="${i}" aria-label="key ${k.name}"></button>`).join('');
+  const cells = $$('.kc', grid);
+  function legend() {
+    const counts = Array(N).fill(0); K.forEach(k => counts[k.h % N]++);
+    $('#modLegend').innerHTML = counts.map((c, s) => `<span><i style="background:${SC(s)}"></i>s${s} · ${c}</span>`).join('');
+    $('#nLabel').textContent = `N = ${N}`;
+    $('#nMinus').disabled = !predicted || N <= 2; $('#nPlus').disabled = !predicted || N >= 8;
+  }
+  function paint(moved) {
+    cells.forEach(c => c.classList.remove('mv'));
+    void grid.offsetWidth;
+    cells.forEach((c, i) => {
+      const o = K[i].h % N;
+      const apply = () => { c.style.background = SC(o); c.textContent = o; if (moved && moved.has(i)) c.classList.add('mv'); };
+      moved && !Q.reduced ? setTimeout(apply, i * 7) : apply();
+    });
+    legend();
+  }
+  async function setN(n) {
+    const before = K.map(k => k.h % N);
+    N = n;
+    const moved = new Set(); K.forEach((k, i) => { if (k.h % N !== before[i]) moved.add(i); });
+    paint(moved);
+    const m = $('#modMoved'); m.textContent = `${moved.size} / 100 keys moved`; m.className = 'bignum ' + (moved.size > 50 ? 'bad' : 'good');
+    if (sel >= 0) note(sel);
+    await sleep(Q.reduced ? 50 : 1000);
+    return moved.size;
+  }
+  function note(i) {
+    const k = K[i];
+    $('#modNote').innerHTML = `hash("${k.name}") = ${k.h} → ${k.h} % ${N} = <b style="color:${SC(k.h % N)}">${k.h % N}</b> → stored on s${k.h % N}`;
+  }
+  cells.forEach((c, i) => c.onclick = () => {
+    cells.forEach(x => x.classList.remove('sel')); c.classList.add('sel'); sel = i; note(i);
+    if (checkGoal('#s1goals', 'tap', goals)) maybeQuiz();
+  });
+  $('#nPlus').onclick = () => { if (N < 8) setN(N + 1); };
+  $('#nMinus').onclick = async () => {
+    if (N <= 2) return;
+    const mv = await setN(N - 1);
+    if (!goals.has('shrink')) { $('#modNote').innerHTML = `a server died: ${mv} of 100 keys now live somewhere else`; checkGoal('#s1goals', 'shrink', goals); maybeQuiz(); }
+  };
+  $('#modReset').onclick = () => { N = 4; sel = -1; cells.forEach(x => x.classList.remove('sel')); paint(null); $('#modMoved').textContent = '—'; $('#modMoved').className = 'bignum'; $('#modNote').textContent = 'each square is a key · its colour is the server that stores it'; };
+  paint(null);
+
+  function maybeQuiz() {
+    if (quizShown || !predicted || goals.size < 2) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s1quiz'), {
+      q: 'Why does <code>hash(key) % N</code> move most keys when N changes?',
+      options: ['Every key’s remainder depends on N', 'The hash function itself gets replaced', 'Servers shuffle their data at random'],
+      correct: 0,
+      good: 'The hash of each key never changes, but the remainder does. Change N and almost every key gets a different remainder, so a different server. That’s the <b>rehashing problem</b>.',
+      bad: 'The hash of each key stays exactly the same. What changes is the remainder: <code>% 4</code> and <code>% 5</code> disagree for most numbers, so most keys get a new server.',
+      onDone: () => setTimeout(() => Q.clearStage(1), 900),
+    }), 500);
+  }
+  function runPredict() {
+    predict($('#modPredict'), {
+      step: 'Predict first',
+      title: 'Your app grows, so you add a 5th server (N: 4 → 5). How many of the 100 keys end up on a different server?',
+      options: ['About 20 of them', 'About 50 of them', 'About 80 of them'],
+      correct: 2,
+      act: async () => { await setN(5); },
+      explain: 'Most keys moved, and only about 1 in 5 stayed put. Adding <i>one</i> server forced almost the whole dataset to move. Now press <b>−</b> to see a server die.',
+    }).then(({ row }) => {
+      predicted = true; legend(); $('#rehashNote').style.display = 'block';
+      nextBtn(row, '↻ Predict again', () => { N = 4; paint(null); runPredict(); }, false);
+      maybeQuiz();
+    });
+  }
+  runPredict();
+  if (Q.isCleared(1)) { predicted = true; legend(); }
+});
+
+/* ================= STAGE 2: the ring, hands-on ================= */
+Q.onStage(2, () => {
+  const BASE = [{ id: 0, pos: 20 }, { id: 1, pos: 105 }, { id: 2, pos: 200 }, { id: 3, pos: 290 }];
+  const SPOTS = [152, 245, 330, 62, 175, 270, 355, 125];
+  const KEYS = Array.from({ length: 24 }, (_, i) => ({ id: i, name: 'k' + i, h: hash32('key:' + i) })).map(k => ({ ...k, pos: toDeg(k.h) }));
+  const goals = new Set();
+  let busy = false, quizShown = false;
+  const ring = makeRing($('#ring2'), {
+    onKey: async (k, g) => {
+      if (busy) return; busy = true;
+      ring.center(k.name, 'walking clockwise…');
+      const o = await ring.walk(k);
+      ring.center(`s${o.id}`, `${k.name} lives here`);
+      logTo('r2log', `${k.name} → walk clockwise → first server is <b style="color:${SC(o.id)}">s${o.id}</b>`);
+      busy = false;
+      if (checkGoal('#s2goals', 'walk', goals)) maybeQuiz();
+    },
+    onServer: (sv, g) => {
+      if (busy) return;
+      if (ring.servers.length <= 2) { Q.toast('keep at least 2', g, 'practice'); return; }
+      const n = ring.servers.length, moved = ring.removeServer(sv.id);
+      report(moved, n, n - 1, `💀 s${sv.id} died`);
+      const to = [...new Set(moved.map(m => 's' + m.to))];
+      logTo('r2log', `→ only s${sv.id}’s own ${moved.length} key${moved.length === 1 ? '' : 's'} moved, all to ${to.join(', ') || 'nobody'}, the next server clockwise.`, 'g');
+      if (checkGoal('#s2goals', 'kill', goals)) maybeQuiz();
+    },
+  });
+  function report(moved, a, b, what) {
+    const tot = KEYS.length;
+    ring.center(`${moved.length}/${tot}`, 'keys moved');
+    const mm = modMoves(KEYS.map(k => k.h), a, b);
+    const el = $('#r2mod'); el.textContent = `${mm}/${tot} would move`; el.className = 'bignum bad';
+    logTo('r2log', `${what}: ring moved <b>${moved.length}</b> of ${tot} keys. With % N (${a} → ${b}) it would be <b>${mm}</b>.`, moved.length ? 'w' : '');
+  }
+  function reset() { ring.reset(BASE, KEYS); ring.center('24 keys', '4 servers'); $('#r2mod').textContent = '—'; $('#r2mod').className = 'bignum'; }
+  $('#r2add').onclick = () => {
+    if (busy) return;
+    const used = new Set(ring.servers.map(s => s.id));
+    const id = [0, 1, 2, 3, 4, 5, 6, 7].find(i => !used.has(i));
+    const pos = SPOTS.find(p => ring.servers.every(s => Math.min(Math.abs(s.pos - p), 360 - Math.abs(s.pos - p)) > 12));
+    if (id === undefined || pos === undefined) { Q.toast('ring is full', $('#r2add'), 'practice'); return; }
+    const n = ring.servers.length, moved = ring.addServer({ id, pos });
+    const from = [...new Set(moved.map(m => 's' + m.from))];
+    report(moved, n, n + 1, `✨ s${id} joined`);
+    logTo('r2log', `→ s${id} took only the keys between itself and the server before it (anticlockwise), all from ${from.join(', ') || 'nobody'}.`, 'g');
+    if (checkGoal('#s2goals', 'add', goals)) maybeQuiz();
+  };
+  $('#r2reset').onclick = () => { if (!busy) { reset(); logTo('r2log', '↻ back to 4 servers'); } };
+  reset();
+  function maybeQuiz() {
+    if (quizShown || goals.size < 3) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s2quiz'), {
+      q: 'A ring holds 100 keys on 4 servers, and a 5th server joins. On average, how many keys move?',
+      options: ['About 20 keys move', 'About 50 keys move', 'About 80 keys move'],
+      correct: 0,
+      good: 'The book’s rule: only <b>k/n</b> keys move on average (k = number of keys, n = number of servers or slots). Here that’s 100 / 5 = 20. Modulo moved about 80.',
+      bad: 'On a ring only the new server’s own slice changes hands. The book’s rule is <b>k/n</b> on average (k = keys, n = servers or slots): 100 / 5 = 20. About 80 is what <code>% N</code> does.',
+      onDone: () => setTimeout(() => Q.clearStage(2), 900),
+    }), 500);
+  }
+});
+
+/* ================= STAGE 3: predict, then watch ================= */
+Q.onStage(3, () => {
+  const BASE = [{ id: 0, pos: 30 }, { id: 1, pos: 120 }, { id: 2, pos: 210 }, { id: 3, pos: 300 }];
+  const KP = [320, 350, 15, 50, 80, 105, 150, 172, 195, 222, 234, 246, 272, 290];
+  const KEYS = KP.map((p, i) => ({ id: i, name: 'k' + i, pos: p }));
+  const KK = { id: 99, name: 'K', pos: 133, label: 'K' };
+  const ring = makeRing($('#ring3'));
+  const count = id => ring.keys.filter(k => ring.ownerOf(k.pos).id === id).length;
+  const ROUNDS = [
+    { title: 'Key <b>K</b> hashes to the spot marked K. Which server stores it?',
+      setup: () => { ring.reset(BASE, [...KEYS, KK]); ring.center('K', 'who owns it?'); },
+      options: ['s1', 's2', 's0'], correct: 1,
+      act: async () => { const o = await ring.walk(KK); ring.center('s' + o.id, 'owns K'); logTo('r3log', `K → walk clockwise → s${o.id}`, 'g'); },
+      explain: 'Walk <b>clockwise</b> from K and the first server you reach is s2. s1 is closer, but it sits <i>behind</i> K (anticlockwise). What matters is the direction, not the distance.' },
+    { title: 'A new server <b>s4</b> will land at the dashed circle, between s2 and s3. How many of the 14 keys change server?',
+      setup: () => { ring.reset(BASE, KEYS); ring.ghost(258, 's4'); ring.center('14 keys', 's3 holds ' + count(3)); },
+      options: ['3 of the 14 keys', '5 of the 14 keys', '11 of the 14 keys'], correct: 0,
+      act: async () => { ring.clearGhost(); const m = ring.addServer({ id: 4, pos: 258 }); ring.center(`${m.length}/14`, 'keys moved'); logTo('r3log', `s4 joined → ${m.length} keys moved, all from s${[...new Set(m.map(x => x.from))].join(', s')}`, 'g'); await sleep(Q.reduced ? 50 : 900); },
+      explain: 'Only the keys between s4 and the server before it (s2) move, and they all come from s3. s3 keeps its 2 keys past s4, and no other server is touched. With <code>% N</code> going 4 → 5, about 11 of 14 would have moved.' },
+    { title: 'Server <b>s1</b> crashes. Who takes over its keys?',
+      setup: () => { ring.reset(BASE, KEYS); ring.center('s1', `holds ${count(1)} keys`); },
+      options: ['s0, the neighbour anticlockwise', 's2, the neighbour clockwise', 'all servers, shared equally'], correct: 1,
+      act: async () => { const m = ring.removeServer(1); ring.center(`s2: ${count(2)}`, `keys (was ${count(2) - m.length})`); logTo('r3log', `💀 s1 died → its ${m.length} keys walked on to s2. Nothing else moved.`, 'w'); await sleep(Q.reduced ? 50 : 900); },
+      explain: 'Its keys keep walking clockwise and reach s2. Nothing else moves, which is great. But s2’s load just <b>doubled</b> in one go, which is not. That unfairness is what the next stage fixes.' },
+  ];
+  let ri = 0;
+  async function show() {
+    const r = ROUNDS[ri];
+    r.setup();
+    const { row } = await predict($('#r3box'), { step: `Round ${ri + 1} of ${ROUNDS.length}`, title: r.title, options: r.options, correct: r.correct, act: r.act, explain: r.explain });
+    nextBtn(row, ri < ROUNDS.length - 1 ? 'Next round →' : 'Finish the rounds →', () => {
+      ri++;
+      if (ri < ROUNDS.length) return show();
+      $('#r3box').innerHTML = '<div class="row"><button class="btn" id="r3replay">↻ Replay the 3 rounds</button></div>';
+      $('#r3replay').onclick = () => { ri = 0; $('#r3log').innerHTML = '<div>s0, s1, s2, s3 on the ring. 14 keys.</div>'; show(); };
+      Q.clearStage(3);
+    });
+  }
+  show();
+});
+
+/* ================= STAGE 4: virtual node lab ================= */
+Q.onStage(4, () => {
+  const VS = [1, 2, 3, 5, 10, 25, 50, 100, 200], SALT = 'r245:', NSV = 5;
+  const L = { vi: 0, big: false, mult: 1, alive: [1, 1, 1, 1, 1], prev: null };
+  const goals = new Set();
+  const cx = 200, cy = 200, R = 150;
+  const svg = $('#ring4');
+  svg.innerHTML = '';
+  S('circle', { class: 'base', cx, cy, r: R }, svg);
+  const bandsG = S('g', {}, svg), ticksG = S('g', {}, svg);
+  const cBig = S('text', { x: 200, y: 200, class: 'cbig' }, svg), cSmall = S('text', { x: 200, y: 228, class: 'csmall' }, svg);
+  $('#bars').innerHTML = Array.from({ length: NSV }, (_, i) => `<div class="lb" data-s="${i}"><span class="nm" style="color:${SC(i)}">s${i}</span><div class="track"><div class="fill" style="background:${SC(i)}"></div><div class="target"></div></div><span class="pct"></span></div>`).join('');
+  const posCache = {};
+  const vpos = (i, j) => posCache[i + '#' + j] ?? (posCache[i + '#' + j] = toDeg(hash32(`${SALT}s${i}#${j}`)));
+  function compute() {
+    const V = VS[L.vi], caps = L.alive.map((a, i) => i === 4 && L.big ? 2 : 1), pts = [];
+    for (let i = 0; i < NSV; i++) { if (!L.alive[i]) continue; const n = V * (i === 4 ? L.mult : 1); for (let j = 0; j < n; j++) pts.push({ p: vpos(i, j), o: i }); }
+    pts.sort((a, b) => a.p - b.p);
+    const share = Array(NSV).fill(0);
+    pts.forEach((q, k) => { const prev = k ? pts[k - 1].p : pts[pts.length - 1].p - 360; share[q.o] += (q.p - prev) / 360; });
+    const idx = [...Array(NSV).keys()].filter(i => L.alive[i]), capSum = idx.reduce((s, i) => s + caps[i], 0);
+    const target = Array(NSV).fill(0); idx.forEach(i => target[i] = caps[i] / capSum);
+    const ratio = idx.map(i => share[i] / target[i]), mean = ratio.reduce((a, b) => a + b, 0) / ratio.length;
+    const spread = Math.sqrt(ratio.reduce((s, x) => s + (x - mean) ** 2, 0) / ratio.length);
+    return { V, pts, share, target, spread };
+  }
+  function render(showDelta) {
+    const c = compute();
+    bandsG.innerHTML = ''; ticksG.innerHTML = '';
+    c.pts.forEach((q, k) => {
+      const prev = k ? c.pts[k - 1].p : c.pts[c.pts.length - 1].p;
+      const p = S('path', { class: 'band', d: arcD(cx, cy, R, prev, q.p) }, bandsG); p.style.stroke = SC(q.o); p.style.opacity = '.75';
+    });
+    if (c.pts.length <= 60) c.pts.forEach(q => { const [x, y] = pt(cx, cy, R, q.p); const d = S('circle', { cx: f2(x), cy: f2(y), r: c.pts.length <= 15 ? 9 : 5.5, class: 'tick' }, ticksG); d.style.fill = SC(q.o); });
+    cBig.textContent = c.V; cSmall.textContent = c.V === 1 ? 'point per server' : 'points per server';
+    $('#vVal').textContent = c.V; $('#vSlider').value = L.vi;
+    const SCALE = 0.5;
+    $$('#bars .lb').forEach(row => {
+      const i = +row.dataset.s, alive = !!L.alive[i];
+      row.classList.toggle('dead', !alive);
+      $('.fill', row).style.width = Math.min(100, c.share[i] / SCALE * 100) + '%';
+      $('.target', row).style.left = Math.min(100, c.target[i] / SCALE * 100) + '%';
+      $('.target', row).style.display = alive ? '' : 'none';
+      const d = showDelta && L.prev ? (c.share[i] - L.prev[i]) * 100 : 0;
+      $('.pct', row).innerHTML = alive ? `${(c.share[i] * 100).toFixed(1)}%${d > 0.05 ? ` <small>+${d.toFixed(1)}</small>` : ''}` : '💀 down';
+      $('.nm', row).textContent = 's' + i + (i === 4 && L.big ? '⁺' : '');
+    });
+    const sp = Math.round(c.spread * 100), se = $('#spreadVal');
+    se.textContent = sp + '%'; se.style.color = sp < 12 ? 'var(--good)' : sp < 30 ? 'var(--warn)' : 'var(--bad)';
+    L.prev = c.share.slice();
+    return c;
+  }
+  function check(c) {
+    if (!L.big && L.alive.every(Boolean) && c.spread < 0.12 && !goals.has('even')) {
+      checkGoal('#s4goals', 'even', goals, 15);
+      logTo('r4log', `✓ ${c.V} virtual nodes each → spread ${Math.round(c.spread * 100)}%. Many small slices average out.`, 'g');
+      $('#vnNote').style.display = 'block';
+      setTimeout(startHetero, 600);
+    }
+    if (L.big) {
+      const m = $('#hmsg'), s4 = c.share[4], t4 = c.target[4];
+      if (L.mult === 1) { m.textContent = `s4 has 2× the capacity but only ${(s4 * 100).toFixed(0)}% of the ring (fair share: ${(t4 * 100).toFixed(0)}%). Its extra hardware sits idle.`; m.className = 'hmsg bad'; }
+      else if (L.mult === 3) { m.textContent = `Too much: s4 now owns ${(s4 * 100).toFixed(0)}% against a fair share of ${(t4 * 100).toFixed(0)}%, so it'll be the first to overload.`; m.className = 'hmsg bad'; }
+      else if (c.V < 50) { m.textContent = 'Right ratio, but with so few points the slices are still lumpy. Slide virtual nodes up.'; m.className = 'hmsg bad'; }
+      else {
+        m.textContent = `✓ s4 owns ${(s4 * 100).toFixed(0)}% against a fair share of ${(t4 * 100).toFixed(0)}%. Twice the capacity, twice the virtual nodes.`; m.className = 'hmsg good';
+        if (!goals.has('hetero')) { checkGoal('#s4goals', 'hetero', goals, 20); logTo('r4log', '✓ heterogeneity: virtual nodes in proportion to capacity', 'g'); setTimeout(startDeath, 700); }
+      }
+    }
+  }
+  function update() { check(render(false)); }
+  $('#vSlider').addEventListener('input', e => { L.vi = +e.target.value; update(); });
+  $$('#multSeg button').forEach(b => b.onclick = () => { L.mult = +b.dataset.m; $$('#multSeg button').forEach(x => x.classList.toggle('on', x === b)); logTo('r4log', `s4 now gets ${L.mult}× the virtual nodes`); update(); });
+  function startHetero() {
+    if (L.big) return;
+    L.big = true; L.mult = 1; $$('#multSeg button').forEach(x => x.classList.toggle('on', x.dataset.m === '1'));
+    $('#hetero').classList.add('on'); logTo('r4log', '🖥️ s4 upgraded to 2× capacity. Its fair-share line moved.', 'w'); update();
+  }
+  async function startDeath() {
+    const box = $('#r4box'); box.style.display = 'block';
+    await sleep(300);
+    L.big = false; L.mult = 1; L.vi = 7; L.alive = [1, 1, 1, 1, 1]; $('#hetero').classList.remove('on');
+    render(false);
+    logTo('r4log', 'Reset to 100 virtual nodes each, all servers equal.');
+    const { row } = await predict(box, {
+      step: 'Predict, then watch',
+      title: 'Every server has 100 virtual nodes. Server <b>s1</b> dies. Where does its load go?',
+      options: ['Only the next server clockwise inherits', 'It spreads across all other servers', 'The emptiest server takes it all'],
+      correct: 1,
+      act: async () => { L.alive[1] = 0; render(true); logTo('r4log', '💀 s1 died. Each of its 100 slices went to whichever server sits clockwise of that slice.', 'w'); await sleep(Q.reduced ? 50 : 1000); },
+      explain: 'Each of s1’s 100 small slices passes to whatever server comes next clockwise from <i>that</i> slice, and those are scattered among s0, s2, s3 and s4. Every survivor gets roughly a quarter (look at the green <b>+</b> numbers). Dynamo lists exactly this advantage.<a class="cite" href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf" target="_blank" rel="noopener">[4]</a> Compare round 3, where s2 swallowed everything.',
+    });
+    nextBtn(row, 'Finish the lab →', () => {
+      box.innerHTML = '<div class="row"><button class="btn" id="r4again">↻ Replay this round</button></div>';
+      $('#r4again').onclick = () => startDeath();
+      Q.clearStage(4);
+    });
+  }
+  $('#vReset').onclick = () => {
+    L.vi = 0; L.big = false; L.mult = 1; L.alive = [1, 1, 1, 1, 1]; L.prev = null;
+    $('#hetero').classList.remove('on'); $('#hmsg').textContent = '';
+    $('#r4log').innerHTML = '<div>1 virtual node each is just the basic ring. Look how uneven it is.</div>';
+    goals.clear(); $$('#s4goals li').forEach(li => li.classList.remove('done'));
+    $('#r4box').style.display = 'none'; $('#r4box').innerHTML = '';
+    update();
+  };
+  update();
+});
+
+/* ================= STAGE 5: recall ================= */
+Q.onStage(5, () => {
+  const IDEAS = { R: 'Rehashing problem', C: 'Consistent hashing', V: 'Virtual nodes' };
+  const SORT = [
+    { t: 'Going from 4 cache servers to 5 makes about 80% of lookups miss.', a: 'R', why: 'Changing N under hash % N remaps most keys. That’s the rehashing problem.' },
+    { t: 'A key is stored on the first server you reach walking clockwise.', a: 'C', why: 'That’s the core rule of the hash ring.' },
+    { t: 'Each physical server appears at many points on the ring.', a: 'V', why: 'Many positions per server = virtual nodes.' },
+    { t: 'A server with twice the disk gets twice as many ring positions.', a: 'V', why: 'Heterogeneity: virtual nodes in proportion to capacity.' },
+    { t: 'When a server leaves, only the keys it held have to move.', a: 'C', why: 'On a ring, a leave only affects that server’s own slice. About k/n keys move.' },
+  ];
+  let sorted = 0;
+  $('#flipBtn').onclick = () => {
+    sorted = 0;
+    $$('#cards5 .card').forEach((c, i) => setTimeout(() => c.classList.add('down'), i * 120));
+    $('#flipRow').style.display = 'none'; $('#sortWrap').style.display = 'block'; $('#s5quiz').innerHTML = '';
+    $('#sort').innerHTML = shuffle(SORT).map(s => `<div class="sort-item" data-t="${SORT.indexOf(s)}"><p>${s.t}</p><div class="row">${['R', 'C', 'V'].map(k => `<button class="opt" data-k="${k}">${IDEAS[k]}</button>`).join('')}</div><div class="explain"></div></div>`).join('');
+    $$('#sort .sort-item').forEach(item => {
+      const s = SORT[+item.dataset.t];
+      $$('.opt', item).forEach(b => b.onclick = () => {
+        $$('.opt', item).forEach(x => x.disabled = true);
+        const ok = b.dataset.k === s.a;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-k="${s.a}"]`, item).classList.add('right');
+        const ex = $('.explain', item); ex.className = 'explain show ' + (ok ? 'good' : 'bad'); ex.textContent = s.why;
+        ok ? Q.addXP(10, b) : Q.loseHeart(b);
+        if (++sorted === SORT.length) setTimeout(quiz, 600);
+      });
+    });
+  };
+  function quiz() {
+    Q.quiz($('#s5quiz'), {
+      tag: 'Final check',
+      q: 'Why does a new server on a ring move only about k/n keys, not most of them?',
+      options: ['It takes over just one slice', 'It copies every key it receives', 'Keys are sorted before being moved'],
+      correct: 0,
+      good: 'The new server only takes the slice between itself and the server before it. Every other key still walks clockwise to the same server as before.',
+      bad: 'It’s about ownership, not copying or sorting. The new server only takes over the slice between itself and the server before it, and every other key still reaches the same server.',
+      onDone: () => {
+        $('#flipRow').style.display = ''; $('#flipBtn').textContent = '↻ Flip them back up and try again';
+        $$('#cards5 .card').forEach(c => c.classList.remove('down'));
+        setTimeout(() => Q.clearStage(5), 900);
+      },
+    });
+  }
+});
+
+/* ================= STAGE 6: boss ================= */
+Q.onStage(6, () => Q.boss($('#boss'), {
+  name: '🦑 Rehash Kraken',
+  xp: 15,
+  choices: [
+    { k: 'mod', label: 'hash % N', sub: 'keep it simple' },
+    { k: 'ring', label: 'Hash ring', sub: 'consistent hashing' },
+    { k: 'vn', label: '+ Virtual nodes', sub: 'many points per server' },
+  ],
+  scenarios: [
+    { e: '🛍️', t: 'A cache that resizes every day', d: 'Your cache fleet grows from 10 to 14 nodes every evening and shrinks at night. Clients pick a node with hash(key) % N.', a: 'ring', why: 'Each resize changes N, which remaps most keys and sends a flood of misses to the database. On a ring only the slices next to the new nodes move, about k/n keys.' },
+    { e: '📊', t: 'One server hogs the ring', d: 'You’re already on a ring, with one point per server. The dashboard shows s3 holding 31% of the data across 6 servers.', a: 'vn', why: 'With one random point per server, arcs come out uneven. Give every server many points (100+) and the slices average out. The book quotes ~10% spread at 100.' },
+    { e: '🧮', t: 'A fixed, tiny lookup table', d: 'Exactly 4 shards, hard-wired in config. The shard count will never change.', a: 'mod', why: 'If N truly never changes, rehashing never happens, and plain hash % N is simple and spreads evenly. The ring only pays off when N changes. In an interview, be ready to defend "never".' },
+    { e: '🖥️', t: 'Bigger new hardware', d: 'You’re on a ring. New servers have twice the RAM and disk of the old ones, and you want them to carry twice the data.', a: 'vn', why: 'Heterogeneity: give each server virtual nodes in proportion to its capacity, so a 2× server gets 2× the points.' },
+    { e: '💥', t: 'A cache box dies', d: 'Clients use hash(key) % 5. One box dies, N becomes 4, and suddenly the database is hammered by misses.', a: 'ring', why: 'This is the rehashing problem: N changed, so about 80% of keys now map elsewhere and miss. On a ring, only the dead box’s keys move, to its clockwise neighbour.' },
+    { e: '🔥', t: 'Domino failure', d: 'On a basic ring (one point per server) a server dies. Its clockwise neighbour inherits everything, overloads, and dies too.', a: 'vn', why: 'With virtual nodes a dead server’s slices are scattered around the ring, so its load spreads across all survivors instead of crushing one neighbour (Dynamo §4.2).' },
+  ],
+  outro: 'The pattern: if N changes, use a ring. If the ring is uneven or your servers differ in size, add virtual nodes.',
+  onDone: () => Q.clearStage(6),
+}));
+
+/* ================= STAGE 7: interview drill ================= */
+Q.onStage(7, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"Our key-value store has billions of keys, and servers join and fail all the time. How do you decide which server stores which key?"</i>',
+  placeholder: 'I’d put servers and keys on a ring…',
+  model: '"I\'d use consistent hashing. Servers and keys are hashed onto the same ring, and a key lives on the first server clockwise from its position. With hash-mod-N, changing N remaps most keys. On the ring, adding or removing a server only moves the keys in its neighbouring slice, about k/n of them. To keep the load even, each server gets many virtual nodes on the ring, and bigger servers get more. That also means a failed server\'s load spreads across everyone instead of landing on one neighbour."',
+  checks: ['I explained the ring and the clockwise rule', 'I said why not hash % N: most keys move when N changes', 'I brought up virtual nodes for even load (and bigger servers getting more)'],
+  onDone: () => Q.clearStage(7),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Who Wrote Last?</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: server colours, stage 1 twin-node sim, stage 2 clock builder, stage 3 version graph + dials,
+   stage 4 compare game + truncation demo, stage 5 cart merge */
+.sx { --c: var(--accent); --cs: var(--accent-soft); }
+.sy { --c: var(--teal); --cs: var(--teal-soft); }
+.sz { --c: var(--warn); --cs: var(--warn-soft); }
+.recap { font-size: 14.5px; }
+.recap code { white-space: normal; }
+
+/* stage 1 */
+.twin svg { max-width: 560px; margin: 0 auto; }
+.twin .nrect { fill: var(--panel); stroke: var(--accent); stroke-width: 2.5; transition: stroke .3s, fill .3s; }
+.twin .nrect.conflict { stroke: var(--warn); fill: var(--warn-soft); }
+.twin .nt { fill: var(--muted); font-family: var(--font); font-weight: 700; font-size: 16px; text-anchor: middle; }
+.twin .nv { fill: var(--ink); font-family: var(--mono); font-size: 14.5px; text-anchor: middle; transition: fill .3s; }
+.twin .nv.fresh { fill: var(--accent); font-weight: 600; }
+.twin .client rect { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+.twin .client text { fill: var(--accent); font-weight: 700; font-size: 15px; text-anchor: middle; font-family: var(--font); }
+.twin .clink { stroke: var(--line); stroke-width: 2; stroke-dasharray: 3 5; }
+.twin .rlink { stroke: var(--muted); stroke-width: 3; opacity: .5; }
+.twin .cbadge { fill: var(--warn); font-weight: 700; font-size: 15px; text-anchor: middle; font-family: var(--font); opacity: 0; transition: opacity .4s; }
+.twin.split .cbadge { opacity: 1; }
+
+/* clock chips (stages 2, 4, 5) */
+.clock { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-family: var(--mono); font-size: 14px; min-height: 36px; }
+.clock .paren { color: var(--muted); font-weight: 600; }
+.clock .empty { color: var(--muted); font-family: var(--font); font-size: 14px; }
+.vpair { display: inline-block; border: 1px solid var(--line); border-left: 4px solid var(--c, var(--muted)); background: var(--panel); border-radius: 8px; padding: 3px 8px; font-weight: 600; white-space: nowrap; }
+.vpair.add { animation: pairIn .45s cubic-bezier(.2,.8,.2,1); }
+.vpair.bump { animation: bump .5s; background: var(--cs, var(--bg-2)); }
+.vpair.drop { opacity: 0; transform: scale(.6); transition: opacity .45s, transform .45s; }
+@keyframes pairIn { from { opacity: 0; transform: translateY(-8px) scale(.7); } }
+@keyframes bump { 40% { transform: scale(1.25); } }
+
+/* stage 2 builder */
+.item-card { border: 1px solid var(--line); border-radius: 16px; background: var(--bg); padding: 14px 16px; margin-top: 14px; }
+.item-top { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-weight: 600; font-size: 14px; margin-bottom: 10px; }
+.rule-line { margin-top: 10px; font-size: 14px; color: var(--muted); min-height: 22px; }
+.rule-line b { color: var(--ink); }
+.srv-row { margin-top: 12px; }
+.srv-btn { border-left: 5px solid var(--c); }
+
+/* stage 3 version graph */
+.dag svg { max-width: 600px; margin: 0 auto; }
+.dag .vb { opacity: 0; transform: scale(.7); transform-box: fill-box; transform-origin: center; transition: opacity .45s, transform .45s cubic-bezier(.2,.8,.2,1); }
+.dag .vb.ghost, .dag .vb.on { opacity: 1; transform: none; }
+.dag .vb.old { opacity: .42; }
+.dag .vrect { fill: var(--cs); stroke: var(--c); stroke-width: 2.5; }
+.dag .ghost .vrect { fill: var(--panel); stroke: var(--muted); stroke-dasharray: 5 5; }
+.dag .vt { fill: var(--ink); font: 700 15px var(--font); text-anchor: middle; }
+.dag .vp { fill: var(--ink); font: 600 16.5px var(--mono); text-anchor: middle; }
+.dag .vq { fill: var(--muted); font: 700 22px var(--font); text-anchor: middle; }
+.dag .edge { fill: none; stroke: var(--muted); stroke-width: 2.2; stroke-dasharray: 1; stroke-dashoffset: 1; opacity: 0; transition: stroke-dashoffset .6s ease-out, opacity .2s; }
+.dag .edge.on { stroke-dashoffset: 0; opacity: .8; }
+.dag .edge.done { marker-end: url(#arr3); }
+.dag #arr3 path { fill: var(--muted); }
+.dag .conf { opacity: 0; transition: opacity .4s; }
+.dag .conf.on { opacity: 1; }
+.dag .conf line { stroke: var(--bad); stroke-width: 2.5; stroke-dasharray: 5 6; }
+.dag .conf rect { fill: var(--bad-soft); stroke: var(--bad); stroke-width: 1.5; }
+.dag .conf text { fill: var(--bad); font: 700 13px var(--font); text-anchor: middle; }
+.dag .conf.merged line { stroke: var(--good); }
+.dag .conf.merged rect { fill: var(--good-soft); stroke: var(--good); }
+.dag .conf.merged text { fill: var(--good); }
+.srv { display: inline-block; font-family: var(--mono); font-weight: 600; font-size: 13px; padding: 2px 9px; border-radius: 8px; border: 1px solid var(--line); border-left: 4px solid var(--c); margin-right: 4px; transition: background .3s, transform .3s; }
+.srv.on { background: var(--cs); transform: scale(1.12); }
+.dials { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 6px 0 10px; }
+.dial { border: 2px solid var(--line); border-top: 5px solid var(--c); border-radius: 12px; padding: 8px 4px; text-align: center; background: var(--bg); }
+.dial .dn { display: block; font-family: var(--mono); font-weight: 700; font-size: 14px; }
+.dial .dr { display: flex; justify-content: center; align-items: center; gap: 4px; margin-top: 4px; }
+.dial button { width: 30px; height: 30px; flex: none; border-radius: 9px; border: 1px solid var(--line); background: var(--panel); font-weight: 700; font-size: 18px; line-height: 1; padding: 0; }
+.dial button:hover:not([disabled]) { border-color: var(--accent); }
+.dial .dv { min-width: 18px; font-family: var(--mono); font-size: 20px; }
+.dial.zero .dv { color: var(--muted); }
+.pred { font-family: var(--mono); font-size: 14px; padding: 8px 12px; border-radius: 10px; background: var(--bg-2); margin-bottom: 10px; word-break: break-word; }
+
+/* stage 4 compare game */
+.vs { border: 1px solid var(--line); border-radius: 18px; background: var(--bg); padding: 16px; margin-top: 14px; }
+.vs-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.timer { flex: 1; max-width: 220px; height: 8px; border-radius: 99px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; }
+.timer div { height: 100%; width: 100%; background: linear-gradient(90deg, var(--teal), var(--accent)); }
+.timer.low div { background: var(--bad); }
+.clocks { display: grid; gap: 8px; margin: 14px 0 6px; }
+.clk { font-family: var(--mono); font-size: 15.5px; font-weight: 600; padding: 10px 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); word-break: break-word; }
+.clk .who { display: inline-block; width: 26px; color: var(--accent); }
+.vs-q { font-weight: 600; margin: 12px 0 0; }
+.vs .choice { grid-template-columns: repeat(3, 1fr); }
+.vs .choice .opt b { font-size: 17px; }
+@media (max-width: 560px) { .vs .choice { grid-template-columns: repeat(3, 1fr); gap: 6px; } .vs .choice .opt { padding: 10px 4px; } .vs .choice .opt b { font-size: 14px; } .vs .choice .opt span { font-size: 11.5px; } }
+.cmp { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 13.5px; margin-top: 10px; }
+.cmp th, .cmp td { padding: 4px 6px; border-bottom: 1px solid var(--line); text-align: center; }
+.cmp th { font-family: var(--font); font-size: 12px; color: var(--muted); }
+.cmp .xa { color: var(--warn); font-weight: 700; }
+.cmp .ya { color: var(--teal); font-weight: 700; }
+.trunc { display: none; margin-top: 20px; }
+.trunc.on { display: block; animation: rise .4s; }
+.trunc .clock { font-size: 12.5px; gap: 5px; }
+.trunc .vpair { padding: 2px 6px; }
+.oldcopy { margin-top: 10px; font-size: 14px; }
+
+/* stage 5 carts */
+.sibs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+.sib { border: 2px solid var(--c); border-radius: 14px; padding: 10px 12px; background: var(--bg); transition: opacity .4s, filter .4s; }
+.sib.dropped { opacity: .4; filter: grayscale(1); }
+.sib h4 { margin: 0 0 4px; font-size: 14px; }
+.sib .mono { font-size: 11.5px; color: var(--muted); display: block; word-break: break-word; }
+.sib ul { list-style: none; padding: 0; margin: 8px 0 0; font-size: 15px; }
+.sib li { padding: 2px 0; }
+.carts { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+.cart-chip { border: 2px dashed var(--line); background: var(--panel); border-radius: 12px; padding: 8px 12px; font-weight: 600; font-size: 15px; transition: border-color .2s, background .2s; }
+.cart-chip.in { border-style: solid; border-color: var(--good); background: var(--good-soft); }
+.cart-chip[disabled] { cursor: default; }
+.mergebox { border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; margin-top: 14px; background: var(--bg); }
+.reveal { display: none; margin-top: 12px; }
+.reveal.on { display: block; animation: rise .4s; }
+.history { font-size: 14.5px; border-left: 4px solid var(--accent); padding: 8px 12px; background: var(--accent-soft); border-radius: 0 12px 12px 0; }
+.lwwbox { display: none; margin-top: 12px; font-size: 15px; }
+.lwwbox.on { display: block; animation: rise .4s; }
+.resurrect { color: var(--warn); font-weight: 700; }
+.lost { color: var(--bad); font-weight: 700; text-decoration: line-through; }
+.face .L { font-size: 24px; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 6.5 · Design a Key-Value Store</div>
+    <h1>Who Wrote Last?</h1>
+    <p class="lede">Two replicas, two different values, one key. Meet the tiny list of counters that tells you which write came first — or proves nobody can tell.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> when an interviewer asks "two replicas accepted different writes to the same key — now what?", you can explain how a <b>vector clock</b> detects the conflict, who fixes it, and what that costs compared with plain <b>last-write-wins</b>.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Two truths at once</h2><div class="sub">How replicas end up disagreeing</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div class="callout tip recap"><b>Remember Quest 6.1's sandbox?</b> When you wrote to both sides of a split and healed it, the log said <code>⚔ CONFLICT: both sides were written during the split…</code> and quietly kept the most recent write. The other write was thrown away. Today you pay that off: how a real store <i>notices</i> the conflict instead of guessing.</div>
+      <p>Copying data to several servers (<b>replication</b>) keeps the store available, but the copies can drift apart.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noopener">[1]</a> Here is the book's example: replicas <b>n1</b> and <b>n2</b> both hold <code>name = "john"</code>. Two clients change it at the same moment, through different replicas.</p>
+
+      <div class="sim twin" id="twin">
+        <svg viewBox="0 0 400 256" role="img" aria-label="Two clients writing to two replicas, n1 and n2">
+          <line class="clink" x1="100" y1="50" x2="100" y2="95"/>
+          <line class="clink" x1="300" y1="50" x2="300" y2="95"/>
+          <line class="rlink" x1="194" y1="155" x2="206" y2="155"/>
+          <g class="client"><rect x="35" y="10" width="130" height="40" rx="12"/><text x="100" y="36">💻 client A</text></g>
+          <g class="client"><rect x="235" y="10" width="130" height="40" rx="12"/><text x="300" y="36">💻 client B</text></g>
+          <rect class="nrect" id="n1r" x="6" y="95" width="188" height="122" rx="14"/>
+          <rect class="nrect" id="n2r" x="206" y="95" width="188" height="122" rx="14"/>
+          <text class="nt" x="100" y="121">n1</text><text class="nt" x="300" y="121">n2</text>
+          <text class="nv" id="n1a" x="100" y="158">name = john</text><text class="nv" id="n1b" x="100" y="188"></text>
+          <text class="nv" id="n2a" x="300" y="158">name = john</text><text class="nv" id="n2b" x="300" y="188"></text>
+          <text class="cbadge" x="200" y="244">⚔ two versions — which one wins?</text>
+          <g id="twinPk"></g>
+        </svg>
+        <div class="sim-bar"><button class="btn primary" id="twinGo">⚡ Both clients write at the same instant</button></div>
+        <div class="simlog" id="twinLog"><div>n1 and n2 both hold name = "john".</div></div>
+      </div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Build a clock</h2><div class="sub">Versioning and the vector-clock rule</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The fix starts with <b>versioning</b>: every change creates a <b>new, unchangeable version</b> of the data instead of editing it in place.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noopener">[1]</a> Then each version gets a label that records its history — a <b>vector clock</b>.</p>
+      <p>A vector clock is just a list of <code>[server, counter]</code> pairs stuck to the data: <code>D([S1, v1], [S2, v2], …)</code>. The rule when a write to D is handled by server <b>Si</b>:</p>
+      <ul>
+        <li>If <code>[Si, vi]</code> is already in the clock → <b>add 1</b> to <code>vi</code>.</li>
+        <li>If it isn't → <b>add a new pair</b> <code>[Si, 1]</code>.</li>
+      </ul>
+      <p>That's the whole rule. Send some writes through different servers and watch the clock 👇</p>
+      <div class="item-card">
+        <div class="item-top"><span>📦 data item <b>D</b></span><span class="mono muted" id="bVer">no versions yet</span></div>
+        <div class="clock" id="bClock"><span class="empty">empty clock — nobody has written yet</span></div>
+        <div class="rule-line" id="bRule">Tap a server to send a write through it.</div>
+        <div class="row srv-row">
+          <button class="btn srv-btn sx" data-s="Sx">✍️ write via Sx</button>
+          <button class="btn srv-btn sy" data-s="Sy">✍️ write via Sy</button>
+          <button class="btn srv-btn sz" data-s="Sz">✍️ write via Sz</button>
+          <button class="btn" id="bReset">↻ Reset</button>
+        </div>
+      </div>
+      <ul class="checklist" id="s2goals">
+        <li data-g="bump"><span class="box">✓</span>Make a server bump a counter that's already there</li>
+        <li data-g="add"><span class="box">✓</span>Bring a second server into the clock (new pair)</li>
+        <li data-g="three"><span class="box">✓</span>Grow the clock to three pairs</li>
+      </ul>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Replay the book's story</h2><div class="sub">Predict each clock, then watch the versions branch and merge</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>This is the book's worked example (its Figure 6-9, taken from the Dynamo paper).<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noopener">[1]</a><a class="cite" href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf" target="_blank" rel="noopener">[2]</a> Three servers — <span class="srv sx">Sx</span><span class="srv sy">Sy</span><span class="srv sz">Sz</span> — handle five writes to one item. Before each write lands, <b>set the dials to the clock you expect</b> (<b>—</b> means "no pair for this server"). Right calls earn XP; wrong ones cost a heart.</p>
+      <div class="sim dag" id="dag">
+        <svg viewBox="0 0 460 300" role="img" aria-label="Version graph: D1 to D5">
+          <defs><marker id="arr3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker></defs>
+          <g id="dagEdges"></g>
+          <g class="conf" id="dagConf"><line x1="278" y1="112" x2="278" y2="188"/><rect x="232" y="138" width="92" height="24" rx="12"/><text x="278" y="154">⚔ siblings</text></g>
+          <g id="dagBoxes"></g>
+          <g id="dagPk"></g>
+        </svg>
+        <div class="sim-bar"><span>Handled by <span class="srv sx" data-s="Sx">Sx</span><span class="srv sy" data-s="Sy">Sy</span><span class="srv sz" data-s="Sz">Sz</span></span><span class="mono small muted" id="dagStep">step 0 / 5</span></div>
+        <div class="simlog" id="dagLog"><div>No versions yet.</div></div>
+      </div>
+      <div class="challenge" id="dagCh"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Ancestor or conflict?</h2><div class="sub">Compare two clocks at speed</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Line two clocks up server by server. A missing pair counts as <b>0</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noopener">[1]</a></p>
+      <ul>
+        <li><b>X is an ancestor of Y</b> (no conflict) if <b>every</b> counter in Y is ≥ the matching counter in X. Y already contains X's changes, so X can be thrown away. Book example: <code>D([s0,1],[s1,1])</code> is an ancestor of <code>D([s0,1],[s1,2])</code>.</li>
+        <li><b>X and Y are siblings — a conflict</b> — if X is ahead on some server <i>and</i> Y is ahead on another. Book example: <code>D([s0,1],[s1,2])</code> vs <code>D([s0,2],[s1,1])</code>.</li>
+      </ul>
+      <p class="small muted">Six rounds, 12 seconds each. Answer in under 6 seconds for a +5 speed bonus. Running out of time costs no heart — just the XP.</p>
+      <div class="vs" id="vs"></div>
+      <div class="trunc" id="trunc">
+        <h3 style="margin:0 0 6px">When clocks get too long</h3>
+        <p class="small" style="margin-top:0">The book's second downside: every new server that handles a write adds a pair, so the clock can grow. The fix is a <b>size cap</b>: past a threshold, drop the oldest pair. Dynamo keeps a timestamp on each pair to know which is oldest, and its example cap is 10.<a class="cite" href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf" target="_blank" rel="noopener">[2]</a> Here a hot key has already been written through 10 servers during a messy outage.</p>
+        <div class="item-card" style="margin-top:8px">
+          <div class="item-top"><span>📦 newest version <b>Y</b></span><span class="mono muted" id="tCount">10 / 10 pairs</span></div>
+          <div class="clock" id="tClock"></div>
+          <div class="oldcopy">🐢 An old copy still sits on a slow replica: <b class="mono">X = D([S1,1])</b> — a true ancestor of Y.</div>
+          <div class="row" style="margin-top:12px"><button class="btn primary" id="tWrite">✍️ Write via S11</button></div>
+        </div>
+        <div id="s4quiz"></div>
+        <div class="callout warn" id="truncCaveat" style="display:none"><b>Honest caveat — this is rarer than it sounds.</b> The Dynamo paper admits truncation "can lead to inefficiencies in reconciliation" because ancestry can no longer be worked out accurately — and then says the problem had not come up in production, so Amazon never investigated it deeply.<a class="cite" href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf" target="_blank" rel="noopener">[2]</a> Writes are normally handled by the same few servers, so clocks stay short.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Merge day</h2><div class="sub">You are the client — reconcile the siblings</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>When two versions conflict, the store can't pick for you: it keeps <b>both siblings</b> and hands them to the next client that reads the key. That client — your application code — merges them and writes the result back.<a class="cite" href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf" target="_blank" rel="noopener">[2]</a> Amazon's shopping cart does exactly this, with one hard rule: <b>an "add to cart" must never be lost.</b></p>
+      <p>A read returns these two siblings of one shopper's cart:</p>
+      <div class="sibs">
+        <div class="sib sy" id="sibA"><h4>Sibling A · 📱 phone</h4><span class="mono">D([Sx,2],[Sy,1]) · 10:02:07</span><ul><li>📕 book</li><li>🎧 headphones</li></ul></div>
+        <div class="sib sz" id="sibB"><h4>Sibling B · 💻 laptop</h4><span class="mono">D([Sx,2],[Sz,1]) · 10:02:05</span><ul><li>📕 book</li><li>🖊️ pen</li><li>☕ mug</li></ul></div>
+      </div>
+      <div class="mergebox">
+        <b>Build the merged cart.</b> <span class="small muted">Tap items to put them in (or take them out).</span>
+        <div class="carts" id="carts"></div>
+        <div class="row"><button class="btn primary" id="mergeGo">📤 Write merged cart via Sx</button></div>
+        <div class="explain" id="mergeEx"></div>
+        <div class="reveal" id="mergeReveal">
+          <div class="history"><b>What really happened.</b> Before the split the cart was <span class="mono">D([Sx,2])</span> = 📕 book, 🖊️ pen. On the phone, the shopper added 🎧 headphones <i>and removed 🖊️ pen</i> → sibling A. On the laptop, they added ☕ mug → sibling B.</div>
+          <p>The merged version is <b class="mono">D5([Sx,3],[Sy,1],[Sz,1])</b> — exactly Stage 3's D5. Notice the <span class="resurrect">🖊️ pen is back</span>, even though the shopper deleted it. The client only sees two finished carts, not the steps that made them, so "A dropped the pen" looks identical to "B added a pen". Dynamo's paper admits it plainly: an add to cart is never lost, but deleted items can resurface.<a class="cite" href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf" target="_blank" rel="noopener">[2]</a></p>
+          <div class="row"><button class="btn" id="lwwGo">⏱️ Now replay it with last-write-wins</button><button class="btn" id="mergeReset">↻ Redo the merge</button></div>
+          <div class="lwwbox" id="lwwBox">
+            <p><b>Last-write-wins (LWW)</b> skips clocks and merging: every write carries a timestamp, and the newest timestamp simply wins. Cassandra works this way.<a class="cite" href="https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html" target="_blank" rel="noopener">[3]</a> Sibling A (10:02:07) beats sibling B (10:02:05), so the cart becomes 📕 book, 🎧 headphones. The <span class="lost">☕ mug</span> just vanished — no error, no sibling, nobody told. Simpler, but a real add-to-cart was silently dropped.</p>
+            <div class="callout warn"><b>Honest caveat — "newest" depends on whose clock.</b> LWW trusts timestamps from different machines, and machine clocks drift. A server whose clock runs a few seconds fast can make an older write "win".<a class="cite" href="https://dataintensive.net/" target="_blank" rel="noopener">[5]</a> Vector clocks avoid wall-clock time entirely: they only track who has seen what.</div>
+          </div>
+        </div>
+      </div>
+      <div id="s5quiz"></div>
+      <div id="s5recall" style="display:none">
+        <p style="margin-top:20px">Vector clocks never lose a write — but they aren't free. The book lists two downsides; LWW is the simpler alternative.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noopener">[1]</a></p>
+        <div class="cards" id="dnCards">
+          <div class="card"><div class="card-in"><div class="face"><div class="L">🧩</div><h3>Client complexity</h3><p>The client must implement conflict resolution — like the merge you just wrote — for every kind of data that can conflict.</p></div><div class="face back"><div class="L">🧩</div></div></div></div>
+          <div class="card"><div class="card-in"><div class="face"><div class="L">📏</div><h3>Clock growth</h3><p>[server, counter] pairs pile up. Cap the size and drop the oldest — but then ancestry gets fuzzy.</p></div><div class="face back"><div class="L">📏</div></div></div></div>
+          <div class="card"><div class="card-in"><div class="face"><div class="L">⏱️</div><h3>Timestamp wins</h3><p>The LWW alternative: no clocks to compare, no merge code — but one of two concurrent writes silently disappears.</p></div><div class="face back"><div class="L">⏱️</div></div></div></div>
+        </div>
+        <div class="row" id="dnFlipRow"><button class="btn primary" id="dnFlip">I've got it — flip them face-down</button><span class="muted small">Recall beats re-reading.</span></div>
+        <div id="dnSortWrap" style="display:none">
+          <p class="small muted" style="margin-top:16px">Which card is each sentence about? From memory.</p>
+          <div class="sort" id="dnSort"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Boss: The Clock Tower</h2><div class="sub">Detect &amp; merge, or last write wins?</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Six real products, each about to get two concurrent writes to the same key. For each, pick: <b>detect the conflict with vector clocks and let the client merge</b>, or <b>keep the newest timestamp and drop the other</b>?</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 7 ================= -->
+  <section class="stage" data-stage="7" id="s7">
+    <div class="stage-h"><div class="num">7</div><div><h2>Say it like a senior</h2><div class="sub">The interview answer, in your words</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <p class="small muted" style="margin-top:16px">Next up — Quest 6.6 <i>When Nodes Die</i>: how servers notice a dead peer, and how missed writes get repaired.</p>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-key-value-store" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 6 — "Inconsistency resolution: versioning"</a>. Then read §4.4 "Data Versioning" of the <a href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf" target="_blank" rel="noopener">Dynamo paper</a> — it's two pages, it's where Figure 6-9 comes from, and it explains the shopping-cart merge in Amazon's own words.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      In practice conflicts are rare: over 24 hours, 99.94% of Amazon shopping-cart reads saw exactly one version, and most divergence came from many writers hitting one key at once (often automated clients), not from failures.<a class="cite" href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf" target="_blank" rel="noopener">[2]</a> Later systems refined the idea: Riak 2.0 switched to <i>dotted version vectors</i>, which tag each sibling with the exact write that made it, to stop siblings piling up ("sibling explosion").<a class="cite" href="https://docs.riak.com/riak/kv/latest/learn/concepts/causal-context/" target="_blank" rel="noopener">[4]</a> Even Dynamo let some services opt into last-write-wins — its session-info service did.<a class="cite" href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf" target="_blank" rel="noopener">[2]</a>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat) — e.g. <i>"why not just use timestamps if conflicts are so rare?"</i> or <i>"how would a merge work for something that isn't a set, like a counter?"</i>. Follow-up questions are part of the quest.
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 6, "Inconsistency resolution: versioning" (ByteByteGo).</li>
+        <li>DeCandia et al., "Dynamo: Amazon's Highly Available Key-value Store", SOSP 2007 — §4.4 Data Versioning, §5, §6.3 Divergent Versions.</li>
+        <li>Apache Cassandra documentation, "Dynamo" architecture page — Data Versioning (last-write-wins).</li>
+        <li>Riak KV documentation, "Causal Context" — vector clocks vs dotted version vectors, sibling explosion.</li>
+        <li>Martin Kleppmann, <i>Designing Data-Intensive Applications</i> (O'Reilly, 2017) — last write wins and unreliable clocks.</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0005',
+  winTitle: 'Every write accounted for',
+  badge: '🕰️ Badge: Clockwatcher',
+  cheatsheet: '../reference/kv-store-cap-cheatsheet.html',
+});
+const { sleep, shuffle, esc } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+const SERVERS = ['Sx', 'Sy', 'Sz'];
+const cls = s => s.toLowerCase();
+// A clock is a plain object { Sx: 2, Sy: 1 }; key order = order pairs were added.
+const fmtPairs = c => Object.keys(c).map(k => `[${k},${c[k]}]`).join(',');
+const fmt = (c, name = 'D') => `${name}(${fmtPairs(c)})`;
+const chip = (s, n, extra = '') => `<span class="vpair ${cls(s)} ${extra}">[${esc(s)}, ${n}]</span>`;
+function logTo(el, html, c) { el.insertAdjacentHTML('beforeend', `<div class="${c || ''}">${html}</div>`); el.scrollTop = el.scrollHeight; }
+
+// Generic packet animation along a straight line inside an SVG layer.
+function packet(layer, [x1, y1], [x2, y2], { color = 'var(--accent)', label = '' } = {}) {
+  const c = document.createElementNS(NS, 'circle'); c.setAttribute('r', 8); c.style.fill = color;
+  const tx = document.createElementNS(NS, 'text'); tx.setAttribute('font-size', 11); tx.setAttribute('font-weight', 700); tx.setAttribute('text-anchor', 'middle'); tx.setAttribute('font-family', 'JetBrains Mono, monospace'); tx.style.fill = color; tx.textContent = label;
+  layer.append(c, tx);
+  const dur = Q.reduced ? 1 : 650;
+  return new Promise(res => {
+    const t0 = performance.now();
+    const frame = now => {
+      const p = Math.min(1, (now - t0) / dur), k = p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+      const x = x1 + (x2 - x1) * k, y = y1 + (y2 - y1) * k;
+      c.setAttribute('cx', x); c.setAttribute('cy', y); tx.setAttribute('x', x); tx.setAttribute('y', y - 12);
+      if (p < 1) requestAnimationFrame(frame); else { c.remove(); tx.remove(); res(); }
+    };
+    requestAnimationFrame(frame);
+  });
+}
+
+/* ================= STAGE 1: two truths ================= */
+let twinBusy = false, twinQuizzed = false;
+function twinReset() {
+  $('#n1a').textContent = 'name = john'; $('#n2a').textContent = 'name = john';
+  $('#n1b').textContent = ''; $('#n2b').textContent = '';
+  $$('#twin .nv').forEach(t => t.classList.remove('fresh'));
+  $$('#twin .nrect').forEach(r => r.classList.remove('conflict'));
+  $('#twin').classList.remove('split');
+  $('#twinLog').innerHTML = '<div>n1 and n2 both hold name = "john".</div>';
+}
+$('#twinGo').onclick = async e => {
+  if (twinBusy) return; twinBusy = true;
+  const btn = e.currentTarget; btn.disabled = true;
+  twinReset();
+  const L = $('#twinLog'), pk = $('#twinPk');
+  logTo(L, 'client A → n1: name = "johnSanFrancisco"');
+  logTo(L, 'client B → n2: name = "johnNewYork"');
+  await Promise.all([packet(pk, [100, 50], [100, 140], { label: 'SF' }), packet(pk, [300, 50], [300, 140], { label: 'NY', color: 'var(--teal)' })]);
+  $('#n1a').textContent = 'v1 johnSanFrancisco'; $('#n2a').textContent = 'v2 johnNewYork';
+  $('#n1a').classList.add('fresh'); $('#n2a').classList.add('fresh');
+  logTo(L, 'n1 now has version v1, n2 has version v2. They replicate to each other…');
+  await sleep(Q.reduced ? 0 : 350);
+  await Promise.all([packet(pk, [100, 172], [300, 172], { label: 'v1' }), packet(pk, [300, 172], [100, 172], { label: 'v2', color: 'var(--teal)' })]);
+  $('#n1b').textContent = 'v2 johnNewYork'; $('#n2b').textContent = 'v1 johnSanFrancisco';
+  $$('#twin .nrect').forEach(r => r.classList.add('conflict')); $('#twin').classList.add('split');
+  logTo(L, '⚔ Each replica now holds v1 AND v2. Which is newer? Did one replace the other? The values alone can\'t say.', 'w');
+  btn.textContent = '↻ Replay the collision'; btn.disabled = false; twinBusy = false;
+  if (!twinQuizzed) {
+    twinQuizzed = true; Q.addXP(10, btn);
+    setTimeout(() => Q.quiz($('#s1quiz'), {
+      q: 'Each replica now holds both v1 and v2. Looking only at the two stored values, what can the system tell?',
+      options: ['Nothing: no order, no conflict signal', 'The longer value is the newer', 'The first node’s value always wins'],
+      correct: 0,
+      good: 'Two strings carry no history. The system can’t tell which came first — or even whether one write knew about the other. It needs <b>extra information stored with each version</b>. That’s the next stage.',
+      bad: 'Nothing in the values themselves records history — length and node order are meaningless. Without extra information stored next to each version, the system can’t even tell that v1 and v2 conflict.',
+      onDone: () => setTimeout(() => Q.clearStage(1), 1000),
+    }), 500);
+  }
+};
+
+/* ================= STAGE 2: clock builder ================= */
+let bClock = {}, bVer = 0;
+const bGoals = new Set();
+function bRender(changed, how) {
+  const keys = Object.keys(bClock);
+  $('#bClock').innerHTML = keys.length
+    ? `<span class="paren">D${bVer}(</span>${keys.map(k => chip(k, bClock[k], k === changed ? how : '')).join('')}<span class="paren">)</span>`
+    : '<span class="empty">empty clock — nobody has written yet</span>';
+  $('#bVer').textContent = bVer ? `version D${bVer}` : 'no versions yet';
+}
+function bGoal(g) {
+  if (bGoals.has(g)) return;
+  bGoals.add(g);
+  const li = $(`#s2goals [data-g="${g}"]`); li.classList.add('done'); Q.addXP(10, li);
+  if (bGoals.size === 3 && !$('#s2quiz').children.length) setTimeout(stage2Quiz, 600);
+}
+$$('#s2 .srv-btn').forEach(b => b.onclick = () => {
+  const s = b.dataset.s; bVer++;
+  if (bClock[s]) {
+    const old = bClock[s]++;
+    $('#bRule').innerHTML = `<b>${s}</b> is already in the clock → add 1 to its counter: ${old} → <b>${bClock[s]}</b>.`;
+    bRender(s, 'bump'); bGoal('bump');
+  } else {
+    const first = !Object.keys(bClock).length;
+    bClock[s] = 1;
+    $('#bRule').innerHTML = `<b>${s}</b> isn't in the clock yet → add a new pair <b>[${s}, 1]</b>.`;
+    bRender(s, 'add'); if (!first) bGoal('add');
+  }
+  if (Object.keys(bClock).length >= 3) bGoal('three');
+});
+$('#bReset').onclick = () => { bClock = {}; bVer = 0; bRender(); $('#bRule').textContent = 'Tap a server to send a write through it.'; };
+function stage2Quiz() {
+  Q.quiz($('#s2quiz'), {
+    q: 'An item carries the clock D([Sx,3],[Sy,1]). The next write is handled by Sy. What is the new clock?',
+    options: ['D([Sx,3],[Sy,2])', 'D([Sx,4],[Sy,1])', 'D([Sx,4],[Sy,2])'],
+    correct: 0,
+    good: 'Only the server that handles the write touches the clock. Sy is already there, so <i>its</i> counter goes 1 → 2; Sx’s counter stays put.',
+    bad: 'Only the server handling the write changes the clock — and only its own counter. Sy is already there, so it goes 1 → 2. Sx’s 3 is untouched: D([Sx,3],[Sy,2]).',
+    onDone: () => setTimeout(() => Q.clearStage(2), 1000),
+  });
+}
+
+/* ================= STAGE 3: Figure 6-9 replay ================= */
+const POS3 = { D1: [50, 150], D2: [155, 150], D3: [278, 72], D4: [278, 228], D5: [402, 150] };
+const BW = 92, bh = n => 32 + 20 * n;
+const STEPS = [
+  { id: 'D1', parents: [], via: 'Sx', clock: { Sx: 1 }, watch: true,
+    text: 'A client writes a brand-new item, <b>D1</b>. Server <b>Sx</b> handles the write.',
+    explain: 'The clock starts empty. Sx isn’t in it, so Sx adds <b>[Sx,1]</b>: D1([Sx,1]).' },
+  { id: 'D2', parents: ['D1'], via: 'Sx', clock: { Sx: 2 },
+    text: 'Another client reads D1, updates it to <b>D2</b>, and <b>Sx</b> handles the write again. Set the dials for D2’s clock.',
+    explain: 'D2 starts from D1’s clock [Sx,1]. Sx is already there, so its counter goes up: <b>D2([Sx,2])</b>. D2 descends from D1, so D1 can be thrown away (it’s faded in the graph).' },
+  { id: 'D3', parents: ['D2'], via: 'Sy', clock: { Sx: 2, Sy: 1 },
+    text: 'A client reads D2, updates it to <b>D3</b>. This time server <b>Sy</b> handles the write.',
+    explain: 'Start from D2’s clock [Sx,2]. Sy is new to this clock, so it adds a pair: <b>D3([Sx,2],[Sy,1])</b>.' },
+  { id: 'D4', parents: ['D2'], via: 'Sz', clock: { Sx: 2, Sz: 1 },
+    text: 'Meanwhile a <i>different</i> client also reads <b>D2</b> — it never saw D3 — updates it to <b>D4</b>, and <b>Sz</b> handles the write.',
+    explain: 'The trap: D4 is built from <b>D2</b>, not D3, so there is no Sy in it. Start from [Sx,2] and add [Sz,1]: <b>D4([Sx,2],[Sz,1])</b>. Now compare D3 and D4: D3 is ahead on Sy, D4 is ahead on Sz — <b>siblings</b>. The store keeps both.' },
+  { id: 'D5', parents: ['D3', 'D4'], via: 'Sx', clock: { Sx: 3, Sy: 1, Sz: 1 },
+    text: 'A client reads <b>both D3 and D4</b>, sees the conflict, merges them into <b>D5</b>, and <b>Sx</b> handles the write.',
+    explain: 'First combine the two clocks by taking the larger counter for each server: [Sx,2],[Sy,1],[Sz,1]. Then Sx handles the write and bumps its own counter: <b>D5([Sx,3],[Sy,1],[Sz,1])</b>. D5 descends from both D3 and D4, so the conflict is resolved.' },
+];
+let si = 0, dagBusy = false, dial = { Sx: 0, Sy: 0, Sz: 0 };
+function edgePath(a, b) {
+  const [ax, ay] = POS3[a], [bx, by] = POS3[b];
+  const x1 = ax + BW / 2, x2 = bx - BW / 2 - 3;
+  return `M${x1},${ay} C${x1 + 26},${ay} ${x2 - 26},${by} ${x2},${by}`;
+}
+function drawBox(step, ghost) {
+  const g = $('#vb-' + step.id), [cx, cy] = POS3[step.id];
+  const pairs = Object.keys(step.clock), h = ghost ? 72 : bh(pairs.length), top = cy - h / 2;
+  g.setAttribute('class', `vb ${cls(step.via)}${ghost ? ' ghost' : ''}`);
+  g.innerHTML = `<rect class="vrect" x="${cx - BW / 2}" y="${top}" width="${BW}" height="${h}" rx="10"/>
+    <text class="vt" x="${cx}" y="${top + 21}">${step.id} · ${step.via}</text>` +
+    (ghost ? `<text class="vq" x="${cx}" y="${top + 54}">?</text>`
+      : pairs.map((k, i) => `<text class="vp" x="${cx}" y="${top + 22 + 20 * (i + 1)}">[${k},${step.clock[k]}]</text>`).join(''));
+}
+function dagReset() {
+  si = 0; dagBusy = false;
+  $('#dagBoxes').innerHTML = STEPS.map(s => `<g id="vb-${s.id}" class="vb"></g>`).join('');
+  $('#dagEdges').innerHTML = STEPS.flatMap(s => s.parents.map(p => `<path class="edge" id="e-${p}-${s.id}" pathLength="1" d="${edgePath(p, s.id)}"/>`)).join('');
+  $('#dagConf').setAttribute('class', 'conf');
+  $('#dagLog').innerHTML = '<div>No versions yet.</div>';
+  $('#dagStep').textContent = 'step 0 / 5';
+  $$('#dag .sim-bar .srv').forEach(x => x.classList.remove('on'));
+}
+async function revealStep(step) {
+  $$('#dag .sim-bar .srv').forEach(x => x.classList.toggle('on', x.dataset.s === step.via));
+  drawBox(step, false);
+  step.parents.forEach(p => { const e = $(`#e-${p}-${step.id}`); e.classList.add('on'); setTimeout(() => e.classList.add('done'), Q.reduced ? 0 : 600); });
+  await sleep(30);
+  $('#vb-' + step.id).classList.add('on');
+  if (step.id === 'D2') $('#vb-D1').classList.add('old');
+  if (step.id === 'D4') { await sleep(Q.reduced ? 0 : 500); $('#dagConf').setAttribute('class', 'conf on'); }
+  if (step.id === 'D5') { $('#dagConf').setAttribute('class', 'conf on merged'); $('#dagConf text').textContent = '✓ merged'; $('#vb-D2').classList.add('old'); }
+  else $('#dagConf text').textContent = '⚔ siblings';
+  $('#dagStep').textContent = `step ${STEPS.indexOf(step) + 1} / 5`;
+  logTo($('#dagLog'), `${step.id} written via ${step.via} → ${fmt(step.clock, step.id)}`, 'g');
+  if (step.id === 'D4') logTo($('#dagLog'), '⚔ D3 vs D4: D3 is ahead on Sy, D4 is ahead on Sz → conflict. Both siblings are kept.', 'w');
+  if (step.id === 'D5') logTo($('#dagLog'), '✓ D5 descends from both D3 and D4 — the branches are merged.', 'g');
+  await sleep(Q.reduced ? 0 : 500);
+}
+function dialsHTML() {
+  return `<div class="dials">${SERVERS.map(s => `<div class="dial ${cls(s)} zero" data-s="${s}"><span class="dn">${s}</span><div class="dr"><button class="dm" aria-label="Decrease ${s}">−</button><b class="dv">—</b><button class="dp" aria-label="Increase ${s}">+</button></div></div>`).join('')}</div>
+    <div class="pred" id="predLine"></div>`;
+}
+function predClock() { const c = {}; SERVERS.forEach(s => { if (dial[s]) c[s] = dial[s]; }); return c; }
+function renderDials(id) {
+  $$('#dagCh .dial').forEach(d => { const s = d.dataset.s; $('.dv', d).textContent = dial[s] || '—'; d.classList.toggle('zero', !dial[s]); });
+  const c = predClock();
+  $('#predLine').textContent = `Your prediction: ${Object.keys(c).length ? fmt(c, id) : id + '( )'}`;
+}
+const sameClock = (a, b) => SERVERS.every(s => (a[s] || 0) === (b[s] || 0));
+function showStep() {
+  const step = STEPS[si], box = $('#dagCh');
+  dial = { Sx: 0, Sy: 0, Sz: 0 };
+  if (!step.watch) drawBox(step, true);
+  box.innerHTML = `<div class="step">Step ${si + 1} of ${STEPS.length}${step.watch ? ' · watch' : ' · predict'}</div><h3>${step.text}</h3>` +
+    (step.watch ? `<div class="row"><button class="btn primary" id="dagGo">▶ Write D1 via Sx</button></div>`
+      : `${dialsHTML()}<div class="row"><button class="btn primary" id="dagGo">🔒 Lock in prediction</button></div>`) +
+    `<div class="explain"></div><div class="row nextrow" style="margin-top:12px"></div>`;
+  if (!step.watch) {
+    renderDials(step.id);
+    $$('#dagCh .dial').forEach(d => {
+      const s = d.dataset.s;
+      $('.dm', d).onclick = () => { dial[s] = Math.max(0, dial[s] - 1); renderDials(step.id); };
+      $('.dp', d).onclick = () => { dial[s] = Math.min(5, dial[s] + 1); renderDials(step.id); };
+    });
+  }
+  $('#dagGo').onclick = async e => {
+    if (dagBusy) return; dagBusy = true;
+    const go = e.currentTarget; go.disabled = true;
+    $$('#dagCh .dial button').forEach(b => b.disabled = true);
+    let ok = true;
+    if (!step.watch) { ok = sameClock(predClock(), step.clock); logTo($('#dagLog'), `— your prediction: ${$('#predLine').textContent.replace('Your prediction: ', '')}`); }
+    await revealStep(step);
+    const ex = $('.explain', box);
+    ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+    ex.innerHTML = step.watch ? step.explain : (ok ? '<b>Called it.</b> ' : `<b>Not quite</b> — the clock is <span class="mono">${fmt(step.clock, step.id)}</span>. `) + step.explain;
+    if (!step.watch) ok ? Q.addXP(20, go) : Q.loseHeart(go);
+    const nx = document.createElement('button'); nx.className = 'btn primary';
+    nx.textContent = si < STEPS.length - 1 ? 'Next step →' : 'Finish the replay →';
+    nx.onclick = () => {
+      si++; dagBusy = false;
+      if (si < STEPS.length) return showStep();
+      box.innerHTML = `<div class="callout tip"><b>That's Figure 6-9 — and you built every clock.</b> One honest note: "at the same time" in conflict talk doesn't mean the same millisecond. D3 and D4 conflict because <i>neither write had seen the other</i>, however far apart they happened.</div><div class="row"><button class="btn" id="dagReplay">↻ Replay the five steps</button></div>`;
+      $('#dagReplay').onclick = () => { dagReset(); showStep(); };
+      Q.clearStage(3);
+    };
+    $('.nextrow', box).appendChild(nx);
+  };
+}
+Q.onStage(3, () => { dagReset(); showStep(); });
+
+/* ================= STAGE 4: compare game + truncation ================= */
+const ROUNDS = [
+  { x: { s0: 1, s1: 1 }, y: { s0: 1, s1: 2 }, a: 'anc', book: true },
+  { x: { s0: 1, s1: 2 }, y: { s0: 2, s1: 1 }, a: 'conf', book: true },
+  { x: { Sx: 2, Sy: 1 }, y: { Sx: 2 }, a: 'desc' },
+  { x: { Sx: 2, Sy: 1 }, y: { Sx: 2, Sz: 1 }, a: 'conf' },
+  { x: { Sx: 2 }, y: { Sx: 3, Sy: 1, Sz: 1 }, a: 'anc' },
+  { x: { Sx: 3 }, y: { Sx: 2, Sy: 1 }, a: 'conf' },
+];
+const VS_CHOICES = [
+  { k: 'anc', label: 'Ancestor', sub: 'X came first' },
+  { k: 'desc', label: 'Descendant', sub: 'X came later' },
+  { k: 'conf', label: 'Conflict', sub: 'neither came first' },
+];
+const LIMIT = 12000, FAST = 6000;
+let order = [], ri = 0, vsWins = 0, tInt = null;
+function compare(x, y) {
+  const ks = [...new Set([...Object.keys(x), ...Object.keys(y)])];
+  const xAhead = ks.filter(k => (x[k] || 0) > (y[k] || 0)), yAhead = ks.filter(k => (y[k] || 0) > (x[k] || 0));
+  const a = !xAhead.length && yAhead.length ? 'anc' : xAhead.length && !yAhead.length ? 'desc' : 'conf';
+  return { ks, xAhead, yAhead, a };
+}
+function cmpTable(x, y) {
+  const { ks, xAhead, yAhead, a } = compare(x, y);
+  const rows = ks.map(k => {
+    const xv = x[k] || 0, yv = y[k] || 0, rel = xv > yv ? '<span class="xa">X ahead</span>' : yv > xv ? '<span class="ya">Y ahead</span>' : '=';
+    return `<tr><td>${k}</td><td>${xv}${k in x ? '' : '<sup class="muted">*</sup>'}</td><td>${yv}${k in y ? '' : '<sup class="muted">*</sup>'}</td><td>${rel}</td></tr>`;
+  }).join('');
+  const why = a === 'anc' ? `X is never ahead, and Y is ahead on ${yAhead.join(', ')}. Every counter in Y is ≥ X’s, so <b>X is an ancestor</b>: Y already includes X, and X can be thrown away.`
+    : a === 'desc' ? `Y is never ahead, and X is ahead on ${xAhead.join(', ')}. So <b>X is a descendant</b>: X already includes Y’s changes.`
+    : `X is ahead on ${xAhead.join(', ')} while Y is ahead on ${yAhead.join(', ')}. Neither includes the other, so they are <b>siblings — a conflict</b> the client must merge.`;
+  const note = ks.some(k => !(k in x) || !(k in y)) ? '<div class="small muted" style="margin-top:4px">* missing pair, counts as 0</div>' : '';
+  return `<table class="cmp"><tr><th>server</th><th>X</th><th>Y</th><th></th></tr>${rows}</table>${note}<p style="margin:8px 0 0">${why}</p>`;
+}
+function vsShow() {
+  const r = order[ri], box = $('#vs');
+  box.innerHTML = `<div class="vs-top"><span>Round ${ri + 1} / ${order.length}${r.book ? ' · from the book' : ''}</span><div class="timer"><div></div></div></div>
+    <div class="clocks"><div class="clk"><span class="who">X</span>= ${fmt(r.x)}</div><div class="clk"><span class="who">Y</span>= ${fmt(r.y)}</div></div>
+    <p class="vs-q">X is Y’s…</p>
+    <div class="choice">${VS_CHOICES.map(c => `<button class="opt" data-c="${c.k}"><b>${c.label}</b><span>${c.sub}</span></button>`).join('')}</div>
+    <div class="explain"></div><div class="row nextrow" style="margin-top:12px"></div>`;
+  const bar = $('.timer', box), t0 = performance.now();
+  let done = false;
+  const finish = (b) => {
+    if (done) return; done = true; clearInterval(tInt);
+    const ms = performance.now() - t0;
+    $$('.choice .opt', box).forEach(x => x.disabled = true);
+    const ex = $('.explain', box), ok = b && b.dataset.c === r.a;
+    if (b) b.classList.add(ok ? 'right' : 'wrong');
+    if (!ok) $(`.choice .opt[data-c="${r.a}"]`, box).classList.add('right');
+    ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+    ex.innerHTML = (b ? (ok ? (ms < FAST ? '<b>Correct — and fast.</b> ' : '<b>Correct.</b> ') : '<b>Not quite.</b> ') : '<b>⏰ Time’s up — no XP this round.</b> ') + cmpTable(r.x, r.y);
+    if (b) { if (ok) { vsWins++; Q.addXP(ms < FAST ? 15 : 10, b); } else Q.loseHeart(b); }
+    const nx = document.createElement('button'); nx.className = 'btn primary';
+    nx.textContent = ri < order.length - 1 ? 'Next round →' : 'See results →';
+    nx.onclick = () => {
+      ri++;
+      if (ri < order.length) return vsShow();
+      box.innerHTML = `<div class="scenario"><div class="emoji">🕰️</div><h3>${vsWins} of ${order.length} clocks read correctly</h3><p>The whole rule in one line: if one side is never ahead, it's the ancestor; if both sides are ahead somewhere, it's a conflict.</p></div><div class="row" style="margin-top:12px"><button class="btn" id="vsReplay">↻ Play again (practice)</button></div>`;
+      $('#vsReplay').onclick = vsStart;
+      $('#trunc').classList.add('on');
+    };
+    $('.nextrow', box).appendChild(nx);
+  };
+  $$('.choice .opt', box).forEach(b => b.onclick = () => finish(b));
+  clearInterval(tInt);
+  tInt = setInterval(() => {
+    if (!document.body.contains(bar)) { clearInterval(tInt); return; }
+    const left = Math.max(0, 1 - (performance.now() - t0) / LIMIT);
+    bar.firstElementChild.style.width = (left * 100) + '%';
+    bar.classList.toggle('low', left < .25);
+    if (left <= 0) finish(null);
+  }, 100);
+}
+function vsStart() {
+  clearInterval(tInt); order = shuffle(ROUNDS); ri = 0; vsWins = 0;
+  $('#vs').innerHTML = `<div class="scenario"><div class="emoji">⏱️</div><h3>Ancestor or conflict?</h3><p>${ROUNDS.length} pairs of clocks · 12 seconds each · the clock starts when you do.</p></div><div class="row" style="margin-top:12px;justify-content:center"><button class="btn primary" id="vsGo">▶ Start the clock</button></div>`;
+  $('#vsGo').onclick = vsShow;
+}
+
+let tClock = [], tWritten = false;
+function tRender(extra) {
+  $('#tClock').innerHTML = `<span class="paren">Y(</span>${tClock.map(p => `<span class="vpair ${extra && extra[p.s] || ''}" data-s="${p.s}">[${p.s},${p.n}]</span>`).join('')}<span class="paren">)</span>`;
+  $('#tCount').textContent = `${tClock.length} / 10 pairs`;
+}
+function truncReset() {
+  tClock = Array.from({ length: 10 }, (_, i) => ({ s: 'S' + (i + 1), n: 1 })); tWritten = false;
+  tRender(); $('#tWrite').disabled = false; $('#tWrite').textContent = '✍️ Write via S11';
+}
+$('#tWrite').onclick = async e => {
+  if (tWritten) { truncReset(); return; }
+  tWritten = true; const btn = e.currentTarget; btn.disabled = true;
+  tClock.push({ s: 'S11', n: 1 }); tRender({ S11: 'add' });
+  $('#tCount').textContent = '11 pairs — over the cap!';
+  await sleep(Q.reduced ? 0 : 700);
+  const old = $('#tClock .vpair[data-s="S1"]'); old.classList.add('drop');
+  await sleep(Q.reduced ? 0 : 480);
+  tClock.shift(); tRender();
+  $('#tCount').textContent = '10 / 10 pairs · dropped oldest: [S1,1]';
+  if (!$('#s4quiz').children.length) {
+    Q.quiz($('#s4quiz'), {
+      tag: 'Predict',
+      q: 'The store now compares the old copy X = D([S1,1]) with the truncated Y. What will the comparison say?',
+      options: ['A conflict, though X is older', 'An ancestor, exactly as it was', 'A descendant, because Y changed more'],
+      correct: 0,
+      good: 'Y lost its S1 pair, so S1 now counts as 0 in Y — while X has S1 = 1. X looks “ahead” on S1, Y is ahead everywhere else: a <b>false conflict</b>. A client gets asked to merge something that was really just old. That’s the inefficiency the book warns about.',
+      bad: 'Y lost its S1 pair, so S1 now counts as 0 in Y — while X has S1 = 1. X looks “ahead” on S1 and Y is ahead everywhere else, so the store reports a <b>conflict</b> that isn’t real. A client gets asked to merge something that was really just old.',
+      onDone: () => { $('#truncCaveat').style.display = 'block'; btn.disabled = false; btn.textContent = '↻ Reset the clock'; setTimeout(() => Q.clearStage(4), 1200); },
+    });
+  } else { btn.disabled = false; btn.textContent = '↻ Reset the clock'; }
+};
+Q.onStage(4, () => { vsStart(); truncReset(); });
+
+/* ================= STAGE 5: merge day ================= */
+const ITEMS = [{ k: 'book', e: '📕' }, { k: 'pen', e: '🖊️' }, { k: 'headphones', e: '🎧' }, { k: 'mug', e: '☕' }];
+let picked = new Set(), merged = false;
+function cartsRender() {
+  $('#carts').innerHTML = shuffle(ITEMS).map(it => `<button class="cart-chip${picked.has(it.k) ? ' in' : ''}" data-k="${it.k}" aria-pressed="${picked.has(it.k)}">${it.e} ${it.k}</button>`).join('');
+  $$('#carts .cart-chip').forEach(b => b.onclick = () => {
+    if (merged) return;
+    const k = b.dataset.k; picked.has(k) ? picked.delete(k) : picked.add(k);
+    b.classList.toggle('in', picked.has(k)); b.setAttribute('aria-pressed', picked.has(k));
+  });
+}
+$('#mergeGo').onclick = e => {
+  if (merged) return;
+  const btn = e.currentTarget;
+  if (!picked.size) { Q.toast('Pick some items first', btn, 'practice'); return; }
+  merged = true; btn.disabled = true; $$('#carts .cart-chip').forEach(b => b.disabled = true);
+  const missing = ITEMS.map(i => i.k).filter(k => !picked.has(k));
+  const ex = $('#mergeEx');
+  if (!missing.length) {
+    ex.className = 'explain show good';
+    ex.innerHTML = '<b>Right by the rule.</b> You can’t tell from two finished carts which items were removed, so the only merge that never loses an add is the <b>union</b> — everything that appears in either sibling.';
+    Q.addXP(20, btn);
+  } else if (missing.length === 1 && missing[0] === 'pen') {
+    ex.className = 'explain show bad';
+    ex.innerHTML = '<b>Clever guess — but a gamble.</b> You assumed the phone <i>removed</i> the pen. From the two carts alone, that looks identical to the laptop <i>adding</i> it. A merge that drops it would sometimes throw away a real add-to-cart — the one thing the cart must never do. No heart lost; see what really happened below.';
+  } else {
+    ex.className = 'explain show bad';
+    ex.innerHTML = `<b>Not quite.</b> Your merge dropped ${missing.map(k => '<b>' + k + '</b>').join(', ')} — ${missing.length > 1 ? 'items that were' : 'an item that was'} in a sibling. If ${missing.length > 1 ? 'those were' : 'that was'} added, you just lost an add-to-cart. The safe merge is the <b>union</b> of both siblings.`;
+    Q.loseHeart(btn);
+  }
+  $('#mergeReveal').classList.add('on');
+};
+$('#lwwGo').onclick = e => {
+  const btn = e.currentTarget; btn.disabled = true;
+  $('#sibB').classList.add('dropped'); $('#lwwBox').classList.add('on');
+  if (!$('#s5quiz').children.length) setTimeout(stage5Quiz, 500);
+};
+function stage5Quiz() {
+  Q.quiz($('#s5quiz'), {
+    q: 'After the union merge, the shopper’s deleted pen is back in the cart. What is the root cause?',
+    options: ['Siblings store results, not the deletes', 'Vector clocks lose the newest counter', 'The older timestamp overwrote the newer'],
+    correct: 0,
+    good: 'Each sibling is just a finished cart. A delete leaves no trace — it’s simply an item that isn’t there — so the merge can’t tell “removed on A” from “added on B”. Dynamo accepts the occasional zombie item to guarantee no add is ever lost.',
+    bad: 'The clocks worked perfectly — they correctly flagged A and B as siblings. The problem is what siblings contain: finished carts. A delete leaves no trace, so the merge can’t tell “removed on A” from “added on B”.',
+    onDone: () => { $('#s5recall').style.display = 'block'; },
+  });
+}
+const DN = [
+  { t: 'Your app team has to write and test merge code for every kind of data that can conflict.', a: 'client', why: 'Pushing reconciliation to the client = client complexity.' },
+  { t: 'A key written through many different servers drags a long list of pairs around with it.', a: 'growth', why: 'More servers handling writes = more pairs = clock growth (hence the cap).' },
+  { t: 'Simpler for everyone — but one of two concurrent writes quietly disappears.', a: 'lww', why: 'That’s last-write-wins: the newest timestamp is kept, the other write is dropped.' },
+];
+const DN_NAMES = { client: 'Client complexity', growth: 'Clock growth', lww: 'Timestamp wins' };
+$('#dnFlip').onclick = () => {
+  let sorted = 0;
+  $$('#dnCards .card').forEach((c, i) => setTimeout(() => c.classList.add('down'), i * 120));
+  $('#dnFlipRow').style.display = 'none'; $('#dnSortWrap').style.display = 'block';
+  $('#dnSort').innerHTML = shuffle(DN).map(s => `<div class="sort-item" data-a="${s.a}"><p>${s.t}</p><div class="row">${shuffle(Object.keys(DN_NAMES)).map(k => `<button class="opt" data-k="${k}">${DN_NAMES[k]}</button>`).join('')}</div><div class="explain"></div></div>`).join('');
+  $$('#dnSort .sort-item').forEach(item => {
+    const s = DN.find(x => x.a === item.dataset.a);
+    $$('.opt', item).forEach(b => b.onclick = () => {
+      $$('.opt', item).forEach(x => x.disabled = true);
+      const ok = b.dataset.k === s.a;
+      b.classList.add(ok ? 'right' : 'wrong');
+      if (!ok) $(`.opt[data-k="${s.a}"]`, item).classList.add('right');
+      const ex = $('.explain', item); ex.className = 'explain show ' + (ok ? 'good' : 'bad'); ex.textContent = s.why;
+      ok ? Q.addXP(10, b) : Q.loseHeart(b);
+      if (++sorted === DN.length) {
+        $('#dnFlipRow').style.display = ''; $('#dnFlip').textContent = '↻ Flip them back up and try again';
+        $$('#dnCards .card').forEach(c => c.classList.remove('down'));
+        setTimeout(() => Q.clearStage(5), 900);
+      }
+    });
+  });
+};
+function mergeReset() {
+  picked = new Set(); merged = false; cartsRender();
+  $('#mergeGo').disabled = false; $('#mergeEx').className = 'explain';
+  $('#mergeReveal').classList.remove('on'); $('#lwwBox').classList.remove('on'); $('#sibB').classList.remove('dropped'); $('#lwwGo').disabled = false;
+}
+$('#mergeReset').onclick = mergeReset;
+Q.onStage(5, mergeReset);
+
+/* ================= STAGE 6: boss ================= */
+const DYN = '<a class="cite" href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf" target="_blank" rel="noopener">[2]</a>';
+Q.onStage(6, () => Q.boss($('#boss'), {
+  name: '👾 The Clock Tower',
+  xp: 15,
+  choices: [{ k: 'VC', label: 'Detect & merge', sub: 'vector clocks + client merge' }, { k: 'LWW', label: 'Last write wins', sub: 'newest timestamp kept, other dropped' }],
+  scenarios: [
+    { e: '🛒', t: 'Shopping cart during a flash sale', d: 'A shopper adds items from a phone and a laptop while two replicas are cut off from each other.', a: 'VC', why: 'This is Dynamo’s own example: an add to cart must never be lost, so siblings are kept and merged. The price: a deleted item can occasionally come back.' + DYN },
+    { e: '🔑', t: 'Login session data', d: 'Who is logged in and which page they were on. Rewritten on almost every request.', a: 'LWW', why: 'Losing one of two near-simultaneous session updates is harmless, and nobody wants to write merge code for it. Dynamo itself ran its session-info service in last-write-wins mode.' + DYN },
+    { e: '🌡️', t: 'A thermostat’s “current temperature”', d: 'A sensor reports a fresh reading every few seconds.', a: 'LWW', why: 'Only the newest reading matters; an older one is worthless anyway. There’s nothing to merge — keep the latest.' },
+    { e: '📋', t: 'Shared grocery list', d: 'Two roommates, both offline in the store, each add items at the same time.', a: 'VC', why: 'Each add is something a person meant. Last-write-wins would silently erase one roommate’s items. Detect the siblings, merge the lists — and accept that a removed item might reappear.' },
+    { e: '📝', t: 'Wiki page edited by two people', d: 'Two editors save changes to the same page during a network split.', a: 'VC', why: 'Silently dropping one editor’s work is unacceptable. Detect the conflict and surface both versions for a merge — the same idea as a git merge conflict.' },
+    { e: '🖼️', t: 'Profile picture URL', d: 'A user changes their avatar from two devices within the same second.', a: 'LWW', why: 'Only one picture can be shown, and either recent choice is acceptable. A merge has nothing to combine, so last-write-wins is the simple, correct call.' },
+  ],
+  outro: 'The pattern: if every concurrent write carries intent you can’t afford to lose, detect and merge; if only the latest value matters, last-write-wins keeps it simple.',
+  onDone: () => Q.clearStage(6),
+}));
+
+/* ================= STAGE 7: drill ================= */
+Q.onStage(7, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer leans in: <i>"During a network split, two replicas of your key-value store accepted different writes to the same key. How do you detect that, and what do you do about it?"</i>',
+  placeholder: 'Every write creates a new version, and each version carries…',
+  model: '"I\'d version every write and attach a vector clock — a list of [server, counter] pairs; the server that handles a write bumps its own counter, or adds itself with 1. To compare two versions, I line up the counters: if one is ≤ the other everywhere, it\'s an ancestor and can be dropped; if each is ahead somewhere, they\'re concurrent siblings. The store keeps both and returns them on the next read; the client merges them — say, a union for a shopping cart — and writes back, which collapses the branches. The costs are merge logic in the client and clocks that grow, which we cap by dropping the oldest pair. If the data only needs the latest value, last-write-wins by timestamp is simpler, but it silently drops one of the concurrent writes."',
+  checks: ['I described the clock: [server, counter] pairs and how a write updates them', 'I explained the comparison: all ≤ means ancestor, ahead on both sides means conflict', 'I said siblings go to the client to merge and get written back', 'I named a cost or the LWW alternative (client complexity, clock growth, dropped writes)'],
+  onDone: () => Q.clearStage(7),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>
