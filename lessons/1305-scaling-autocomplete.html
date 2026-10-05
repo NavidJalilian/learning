@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Split the Alphabet</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: s1 alphabet shard bar, s2 balance scale + shard bins + lookup, s3 trie node demo, s4 trending timeline */
+:root { --lava: #e2572b; --lava-soft: #fde7dc; --gold: #b98900; --idle: #b9b5c6; --band-a: #ebe8ff; --band-b: #dcf5f3; --on-acc: #ffffff; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --lava: #ff8a5c; --lava-soft: #3a1d12; --gold: #ffd23f; --idle: #4a4c68; --band-a: #25224a; --band-b: #123335; --on-acc: #0e0f1d; }
+}
+:root[data-theme="dark"] { --lava: #ff8a5c; --lava-soft: #3a1d12; --gold: #ffd23f; --idle: #4a4c68; --band-a: #25224a; --band-b: #123335; --on-acc: #0e0f1d; }
+
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.challenge.boxed:empty { display: none; }
+.bignum { font-family: var(--mono); font-weight: 700; }
+.cap { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.seg button { min-height: 40px; min-width: 48px; }
+.seg button.on { background: var(--accent); color: #fff; }
+.msg { min-height: 24px; font-size: 14px; font-weight: 600; padding: 8px 14px; }
+.msg.good { color: var(--good); } .msg.bad { color: var(--bad); } .msg.gold { color: var(--gold); } .msg.meh { color: var(--warn); }
+
+/* ---------- svg text ---------- */
+.sv-t { fill: var(--ink); font: 600 11px var(--mono); }
+.sv-m { fill: var(--muted); font: 600 10px var(--font); }
+.sv-c { text-anchor: middle; }
+.sv-b { font-weight: 700; }
+
+/* ---------- stage 1: alphabet bar ---------- */
+.abar .lbar { fill: var(--accent); opacity: .75; }
+.abar .band { stroke: var(--panel); stroke-width: 1; }
+.abar .gauge { stroke: var(--panel); stroke-width: .8; transition: height .5s, y .5s; }
+.abar .g-ok { fill: var(--teal); } .abar .g-warn { fill: var(--warn); } .abar .g-hot { fill: var(--bad); } .abar .g-idle { fill: var(--idle); }
+.abar .fair { stroke: var(--ink); stroke-width: 1.2; stroke-dasharray: 4 3; }
+.letters { display: none; padding: 12px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+.letters.on { display: block; }
+.lgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(42px, 1fr)); gap: 6px; margin-top: 8px; }
+.lbtn { min-height: 44px; border: 2px solid var(--line); background: var(--bg); border-radius: 10px; font: 700 15px var(--mono); padding: 2px 0; display: grid; place-items: center; line-height: 1.05; }
+.lbtn small { font: 600 10px var(--mono); color: var(--muted); }
+.lbtn:hover:not([disabled]) { border-color: var(--accent); }
+.lbtn.hot { border-color: var(--bad); background: var(--bad-soft); }
+.lbtn.goldy { border-color: var(--gold); box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold) 35%, transparent); }
+.lbtn.bored { border-color: var(--idle); opacity: .7; }
+.lbtn.shake { animation: shake .4s; }
+.lgend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12.5px; color: var(--muted); }
+.lgend i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+
+/* ---------- stage 2: balance scale ---------- */
+.scale svg { max-width: 460px; margin: 0 auto; }
+.scale .beam { transition: transform .5s cubic-bezier(.3,1.4,.5,1); transform-origin: 200px 52px; }
+.scale .pan { fill: var(--bg-2); stroke: var(--line); stroke-width: 1.5; }
+.scale .post { fill: var(--muted); }
+.scale .beamr { fill: var(--ink); }
+.chiprow { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px 12px; justify-content: center; }
+.lchip { min-height: 44px; min-width: 52px; border: 2px solid var(--line); background: var(--panel); border-radius: 10px; font: 700 14px var(--mono); padding: 2px 8px; }
+.lchip small { display: block; font: 600 10px var(--mono); color: var(--muted); }
+.lchip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+
+/* ---------- stage 2: shard bins ---------- */
+.bins { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 14px; }
+@media (max-width: 520px) { .bins { grid-template-columns: 1fr; } }
+.bin { border: 2px dashed var(--line); border-radius: 14px; padding: 10px; background: var(--panel); cursor: pointer; transition: border-color .2s, background .2s; min-height: 120px; }
+.bin.target { border-color: var(--accent); background: var(--accent-soft); }
+.bin.over { border-color: var(--bad); border-style: solid; }
+.bin.okb { border-color: var(--good); border-style: solid; }
+.bin:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.bin-h { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; font-size: 13px; font-weight: 700; flex-wrap: wrap; }
+.bin-h .ld { font-family: var(--mono); }
+.bmeter { position: relative; height: 12px; margin: 6px 0 8px; border-radius: 99px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; }
+.bmeter .bf { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 99px; background: var(--teal); transition: width .4s, background .3s; }
+.bmeter .bf.hi { background: var(--bad); }
+.bmeter .bf.lo { background: var(--idle); }
+.bmeter .cap1 { position: absolute; top: -1px; bottom: -1px; width: 2px; background: var(--ink); }
+.tiles { display: flex; flex-wrap: wrap; gap: 5px; min-height: 44px; }
+.tilebtn { height: 44px; border: 0; border-radius: 9px; background: var(--accent); color: var(--on-acc); font: 700 14px var(--mono); padding: 0 6px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; transition: transform .15s, box-shadow .15s; }
+.tilebtn small { font: 600 10px var(--mono); opacity: .85; }
+.tilebtn.sel { box-shadow: 0 0 0 3px var(--panel), 0 0 0 5px var(--ink); transform: translateY(-2px); }
+.tilebtn[disabled] { cursor: default; opacity: .9; }
+.maptable { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 8px; }
+.maptable th, .maptable td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+.maptable td:first-child { font-family: var(--mono); font-weight: 700; word-break: break-word; }
+.maptable th { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+.lookup svg { max-width: 520px; margin: 0 auto; }
+.lookup .nd rect { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; }
+.lookup .nd.hl rect { stroke: var(--accent); stroke-width: 2.5; fill: var(--accent-soft); }
+.lookup .nd.good rect { stroke: var(--good); stroke-width: 2.5; fill: var(--good-soft); }
+.lookup .wire { stroke: var(--line); stroke-width: 1.5; }
+.lookup .pkt { fill: var(--xp); stroke: var(--ink); stroke-width: 1.5; }
+.shardpick { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; }
+@media (max-width: 420px) { .shardpick { grid-template-columns: repeat(2, 1fr); } }
+.shardpick .opt { text-align: center; }
+
+/* ---------- stage 3: trie node demo ---------- */
+.nodes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 14px; }
+@media (max-width: 560px) { .nodes { grid-template-columns: 1fr; } }
+.node { border: 2px solid var(--line); border-radius: 14px; padding: 10px; background: var(--panel); transition: border-color .3s; }
+.node.err { border-color: var(--bad); animation: shake .4s; }
+.node.okn { border-color: var(--good); }
+.node h4 { margin: 0 0 6px; font-size: 13px; font-family: var(--mono); }
+.slots { display: grid; grid-template-columns: repeat(13, 1fr); gap: 2px; }
+.slot { aspect-ratio: 1; border-radius: 4px; background: var(--bg-2); display: grid; place-items: center; font: 600 9.5px var(--mono); color: var(--muted); min-width: 0; }
+.slot.full { background: var(--accent); color: var(--on-acc); }
+.overflow { margin-top: 6px; font: 700 12.5px var(--mono); color: var(--bad); min-height: 18px; }
+.kv { display: grid; gap: 4px; font: 600 13px var(--mono); }
+.kv div { display: flex; gap: 8px; align-items: center; padding: 5px 8px; border-radius: 8px; background: var(--bg-2); }
+.kv div.new { background: var(--good-soft); animation: rise .4s; }
+.kv span.cp { margin-left: auto; font-size: 11px; color: var(--muted); }
+
+/* ---------- stage 4: trending timeline ---------- */
+.tl svg { max-width: 640px; margin: 0 auto; }
+.tl .day { fill: none; stroke: var(--line); stroke-width: 1; }
+.tl .sun { fill: var(--accent-soft); }
+.tl .area { fill: var(--lava); opacity: .28; }
+.tl .curve { fill: none; stroke: var(--lava); stroke-width: 2.2; }
+.tl .now { stroke: var(--ink); stroke-width: 2; }
+.tl .land { fill: var(--good); stroke: var(--panel); stroke-width: 1.5; transition: transform .4s; }
+.tl .rb { stroke: var(--accent); stroke-width: 1.5; }
+.tl .strm { fill: var(--teal); opacity: .5; }
+.tl .news { fill: var(--lava); font: 700 11px var(--font); }
+.drop { padding: 12px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+.sbox { border: 2px solid var(--line); border-radius: 14px; background: var(--bg); max-width: 380px; overflow: hidden; }
+.sbox .inp { padding: 9px 12px; font: 600 15px var(--mono); border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 8px; }
+.sbox .inp .caret { display: inline-block; width: 2px; height: 1em; background: var(--ink); vertical-align: -2px; animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.sbox ol { list-style: none; margin: 0; padding: 4px 0; }
+.sbox li { padding: 6px 12px; font-size: 14px; display: flex; justify-content: space-between; gap: 8px; }
+.sbox li.fresh { background: var(--lava-soft); font-weight: 700; animation: rise .4s; }
+.sbox li.fresh span { color: var(--lava); font-size: 12px; }
+.levers { display: grid; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+.lever { display: flex; align-items: center; gap: 10px; text-align: left; min-height: 48px; border: 2px solid var(--line); border-radius: 12px; background: var(--bg); padding: 8px 12px; font-size: 14px; }
+.lever .sw { flex: none; width: 38px; height: 22px; border-radius: 99px; background: var(--line); position: relative; transition: background .2s; }
+.lever .sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--panel); transition: left .2s; }
+.lever[aria-pressed="true"] { border-color: var(--teal); }
+.lever[aria-pressed="true"] .sw { background: var(--teal); }
+.lever[aria-pressed="true"] .sw::after { left: 19px; }
+.lever[disabled] { opacity: .5; cursor: not-allowed; }
+.lever small { display: block; color: var(--muted); font-size: 12.5px; }
+.readout { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 14px; }
+.readout b { font-family: var(--mono); }
+.readout .fast { color: var(--good); } .readout .slow { color: var(--bad); }
+.tslider { width: 100%; accent-color: var(--lava); height: 30px; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 13.5 · Design a Search Autocomplete System</div>
+    <h1>Split the Alphabet</h1>
+    <p class="lede">The trie has outgrown one machine. Cut it up by letter, find out why the letter "s" melts its server, rebalance with history, then take the design worldwide and make it notice breaking news.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can shard the trie by first letter (and deeper), explain why that's uneven and how a <b>shard map manager</b> fixes it with historical data, and answer the book's three wrap-up follow-ups: <b>multiple languages</b> (Unicode), <b>country-specific results</b> (per-country tries on CDNs), and <b>real-time trending queries</b> (streaming).</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Slice by first letter</h2><div class="sub">The naive shard</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>In <a href="1303-data-gathering-service.html">Quest 13.3</a> the whole trie lived in one Trie DB, and in <a href="1304-query-service.html">13.4</a> one Trie Cache served it. At some point it won't fit on one machine. So you <b>shard</b> it: split the data across several servers, each holding one slice.</p>
+      <p>The book's first idea for an English-only system is simple: <b>split by the first character of the query</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system" target="_blank" rel="noopener">[1]</a> Below, the purple bars show what share of searches start with each letter. The coloured gauges underneath show how busy each server is. The dashed line is a server's <i>fair share</i> (total load ÷ number of servers).</p>
+
+      <div class="sim abar">
+        <div class="sim-bar"><span class="row" style="gap:8px"><b class="small">Servers:</b><span class="seg" id="nSeg" role="group" aria-label="Number of servers"><button data-n="2">2</button><button data-n="3">3</button><button data-n="26">26</button><button data-n="30">30</button></span></span><span class="small">Hottest server: <span class="bignum" id="hotVal">—</span></span></div>
+        <svg id="abar" viewBox="0 0 400 278" role="img" aria-label="Letter frequency bars with server load gauges"></svg>
+        <div class="sim-bar"><div class="lgend"><span><i style="background:var(--teal)"></i>near fair share</span><span><i style="background:var(--warn)"></i>busy (over 1.25×)</span><span><i style="background:var(--bad)"></i>melting (over 2×)</span><span><i style="background:var(--idle)"></i>idle (under ¼)</span></div></div>
+        <div class="letters" id="letters">
+          <div class="small" id="lPrompt"></div>
+          <div class="lgrid" id="lgrid"></div>
+          <div class="row" id="spareRow" style="margin-top:10px;display:none"><button class="btn" id="spareReset" style="padding:7px 12px;font-size:14px">↻ Take the spares back</button></div>
+        </div>
+        <div class="msg" id="s1msg" aria-live="polite"></div>
+        <div class="simlog" id="s1log"><div>Pick a server count to start.</div></div>
+      </div>
+      <ul class="checklist" id="s1goals">
+        <li data-g="2"><span class="box">✓</span><span>Split across <b>2</b> servers, the book's way: a–m and n–z</span></li>
+        <li data-g="3"><span class="box">✓</span><span>Split across <b>3</b>: a–i, j–r, s–z. Are the gauges equal?</span></li>
+        <li data-g="hot"><span class="box">✓</span><span>Go to <b>26</b> (one per letter) and tap the server that's melting</span></li>
+        <li data-g="spare"><span class="box">✓</span><span>Go to <b>30</b> and spend 4 spare servers by splitting letters on their second character</span></li>
+      </ul>
+      <div class="callout" id="s1note" style="display:none"><b>Past 26, go one letter deeper.</b> With first-letter sharding you run out at 26 servers. After that you shard on the second (or third) character. The book's example splits the "a" queries over four servers: <code>aa–ag</code>, <code>ah–an</code>, <code>ao–au</code>, <code>av–az</code>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system" target="_blank" rel="noopener">[1]</a> But the big lesson is in the gauges: far more words start with <b>c</b> or <b>s</b> than with <b>x</b>, so equal slices of the alphabet are <i>not</i> equal slices of the work.</div>
+      <div class="callout warn"><b>Toy numbers.</b> The letter shares here are illustrative, roughly shaped like English. Real query mixes vary by product and language. Inside a split letter, this sim also spreads load evenly over the second character, which real data won't do either.</div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>The shard map manager</h2><div class="sub">Balance by history, not by alphabet</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Fixed letter ranges ignore how people actually search. The book's fix: shard by the <b>historical data distribution</b>, meaning how many queries each prefix got in the past.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system" target="_blank" rel="noopener">[1]</a> Slices no longer follow a neat rule, so something has to remember who holds what. That's the <b>shard map manager</b>: a small lookup database that maps each prefix range to a shard.</p>
+      <p><b>First, the book's example.</b> Suppose "s" gets about as many queries as several quiet letters put together. Pile letters onto the right pan until the scale balances.</p>
+      <div class="sim scale">
+        <svg id="scaleSvg" viewBox="0 0 400 150" role="img" aria-label="Balance scale: s on the left, chosen letters on the right"></svg>
+        <div class="chiprow" id="chips"></div>
+        <div class="msg" id="scaleMsg" aria-live="polite"></div>
+      </div>
+
+      <p style="margin-top:20px"><b>Now balance four shards.</b> They start with plain alphabet ranges. Move letter tiles until every shard is under the line, which sits at 110% of the average load. <span class="muted">Tap a tile, then tap a shard (or drag it on a computer). Tiles don't need to stay in alphabet order. The map remembers.</span></p>
+      <div class="sim">
+        <div class="bins" id="bins"></div>
+        <div class="sim-bar"><span class="small">Busiest shard: <span class="bignum" id="maxLoad">—</span> of average · target ≤ 110%</span><button class="btn" id="binReset" style="padding:7px 12px;font-size:14px">↻ Back to a–g / h–n / o–u / v–z</button></div>
+      </div>
+      <div id="mapWrap" style="display:none">
+        <div class="callout tip"><b>Your shard map, generated from your bins.</b> This is the table the shard map manager stores.
+          <table class="maptable" id="mapTable"></table>
+        </div>
+        <p><b>Lookup test.</b> Every read and every write first asks the shard map manager where a prefix lives, then goes to that shard. Predict the shard for each query, then watch the request travel.</p>
+        <div class="sim lookup">
+          <svg id="lkSvg" viewBox="0 0 400 180" role="img" aria-label="API server asks the shard map manager, then calls a shard"></svg>
+          <div class="simlog" id="lkLog"><div>API server ready.</div></div>
+        </div>
+        <div class="challenge boxed" id="lkBox"></div>
+      </div>
+      <ul class="checklist" id="s2goals">
+        <li data-g="scale"><span class="box">✓</span><span>Balance "s" against a pile of quiet letters</span></li>
+        <li data-g="balance"><span class="box">✓</span><span>Get every shard to 110% of average or less</span></li>
+        <li data-g="lookup"><span class="box">✓</span><span>Route three queries through the shard map manager</span></li>
+      </ul>
+      <div class="callout warn"><b>The trade-off to name.</b> The map is one more moving part. It must be fast (every request reads it), highly available, and updated carefully when a range moves between shards. In practice servers cache the map, so most lookups never leave the API server.</div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Beyond English</h2><div class="sub">Languages and countries</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book's wrap-up asks two "what if" questions about going global.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system" target="_blank" rel="noopener">[1]</a></p>
+      <p><b>Follow-up 1: other languages.</b> Store <b>Unicode</b> characters in the trie nodes. Unicode is the standard that gives a number (a <i>code point</i>) to every character in every writing system, current or historical.<a class="cite" href="https://www.unicode.org/faq/basic_q.html" target="_blank" rel="noopener">[2]</a> A node can then no longer keep exactly 26 child slots, one per letter. Try it.</p>
+      <div class="sim">
+        <div class="sim-bar"><span class="row" style="gap:8px"><b class="small">Children stored as:</b><span class="seg" id="modeSeg" role="group" aria-label="How a node stores its children"><button data-m="arr" class="on">26-slot array</button><button data-m="map">map</button></span></span></div>
+        <div class="nodes" id="nodes"></div>
+        <div class="sim-bar"><span class="row" style="gap:8px"><button class="btn" id="insCafe" style="padding:7px 12px;font-size:14px">Insert "café"</button><button class="btn" id="insKana" style="padding:7px 12px;font-size:14px">Insert "カフェ"</button></span><button class="btn" id="nodeReset" style="padding:7px 12px;font-size:14px">↻ Reset</button></div>
+        <div class="simlog" id="nodeLog"><div>The trie holds "cafe". Each node has 26 slots, a to z.</div></div>
+      </div>
+      <ul class="checklist" id="s3goals">
+        <li data-g="fail"><span class="box">✓</span><span>Insert a non-English word into the 26-slot node</span></li>
+        <li data-g="map"><span class="box">✓</span><span>Switch to a map and insert both words</span></li>
+        <li data-g="sort"><span class="box">✓</span><span>Sort all six situations below</span></li>
+      </ul>
+      <p style="margin-top:18px"><b>Follow-up 2: different countries.</b> People in different countries search for different things. So build a <b>separate trie per country</b>, and store those tries in <b>CDNs</b> (content delivery networks: servers spread around the world, close to users) so suggestions arrive faster.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system" target="_blank" rel="noopener">[1]</a></p>
+      <p class="small muted">Which fix does each situation need?</p>
+      <div class="sort" id="sort3"></div>
+      <div id="s3quiz"></div>
+      <div class="callout warn"><b>Honest caveats.</b> Unicode breaks the "1 byte per character" estimate from <a href="1301-autocomplete-scope-and-estimation.html">Quest 13.1</a>: UTF-8 stores a character in 1 to 4 bytes (é takes 2, カ takes 3). And one trie per country multiplies storage by the number of countries. You trade disk for lower latency and more relevant results.</div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Trending now</h2><div class="sub">When the news breaks</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p><b>Follow-up 3: real-time trending queries.</b> A volcano erupts on Tuesday morning. Millions of people type "vo…". Our design rebuilds the trie once a week, on Sunday. The book says the design fails here for two reasons: the offline workers aren't scheduled to run yet, and even if they ran, building the whole trie takes too long.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system" target="_blank" rel="noopener">[1]</a></p>
+      <p>The book sketches three ideas. <b>1.</b> Shrink the working data set by sharding, so each piece rebuilds faster. <b>2.</b> Change the ranking model to give <b>recent</b> searches more weight. <b>3.</b> Treat the data as a <b>stream</b>: it arrives continuously and you never have all of it at once. That needs different tools, such as Apache Hadoop MapReduce,<a class="cite" href="https://hadoop.apache.org/" target="_blank" rel="noopener">[3]</a> Spark Streaming,<a class="cite" href="https://spark.apache.org/streaming/" target="_blank" rel="noopener">[4]</a> Storm<a class="cite" href="https://storm.apache.org/" target="_blank" rel="noopener">[5]</a> and Kafka.<a class="cite" href="https://kafka.apache.org/documentation/" target="_blank" rel="noopener">[6]</a> The book stops there and calls the details out of scope.</p>
+      <div class="challenge boxed" id="trPredict"></div>
+      <div class="sim tl">
+        <svg id="tlSvg" viewBox="0 0 400 170" role="img" aria-label="A week timeline: news on Tuesday, weekly rebuild on Sunday"></svg>
+        <div class="sim-bar"><button class="btn primary" id="trRun" disabled>▶ Play the week</button><span class="small">Now: <span class="bignum" id="trNow">Mon 00:00</span></span></div>
+        <div style="padding:0 14px;background:var(--panel)"><input type="range" class="tslider" id="trSlider" min="0" max="672" value="0" aria-label="Scrub through the week" disabled></div>
+        <div class="drop">
+          <div class="cap" style="margin-bottom:6px">What a user sees after typing "vo"</div>
+          <div class="sbox"><div class="inp"><span>vo<span class="caret"></span></span><span>🔍</span></div><ol id="dropList"></ol></div>
+        </div>
+        <div class="levers" id="levers">
+          <button class="lever" data-l="shard" aria-pressed="false" disabled><span class="sw"></span><span><b>Smaller shards, faster rebuilds</b><small>each piece rebuilds quickly, so rebuild every 3 hours</small></span></button>
+          <button class="lever" data-l="recent" aria-pressed="false" disabled><span class="sw"></span><span><b>Recency-weighted ranking</b><small>recent searches count for more</small></span></button>
+          <button class="lever" data-l="stream" aria-pressed="false" disabled><span class="sw"></span><span><b>Streaming pipeline</b><small>Kafka → stream processor → trie, updated continuously</small></span></button>
+          <div class="readout" aria-live="polite"><span>Shows up in the top 5: <b id="trEta">—</b></span><span>Fresh data reaches the trie: <b id="trLag">—</b></span></div>
+        </div>
+        <div class="simlog" id="trLog"><div>Make your prediction above to start the week.</div></div>
+      </div>
+      <ul class="checklist" id="s4goals">
+        <li data-g="run"><span class="box">✓</span><span>Play the week with the original design</span></li>
+        <li data-g="solo"><span class="box">✓</span><span>Try each lever <b>on its own</b> (only that one switched on)</span></li>
+        <li data-g="win"><span class="box">✓</span><span>Get "volcano eruption" into the top 5 within an hour</span></li>
+      </ul>
+      <div class="callout warn"><b>Toy model.</b> The times are illustrative. Without recency weighting, this sim needs about 6 hours of searches before a new query can outrank old favourites. With it, about 10 minutes. Real systems usually keep the weekly batch trie and blend in a separate, small real-time layer for fresh queries rather than rebuilding everything from a stream.</div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Hot-Letter Titan</h2><div class="sub">Scaling and follow-up scenarios</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Six situations from the interviewer. For each one, pick the move the book would make.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">Scale it and extend it</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next up: the chapter boss.</b> You've now seen every piece of the design. In <a href="1306-boss-autocomplete-live.html">Autocomplete Live</a> you run the full interview, from scoping questions to this scaling deep dive.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 13 "Design a Search Autocomplete System"</a>: the end of Step 3, "Scale the storage", and Step 4, "Wrap up". Both are short. For the Unicode side, the official <a href="https://www.unicode.org/faq/basic_q.html" target="_blank" rel="noopener">Unicode basic FAQ</a> explains code points and the UTF-8/16/32 encodings in plain language.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <p style="margin-top:0"><b>Range vs hash sharding.</b> You could hash each prefix to a shard instead. That spreads load evenly with no map, and it works fine for point lookups like "give me the top 5 for <code>vol</code>". The cost: a letter's whole subtree no longer lives on one server, so the simple "letter → shard" rule is gone and a worker can't rebuild one shard's trie on its own. The book picks letter ranges plus a shard map manager, and naming that trade-off is what an interviewer wants to hear.</p>
+      <p><b>Trending in practice.</b> The book's three ideas are a sketch. Production systems commonly run two paths: the big batch trie for long-term popularity, plus a small real-time index fed by a stream (often Kafka) that counts the last minutes or hours. At query time they blend the two lists, with a time-decay score so fresh spikes can rise and fade.</p>
+      <p style="margin-bottom:0"><b>Countries × shards.</b> Per-country tries and per-letter shards multiply together. Ten countries with 26 shards each is 260 pieces to build, ship to CDNs and keep in sync. Many countries share a language, so some designs build per-language tries and add a small per-country boost on top.</p>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"who updates the shard map when a hot letter gets split?"</i> or <i>"how would recency weighting actually be computed?"</i>
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 13 "Design a Search Autocomplete System", Steps 3–4 (ByteByteGo).</li>
+        <li>Unicode Consortium, <a href="https://www.unicode.org/faq/basic_q.html" target="_blank" rel="noopener">Frequently Asked Questions: basic</a>.</li>
+        <li><a href="https://hadoop.apache.org/" target="_blank" rel="noopener">Apache Hadoop</a> (MapReduce).</li>
+        <li><a href="https://spark.apache.org/streaming/" target="_blank" rel="noopener">Apache Spark Streaming</a>.</li>
+        <li><a href="https://storm.apache.org/" target="_blank" rel="noopener">Apache Storm</a>.</li>
+        <li><a href="https://kafka.apache.org/documentation/" target="_blank" rel="noopener">Apache Kafka documentation</a>.</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '1305',
+  winTitle: 'Every letter has a home',
+  badge: '🔤 Badge: Alphabet Splitter',
+  cheatsheet: '../reference/ch13-autocomplete-cheatsheet.html',
+});
+const { sleep, shuffle, esc } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent, text) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (text != null) e.textContent = text; if (parent) parent.appendChild(e); return e; }
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); Q.addXP(xp || 10, li);
+  return true;
+}
+function anim(dur, f) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 1) { f(1); return res(); }
+    const t0 = performance.now();
+    const fr = now => { const p = Math.min(1, (now - t0) / dur); f(p); p < 1 ? requestAnimationFrame(fr) : res(); };
+    requestAnimationFrame(fr);
+  });
+}
+const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+function setMsg(id, text, cls) { const m = $('#' + id); m.textContent = text; m.className = 'msg ' + (cls || ''); }
+
+// Illustrative share of searches by first letter, in thousandths (sums to 1000).
+// Shaped roughly like English word starts: s, c, p tall; x, z, y, q tiny. s == u+v+w+x+y+z (the book's example).
+const AL = 'abcdefghijklmnopqrstuvwxyz'.split('');
+const FREQ = { a: 55, b: 56, c: 90, d: 54, e: 41, f: 40, g: 33, h: 35, i: 37, j: 8, k: 10, l: 30, m: 58, n: 22, o: 25, p: 75, q: 5, r: 56, s: 110, t: 50, u: 30, v: 20, w: 49, x: 2, y: 6, z: 3 };
+const TOTAL = 1000;
+const pc = v => (v / 10).toFixed(1) + '%';
+// k contiguous ranges over 26 letters, the way the book cuts them: 2 → a–m/n–z, 3 → a–i/j–r/s–z, 4 → a–g/h–n/o–u/v–z
+function rangesFor(k) { const size = Math.ceil(26 / k), out = []; for (let i = 0; i < 26; i += size) out.push([i, Math.min(25, i + size - 1)]); return out; }
+function rangeLabel(letters) { // sorted letter list → "a–c, k, x–z"
+  const idx = letters.map(l => AL.indexOf(l)).sort((a, b) => a - b), out = [];
+  for (let i = 0; i < idx.length; i++) {
+    let j = i; while (j + 1 < idx.length && idx[j + 1] === idx[j] + 1) j++;
+    out.push(j === i ? AL[idx[i]] : j === i + 1 ? AL[idx[i]] + ', ' + AL[idx[j]] : AL[idx[i]] + '–' + AL[idx[j]]);
+    i = j;
+  }
+  return out.join(', ');
+}
+
+/* ================= STAGE 1: first-letter sharding ================= */
+Q.onStage(1, () => {
+  const goals = new Set();
+  const svg = $('#abar');
+  const X0 = 10, CW = 380 / 26, BASE1 = 112, H1 = 88, GB = 266, GH = 104, CAPR = 3;
+  let mode = 0, cnt = {}, quizShown = false;
+  AL.forEach(l => cnt[l] = 1);
+  const spent = () => AL.reduce((s, l) => s + cnt[l] - 1, 0);
+
+  function servers() {
+    if (mode === 2 || mode === 3) return rangesFor(mode).map(([a, b]) => {
+      let load = 0; for (let i = a; i <= b; i++) load += FREQ[AL[i]];
+      return { x: X0 + a * CW, w: (b - a + 1) * CW, load, label: AL[a] + '–' + AL[b] };
+    });
+    const out = [];
+    AL.forEach((l, i) => {
+      const k = mode === 30 ? cnt[l] : 1;
+      rangesFor(k).forEach(([a, b], j) => out.push({ x: X0 + i * CW + j * CW / k, w: CW / k, load: FREQ[l] / k, label: k === 1 ? l : `${l}${AL[a]}–${l}${AL[b]}`, letter: l }));
+    });
+    return out;
+  }
+  const serverCount = () => mode === 30 ? 30 : mode;
+  const fair = () => TOTAL / serverCount();
+  const cls = r => r > 2 ? 'g-hot' : r > 1.25 ? 'g-warn' : r < .25 ? 'g-idle' : 'g-ok';
+
+  function draw() {
+    svg.innerHTML = '';
+    S('text', { x: X0, y: 12, class: 'sv-m' }, svg, 'share of searches by first letter');
+    AL.forEach((l, i) => {
+      const h = FREQ[l] / 110 * H1;
+      S('rect', { x: (X0 + i * CW + 1.5).toFixed(2), y: (BASE1 - h).toFixed(2), width: (CW - 3).toFixed(2), height: h.toFixed(2), rx: 2, class: 'lbar' }, svg);
+      S('text', { x: (X0 + i * CW + CW / 2).toFixed(2), y: BASE1 + 13, class: 'sv-t sv-c' }, svg, l);
+    });
+    if (!mode) { S('text', { x: 200, y: 200, class: 'sv-m sv-c' }, svg, 'pick a server count above'); return; }
+    const sv = servers(), F = fair();
+    sv.forEach((s, k) => S('rect', { x: s.x.toFixed(2), y: BASE1 + 19, width: s.w.toFixed(2), height: 7, class: 'band', style: `fill:var(${k % 2 ? '--band-b' : '--band-a'})` }, svg));
+    S('text', { x: X0, y: 148, class: 'sv-m' }, svg, `server load · ${serverCount()} servers`);
+    sv.forEach(s => {
+      const r = s.load / F, h = Math.max(2, Math.min(r, CAPR) / CAPR * GH);
+      S('rect', { x: s.x.toFixed(2), y: (GB - h).toFixed(2), width: s.w.toFixed(2), height: h.toFixed(2), class: 'gauge ' + cls(r) }, svg);
+      if (r > CAPR) S('text', { x: (s.x + s.w / 2).toFixed(2), y: GB - GH - 3, class: 'sv-t sv-c' }, svg, '🔥');
+      if (s.w > 60) {
+        S('text', { x: (s.x + s.w / 2).toFixed(2), y: GB - h - 6, class: 'sv-t sv-c sv-b' }, svg, `${s.label}: ${pc(s.load)}`);
+      }
+    });
+    const fy = GB - (1 / CAPR) * GH;
+    S('line', { x1: X0, x2: 390, y1: fy, y2: fy, class: 'fair' }, svg);
+    S('text', { x: 390, y: fy - 3, class: 'sv-m', 'text-anchor': 'end' }, svg, 'fair share');
+    S('line', { x1: X0, x2: 390, y1: GB, y2: GB, stroke: 'var(--line)' }, svg);
+    if (mode === 30 && 30 - 26 - spent() > 0) S('text', { x: 200, y: GB + 11, class: 'sv-m sv-c' }, svg, `${4 - spent()} spare server${4 - spent() === 1 ? '' : 's'} idle`);
+    const hot = sv.reduce((a, b) => b.load > a.load ? b : a);
+    $('#hotVal').textContent = `${hot.label} · ${(hot.load / F).toFixed(1)}× fair`;
+  }
+
+  function letterGrid() {
+    const box = $('#letters');
+    if (mode !== 26 && mode !== 30) { box.classList.remove('on'); return; }
+    box.classList.add('on');
+    $('#spareRow').style.display = mode === 30 ? '' : 'none';
+    $('#lPrompt').innerHTML = mode === 26
+      ? '<b>Tap the server that’s melting.</b> Each button is one server (one letter).'
+      : `<b>You have 4 spare servers.</b> Tap a letter to give it one more server; its range splits on the second character. Spares left: <b class="mono">${4 - spent()}</b>`;
+    $('#lgrid').innerHTML = AL.map(l => `<button class="lbtn" data-l="${l}" aria-label="Letter ${l}${mode === 30 && cnt[l] > 1 ? ', ' + cnt[l] + ' servers' : ''}">${l}${mode === 30 && cnt[l] > 1 ? `<small>×${cnt[l]}</small>` : ''}</button>`).join('');
+    $$('#lgrid .lbtn').forEach(b => b.onclick = () => (mode === 26 ? tap26 : tap30)(b.dataset.l, b));
+  }
+
+  function tap26(l, b) {
+    const r = FREQ[l] / fair();
+    if (l === 's') {
+      b.classList.add('hot');
+      setMsg('s1msg', `🔥 Found it: the "s" server runs at ${r.toFixed(1)}× its fair share, while "x" idles at ${(FREQ.x / fair()).toFixed(2)}×.`, 'bad');
+      if (checkGoal('#s1goals', 'hot', goals, 10)) logTo('s1log', `26 servers: s → ${pc(FREQ.s)} of all searches, x → ${pc(FREQ.x)}. Same hardware, ${Math.round(FREQ.s / FREQ.x)}× the work.`, 'w');
+      after();
+    } else if (!goals.has('hot')) {
+      b.classList.remove('shake'); void b.offsetWidth; b.classList.add('shake');
+      setMsg('s1msg', `"${l}" runs at ${r.toFixed(1)}× fair share. Look for the tallest red gauge.`, 'meh');
+      Q.loseHeart(b);
+    } else setMsg('s1msg', `"${l}" runs at ${r.toFixed(1)}× its fair share.`, '');
+  }
+
+  function tap30(l, b) {
+    if (4 - spent() <= 0) { setMsg('s1msg', 'No spares left. Take them back to try again.', 'meh'); return; }
+    const cur = FREQ[l] / cnt[l], max = Math.max(...AL.map(x => FREQ[x] / cnt[x]));
+    cnt[l]++;
+    const parts = rangesFor(cnt[l]).map(([a, z]) => `${l}${AL[a]}–${l}${AL[z]}`).join(', ');
+    if (cur >= .75 * max) {
+      setMsg('s1msg', `★ Good pick. "${l}" was one of the hottest servers. Now ${cnt[l]} servers share it: ${parts}.`, 'gold');
+      Q.addXP(5, b);
+    } else if (cur < .2 * max) {
+      setMsg('s1msg', `😴 That server was already bored ("${l}" gets ${pc(FREQ[l])} of searches). The spare is wasted.`, 'bad');
+      Q.loseHeart(b);
+    } else setMsg('s1msg', `Helps a little: "${l}" is now ${parts}. Hotter servers are still waiting.`, 'meh');
+    logTo('s1log', `${l} → ${parts}`);
+    draw(); letterGrid();
+    const nb = $(`#lgrid .lbtn[data-l="${l}"]`); if (nb) nb.classList.add(cur >= .75 * max ? 'goldy' : cur < .2 * max ? 'bored' : 'x');
+    if (4 - spent() === 0) {
+      const newMax = Math.max(...AL.map(x => FREQ[x] / cnt[x]));
+      logTo('s1log', `All 4 spares used. Hottest server now carries ${pc(newMax)} of searches (fair share ${pc(fair())}).`, 'g');
+      checkGoal('#s1goals', 'spare', goals, 10);
+      $('#s1note').style.display = '';
+      after();
+    }
+  }
+
+  function setMode(n) {
+    mode = n;
+    $$('#nSeg button').forEach(b => b.classList.toggle('on', +b.dataset.n === n));
+    setMsg('s1msg', '');
+    draw(); letterGrid();
+    if (n === 2 || n === 3) {
+      const sv = servers();
+      logTo('s1log', `${n} servers: ` + sv.map(s => `${s.label} → ${pc(s.load)}`).join(' · ') + ` (fair share ${pc(fair())})`);
+      checkGoal('#s1goals', String(n), goals, 10);
+      if (n === 3) setMsg('s1msg', 'Same number of letters each, but a–i does far more work than s–z.', 'meh');
+    } else if (n === 26) logTo('s1log', '26 servers: one per letter. That’s the ceiling for first-letter sharding.');
+    else logTo('s1log', '30 servers: 26 letters, so 4 servers have nothing to do yet.', 'w');
+    after();
+  }
+  $$('#nSeg button').forEach(b => b.onclick = () => setMode(+b.dataset.n));
+  $('#spareReset').onclick = () => { AL.forEach(l => cnt[l] = 1); setMsg('s1msg', 'Spares returned. Spend them again.'); draw(); letterGrid(); };
+
+  function after() {
+    if (quizShown || !['2', '3', 'hot', 'spare'].every(g => goals.has(g))) return;
+    quizShown = true;
+    const m = $('#s1quiz');
+    Q.quiz(m, {
+      tag: 'Check 1 of 3', xp: 15,
+      q: 'An English-only trie, sharded by first letter alone. What is the most shards you can have?',
+      options: ['26, one for each letter', '52, upper and lower case', 'As many as you have servers'],
+      correct: 0,
+      good: 'The book’s system is lowercase English, so there are 26 possible first characters and at most 26 shards.',
+      bad: 'Queries are lowercase English, so there are only 26 possible first characters. That caps first-letter sharding at 26.',
+      onDone: () => Q.quiz(m, {
+        tag: 'Check 2 of 3', xp: 15,
+        q: 'You need 40 shards. What does the book do next?',
+        options: ['Shard on the 2nd or 3rd character', 'Hash each query to a random shard', 'Buy one much bigger server instead'],
+        correct: 0,
+        good: 'Go one level deeper: split a letter’s queries by their second (or third) character, like aa–ag, ah–an, ao–au, av–az.',
+        bad: 'The book goes one level deeper: split a letter’s queries by their second (or third) character, like aa–ag, ah–an, ao–au, av–az.',
+        onDone: () => Q.quiz(m, {
+          tag: 'Check 3 of 3', xp: 15,
+          q: 'Why are first-letter shards so uneven?',
+          options: ['Some letters start many more queries', 'Later letters are stored less densely', 'Short queries all pile onto shard one'],
+          correct: 0,
+          good: 'Letter frequency isn’t uniform. Far more words start with “c” or “s” than with “x”, so equal alphabet slices are unequal work.',
+          bad: 'It’s letter frequency. Far more words start with “c” or “s” than with “x”, so equal alphabet slices are unequal work.',
+          onDone: () => setTimeout(() => Q.clearStage(1), 700),
+        }),
+      }),
+    });
+  }
+  draw();
+});
+
+/* ================= STAGE 2: shard map manager ================= */
+Q.onStage(2, () => {
+  const goals = new Set();
+  /* --- balance scale --- */
+  const RIGHT = ['t', 'u', 'v', 'w', 'x', 'y', 'z'];
+  const on = new Set();
+  const ss = $('#scaleSvg');
+  function drawScale() {
+    const sum = [...on].reduce((s, l) => s + FREQ[l], 0), diff = sum - FREQ.s;
+    const ang = Math.max(-11, Math.min(11, diff / FREQ.s * 14));
+    ss.innerHTML = '';
+    S('rect', { x: 196, y: 52, width: 8, height: 82, class: 'post', rx: 2 }, ss);
+    S('path', { d: 'M170 140 L230 140 L214 130 L186 130 Z', class: 'post' }, ss);
+    const g = S('g', { class: 'beam', style: `transform: rotate(${ang}deg)` }, ss);
+    S('rect', { x: 60, y: 49, width: 280, height: 6, rx: 3, class: 'beamr' }, g);
+    S('circle', { cx: 200, cy: 52, r: 7, class: 'beamr' }, g);
+    [[90, 's', `${pc(FREQ.s)}`], [310, on.size ? rangeLabel([...on]) : '—', `${pc(sum)}`]].forEach(([x, lab, v]) => {
+      S('line', { x1: x - 34, y1: 55, x2: x - 26, y2: 92, stroke: 'var(--muted)', 'stroke-width': 1.2 }, g);
+      S('line', { x1: x + 34, y1: 55, x2: x + 26, y2: 92, stroke: 'var(--muted)', 'stroke-width': 1.2 }, g);
+      S('path', { d: `M${x - 42} 92 L${x + 42} 92 Q${x} 116 ${x - 42} 92 Z`, class: 'pan' }, g);
+      S('text', { x, y: 84, class: 'sv-t sv-c sv-b', style: 'font-size:13px' }, g, lab);
+      S('text', { x, y: 30, class: 'sv-m sv-c', style: 'font-size:11px' }, g, v);
+    });
+    S('text', { x: 200, y: 14, class: 'sv-m sv-c' }, ss, diff === 0 ? 'balanced' : diff < 0 ? '“s” is heavier' : 'right side is heavier');
+    return diff;
+  }
+  $('#chips').innerHTML = RIGHT.map(l => `<button class="lchip" data-l="${l}" aria-pressed="false">${l}<small>${pc(FREQ[l])}</small></button>`).join('');
+  $$('#chips .lchip').forEach(b => b.onclick = () => {
+    const l = b.dataset.l;
+    on.has(l) ? on.delete(l) : on.add(l);
+    b.setAttribute('aria-pressed', on.has(l));
+    const diff = drawScale();
+    if (diff === 0 && on.size) {
+      const book = ['u', 'v', 'w', 'x', 'y', 'z'].every(x => on.has(x)) && on.size === 6;
+      setMsg('scaleMsg', book ? '⚖️ Balanced: s alone weighs the same as u–z combined. That’s the book’s example: one shard for "s", one shard for "u" to "z".' : `⚖️ Balanced with ${rangeLabel([...on])}. The book’s version is u–z: one shard for "s", one for "u" to "z".`, 'good');
+      checkGoal('#s2goals', 'scale', goals, 10); maybeClear();
+    } else setMsg('scaleMsg', on.size ? `Off by ${pc(Math.abs(diff))}.` : 'Tap letters to put them on the right pan.', '');
+  });
+  drawScale(); setMsg('scaleMsg', 'Tap letters to put them on the right pan.');
+
+  /* --- shard bins --- */
+  const NB = 4, MEAN = TOTAL / NB, LIMIT = MEAN * 1.10;
+  let assign = {}, sel = null, locked = false;
+  function resetBins() { rangesFor(4).forEach(([a, b], k) => { for (let i = a; i <= b; i++) assign[AL[i]] = k; }); sel = null; }
+  const loadOf = k => AL.reduce((s, l) => s + (assign[l] === k ? FREQ[l] : 0), 0);
+  function drawBins() {
+    const wrap = $('#bins');
+    wrap.innerHTML = '';
+    for (let k = 0; k < NB; k++) {
+      const ld = loadOf(k), r = ld / MEAN;
+      const bin = document.createElement('div');
+      bin.className = 'bin' + (sel ? ' target' : '') + (r > 1.10 ? ' over' : ' okb');
+      bin.dataset.k = k; bin.tabIndex = 0; bin.setAttribute('role', 'button');
+      bin.setAttribute('aria-label', `Shard ${k + 1}, load ${Math.round(r * 100)}% of average${sel ? `. Move ${sel} here` : ''}`);
+      const letters = AL.filter(l => assign[l] === k);
+      bin.innerHTML = `<div class="bin-h"><span>Shard ${k + 1}</span><span class="ld">${pc(ld)} · ${Math.round(r * 100)}%</span></div>
+        <div class="bmeter"><div class="bf ${r > 1.10 ? 'hi' : r < .5 ? 'lo' : ''}" style="width:${Math.min(100, r / 1.6 * 100)}%"></div><div class="cap1" style="left:${1.10 / 1.6 * 100}%"></div></div>
+        <div class="tiles">${letters.map(l => `<button class="tilebtn${sel === l ? ' sel' : ''}" data-l="${l}" draggable="${!locked}" style="min-width:${Math.round(34 + FREQ[l] * .6)}px" aria-label="Letter ${l}, ${pc(FREQ[l])} of searches"${locked ? ' disabled' : ''}>${l}<small>${pc(FREQ[l])}</small></button>`).join('')}</div>`;
+      wrap.appendChild(bin);
+      const drop = () => { if (locked || !sel) return; move(sel, k); };
+      bin.onclick = drop;
+      bin.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target === bin) { e.preventDefault(); drop(); } });
+      bin.addEventListener('dragover', e => { if (!locked) e.preventDefault(); });
+      bin.addEventListener('drop', e => { e.preventDefault(); const l = e.dataTransfer.getData('text/plain'); if (l && !locked) move(l, k); });
+    }
+    $$('#bins .tilebtn').forEach(t => {
+      t.onclick = e => { e.stopPropagation(); if (locked) return; sel = sel === t.dataset.l ? null : t.dataset.l; drawBins(); const again = $(`#bins .tilebtn[data-l="${sel}"]`); if (again) again.focus(); };
+      t.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', t.dataset.l); sel = t.dataset.l; });
+    });
+    const mx = Math.max(...[0, 1, 2, 3].map(loadOf)) / MEAN;
+    const mv = $('#maxLoad'); mv.textContent = Math.round(mx * 100) + '%'; mv.style.color = mx <= 1.10 ? 'var(--good)' : 'var(--bad)';
+  }
+  function move(l, k) {
+    assign[l] = k; sel = null; drawBins();
+    const mx = Math.max(...[0, 1, 2, 3].map(loadOf));
+    if (mx <= LIMIT && !locked) {
+      locked = true; drawBins();
+      checkGoal('#s2goals', 'balance', goals, 30);
+      buildMap();
+    }
+  }
+  function buildMap() {
+    $('#mapWrap').style.display = '';
+    $('#mapTable').innerHTML = '<tr><th>Prefixes starting with</th><th>Shard</th><th>Load</th></tr>' +
+      [0, 1, 2, 3].map(k => `<tr><td>${rangeLabel(AL.filter(l => assign[l] === k))}</td><td>Shard ${k + 1}</td><td class="mono">${pc(loadOf(k))}</td></tr>`).join('');
+    startLookups();
+  }
+  $('#binReset').onclick = () => {
+    locked = false; resetBins(); drawBins();
+    $('#mapWrap').style.display = 'none'; $('#lkBox').innerHTML = '';
+  };
+
+  /* --- lookup test --- */
+  const lk = $('#lkSvg');
+  const P = { api: [55, 90], smm: [205, 32] }, SH = k => [345, 34 + k * 38];
+  function drawLk(hl = {}) {
+    lk.innerHTML = '';
+    [0, 1, 2, 3].forEach(k => S('line', { x1: 100, y1: 90, x2: 300, y2: SH(k)[1], class: 'wire' }, lk));
+    S('line', { x1: 100, y1: 82, x2: 150, y2: 40, class: 'wire' }, lk);
+    const node = (x, y, w, h, t, sub, key) => {
+      const g = S('g', { class: 'nd' + (hl[key] ? ' ' + hl[key] : '') }, lk);
+      S('rect', { x, y, width: w, height: h, rx: 8 }, g);
+      S('text', { x: x + w / 2, y: y + (sub ? h / 2 - 2 : h / 2 + 4), class: 'sv-t sv-c sv-b' }, g, t);
+      if (sub) S('text', { x: x + w / 2, y: y + h / 2 + 11, class: 'sv-m sv-c' }, g, sub);
+    };
+    node(10, 68, 90, 44, 'API server', 'asks first', 'api');
+    node(150, 12, 110, 40, 'Shard map mgr', 'prefix → shard', 'smm');
+    [0, 1, 2, 3].forEach(k => node(300, SH(k)[1] - 16, 90, 32, `Shard ${k + 1}`, '', 'sh' + k));
+    return S('circle', { cx: P.api[0], cy: P.api[1], r: 7, class: 'pkt', opacity: 0 }, lk);
+  }
+  async function fly(pk, a, b, ms) {
+    pk.setAttribute('opacity', 1);
+    await anim(ms, p => { const e = ease(p); pk.setAttribute('cx', a[0] + (b[0] - a[0]) * e); pk.setAttribute('cy', a[1] + (b[1] - a[1]) * e); });
+  }
+  const QUERIES = ['sun', 'xylophone', 'cat'];
+  let qi = 0, rightCount = 0;
+  function startLookups() { qi = 0; rightCount = 0; drawLk(); $('#lkLog').innerHTML = '<div>API server ready.</div>'; askLookup(); }
+  function askLookup() {
+    const box = $('#lkBox');
+    if (qi >= QUERIES.length) {
+      box.innerHTML = `<div class="explain show good"><b>${rightCount} of 3 routed correctly.</b> Every request paid one quick map lookup, and in return each shard carries a fair share of traffic.</div><div class="row" style="margin-top:12px"><button class="btn" id="lkAgain">↻ Replay the lookups</button></div>`;
+      $('#lkAgain').onclick = startLookups;
+      if (checkGoal('#s2goals', 'lookup', goals, 10)) maybeClear();
+      return;
+    }
+    const q = QUERIES[qi], k = assign[q[0]];
+    box.innerHTML = `<div class="step cap">Lookup ${qi + 1} of 3 · predict</div><h3 style="margin:4px 0 0">A user types <code>${q}</code>. Which shard holds it?</h3><div class="shardpick">${[0, 1, 2, 3].map(j => `<button class="opt" data-k="${j}">Shard ${j + 1}</button>`).join('')}</div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+    $$('.shardpick .opt', box).forEach(b => b.onclick = async () => {
+      $$('.shardpick .opt', box).forEach(x => x.disabled = true);
+      b.classList.add('picked');
+      const pk = drawLk({ api: 'hl' });
+      logTo('lkLog', `GET /autocomplete?q=${q}`);
+      await fly(pk, P.api, [205, 52], 550);
+      drawLk({ smm: 'hl' });
+      logTo('lkLog', `shard map: "${q[0]}" → shard ${k + 1}`, 'w');
+      const pk2 = drawLk({ smm: 'hl' });
+      await fly(pk2, [205, 52], P.api, 450);
+      const pk3 = drawLk({ api: 'hl' });
+      await fly(pk3, P.api, SH(k), 550);
+      drawLk({ ['sh' + k]: 'good' });
+      logTo('lkLog', `shard ${k + 1} returns the top 5 for "${q}"`, 'g');
+      const ok = +b.dataset.k === k;
+      b.classList.add(ok ? 'right' : 'wrong');
+      if (!ok) $(`.shardpick .opt[data-k="${k}"]`, box).classList.add('right');
+      const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+      ex.innerHTML = (ok ? '<b>Routed.</b> ' : '<b>Not that one.</b> ') + `Your map sends prefixes starting with “${q[0]}” to Shard ${k + 1}.`;
+      if (ok) { rightCount++; Q.addXP(10, b); } else Q.loseHeart(b);
+      const nx = document.createElement('button'); nx.className = 'btn primary'; nx.textContent = qi < QUERIES.length - 1 ? 'Next query →' : 'Finish';
+      nx.onclick = () => { qi++; askLookup(); };
+      $('.row', box).appendChild(nx);
+    });
+  }
+  function maybeClear() { if (['scale', 'balance', 'lookup'].every(g => goals.has(g))) setTimeout(() => Q.clearStage(2), 700); }
+  resetBins(); drawBins(); drawLk();
+});
+
+/* ================= STAGE 3: languages and countries ================= */
+Q.onStage(3, () => {
+  const goals = new Set();
+  let mode = 'arr', has = { cafe: false, kana: false }, done = { sort: false, quiz: false };
+  function drawNodes(err) {
+    const wrap = $('#nodes');
+    const root = { title: 'root node', base: [['c', 'U+0063']], extra: has.kana ? [['カ', 'U+30AB']] : [] };
+    const caf = { title: 'node "caf"', base: [['e', 'U+0065']], extra: has.cafe ? [['é', 'U+00E9']] : [] };
+    wrap.innerHTML = [['root', root], ['caf', caf]].map(([id, n]) => {
+      const st = err === id ? ' err' : (mode === 'map' && n.extra.length ? ' okn' : '');
+      if (mode === 'arr') {
+        const filled = new Set(n.base.map(x => x[0]));
+        return `<div class="node${st}" id="n-${id}"><h4>${n.title} · 26 slots</h4><div class="slots">${AL.map(l => `<div class="slot${filled.has(l) ? ' full' : ''}">${l}</div>`).join('')}</div><div class="overflow">${err === id ? `✗ no slot for “${id === 'root' ? 'カ' : 'é'}”` : ''}</div></div>`;
+      }
+      return `<div class="node${st}" id="n-${id}"><h4>${n.title} · children map</h4><div class="kv">${n.base.concat(n.extra).map(([c, cp], i) => `<div class="${i >= n.base.length ? 'new' : ''}"><b>${c}</b> → child<span class="cp">${cp}</span></div>`).join('')}</div></div>`;
+    }).join('');
+  }
+  function insert(which) {
+    const ch = which === 'cafe' ? 'é' : 'カ', word = which === 'cafe' ? 'café' : 'カフェ', nodeId = which === 'cafe' ? 'caf' : 'root';
+    if (mode === 'arr') {
+      drawNodes(nodeId);
+      logTo('nodeLog', `insert "${word}": the ${nodeId === 'root' ? 'root' : '"caf"'} node needs a child for “${ch}”, but its 26 slots only cover a–z. ✗`, 'e');
+      if (checkGoal('#s3goals', 'fail', goals, 10)) logTo('nodeLog', 'Switch the node to a map and try again.', 'w');
+      return;
+    }
+    has[which] = true; drawNodes();
+    logTo('nodeLog', `insert "${word}": added “${ch}” (${which === 'cafe' ? 'U+00E9' : 'U+30AB'}) as a key in the map. ✓`, 'g');
+    if (has.cafe && has.kana && checkGoal('#s3goals', 'map', goals, 10)) {
+      logTo('nodeLog', 'A map holds any character, and only stores the children that actually exist.', 'g');
+      maybeClear();
+    }
+  }
+  $$('#modeSeg button').forEach(b => b.onclick = () => {
+    mode = b.dataset.m; $$('#modeSeg button').forEach(x => x.classList.toggle('on', x === b));
+    if (mode === 'arr') has = { cafe: false, kana: false };
+    drawNodes();
+    logTo('nodeLog', mode === 'map' ? 'Children are now a map: character → child node.' : 'Back to fixed 26-slot arrays.');
+  });
+  $('#insCafe').onclick = () => insert('cafe');
+  $('#insKana').onclick = () => insert('kana');
+  $('#nodeReset').onclick = () => {
+    mode = 'arr'; has = { cafe: false, kana: false };
+    $$('#modeSeg button').forEach(x => x.classList.toggle('on', x.dataset.m === 'arr'));
+    $('#nodeLog').innerHTML = '<div>The trie holds "cafe". Each node has 26 slots, a to z.</div>'; drawNodes();
+  };
+  drawNodes();
+
+  /* --- sort --- */
+  const BINS = { uni: 'Unicode trie nodes', geo: 'Per-country tries on CDNs', none: 'Neither: out of scope' };
+  const CARDS = [
+    { t: 'Japanese users type in kana, like カ and ナ.', a: 'uni', why: 'Those characters have no slot in an a–z node. Unicode keys fix it.' },
+    { t: 'The top searches in Brazil look nothing like the top searches in the US.', a: 'geo', why: 'Different countries, different popular queries: give each country its own trie.' },
+    { t: 'Users in India say suggestions are slow and full of US topics.', a: 'geo', why: 'Both halves point the same way: a per-country trie for relevance, served from a nearby CDN for speed.' },
+    { t: 'A node’s a–z array has no slot for “é”.', a: 'uni', why: 'Store Unicode characters as the keys of a children map.' },
+    { t: 'Users want “recieve” to be corrected to “receive”.', a: 'none', why: 'Spell check and autocorrect were scoped out at the start of the chapter. Neither fix is about typos.' },
+    { t: 'German users type words with ü and ß.', a: 'uni', why: 'ü (U+00FC) and ß (U+00DF) are outside a–z. Unicode nodes handle them.' },
+  ];
+  let sorted = 0;
+  $('#sort3').innerHTML = shuffle(CARDS.map((c, i) => ({ c, i }))).map(({ c, i }) => `<div class="sort-item" data-i="${i}"><p>${c.t}</p><div class="row">${Object.keys(BINS).map(k => `<button class="opt" data-k="${k}">${BINS[k]}</button>`).join('')}</div><div class="explain"></div></div>`).join('');
+  $$('#sort3 .sort-item').forEach(item => {
+    const c = CARDS[+item.dataset.i];
+    $$('.opt', item).forEach(b => b.onclick = () => {
+      $$('.opt', item).forEach(x => x.disabled = true);
+      const ok = b.dataset.k === c.a;
+      b.classList.add(ok ? 'right' : 'wrong');
+      if (!ok) $(`.opt[data-k="${c.a}"]`, item).classList.add('right');
+      const ex = $('.explain', item); ex.className = 'explain show ' + (ok ? 'good' : 'bad'); ex.textContent = c.why;
+      ok ? Q.addXP(5, b) : Q.loseHeart(b);
+      if (++sorted === CARDS.length) {
+        checkGoal('#s3goals', 'sort', goals, 0 || 5);
+        setTimeout(() => Q.quiz($('#s3quiz'), {
+          q: 'Why store each country’s trie on a CDN?',
+          options: ['Serve it from near the user, so it’s faster', 'CDNs rank each country’s queries more fairly', 'CDNs compress the tries so they take less disk'],
+          correct: 0,
+          good: 'A CDN keeps copies on servers close to users. A shorter network trip means a faster dropdown, which matters when every keystroke is a request.',
+          bad: 'It’s about distance. A CDN keeps copies on servers close to users, so the network trip is short and suggestions arrive faster.',
+          onDone: () => { done.quiz = true; maybeClear(); },
+        }), 500);
+      }
+    });
+  });
+  function maybeClear() { if (done.quiz && ['fail', 'map', 'sort'].every(g => goals.has(g))) setTimeout(() => Q.clearStage(3), 700); }
+});
+
+/* ================= STAGE 4: trending ================= */
+Q.onStage(4, () => {
+  const goals = new Set();
+  const NEWS = 1 + 9.6 / 24;         // Tuesday 09:36, in days from Monday 00:00
+  const STEPS = 672, DAY = STEPS / 7; // slider: 15-minute steps over 7 days
+  const lev = { shard: false, recent: false, stream: false };
+  const solos = new Set();
+  let t = 0, predicted = false, ran = false, playing = false, quizShown = false;
+
+  // When does "volcano eruption" first appear in the top 5?
+  // Without recency weighting it needs ~6 h of searches to outrank old favourites; with it, ~10 min.
+  function model() {
+    const need = lev.recent ? 10 / 1440 : 6 / 24;
+    let lag, vis, cadence;
+    if (lev.stream) { lag = 6 / 1440; vis = NEWS + need + lag; cadence = 'continuous (~6 min lag)'; }
+    else if (lev.shard) { const step = 3 / 24; vis = Math.ceil((NEWS + need) / step + 1e-9) * step; lag = null; cadence = 'every 3 hours'; }
+    else { vis = 6.5; cadence = 'once a week (Sunday)'; }
+    return { vis, cadence };
+  }
+  function fmt(d) {
+    const h = d * 24;
+    if (h < 1) return `~${Math.max(5, Math.round(h * 60 / 5) * 5)} min`;
+    if (h < 36) return `~${Math.round(h)} hours`;
+    return `~${Math.round(d)} days`;
+  }
+  const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  function clock(td) { const d = Math.min(6, Math.floor(td)), m = Math.round((td - d) * 1440), hh = Math.floor(m / 60) % 24, mm = m % 60; return `${DAYS[d]} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`; }
+
+  const svg = $('#tlSvg');
+  const X = td => 18 + td / 7 * 364, Y0 = 132;
+  const curveAt = td => td < NEWS ? 0 : (1 - Math.exp(-(td - NEWS) * 9)) * Math.exp(-(td - NEWS) * .28);
+  function draw() {
+    const m = model();
+    svg.innerHTML = '';
+    S('rect', { x: X(6), y: 18, width: 52, height: Y0 - 18, class: 'sun' }, svg);
+    S('text', { x: X(6.5), y: 30, class: 'sv-m sv-c' }, svg, '🔨 rebuild');
+    for (let d = 0; d < 7; d++) { S('rect', { x: X(d), y: 18, width: 52, height: Y0 - 18, class: 'day' }, svg); S('text', { x: X(d + .5), y: Y0 + 14, class: 'sv-t sv-c' }, svg, DAYS[d]); }
+    if (lev.stream) S('rect', { x: X(0), y: Y0 - 4, width: 364, height: 4, class: 'strm' }, svg);
+    else if (lev.shard) for (let k = 1; k < 56; k++) S('line', { x1: X(k / 8), x2: X(k / 8), y1: Y0 - 6, y2: Y0, class: 'rb' }, svg);
+    // search volume for "volcano eruption", drawn up to "now"
+    if (t > NEWS) {
+      let d = `M${X(NEWS).toFixed(1)} ${Y0}`, line = '';
+      for (let x = NEWS; x <= t + 1e-9; x += 1 / 48) { const y = Y0 - curveAt(x) * 92; d += ` L${X(x).toFixed(1)} ${y.toFixed(1)}`; line += `${line ? 'L' : 'M'}${X(x).toFixed(1)} ${y.toFixed(1)} `; }
+      d += ` L${X(t).toFixed(1)} ${Y0} Z`;
+      S('path', { d, class: 'area' }, svg); S('path', { d: line, class: 'curve' }, svg);
+    }
+    S('text', { x: X(NEWS) + 3, y: 14, class: 'news' }, svg, '🌋 news breaks');
+    S('line', { x1: X(NEWS), x2: X(NEWS), y1: 18, y2: Y0, stroke: 'var(--lava)', 'stroke-dasharray': '3 3' }, svg);
+    // where it lands in the dropdown
+    const lx = X(Math.min(7, m.vis));
+    S('path', { d: `M${lx} ${Y0 - 14} l7 7 l-7 7 l-7 -7 Z`, class: 'land' }, svg);
+    S('text', { x: Math.min(372, Math.max(28, lx)), y: Y0 - 18, class: 'sv-t sv-c sv-b', style: 'fill:var(--good)' }, svg, 'top 5');
+    S('line', { x1: X(t), x2: X(t), y1: 18, y2: Y0, class: 'now' }, svg);
+  }
+  const STALE = ['voice recorder', 'volleyball', 'vocabulary', 'volume booster', 'vodka cocktails'];
+  function drawDrop() {
+    const m = model(), fresh = t >= m.vis;
+    const list = fresh ? ['volcano eruption'].concat(STALE.slice(0, 4)) : STALE;
+    $('#dropList').innerHTML = list.map((s, i) => `<li class="${fresh && i === 0 ? 'fresh' : ''}">${s}${fresh && i === 0 ? '<span>🔥 trending</span>' : ''}</li>`).join('');
+    $('#trNow').textContent = clock(t);
+  }
+  function readout() {
+    const m = model(), d = m.vis - NEWS;
+    const eta = $('#trEta'); eta.textContent = `${fmt(d)} after the news`; eta.className = d < 1 / 24 ? 'fast' : d > 2 ? 'slow' : '';
+    $('#trLag').textContent = m.cadence;
+  }
+  function render() { draw(); drawDrop(); readout(); }
+
+  $$('#levers .lever').forEach(b => b.onclick = () => {
+    if (playing) return;
+    const k = b.dataset.l; lev[k] = !lev[k]; b.setAttribute('aria-pressed', lev[k]);
+    if (t < 2) t = Math.min(7, model().vis + .02); // jump "now" to just after it lands, so the effect is visible
+    const onKeys = Object.keys(lev).filter(x => lev[x]);
+    const m = model();
+    logTo('trLog', `${onKeys.length ? onKeys.map(x => ({ shard: 'smaller shards', recent: 'recency weighting', stream: 'streaming' })[x]).join(' + ') : 'original design'} → top 5 ${fmt(m.vis - NEWS)} after the news`, m.vis - NEWS < 1 / 24 ? 'g' : '');
+    if (onKeys.length === 1) solos.add(onKeys[0]);
+    if (solos.size === 3 && checkGoal('#s4goals', 'solo', goals, 10)) logTo('trLog', 'Solo results: recency alone changes nothing (no fresh data arrives until Sunday). Streaming alone is the fastest single lever.', 'w');
+    if (lev.stream && lev.recent && checkGoal('#s4goals', 'win', goals, 15)) logTo('trLog', '✓ Fresh data within minutes AND ranked high: streaming + recency weighting.', 'g');
+    $('#trSlider').value = Math.round(t * DAY);
+    render(); maybeQuiz();
+  });
+  $('#trSlider').addEventListener('input', e => { t = +e.target.value / DAY; render(); });
+  $('#trRun').onclick = async () => {
+    if (playing) return;
+    playing = true; $('#trRun').disabled = true;
+    $$('#levers .lever').forEach(b => b.disabled = true);
+    const m = model(); let flagged = false;
+    await anim(5200, p => {
+      t = p * 7; $('#trSlider').value = Math.round(t * DAY); render();
+      if (!flagged && t >= NEWS) { flagged = true; logTo('trLog', `🌋 ${clock(NEWS)}: volcano erupts. Searches for "volcano eruption" explode.`, 'w'); }
+    });
+    if (!flagged) logTo('trLog', `🌋 ${clock(NEWS)}: volcano erupts. Searches for "volcano eruption" explode.`, 'w');
+    logTo('trLog', `It reached the top 5 at ${clock(m.vis)}: ${fmt(m.vis - NEWS)} after the news.`, m.vis - NEWS < 1 / 24 ? 'g' : 'e');
+    playing = false; $('#trRun').disabled = false; $('#trRun').textContent = '↻ Play the week again';
+    $$('#levers .lever').forEach(b => b.disabled = false);
+    if (!ran) { ran = true; if (!Object.values(lev).some(Boolean)) checkGoal('#s4goals', 'run', goals, 10); else checkGoal('#s4goals', 'run', goals, 10); logTo('trLog', 'Now flip the levers below. Each one updates the timeline and the dropdown.'); }
+    maybeQuiz();
+  };
+
+  // prediction first
+  const box = $('#trPredict');
+  box.innerHTML = `<div class="step">Predict first</div><h3>Which <b>single</b> change gets "volcano eruption" into the suggestions fastest?</h3><div class="opts"></div><div class="explain"></div>`;
+  const P_OPTS = ['Smaller shards, so rebuilds are faster', 'Recency-weighted ranking of queries', 'A streaming pipeline that feeds the trie'];
+  shuffle(P_OPTS.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+    const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+    b.onclick = () => {
+      $$('.opt', box).forEach(x => x.disabled = true);
+      const ok = i === 2;
+      b.classList.add(ok ? 'right' : 'wrong');
+      if (!ok) $('.opt[data-i="2"]', box).classList.add('right');
+      const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+      ex.innerHTML = (ok ? '<b>Good call.</b> ' : '<b>Watch and see.</b> ') + 'Recency weighting only re-ranks data the trie already has, so on its own it still waits for Sunday. Smaller shards let you rebuild every few hours. Streaming feeds new searches in continuously, so it wins on its own, and pairing it with recency weighting gets you to minutes. Test all three below.';
+      ok ? Q.addXP(20, b) : Q.loseHeart(b);
+      predicted = true;
+      $('#trRun').disabled = false; $('#trSlider').disabled = false;
+      $('#trLog').innerHTML = '<div>Original design: weekly rebuild on Sunday. Press play.</div>';
+    };
+    $('.opts', box).appendChild(b);
+  });
+
+  function maybeQuiz() {
+    if (quizShown || !['run', 'solo', 'win'].every(g => goals.has(g))) return;
+    quizShown = true;
+    Q.quiz($('#s4quiz'), {
+      q: 'The book gives two reasons the original design can’t show trending queries. Which pair?',
+      options: ['Workers aren’t due to run yet, and a full rebuild is slow', 'The trie cache is too small, and the CDN is too far away', 'Browsers cache old lists, and sampling drops new queries'],
+      correct: 0,
+      good: 'The offline workers run on a schedule (weekly here), so they haven’t run yet. And even if you kicked them off, building the whole trie takes too long to catch a spike.',
+      bad: 'The book’s two reasons are both about the batch pipeline: the offline workers aren’t scheduled to run yet, and a full trie build takes too long anyway.',
+      onDone: () => setTimeout(() => Q.clearStage(4), 700),
+    });
+  }
+  render();
+  $('#trEta').textContent = '—'; $('#trLag').textContent = '—';
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss'), {
+  name: '🗿 Hot-Letter Titan',
+  xp: 15,
+  choices: [
+    { k: 'map', label: 'Shard map', sub: 'rebalance by history' },
+    { k: 'deep', label: 'Go deeper', sub: 'split on 2nd/3rd letter' },
+    { k: 'uni', label: 'Unicode nodes', sub: 'children as a map' },
+    { k: 'cdn', label: 'Country tries', sub: 'served from CDNs' },
+    { k: 'stream', label: 'Fresh path', sub: 'recency + streaming' },
+  ],
+  scenarios: [
+    { e: '🔥', t: 'The "s" shard is melting', d: 'You have 26 first-letter shards and no budget for more. The "s" server runs at 3× its fair share. The "u" to "z" servers are nearly idle.', a: 'map', why: 'Stop slicing by alphabet and slice by historical traffic. Merge the quiet u–z letters onto one shard and free servers for "s". The shard map manager records the new prefix → shard table.' },
+    { e: '📈', t: 'We need 40 shards', d: 'Traffic grew. Even one shard per letter isn’t enough, and there are only 26 letters.', a: 'deep', why: 'Shard on the second (or third) character: split a busy letter into ranges like sa–sg, sh–sn, so–su, sv–sz.' },
+    { e: '🗾', t: 'Launching in Japan', d: 'Japanese users type kana and kanji. The trie’s nodes have one slot per letter, a to z, and inserts fail.', a: 'uni', why: 'Store Unicode characters in the trie nodes. Children become a map keyed by character, so any writing system fits.' },
+    { e: '🦘', t: 'Australia sees 300 ms', d: 'Suggestions for users in Sydney are slow, and half of them are about US topics.', a: 'cdn', why: 'Build a trie for Australia and serve it from a CDN location near Sydney. That makes suggestions both faster and more local.' },
+    { e: '📰', t: 'Celebrity news breaks', d: 'Everyone is searching a name that wasn’t in last week’s data. The trie rebuilds on Sunday, so suggestions are days stale.', a: 'stream', why: 'Weight recent searches more heavily, and feed new searches in as a stream (Kafka plus a stream processor) instead of waiting for the weekly batch.' },
+    { e: '🎲', t: '"Why not hash prefixes to shards?"', d: 'The interviewer asks why you don’t just hash each prefix to pick a shard, instead of using letter ranges and a map.', a: 'trade',
+      choices: [
+        { k: 'trade', label: 'Fair option', sub: 'evens load, but loses letter → shard and whole subtrees' },
+        { k: 'never', label: 'Never works', sub: 'a hashed prefix can’t be found again later' },
+        { k: 'better', label: 'Always better', sub: 'it beats range sharding in every way' },
+      ],
+      why: 'Hashing prefixes balances load and works for point lookups. But a letter’s subtree gets scattered, so one shard’s trie can’t be built on its own and the simple letter → shard rule is gone. The book keeps letter ranges and fixes balance with a shard map manager. Naming that trade-off is the senior move.' },
+  ],
+  outro: 'Too big → shard by letter (deeper past 26). Uneven → shard map from history. Global → Unicode nodes and country tries on CDNs. Fresh → recency + streaming.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: drill ================= */
+Q.onStage(6, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"The trie no longer fits on one machine, and we’re going global. We also want trending searches to show up. Go."</i>',
+  placeholder: 'First I’d shard the trie by the first character…',
+  model: '"I\'d shard the trie by the first character of the prefix. Two servers could split a–m and n–z, three could split a–i, j–r and s–z, and we can go up to 26. Past that we shard on the second or third character, like aa–ag, ah–an. Letters aren\'t equally popular, though: far more queries start with s or c than with x. So I\'d shard by historical query volume, for example one shard just for s and one for u to z, and keep the prefix-to-shard table in a shard map manager that every read and write checks first. For other languages, the trie nodes store Unicode characters, so children become a map instead of 26 slots. For country-specific results, I\'d build a trie per country and serve it from CDNs near the users. For trending queries, the weekly batch is too slow: the workers aren\'t due to run and a full rebuild takes too long. I\'d give recent searches more weight, keep shards small so they rebuild fast, and add a streaming path with something like Kafka and Spark Streaming or Storm."',
+  checks: [
+    'I sharded by first letter (2: a–m / n–z, 3: a–i / j–r / s–z, up to 26)',
+    'I said what to do past 26: shard on the 2nd or 3rd character',
+    'I flagged uneven letters and fixed it with a shard map manager built from historical data',
+    'I covered languages (Unicode nodes) and countries (per-country tries on CDNs)',
+    'I explained why weekly rebuilds miss trends, and named recency weighting plus streaming',
+  ],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>
