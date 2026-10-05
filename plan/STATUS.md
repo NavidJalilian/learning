@@ -2,7 +2,7 @@
 
 Every chapter of *System Design Interview* Vol. 1 as a world of quests. Ticked = done. Regenerate: `python3 plan/tools/status.py`.
 
-**56 of 83 quests built** · 51 live on the map · 5 built, awaiting world review · 14 being built (draft on disk, not verified) · 13 not started.
+**57 of 83 quests built** · 51 live on the map · 6 built, awaiting world review · 13 being built (draft on disk, not verified) · 13 not started.
 
 Legend: `[x]` done · `[ ]` not done. A world is **done** when every quest is built, the world review has run, its cheat sheet
 exists, and its quests are `ready: true` on the map.
@@ -49,7 +49,7 @@ exists, and its quests are `ready: true` on the map.
 
 - [ ] `0501` 5.1 · [Ring Math](../lessons/0501-consistent-hashing-ring-math.html) — being built (unverified draft)
 - [ ] `0502` 5.2 · [Cracks in the Ring](../lessons/0502-consistent-hashing-cracks-and-riders.html) — being built (unverified draft)
-- [ ] `0503` BOSS · [Hash It Live](../lessons/0503-consistent-hashing-boss-hash-it-live.html) — being built (unverified draft)
+- [x] `0503` BOSS · [Hash It Live](../lessons/0503-consistent-hashing-boss-hash-it-live.html) — built · needs world review
 - [ ] World review + cheat sheet
 
 ## ✅ World 6 · Design a Key-Value Store — *The Key-Value Vault*
