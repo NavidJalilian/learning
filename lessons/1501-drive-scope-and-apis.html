@@ -46,7 +46,8 @@
 .binbtn { min-height: 64px; border: 2px dashed var(--line); background: var(--panel); border-radius: 12px; padding: 8px 6px; text-align: center; line-height: 1.2; transition: border-color .2s, background .2s; }
 .binbtn:hover:not([disabled]) { border-color: var(--accent); background: var(--accent-soft); }
 .binbtn[disabled] { cursor: default; opacity: .7; }
-.binbtn b { display: block; font-size: 14px; overflow-wrap: anywhere; }
+.binbtn b { display: block; font-size: 14px; hyphens: manual; }
+@media (max-width: 480px) { .binbtn b { font-size: 13px; } .binbtn { padding: 8px 4px; } }
 .binbtn span { font-size: 12px; color: var(--muted); }
 .binbtn em { font-style: normal; font: 700 12px var(--mono); color: var(--accent); display: block; margin-top: 2px; }
 .binlist { display: flex; flex-direction: column; gap: 4px; }
@@ -144,6 +145,7 @@
 .arch .bx { fill: var(--panel); stroke: var(--ink); stroke-width: 2; transition: fill .4s, stroke .4s, opacity .4s; }
 .arch .shell { fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 6 5; }
 .arch .shellt { fill: var(--muted); font: 700 11px var(--font); letter-spacing: .08em; }
+.arch .shellt.end { text-anchor: end; }
 .arch .t { fill: var(--ink); font: 700 13.5px var(--font); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
 .arch .ts { fill: var(--muted); font: 600 12.5px var(--font); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
 .arch .tm { fill: var(--muted); font: 600 12.5px var(--mono); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
@@ -507,7 +509,7 @@ Q.onStage(1, () => {
     if (nfrDone) return;
     const box = $('#nfr'); box.classList.add('on');
     const NFR = [['rel', 'Reliability'], ['sync', 'Fast sync'], ['bw', 'Low bandwidth'], ['scale', 'Scalability'], ['ha', 'High availability']];
-    $('#nfrOpts').innerHTML = NFR.map(([k, l]) => `<button class="opt" data-k="${k}">${l}</button>`).join('');
+    $('#nfrOpts').innerHTML = shuffle(NFR).map(([k, l]) => `<button class="opt" data-k="${k}">${l}</button>`).join('');
     $$('#nfrOpts .opt').forEach(b => b.onclick = () => {
       $$('#nfrOpts .opt').forEach(x => x.disabled = true);
       const ok = b.dataset.k === 'rel';
@@ -726,7 +728,7 @@ Q.onStage(3, () => {
     $$('#modeSeg button').forEach(x => x.classList.toggle('on', x === b));
     $('#rsteps').classList.toggle('dim', mode !== 'resumable');
   });
-  const fmtGB = b => (b / 1e9).toFixed(1) + ' GB';
+  const fmtGB = b => (b / 1073741824).toFixed(1) + ' GB'; // binary GB, to match the 2 GB (2 GiB) file
   function setPct(n) { pct.textContent = Math.round(n / CH * 100) + '%'; }
   function resetBar() { cks.forEach(c => c.setAttribute('class', 'ck')); setPct(0); }
   function stepState(n, st) { const li = $(`#rsteps li[data-s="${n}"]`); li.classList.remove('act', 'ok'); if (st) li.classList.add(st); }
@@ -929,7 +931,7 @@ Q.onStage(4, () => {
     }
     // phase C / D: web + metadata on top, S3 in two regions below
     const both = !st.lb && !st.db;
-    if (both) { S('rect', { class: 'shell', x: 16, y: 44, width: 368, height: 86, rx: 12 }, g); T(30, 124, 'STILL ONE SERVER', 'shellt', g); }
+    if (both) { S('rect', { class: 'shell', x: 16, y: 44, width: 368, height: 86, rx: 12 }, g); T(372, 124, 'STILL ONE SERVER', 'shellt end', g); }
     // web tier
     let webBottom, webCx = 110;
     if (st.lb) {
@@ -1098,10 +1100,12 @@ Q.onStage(4, () => {
 });
 
 /* ================= STAGE 5: boss ================= */
+// Q.boss shows choices in the given order, so shuffle each scenario's choices (the right one is written first below).
+const mixChoices = list => list.map(sc => ({ ...sc, choices: shuffle(sc.choices) }));
 Q.onStage(5, () => Q.boss($('#boss'), {
   name: '👾 The Scope Creep',
   xp: 15,
-  scenarios: [
+  scenarios: mixChoices([
     { e: '🧮', t: 'Quick, the QPS', d: '"We have 10M daily users, and each uploads 2 files a day. Roughly what upload QPS?"', a: 'a',
       choices: [{ k: 'a', label: '~240', sub: 'peak ~480' }, { k: 'b', label: '~2,400', sub: 'peak ~4,800' }, { k: 'c', label: '~24,000', sub: 'peak ~48,000' }],
       why: '10M × 2 = 20M uploads a day. ÷ 86,400 seconds ≈ 231, call it ~240. Double it for the peak: ~480.' },
@@ -1117,7 +1121,7 @@ Q.onStage(5, () => Q.boss($('#boss'), {
     { e: '🔐', t: 'Lock the doors', d: '"How do you secure the upload, download and revisions APIs?"', a: 'a',
       choices: [{ k: 'a', label: 'Auth + HTTPS', sub: 'every call, encrypted' }, { k: 'b', label: 'Key in URL', sub: 'over plain HTTP' }, { k: 'c', label: 'Trust the app', sub: 'our client is safe' }],
       why: 'The book: every API call needs an authenticated user, and HTTPS (TLS/SSL) protects the data on its way between client and server. A key in a URL over plain HTTP is readable by anyone on the network.' },
-  ],
+  ]),
   outro: 'Scope first, round the numbers, resumable for big files, never lose data, lock every door.',
   onDone: () => Q.clearStage(5),
 }));
