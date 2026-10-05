@@ -610,7 +610,21 @@ const ROWS = [
 ];
 const GIVEN = ['300M MAU', '50% daily', '2 posts/day', '10% media · 1 MB', '5 years', '10 timeline loads/day', 'peak = 2×'];
 const chat3 = Chat($('#chat3'));
-let ri = 0, s3res = [];
+let ri = 0, s3res = [], uv = {};
+/* Carried slips: each row's formula, fed with the learner's OWN earlier answers. If a row is far
+   from the model answer but matches what their earlier (wrong) inputs give, it's the same mistake
+   carried forward, not a new one: amber, no heart. */
+const MODEL = Object.fromEntries(ROWS.map(r => [r.k, r.model]));
+const CARRY = {
+  wq: u => u('dau') * 2 / 86400,
+  pw: u => u('wq') * 2,
+  rq: u => u('dau') * 10 / 86400,
+  sd: u => u('dau') * 2 * 0.1 * 1e6,
+  s5: u => u('sd') * 365 * 5,
+  cache: u => u('dau') * 2 * 200,
+  srv: u => (u('pw') + 2 * u('rq')) / 1000,
+};
+const sig2 = n => n >= 100 ? fmtN(n) : String(+n.toPrecision(2));
 function parseEntry(raw) {
   let s = String(raw).trim().toLowerCase().replace(/[,_\s]/g, '').replace(/^[~≈]/, '');
   let unit = null;
@@ -628,7 +642,7 @@ function sigFigs(t) {
 }
 function setup3() {
   begun.delete(3);
-  chat3.clear(); ri = 0; s3res = [];
+  chat3.clear(); ri = 0; s3res = []; uv = {};
   $('#s3q').innerHTML = ''; $('#s3bonus').style.display = 'none';
   $('#given').innerHTML = GIVEN.map(g => `<span>📌 ${g}</span>`).join('');
   const opts = '<option value="">unit…</option>' + Object.keys(UNITS).map(u => `<option value="${u}">${u}</option>`).join('');
@@ -678,9 +692,12 @@ function check3(i) {
   const okR = r.ok ? [r.ok[0] / r.model, r.ok[1] / r.model] : [0.7, 1.3];
   const nearR = r.near ? [r.near[0] / r.model, r.near[1] / r.model] : [1 / 3, 3];
   const close = ratio >= okR[0] && ratio <= okR[1], near = ratio >= nearR[0] && ratio <= nearR[1];
-  const grade = close && unitOK ? 'g' : (close || near) ? 'a' : 'r';
+  let grade = close && unitOK ? 'g' : (close || near) ? 'a' : 'r';
+  const carried = grade === 'r' && CARRY[r.k] ? CARRY[r.k](k => uv[k] ?? MODEL[k]) : null;
+  if (carried && value / carried >= okR[0] && value / carried <= okR[1]) grade = 'c';
+  uv[r.k] = value;
   $$('input, select, button', row).forEach(x => x.disabled = true);
-  row.classList.add(grade);
+  row.classList.add(grade === 'c' ? 'a' : grade);
   const btn = $('.q-check', row);
   let html;
   if (grade === 'g') { html = `<b>✓ On the money.</b> ${r.worked}`; Q.addXP(10, btn); tick(3, 25, 'num', 1, 1); }
