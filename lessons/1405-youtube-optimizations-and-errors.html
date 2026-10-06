@@ -278,7 +278,7 @@
       <div class="challenge" id="bouncer" style="display:none">
         <div class="step">Part 1 · The bouncer</div>
         <h3>You're the storage door. Accept the upload, or reject it with a 403?</h3>
-        <p class="small muted" style="margin-top:-6px">Storage takes the fields from the URL, re-computes the signature with the secret key and compares. It also checks the clock. Changed fields show in <span style="color:var(--warn);font-weight:700">orange</span>.</p>
+        <p class="small muted" style="margin-top:-6px">Storage takes the fields from the URL, re-computes the signature with the secret key and compares. It also checks the clock. Fields someone edited <i>after</i> the URL was issued are underlined in <span style="color:var(--warn);font-weight:700">orange</span>.</p>
         <div id="attBox"></div>
         <div class="dots3" id="attDots"></div>
       </div>
@@ -516,7 +516,7 @@ Q.onStage(1, () => {
     near: { rtt: 0.02, cap: 12.5, label: '🏢 upload center nearby · 20 ms round trip' },
     far: { rtt: 0.2, cap: 1.25, label: '🌍 upload center overseas · 200 ms round trip' },
   };
-  let where = 'near', busy = false, races = 0, ranFar = false;
+  let where = 'near', busy = false, races = 0, ranFar = false, farB = null;
   const goals = new Set();
   $('#chunks').innerHTML = Array.from({ length: NCH }, (_, i) => `<div class="ck"><i></i><b>${i + 1}</b></div>`).join('');
   const cks = $$('#chunks .ck');
@@ -647,7 +647,7 @@ Q.onStage(1, () => {
       const was = where;
       const r = await run();
       if (r && was === 'near' && ranFar && checkGoal('#s1goals', 'near', goals, 5)) {
-        logTo('rcLog', `✓ Back near: Lane B went from about 242 s overseas to ${fmtS(r.B.done)}, even with the drop.`, 'g');
+        logTo('rcLog', `✓ Back near: Lane B went from ${fmtS(farB || 242)} overseas to ${fmtS(r.B.done)}, even though the drop hit it this time.`, 'g');
         $('#rcNear').style.display = 'block';
         maybeQuiz();
       }
@@ -661,7 +661,7 @@ Q.onStage(1, () => {
       title: 'Your users are in India, but the only upload center is overseas: <b>200 ms</b> per round trip instead of 20 ms. Each chunk needs about <b>3 round trips</b> just to set up its request. How long is that setup now?',
       options: ['About 60 ms, the same as before', 'About 600 ms, ten times longer', 'About 6 s, a hundred times longer'],
       correct: 1,
-      act: async () => { setWhere('far'); ranFar = true; await run(); checkGoal('#s1goals', 'far', goals); },
+      act: async () => { setWhere('far'); ranFar = true; const r = await run(); if (r) farB = r.B.done; checkGoal('#s1goals', 'far', goals); },
       explain: '3 × 200 ms = 0.6 s per chunk, ten times the 0.06 s you had nearby. Setup is still small next to a 100 MB transfer. The bigger hit is speed: over a long path, one connection waits a full round trip for each "got it" from the server, and lost packets slow it down for longer. In this race, one connection gets only 10 Mbit/s of your 50. Lane A crawled. Lane B ran 4 connections at once and still used 40 Mbit/s. Now switch back to <b>Near</b> and press Go.',
     }).then(() => { $$('#rcSeg button').forEach(b => b.disabled = busy); });
   }
@@ -876,7 +876,8 @@ Q.onStage(3, () => {
   const base = { m: 'PUT', bucket: 'vids-upload', key: 'user123/video.mp4', exp: '10:30' };
   const ATT = [
     { f: { ...base }, sigFor: base, chg: [], a: 'ok', why: 'Every field matches what was signed, and 10:30 is still in the future. The upload goes straight into <code>user123/video.mp4</code>.' },
-    { f: { ...base, exp: '10:12' }, sigFor: { ...base, exp: '10:12' }, chg: ['exp'], a: 'no', why: 'The signature is genuine: it was issued for 10:12. But it’s 10:22 now, so the URL expired 10 minutes ago. Short expiry limits the damage if a URL leaks.' },
+    { f: { ...base, key: 'user123/clip2.mp4', exp: '10:35' }, sigFor: { ...base, key: 'user123/clip2.mp4', exp: '10:35' }, chg: [], a: 'ok', why: 'A different object, but nobody edited this URL: your API servers signed it for <code>clip2.mp4</code>. Storage doesn’t need to know the user. It only checks that the signature matches the fields and that the clock is before 10:35.' },
+    { f: { ...base, exp: '10:12' }, sigFor: { ...base, exp: '10:12' }, chg: [], a: 'no', why: 'The signature is genuine: it was issued for 10:12. But it’s 10:22 now, so the URL expired 10 minutes ago. Short expiry limits the damage if a URL leaks.' },
     { f: { ...base, key: 'user999/video.mp4' }, sigFor: base, chg: ['key'], a: 'no', why: 'Someone edited the object key to write into user999’s folder, but kept the old signature. Storage re-computes the signature over the new key and gets a different code. Without the secret key, nobody can make a matching one.' },
     { f: { ...base, bucket: 'vids-public' }, sigFor: base, chg: ['bucket'], a: 'no', why: 'Same key, same expiry, but a different bucket. The bucket is part of what was signed, so the codes don’t match. A pre-signed URL is good for exactly one place.' },
   ].map(a => ({ ...a, s: sig(a.sigFor.m, a.sigFor.bucket, a.sigFor.key, a.sigFor.exp) }));
