@@ -1,6 +1,6 @@
 #!/bin/bash
-# sync.sh "<message>" : commit everything in the repo and push
-cd /home/user/learning && git add -A && { git diff --cached --quiet || git commit -q -m "$1
+# sync.sh "<message>" : refresh plan/STATUS.md, commit everything in the repo and push
+cd /home/user/learning && python3 plan/tools/status.py >/dev/null && git add -A && { git diff --cached --quiet || git commit -q -m "$1
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01C1ga3Sh2tctmznruSqtkiP"; }

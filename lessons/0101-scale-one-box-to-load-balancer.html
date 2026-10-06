@@ -1,0 +1,1094 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>One Box Wonder</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: s1 request trip, s2 split box + DB sort, s3 scale-up sim, s4 load balancer sim */
+:root { --web: #2f7fd8; --db: #b8409a; --lbc: #0d9a96; --wire: #c9c3b6; --on-c: #ffffff; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --web: #5aa9ff; --db: #f07ad0; --lbc: #31d3c8; --wire: #3a3e60; --on-c: #0e0f1d; }
+}
+:root[data-theme="dark"] { --web: #5aa9ff; --db: #f07ad0; --lbc: #31d3c8; --wire: #3a3e60; --on-c: #0e0f1d; }
+
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.bignum { font-family: var(--mono); font-weight: 700; }
+.bignum.bad { color: var(--bad); }
+.bignum.good { color: var(--good); }
+svg text { font-family: var(--font); }
+.sim svg.trip, .sim svg.split, .sim svg.lbs { max-width: 520px; margin: 0 auto; }
+
+/* stage 1: request trip */
+.trip .wire { fill: none; stroke: var(--wire); stroke-width: 3; stroke-dasharray: 5 6; transition: stroke .3s; }
+.trip .wire.lit { stroke: var(--accent); stroke-dasharray: none; }
+.trip .lab { fill: var(--accent); font: 700 12px var(--mono); text-anchor: middle; opacity: 0; transition: opacity .4s; }
+.trip .lab.show { opacity: 1; }
+.trip .badge circle { fill: var(--accent); }
+.trip .badge text { fill: #fff; font: 700 11px var(--font); text-anchor: middle; dominant-baseline: central; }
+.trip .badge { opacity: 0; transition: opacity .4s; }
+.trip .badge.show { opacity: 1; }
+.trip .dev rect, .trip .dev path { fill: var(--panel); stroke: var(--muted); stroke-width: 2; transition: stroke .3s; }
+.trip .dev .scr { fill: var(--bg-2); stroke: none; }
+.trip .dev.on rect, .trip .dev.on path { stroke: var(--accent); stroke-width: 3; }
+.trip .dev.on .scr { fill: var(--accent-soft); stroke: none; }
+.trip .dlab { fill: var(--muted); font: 600 12px var(--font); text-anchor: middle; }
+.trip .dev.on .dlab { fill: var(--accent); }
+.trip .cloud { fill: var(--teal-soft); stroke: var(--teal); stroke-width: 2; }
+.trip .ctext { fill: var(--ink); font: 700 15px var(--font); text-anchor: middle; }
+.trip .csub { fill: var(--muted); font: 600 11px var(--font); text-anchor: middle; }
+.trip .srv { fill: var(--panel); stroke: var(--ink); stroke-width: 2; }
+.trip .srv-ip { fill: var(--ink); font: 700 11px var(--mono); text-anchor: middle; }
+.trip .row-r { fill: var(--bg-2); stroke: var(--line); }
+.trip .row-t { fill: var(--ink); font: 600 11.5px var(--font); text-anchor: middle; dominant-baseline: central; }
+.trip .srv-g.pulse { animation: spulse .6s; transform-box: fill-box; transform-origin: center; }
+@keyframes spulse { 40% { transform: scale(1.06); } }
+.pkt { fill: var(--xp); stroke: var(--bg); stroke-width: 2; }
+.pkt.bad { fill: var(--bad); }
+.steps { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+@media (max-width: 520px) { .steps { grid-template-columns: 1fr; } }
+.steps .opt { display: flex; gap: 10px; align-items: center; min-height: 48px; }
+.steps .opt .no { flex: none; width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; font: 700 13px var(--mono); background: var(--bg-2); color: var(--muted); }
+.steps .opt.right .no { background: var(--good); color: #fff; }
+.clientlab { display: none; margin-top: 16px; border: 1px solid var(--line); border-radius: 16px; padding: 14px; background: var(--bg); }
+.clientlab.on { display: block; animation: rise .35s; }
+.clientlab .seg button { min-height: 40px; padding: 6px 14px; }
+.resp { margin-top: 12px; min-height: 40px; }
+.resp pre { margin: 0; background: var(--code-bg); color: var(--code-ink); border-radius: 12px; padding: 12px 14px; font: 12.5px/1.5 var(--mono); overflow-x: auto; animation: rise .35s; }
+.resp pre .k { color: #9fa8ff; }
+.resp pre .s { color: #6ee7a8; }
+.resp pre .n { color: #ffb36b; }
+.resp .cap { font-size: 13px; color: var(--muted); margin-top: 6px; }
+.browser { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--panel); max-width: 360px; animation: rise .35s; }
+.bbar { display: flex; gap: 5px; align-items: center; padding: 7px 10px; background: var(--bg-2); border-bottom: 1px solid var(--line); font: 600 11.5px var(--mono); color: var(--muted); }
+.bbar i { width: 9px; height: 9px; border-radius: 50%; background: var(--line); display: inline-block; }
+.bbar span { margin-left: 6px; background: var(--panel); border-radius: 6px; padding: 2px 8px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bpage { display: flex; gap: 12px; padding: 14px; align-items: center; }
+.bpage .av { width: 46px; height: 46px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--teal)); color: #fff; display: grid; place-items: center; font-weight: 700; flex: none; }
+.bpage .ln { height: 8px; border-radius: 4px; background: var(--bg-2); margin-top: 7px; }
+
+/* stage 2: split box */
+.split .shell { fill: none; stroke: var(--muted); stroke-width: 2; stroke-dasharray: 6 6; transition: opacity .5s; }
+.split .shell-t { fill: var(--muted); font: 700 12px var(--font); text-anchor: middle; transition: opacity .5s; }
+.split .half rect { stroke-width: 3; }
+.split .web rect.body { fill: color-mix(in srgb, var(--web) 16%, var(--panel)); stroke: var(--web); }
+.split .db .body { fill: color-mix(in srgb, var(--db) 16%, var(--panel)); stroke: var(--db); stroke-width: 3; }
+.split .ht { fill: var(--ink); font: 700 14px var(--font); text-anchor: middle; }
+.split .hs { fill: var(--muted); font: 600 11px var(--font); text-anchor: middle; }
+.split .db { cursor: grab; touch-action: none; }
+.split .db:focus { outline: none; }
+.split .db:focus .body, .split .db:hover .body { stroke-width: 4.5; }
+.split.done .db { cursor: default; }
+.split .ghost rect { fill: none; stroke: var(--web); stroke-width: 2; opacity: .5; }
+.split .link { stroke: var(--ink); stroke-width: 2.5; opacity: 0; transition: opacity .5s .3s; }
+.split .link-t { fill: var(--ink); font: 600 11.5px var(--font); text-anchor: middle; opacity: 0; transition: opacity .5s .3s; }
+.split.done .link, .split.done .link-t { opacity: 1; }
+.split.done .shell, .split.done .shell-t, .split.done .hint { opacity: 0; }
+.split .hint { fill: var(--accent); font: 700 12.5px var(--font); text-anchor: middle; transition: opacity .4s; }
+.knobs { display: none; grid-template-columns: 1fr 1fr; gap: 6px 18px; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+.knobs.on { display: grid; animation: rise .35s; }
+@media (max-width: 520px) { .knobs { grid-template-columns: 1fr; } }
+.knobs label { font-size: 13px; font-weight: 600; display: flex; justify-content: space-between; gap: 8px; }
+.knobs input { width: 100%; height: 30px; }
+.knobs .kw input { accent-color: var(--web); }
+.knobs .kd input { accent-color: var(--db); }
+.bins { display: flex; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin-top: 6px; }
+.bins b { color: var(--ink); }
+.sort-item.done { border-color: color-mix(in srgb, var(--good) 50%, var(--line)); }
+.sort-item .row .opt { min-height: 40px; }
+.fam { display: grid; gap: 8px; margin-top: 8px; }
+.fam .sort-item p { margin-bottom: 8px; }
+
+/* stage 3: scale-up sim */
+.trafbar { padding: 12px 14px 4px; }
+.trafbar .top { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; font-size: 14px; flex-wrap: wrap; }
+.gauge { height: 12px; border-radius: 99px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; margin-top: 6px; }
+.gauge div { height: 100%; width: 0; background: linear-gradient(90deg, var(--teal), var(--accent)); transition: width .45s; }
+.boxes { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; padding: 12px 14px; }
+.box1 { border: 2px solid var(--line); border-radius: 14px; padding: 10px 12px; background: var(--panel); transition: border-color .3s, background .3s, opacity .3s; }
+.box1.new { animation: rise .35s; }
+.box1 .bx-top { display: flex; justify-content: space-between; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.box1 .bx-top span { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+.box1 .bx-tier { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.box1 .bx-tier b { color: var(--ink); }
+.cpu { height: 14px; border-radius: 6px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; margin-top: 8px; }
+.cpu div { height: 100%; width: 0; background: var(--good); transition: width .45s, background .3s; }
+.box1.busy .cpu div { background: var(--warn); }
+.box1.over .cpu div { background: var(--bad); }
+.box1 .bx-st { font-size: 13px; font-weight: 700; margin-top: 6px; display: flex; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
+.box1.over { border-color: var(--bad); }
+.box1.busy { border-color: var(--warn); }
+.box1.down { border-color: var(--bad); border-style: dashed; background: var(--bad-soft); }
+.box1.down .cpu div { width: 0 !important; }
+.box1.idle { border-style: dashed; }
+.box1 .ok { color: var(--good); } .box1 .wn { color: var(--warn); } .box1 .er { color: var(--bad); } .box1 .mu { color: var(--muted); }
+.ladder { display: flex; gap: 6px; padding: 0 14px 12px; flex-wrap: wrap; }
+.ladder span { flex: 1; min-width: 58px; text-align: center; font-size: 11px; padding: 5px 2px; white-space: nowrap; border-radius: 9px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); line-height: 1.3; }
+.ladder span b { display: block; color: var(--ink); font-size: 12px; }
+.ladder span.cur { border-color: var(--accent); background: var(--accent-soft); }
+.ladder span.cur b { color: var(--accent); }
+.downbar { display: none; margin: 0 14px 12px; padding: 10px 12px; border-radius: 12px; background: var(--bad); color: #fff; font-weight: 700; text-align: center; }
+.downbar.on { display: block; animation: flash .9s; }
+@keyframes flash { 0%, 50% { opacity: .2; } 25%, 75%, 100% { opacity: 1; } }
+.sim-bar .btn { padding: 8px 12px; font-size: 14px; min-height: 40px; }
+
+/* stage 4: load balancer sim */
+.lbs .users { fill: var(--bg-2); stroke: var(--muted); stroke-width: 2; }
+.lbs .ut { fill: var(--ink); font: 700 13px var(--font); text-anchor: middle; }
+.lbs .us { fill: var(--muted); font: 600 10.5px var(--font); text-anchor: middle; }
+.lbs .lbbox { fill: color-mix(in srgb, var(--lbc) 18%, var(--panel)); stroke: var(--lbc); stroke-width: 3; }
+.lbs .lbt { fill: var(--ink); font: 700 14px var(--font); text-anchor: middle; }
+.lbs .lbip { fill: var(--ink); font: 700 11px var(--mono); text-anchor: middle; }
+.lbs .lbs2 { fill: var(--muted); font: 600 10px var(--font); text-anchor: middle; }
+.lbs .net { fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 5 5; }
+.lbs .nett { fill: var(--muted); font: 700 10.5px var(--font); letter-spacing: .06em; text-anchor: middle; }
+.lbs .dnst { fill: var(--teal); font: 700 11px var(--mono); text-anchor: middle; }
+.lbs .ln { stroke: var(--wire); stroke-width: 3; transition: stroke .3s; }
+.lbs .ln.dead { stroke: var(--bad); stroke-dasharray: 4 5; opacity: .6; }
+.lbs .ln0 { stroke: var(--wire); stroke-width: 3; }
+.lbs .sv rect.body { fill: var(--panel); stroke: var(--good); stroke-width: 2.5; transition: stroke .3s, fill .3s; }
+.lbs .sv.busy rect.body { stroke: var(--warn); }
+.lbs .sv.over rect.body { stroke: var(--bad); fill: var(--bad-soft); }
+.lbs .sv.dead rect.body { stroke: var(--muted); stroke-dasharray: 5 4; fill: var(--bg-2); }
+.lbs .sv .nm { fill: var(--ink); font: 700 12.5px var(--font); }
+.lbs .sv .ip { fill: var(--muted); font: 600 10.5px var(--mono); }
+.lbs .sv .pct { fill: var(--ink); font: 700 12px var(--mono); text-anchor: end; }
+.lbs .sv.dead .nm, .lbs .sv.dead .pct { fill: var(--muted); }
+.lbs .sv .track { fill: var(--bg-2); }
+.lbs .sv .fill { fill: var(--good); transition: width .4s; }
+.lbs .sv.busy .fill { fill: var(--warn); }
+.lbs .sv.over .fill { fill: var(--bad); }
+.lbs .sv.flash rect.body { stroke-width: 4; }
+.lbs .sv.pop { animation: popin .45s cubic-bezier(.3,1.6,.5,1); transform-box: fill-box; transform-origin: center; }
+@keyframes popin { from { transform: scale(.4); opacity: 0; } }
+.lbs .dot { fill: var(--accent); }
+.lbs .dot.bad { fill: var(--bad); }
+.lbstats { display: flex; gap: 6px 16px; flex-wrap: wrap; font-size: 13.5px; }
+.lbstats b { font-family: var(--mono); }
+.slider { padding: 12px 14px 4px; display: grid; gap: 2px; border-top: 1px solid var(--line); background: var(--panel); }
+.slider label { display: flex; justify-content: space-between; font-weight: 600; font-size: 14px; gap: 8px; flex-wrap: wrap; }
+.slider input { width: 100%; accent-color: var(--accent); height: 30px; }
+.opt.small { font-size: 13px; padding: 4px 8px; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 1.1 · Scale From Zero to Millions of Users</div>
+    <h1>One Box Wonder</h1>
+    <p class="lede">Every big system starts as one machine doing everything. Follow a request into that box, then take it apart: move the database out, add more servers, and put a load balancer in front.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can trace a request from DNS to JSON, explain why the database moves to its own tier, say when NoSQL beats a relational DB, explain why scaling out beats scaling up past a point, and show how a load balancer adds failover.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Follow the request</h2><div class="sub">Everything on one machine</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Day one of a new app. One server runs <b>everything</b>: the web app, the database and the cache.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">[1]</a> Users reach it from a <b>web browser</b> or a <b>mobile app</b>.</p>
+      <p>A few words first. An <b>IP address</b> is a server's number on the internet, like <code>15.125.23.214</code>. <b>DNS</b> (Domain Name System) is the internet's phone book: you give it a name like <code>api.mysite.com</code> and it gives back the IP. <b>HTTP</b> is the request-and-response language browsers and apps use to talk to servers.<a class="cite" href="https://en.wikipedia.org/wiki/Hypertext_Transfer_Protocol" target="_blank" rel="noopener">[2]</a></p>
+      <p>Below are the four steps of one request, shuffled. <b>Tap them in the order they happen.</b> Each right tap sends a packet along its arrow.</p>
+
+      <div class="sim">
+        <svg class="trip" id="tripSvg" viewBox="0 0 400 290" role="img" aria-label="A phone and a laptop, a DNS cloud, and one server that runs web app, database and cache"></svg>
+        <div class="sim-bar"><span class="small muted" id="tripHint">Step 1 is yours to find.</span><span>Steps: <span class="bignum" id="tripCount">0 / 4</span></span></div>
+        <div class="simlog" id="tripLog"><div>One server at 15.125.23.214 runs web app + database + cache.</div></div>
+      </div>
+      <div class="steps" id="steps"></div>
+
+      <div class="clientlab" id="clientLab">
+        <p class="small" style="margin:0 0 10px"><b>Two kinds of client.</b> A <b>web app</b> runs code on the server for business logic and storage, and sends HTML, CSS and JavaScript for the browser to draw. A <b>mobile app</b> also talks HTTP, but usually gets back <b>JSON</b> (a light text format for data) because it is simple to read.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">[1]</a> Pick a client and send the same request from each.</p>
+        <div class="row">
+          <span class="seg" id="clientSeg" role="group" aria-label="Choose a client"><button data-c="web" class="on" aria-pressed="true">💻 Laptop</button><button data-c="mobile" aria-pressed="false">📱 Phone</button></span>
+          <button class="btn primary" id="sendBtn">Send <code style="background:none;color:inherit">GET /users/12</code></button>
+        </div>
+        <div class="resp" id="resp"></div>
+      </div>
+
+      <ul class="checklist" id="s1goals">
+        <li data-g="order"><span class="box">✓</span><span>Put the four steps of the trip in order</span></li>
+        <li data-g="clients"><span class="box">✓</span><span>Send <code>GET /users/12</code> from the laptop <i>and</i> from the phone</span></li>
+      </ul>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Split off the data</h2><div class="sub">Web tier, data tier, and which database</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Users pile in and one box can't keep up. The first fix in the book: give the database its own server. Now there are two <b>tiers</b> (layers): a <b>web tier</b> that handles requests, and a <b>data tier</b> that stores data. Each one can now grow on its own.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">[1]</a></p>
+      <p><b>Drag the database out of the box</b> (or tap it).</p>
+      <div class="sim">
+        <svg class="split" id="splitSvg" viewBox="0 0 400 190" role="img" aria-label="One server holding the web app and the database"></svg>
+        <div class="knobs" id="knobs">
+          <div class="kw"><label for="kWeb"><span>Web tier</span><span class="mono" id="kWebV">1 server</span></label><input type="range" id="kWeb" min="1" max="4" value="1" aria-label="Web tier servers"></div>
+          <div class="kd"><label for="kDb"><span>Data tier</span><span class="mono" id="kDbV">medium box</span></label><input type="range" id="kDb" min="0" max="2" value="1" aria-label="Database machine size"></div>
+        </div>
+      </div>
+
+      <h3 style="margin:22px 0 6px;font-size:18px">Which database?</h3>
+      <p>Two big families. <b>Relational databases</b> (RDBMS, queried with SQL: MySQL, Oracle, PostgreSQL) keep data in <b>tables</b> of rows and can <b>join</b> tables together, for example orders with customers. They've been around for over 40 years. <b>Non-relational</b> databases (<b>NoSQL</b>: CouchDB, Neo4j, Cassandra, HBase, Amazon DynamoDB) usually can't join.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">[1]</a></p>
+      <div class="callout tip"><b>The book's rule.</b> Relational is the default for most developers. NoSQL may be the right pick if: (1) you need <b>super-low latency</b> (very fast answers), (2) your data is <b>unstructured</b> or has <b>no relationships</b>, (3) you only need to <b>serialize and deserialize</b> it (turn it into JSON, XML or YAML text and back), or (4) you store a <b>massive amount</b> of data.</div>
+      <p class="small muted">Sort each app into a bin. A wrong pick costs a heart, shows the rule that applies, and you try again.</p>
+      <div class="sort" id="dbSort"></div>
+      <p class="small muted" style="margin-top:16px">Bonus: NoSQL comes in four families. Match each to an example the book names.</p>
+      <div class="fam" id="famSort"></div>
+      <ul class="checklist" id="s2goals">
+        <li data-g="split"><span class="box">✓</span><span>Split the web tier from the data tier</span></li>
+        <li data-g="sort"><span class="box">✓</span><span>Sort all 7 apps (<span id="sortN">0</span>/7)</span></li>
+        <li data-g="fam"><span class="box">✓</span><span>Match the 4 NoSQL families (<span id="famN">0</span>/4)</span></li>
+      </ul>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Up or out?</h2><div class="sub">Vertical vs horizontal scaling</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Two ways to handle more traffic. <b>Vertical scaling</b> ("scale up") means a bigger machine: more CPU, more RAM. <b>Horizontal scaling</b> ("scale out") means more machines in a pool.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">[1]</a> Scaling up is simple, and while traffic is low it's a fine choice.</p>
+      <p>Traffic is climbing on your one web server. Keep it alive with <b>⬆ Upgrade</b> for as long as you can.</p>
+
+      <div class="sim" id="upSim">
+        <div class="trafbar"><div class="top"><span>Traffic: <span class="bignum" id="upTraffic">60</span> users/s</span><span class="muted small" id="upErr">errors: 0%</span></div><div class="gauge"><div id="upGauge"></div></div></div>
+        <div class="boxes" id="upBoxes"></div>
+        <div class="ladder" id="upLadder"></div>
+        <div class="downbar" id="downBar">🚫 SITE DOWN · every request fails</div>
+        <div class="sim-bar">
+          <span class="row" style="gap:8px">
+            <button class="btn primary" id="upBtn">⬆ Upgrade</button>
+            <button class="btn" id="plugBack" style="display:none">🔌 Plug it back in</button>
+            <button class="btn" id="addSecond" style="display:none">➕ Add a second server</button>
+          </span>
+          <span class="small muted">* made-up prices</span>
+        </div>
+        <div class="simlog" id="upLog"><div>Small server, 60 users/s and climbing.</div></div>
+      </div>
+      <div class="challenge boxed" id="plugBox" style="display:none"></div>
+      <ul class="checklist" id="s3goals">
+        <li data-g="ceiling"><span class="box">✓</span><span>Upgrade until you hit the hardware ceiling</span></li>
+        <li data-g="plug"><span class="box">✓</span><span>Predict, then pull the plug on the server</span></li>
+        <li data-g="second"><span class="box">✓</span><span>Add a second server and watch where traffic goes</span></li>
+      </ul>
+      <div class="callout" id="upNote" style="display:none"><b>What you just saw, in the book's words.</b> Scaling up has a <b>hard limit</b>: you can't add CPU and memory to one server forever. And it has <b>no failover or redundancy</b> (no spare to take over): if that one server goes down, the whole site goes down with it.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">[1]</a> That one server is a <b>single point of failure</b>: one part whose failure stops everything.<a class="cite" href="https://en.wikipedia.org/wiki/Single_point_of_failure" target="_blank" rel="noopener">[3]</a> Users connect straight to it, so if it's offline they can't reach the site, and if too many arrive at once it slows down or refuses them. Scaling out fits large systems better. But it needs something to spread the traffic.</div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Hire a bouncer</h2><div class="sub">The load balancer</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>A <b>load balancer</b> (LB) sits in front of your web servers and spreads incoming requests across them.<a class="cite" href="https://en.wikipedia.org/wiki/Load_balancing_(computing)" target="_blank" rel="noopener">[4]</a> Users now connect to the LB's <b>public IP</b> (the book's figure uses <code>88.88.88.1</code>). The web servers only get <b>private IPs</b> like <code>10.0.0.1</code>. A private IP works between servers on the same network, but the internet can't reach it. That's safer, and the LB talks to the servers over those private IPs.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">[1]</a></p>
+      <div class="sim">
+        <svg class="lbs" id="lbSvg" viewBox="0 0 400 300" role="img" aria-label="Users send requests to a load balancer, which spreads them across web servers on a private network"></svg>
+        <div class="slider"><label for="lbTraffic"><span>Traffic: <span class="bignum" id="lbTv">80</span> req/s</span><span class="muted small">each server handles 100 req/s</span></label><input type="range" id="lbTraffic" min="40" max="240" step="20" value="80" aria-label="Traffic in requests per second"></div>
+        <div class="sim-bar">
+          <span class="row" style="gap:8px">
+            <button class="btn" id="killBtn" disabled title="Make your prediction below first">💀 Kill server 1</button>
+            <button class="btn" id="addSrv">➕ Add server</button>
+            <button class="btn" id="probeBtn">📡 Call 10.0.0.1 from the internet</button>
+            <button class="btn" id="lbReset">↻ Reset</button>
+          </span>
+        </div>
+        <div class="sim-bar"><div class="lbstats" id="lbStats"></div></div>
+        <div class="simlog" id="lbLog"><div>2 web servers behind the LB, 80 req/s split evenly.</div></div>
+      </div>
+      <div class="challenge boxed" id="killBox"></div>
+      <ul class="checklist" id="s4goals">
+        <li data-g="kill"><span class="box">✓</span><span>Predict, then kill server 1</span></li>
+        <li data-g="revive"><span class="box">✓</span><span>Bring server 1 back</span></li>
+        <li data-g="over"><span class="box">✓</span><span>With 2 healthy servers, push traffic until both turn red</span></li>
+        <li data-g="fix"><span class="box">✓</span><span>Keep traffic at 200+ req/s and turn every server green by adding one</span></li>
+        <li data-g="probe"><span class="box">✓</span><span><i>Bonus:</i> try to reach a private IP from the internet</span></li>
+      </ul>
+      <div class="callout warn"><b>Honest caveat: who balances the balancer?</b> One LB is itself a single point of failure. Real setups run LBs in redundant pairs, or use a managed cloud LB that is redundant under the hood. The book's diagram shows one box to keep things simple.</div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Growth Gremlin</h2><div class="sub">Pick the right first move</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Six real situations. For each one, pick the move you'd make <b>first</b>: scale <b>up</b>, scale <b>out</b> behind a load balancer, <b>split</b> the web and data tiers, or pick a <b>NoSQL</b> store for that data.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">The interview answer, in your words</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout" id="drillRetry" style="display:none"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> Your web tier can now lose a server and shrug. The database can't: it's still one box. Quest 1.2, <a href="0102-scale-database-replication.html"><i>Copy the Ledger</i></a>, copies it.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 1: "Scale From Zero To Millions Of Users"</a>, the sections "Single server setup", "Database", "Vertical scaling vs horizontal scaling" and "Load balancer". They're short. For background, skim Wikipedia on <a href="https://en.wikipedia.org/wiki/Load_balancing_(computing)" target="_blank" rel="noopener">load balancing</a>.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <ul style="margin:0;padding-left:20px">
+        <li><b>Scaling up is underrated.</b> Many big sites ran on surprisingly few large machines for years, and a bigger box is often the cheapest first fix. Scaling out adds moving parts you have to run and debug.</li>
+        <li><b>The LB can be a single point of failure too.</b> Real setups run load balancers in redundant pairs or use a managed cloud LB.</li>
+        <li><b>SQL vs NoSQL is blurrier today.</b> PostgreSQL can store and index JSON, and distributed SQL databases (Google Spanner, CockroachDB) scale out across many machines. Pick on how you read and write the data and how consistent it must be, not on the label.</li>
+        <li><b>The IP addresses here</b> (15.125.23.214, 88.88.88.1, 10.0.0.x) are illustrative, as in the book's diagrams. The prices in stage 3 are made up.</li>
+      </ul>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"how does the load balancer know a server died?"</i> or <i>"if the DB is on another box, isn't every query slower now?"</i> Follow-up questions are part of the quest.
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 1 "Scale From Zero To Millions Of Users" (ByteByteGo).</li>
+        <li>Wikipedia, "Hypertext Transfer Protocol".</li>
+        <li>Wikipedia, "Single point of failure".</li>
+        <li>Wikipedia, "Load balancing (computing)".</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0101',
+  winTitle: 'Out of the single box!',
+  badge: '📦 Badge: Box Splitter',
+  cheatsheet: '../reference/ch01-scaling-cheatsheet.html',
+});
+const { sleep, shuffle, esc } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function T(attrs, text, parent) { const e = S('text', attrs, parent); e.textContent = text; return e; }
+function anim(dur, f) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 1) { f(1); return res(); }
+    const t0 = performance.now();
+    const fr = now => { const p = Math.min(1, (now - t0) / dur); f(p); p < 1 ? requestAnimationFrame(fr) : res(); };
+    requestAnimationFrame(fr);
+  });
+}
+const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); if (xp) Q.addXP(xp, li);
+  return true;
+}
+function keyTap(el, fn) {
+  el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(e); } });
+}
+// Predict-then-watch round. Resolves after the learner picks and the action has played.
+function predict(box, { step, title, options, correct, act, explain, xp = 20 }) {
+  box.innerHTML = `${step ? `<div class="step">${step}</div>` : ''}<h3>${title}</h3><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+  const opts = $('.opts', box);
+  let busy = false;
+  return new Promise(resolve => {
+    shuffle(options.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = async () => {
+        if (busy) return; busy = true;
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        b.classList.add('picked');
+        await act();
+        const ok = i === correct;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-i="${correct}"]`, opts).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + explain;
+        ok ? Q.addXP(xp, b) : Q.loseHeart(b);
+        resolve({ ok, row: $('.row', box) });
+      };
+      opts.appendChild(b);
+    });
+  });
+}
+// A few quizzes in a row; `done` runs after the last one is answered.
+function quizChain(mount, list, done) {
+  let i = 0;
+  const next = () => {
+    if (i >= list.length) return done();
+    const q = list[i++];
+    Q.quiz(mount, { xp: 15, ...q, tag: q.tag || `Check ${i} of ${list.length}`, onDone: () => setTimeout(next, 450) });
+  };
+  next();
+}
+// Run fn every `ms` only while `el` is on screen (saves battery, keeps sims from racing ahead unseen).
+function whileVisible(el, start, stop) {
+  if (!('IntersectionObserver' in window)) { start(); return; }
+  new IntersectionObserver(es => es.forEach(e => e.isIntersecting ? start() : stop()), { threshold: 0.05 }).observe(el);
+}
+
+/* ================= STAGE 1: follow the request ================= */
+Q.onStage(1, () => {
+  const svg = $('#tripSvg');
+  svg.innerHTML = '';
+  // devices
+  const phone = S('g', { class: 'dev on', 'data-d': 'mobile' }, svg);
+  S('rect', { x: 22, y: 26, width: 34, height: 62, rx: 7 }, phone);
+  S('rect', { class: 'scr', x: 26, y: 33, width: 26, height: 46, rx: 2 }, phone);
+  T({ class: 'dlab', x: 39, y: 104 }, 'phone', phone);
+  const laptop = S('g', { class: 'dev on', 'data-d': 'web' }, svg);
+  S('rect', { x: 12, y: 178, width: 54, height: 38, rx: 4 }, laptop);
+  S('rect', { class: 'scr', x: 16, y: 182, width: 46, height: 30, rx: 2 }, laptop);
+  S('path', { d: 'M5,218 H73 L66,227 H12 Z' }, laptop);
+  T({ class: 'dlab', x: 39, y: 244 }, 'laptop', laptop);
+  // DNS cloud
+  S('path', { class: 'cloud', d: 'M200,72 a18,18 0 0 1 4,-34 a24,24 0 0 1 44,-8 a20,20 0 0 1 34,14 a16,16 0 0 1 -2,28 Z' }, svg);
+  T({ class: 'ctext', x: 241, y: 58 }, 'DNS', svg);
+  T({ class: 'csub', x: 241, y: 91 }, 'paid 3rd-party service', svg);
+  // the one server
+  const srvG = S('g', { class: 'srv-g' }, svg);
+  S('rect', { class: 'srv', x: 286, y: 146, width: 106, height: 124, rx: 10 }, srvG);
+  T({ class: 'srv-ip', x: 339, y: 165 }, '15.125.23.214', srvG);
+  ['web app', 'database', 'cache'].forEach((t, i) => {
+    S('rect', { class: 'row-r', x: 295, y: 175 + i * 30, width: 88, height: 24, rx: 6 }, srvG);
+    T({ class: 'row-t', x: 339, y: 187 + i * 30 }, t, srvG);
+  });
+  // wires
+  const WIRES = [
+    { d: 'M62,46 C110,16 160,20 197,44', lab: 'api.mysite.com', lx: 128, ly: 22 },
+    { d: 'M206,74 C170,100 112,98 62,78', lab: '15.125.23.214', lx: 134, ly: 108 },
+    { d: 'M72,148 C150,136 224,146 282,178', lab: 'HTTP request', lx: 176, ly: 134 },
+    { d: 'M282,244 C208,268 128,254 72,206', lab: 'HTML or JSON', lx: 178, ly: 278 },
+  ];
+  const wireG = S('g', {}, svg), labG = S('g', {}, svg), fx = S('g', {}, svg);
+  const paths = WIRES.map(w => S('path', { class: 'wire', d: w.d }, wireG));
+  const labs = WIRES.map((w, i) => {
+    const l = T({ class: 'lab', x: w.lx, y: w.ly }, w.lab, labG);
+    const b = S('g', { class: 'badge' }, labG);
+    const len = w.lab.length * 7.2 / 2 + 14;
+    S('circle', { cx: w.lx - len, cy: w.ly - 4, r: 9 }, b); T({ x: w.lx - len, y: w.ly - 4 }, String(i + 1), b);
+    return { l, b };
+  });
+  async function packet(i, cls) {
+    const p = paths[i], len = p.getTotalLength();
+    const c = S('circle', { class: 'pkt ' + (cls || ''), r: 6 }, fx);
+    await anim(650, t => { const pt = p.getPointAtLength(len * ease(t)); c.setAttribute('cx', pt.x.toFixed(1)); c.setAttribute('cy', pt.y.toFixed(1)); });
+    c.remove();
+    if (i === 2) { srvG.classList.remove('pulse'); void srvG.getBBox(); srvG.classList.add('pulse'); }
+  }
+  function lightWire(i) { paths[i].classList.add('lit'); labs[i].l.classList.add('show'); labs[i].b.classList.add('show'); }
+
+  // step cards
+  const STEPS = [
+    { t: 'You type api.mysite.com', early: '' },
+    { t: 'DNS answers 15.125.23.214', early: 'DNS can’t answer a question nobody has asked yet. Something has to ask for <b>api.mysite.com</b> first.' },
+    { t: 'Send an HTTP request to that IP', early: 'To send a request you need an address. Where does the IP come from?' },
+    { t: 'Server returns HTML or JSON', early: 'The server can’t answer a request it hasn’t received yet.' },
+  ];
+  const LOG = [
+    'You ask for <b>api.mysite.com</b>. Your device asks DNS for its address.',
+    'DNS replies with the IP <b>15.125.23.214</b>. You don’t host DNS: it’s a paid third-party service.',
+    'With the IP in hand, the request goes <b>straight to your server</b>. DNS is out of the picture now.',
+    'The server builds the answer: an <b>HTML page</b> for a browser, or <b>JSON</b> for an app.',
+  ];
+  const goals = new Set();
+  let nextStep = 0, busy = false, slipped = false, quizShown = false;
+  function renderSteps() {
+    nextStep = 0; slipped = false;
+    $('#steps').innerHTML = shuffle(STEPS.map((s, i) => ({ s, i }))).map(({ s, i }) => `<button class="opt" data-i="${i}"><span class="no">?</span><span>${esc(s.t)}</span></button>`).join('');
+    $$('#steps .opt').forEach(b => b.onclick = () => tapStep(b));
+  }
+  async function tapStep(b) {
+    if (busy || b.disabled) return;
+    const i = +b.dataset.i;
+    if (i !== nextStep) {
+      b.classList.remove('wrong'); void b.offsetWidth; b.classList.add('wrong');
+      setTimeout(() => b.classList.remove('wrong'), 500);
+      $('#tripHint').innerHTML = '✗ ' + STEPS[i].early;
+      if (!slipped) { slipped = true; Q.loseHeart(b); } else Q.toast('not yet', b, 'practice');
+      return;
+    }
+    busy = true; b.disabled = true; b.classList.add('right'); $('.no', b).textContent = i + 1;
+    lightWire(i);
+    await packet(i);
+    logTo('tripLog', `${i + 1}. ${LOG[i]}`, i === 3 ? 'g' : '');
+    nextStep++; busy = false;
+    $('#tripCount').textContent = `${nextStep} / 4`;
+    $('#tripHint').textContent = nextStep < 4 ? `What happens after step ${nextStep}?` : '✓ The whole trip, in order.';
+    if (nextStep === 4) {
+      checkGoal('#s1goals', 'order', goals, 15);
+      $('#clientLab').classList.add('on');
+      if (!$('#replayTrip')) {
+        const r = document.createElement('button'); r.className = 'btn'; r.id = 'replayTrip'; r.textContent = '↻ Shuffle and replay the trip'; r.style.marginTop = '10px';
+        r.onclick = () => { paths.forEach(p => p.classList.remove('lit')); labs.forEach(x => { x.l.classList.remove('show'); x.b.classList.remove('show'); }); $('#tripCount').textContent = '0 / 4'; $('#tripHint').textContent = 'Step 1 is yours to find.'; renderSteps(); };
+        $('#steps').after(r);
+      }
+      maybeQuiz();
+    }
+  }
+  renderSteps();
+
+  // client lab
+  let client = 'web', sending = false;
+  const sent = new Set();
+  function setClient(c) {
+    client = c;
+    $$('#clientSeg button').forEach(b => { const on = b.dataset.c === c; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
+    phone.classList.toggle('on', c === 'mobile'); laptop.classList.toggle('on', c === 'web');
+  }
+  $$('#clientSeg button').forEach(b => b.onclick = () => setClient(b.dataset.c));
+  const JSON_HTML = `<pre><span class="muted">200 OK · application/json</span>
+{
+  <span class="k">"id"</span>: <span class="n">12</span>,
+  <span class="k">"firstName"</span>: <span class="s">"Ada"</span>,
+  <span class="k">"lastName"</span>: <span class="s">"Okafor"</span>,
+  <span class="k">"address"</span>: {
+    <span class="k">"street"</span>: <span class="s">"48 Harbour Lane"</span>,
+    <span class="k">"city"</span>: <span class="s">"Leeds"</span>
+  },
+  <span class="k">"phone"</span>: <span class="s">"+44 113 496 0001"</span>
+}</pre><div class="cap">📱 The app gets plain data and draws its own screen. (Made-up user.)</div>`;
+  const PAGE_HTML = `<div class="browser"><div class="bbar"><i></i><i></i><i></i><span>mysite.com/users/12</span></div><div class="bpage"><div class="av">AO</div><div style="flex:1"><b>Ada Okafor</b><div class="ln" style="width:80%"></div><div class="ln" style="width:55%"></div><div class="ln" style="width:68%"></div></div></div></div><div class="cap">💻 The browser gets an HTML page (plus CSS and JavaScript) and renders it.</div>`;
+  $('#sendBtn').onclick = async () => {
+    if (sending) return; sending = true; $('#sendBtn').disabled = true;
+    setClient(client);
+    $('#resp').innerHTML = '';
+    lightWire(2); lightWire(3);
+    await packet(2); await packet(3);
+    $('#resp').innerHTML = client === 'mobile' ? JSON_HTML : PAGE_HTML;
+    logTo('tripLog', `${client === 'mobile' ? '📱' : '💻'} GET /users/12 → ${client === 'mobile' ? 'JSON' : 'HTML page'}`, 'g');
+    sent.add(client);
+    sending = false; $('#sendBtn').disabled = false;
+    if (sent.size === 1) Q.toast(client === 'mobile' ? 'now try the laptop' : 'now try the phone', $('#clientSeg'), 'practice');
+    if (sent.size === 2 && checkGoal('#s1goals', 'clients', goals, 10)) maybeQuiz();
+  };
+  setClient('web');
+
+  function maybeQuiz() {
+    if (quizShown || goals.size < 2) return;
+    quizShown = true;
+    setTimeout(() => quizChain($('#s1quiz'), [
+      { q: 'Who usually runs the DNS that turns <code>api.mysite.com</code> into an IP?',
+        options: ['A paid third-party DNS provider', 'Your own web server, on the side', 'The app store that ships your app'], correct: 0,
+        good: 'The book is explicit: DNS is a paid service run by a third party, not something your servers host.',
+        bad: 'DNS is a paid service run by a third party. Your servers don’t host it, and the app store has nothing to do with it.' },
+      { q: 'What does DNS hand back to the client?',
+        options: ['The server’s IP address', 'The finished HTML page', 'A login cookie for the user'], correct: 0,
+        good: 'DNS only translates a name into an IP address. After that, the client talks to the server directly.',
+        bad: 'DNS only translates the name into an IP address. The page and everything else come from your server.' },
+      { q: 'Your mobile app calls <code>GET /users/12</code>. What does it usually get back?',
+        options: ['JSON data over HTTP', 'A full HTML web page', 'A raw database table'], correct: 0,
+        good: 'Mobile apps talk HTTP and usually get JSON back, because it’s light and simple. The app draws its own screen.',
+        bad: 'Mobile apps usually get JSON over HTTP: light, simple data. HTML pages are what browsers get, and nobody ships raw tables.' },
+    ], () => setTimeout(() => Q.clearStage(1), 600)), 500);
+  }
+});
+
+/* ================= STAGE 2: split off the data ================= */
+Q.onStage(2, () => {
+  const svg = $('#splitSvg');
+  svg.innerHTML = '';
+  const shell = S('rect', { class: 'shell', x: 112, y: 22, width: 176, height: 128, rx: 14 }, svg);
+  T({ class: 'shell-t', x: 200, y: 16 }, 'ONE SERVER', svg);
+  const ghosts = S('g', { class: 'ghost' }, svg);
+  const link = S('line', { class: 'link', x1: 120, y1: 86, x2: 280, y2: 86, 'marker-end': 'url(#ah2)', 'marker-start': 'url(#ah2s)' }, svg);
+  const defs = S('defs', {}, svg);
+  const m = S('marker', { id: 'ah2', viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 6, markerHeight: 6, orient: 'auto' }, defs);
+  S('path', { d: 'M0,0 L10,5 L0,10 Z', style: 'fill: var(--ink)' }, m);
+  const m2 = S('marker', { id: 'ah2s', viewBox: '0 0 10 10', refX: 1, refY: 5, markerWidth: 6, markerHeight: 6, orient: 'auto' }, defs);
+  S('path', { d: 'M10,0 L0,5 L10,10 Z', style: 'fill: var(--ink)' }, m2);
+  T({ class: 'link-t', x: 200, y: 76 }, 'reads / writes', svg);
+  const web = S('g', { class: 'half web' }, svg);
+  S('rect', { class: 'body', x: 122, y: 32, width: 76, height: 108, rx: 10 }, web);
+  const webT = T({ class: 'ht', x: 160, y: 80 }, 'Web', web);
+  const webS = T({ class: 'hs', x: 160, y: 98 }, 'app code', web);
+  const db = S('g', { class: 'half db', tabindex: 0, role: 'button', 'aria-label': 'Database: drag it out of the server, or press Enter to split' }, svg);
+  const dbBody = S('g', {}, db);
+  S('path', { class: 'body', d: 'M206,48 a34,10 0 0 1 68,0 v76 a34,10 0 0 1 -68,0 Z' }, dbBody);
+  S('path', { class: 'body', d: 'M206,48 a34,10 0 0 0 68,0', style: 'fill:none' }, dbBody);
+  const dbT = T({ class: 'ht', x: 240, y: 92 }, 'DB', db);
+  const dbS = T({ class: 'hs', x: 240, y: 110 }, 'database', db);
+  const hint = T({ class: 'hint', x: 200, y: 176 }, 'drag the database out →', svg);
+  let split = false, dragging = false, startX = 0, dx = 0;
+  const goals = new Set();
+  const scale = () => 400 / svg.getBoundingClientRect().width;
+  function setDb(x) { db.setAttribute('transform', `translate(${x.toFixed(1)},0)`); }
+  async function doSplit() {
+    if (split) return; split = true;
+    svg.classList.add('done');
+    db.removeAttribute('tabindex'); db.setAttribute('aria-label', 'Database server');
+    const d0 = dx;
+    await anim(600, p => { const e = ease(p); setDb(d0 + (86 - d0) * e); web.setAttribute('transform', `translate(${(-86 * e).toFixed(1)},0)`); });
+    webT.textContent = 'Web tier'; webS.textContent = 'app servers';
+    dbT.textContent = 'Data tier'; dbS.textContent = 'the database';
+    link.setAttribute('x1', 120); link.setAttribute('x2', 286);
+    $('#knobs').classList.add('on');
+    svg.setAttribute('aria-label', 'Web tier and data tier on separate servers, connected by reads and writes');
+    checkGoal('#s2goals', 'split', goals, 10);
+    maybeQuiz();
+  }
+  db.addEventListener('pointerdown', e => { if (split) return; dragging = true; startX = e.clientX; dx = 0; try { db.setPointerCapture(e.pointerId); } catch (_) {} });
+  db.addEventListener('pointermove', e => { if (!dragging) return; dx = Math.max(0, Math.min(90, (e.clientX - startX) * scale())); setDb(dx); });
+  const up = () => {
+    if (!dragging) return; dragging = false;
+    if (dx > 45 || dx < 4) doSplit();
+    else { const d0 = dx; anim(250, p => setDb(d0 * (1 - p))).then(() => { dx = 0; }); Q.toast('a bit further →', db, 'practice'); }
+  };
+  db.addEventListener('pointerup', up); db.addEventListener('pointercancel', up);
+  keyTap(db, doSplit);
+  // knobs: purely visual reward
+  const SIZES = ['small box', 'medium box', 'big box'];
+  function knobs() {
+    const n = +$('#kWeb').value, s = +$('#kDb').value;
+    $('#kWebV').textContent = `${n} server${n > 1 ? 's' : ''}`; $('#kDbV').textContent = SIZES[s];
+    ghosts.innerHTML = '';
+    for (let i = 1; i < n; i++) S('rect', { x: 36 - i * 7, y: 32 - i * 7, width: 76, height: 108, rx: 10 }, ghosts);
+    const k = [0.8, 1, 1.18][s];
+    dbBody.setAttribute('transform', `translate(240,86) scale(${k}) translate(-240,-86)`);
+  }
+  $('#kWeb').oninput = knobs; $('#kDb').oninput = knobs;
+
+  // sort: relational vs NoSQL
+  const CARDS = [
+    { t: 'Bank transfers between accounts, plus reports that join customers and orders', a: 'R', why: 'Data with clear relationships, queried with joins: that’s what relational databases are built for. NoSQL stores usually can’t join.' },
+    { t: 'Look up a login session by its ID in well under a millisecond', a: 'N', why: 'Super-low latency is one of the book’s four NoSQL signals. A key-value store answers “give me the value for this key” very fast.' },
+    { t: 'Petabytes of clickstream events, piling up every day', a: 'N', why: 'A massive amount of data is a NoSQL signal. Stores like Cassandra spread it across many machines.' },
+    { t: '“Friends of friends” recommendations in a social network', a: 'N', why: 'That’s a graph store’s job, one of the four NoSQL families. It is built to walk links between people. In SQL the same query turns into many self-joins.' },
+    { t: 'An online shop’s orders, products and customers, queried with joins', a: 'R', why: 'Classic relational data: tables that point at each other and get joined. Relational is the default for a reason.' },
+    { t: 'User settings saved as a JSON blob and loaded back whole, never searched inside', a: 'N', why: 'You only serialize and deserialize the data (write the blob, read the blob). That’s a NoSQL signal.' },
+    { t: 'A small internal HR app for 200 staff', a: 'R', why: 'No special need here, so take the default. Relational databases have 40+ years of tools and know-how behind them.' },
+  ];
+  const BIN = { R: 'Relational (SQL)', N: 'NoSQL' };
+  let sorted = 0;
+  $('#dbSort').innerHTML = shuffle(CARDS.map((c, i) => ({ c, i }))).map(({ c, i }) => `<div class="sort-item" data-i="${i}"><p>${c.t}</p><div class="row">${['R', 'N'].map(k => `<button class="opt" data-k="${k}">${BIN[k]}</button>`).join('')}</div><div class="explain"></div></div>`).join('');
+  $$('#dbSort .sort-item').forEach(item => {
+    const c = CARDS[+item.dataset.i];
+    let missed = false;
+    $$('.opt', item).forEach(b => b.onclick = () => {
+      const ok = b.dataset.k === c.a, ex = $('.explain', item);
+      if (!ok) {
+        b.classList.add('wrong'); b.disabled = true;
+        ex.className = 'explain show bad'; ex.innerHTML = '<b>Try the other bin.</b> ' + c.why;
+        if (!missed) { missed = true; Q.loseHeart(b); }
+        return;
+      }
+      $$('.opt', item).forEach(x => x.disabled = true);
+      b.classList.remove('wrong'); b.classList.add('right'); item.classList.add('done');
+      ex.className = 'explain show good'; ex.innerHTML = `<b>${BIN[c.a]}.</b> ${c.why}`;
+      if (!missed) Q.addXP(3, b); else Q.toast('✓', b, 'practice');
+      sorted++; $('#sortN').textContent = sorted;
+      if (sorted === CARDS.length && checkGoal('#s2goals', 'sort', goals)) maybeQuiz();
+    });
+  });
+
+  // NoSQL families
+  const FAMS = [
+    { f: 'Key-value store', d: 'one key → one value', a: 'DynamoDB', why: 'Amazon DynamoDB looks up items by key. (It also stores documents: the labels overlap.)' },
+    { f: 'Graph store', d: 'nodes and the links between them', a: 'Neo4j', why: 'Neo4j stores nodes and relationships and walks them.' },
+    { f: 'Column store', d: 'wide rows grouped by column family', a: 'Cassandra / HBase', why: 'Cassandra and HBase are wide-column stores built for huge, spread-out data.' },
+    { f: 'Document store', d: 'whole JSON-like documents', a: 'CouchDB', why: 'CouchDB stores each record as a JSON document.' },
+  ];
+  const EX = shuffle(FAMS.map(f => f.a));
+  let famDone = 0;
+  $('#famSort').innerHTML = FAMS.map((f, i) => `<div class="sort-item" data-i="${i}"><p><b>${f.f}</b> <span class="muted small">· ${f.d}</span></p><div class="row">${EX.map(x => `<button class="opt small" data-k="${esc(x)}">${esc(x)}</button>`).join('')}</div><div class="explain"></div></div>`).join('');
+  $$('#famSort .sort-item').forEach(item => {
+    const f = FAMS[+item.dataset.i];
+    let missed = false;
+    $$('.opt', item).forEach(b => b.onclick = () => {
+      const ok = b.dataset.k === f.a, ex = $('.explain', item);
+      if (!ok) {
+        b.classList.add('wrong'); b.disabled = true;
+        ex.className = 'explain show bad'; ex.innerHTML = 'Not that one. Think about what this family stores.';
+        if (!missed) { missed = true; Q.loseHeart(b); }
+        return;
+      }
+      $$('.opt', item).forEach(x => x.disabled = true);
+      b.classList.remove('wrong'); b.classList.add('right'); item.classList.add('done');
+      ex.className = 'explain show good'; ex.innerHTML = f.why;
+      if (!missed) Q.addXP(2, b); else Q.toast('✓', b, 'practice');
+      famDone++; $('#famN').textContent = famDone;
+      if (famDone === FAMS.length && checkGoal('#s2goals', 'fam', goals)) maybeQuiz();
+    });
+  });
+
+  let quizShown = false;
+  function maybeQuiz() {
+    if (quizShown || goals.size < 3) return;
+    quizShown = true;
+    setTimeout(() => quizChain($('#s2quiz'), [
+      { q: 'What is the main win from moving the database onto its own server?',
+        options: ['Web and data tiers can scale separately', 'Queries no longer need any indexes', 'Users can now connect to the database'], correct: 0,
+        good: 'Separate tiers can grow on their own: more web servers for more requests, a bigger or replicated database for more data.',
+        bad: 'The point is independence: the web tier and the data tier can now be scaled separately. Users still never talk to the database directly.' },
+      { q: 'No special needs: which kind of database does the book say to start with?',
+        options: ['A relational (SQL) database', 'A graph database like Neo4j', 'A key-value store like DynamoDB'], correct: 0,
+        good: 'Relational is the default for most developers. Reach for NoSQL only when one of the four signals applies.',
+        bad: 'Relational is the default. NoSQL is for the four signals: very low latency, unstructured or unrelated data, serialize-only data, or a massive amount of it.' },
+    ], () => setTimeout(() => Q.clearStage(2), 600)), 500);
+  }
+});
+
+/* ================= STAGE 3: up or out? ================= */
+Q.onStage(3, () => {
+  const TIERS = [
+    { n: 'Small', cap: 100, cost: 20 }, { n: 'Medium', cap: 250, cost: 80 }, { n: 'Large', cap: 550, cost: 320 },
+    { n: 'XL', cap: 1000, cost: 1280 }, { n: 'Max size', cap: 1500, cost: 5120 },
+  ];
+  const MAXT = 1800, STEP = 30;
+  const st = { tier: 0, traffic: 60, down: false, second: false };
+  const goals = new Set();
+  let timer = null, quizShown = false;
+  $('#upLadder').innerHTML = TIERS.map((t, i) => `<span data-i="${i}"><b>${t.n}</b>${t.cap} u/s<br>$${t.cost.toLocaleString()}/mo*</span>`).join('');
+  // server cards: built once per server, then updated in place (no flicker on every tick)
+  function cardEl(id) {
+    const el = document.createElement('div'); el.className = 'box1 new'; el.dataset.id = id;
+    el.innerHTML = `<div class="bx-top"><b></b><span></span></div><div class="bx-tier"></div><div class="cpu"><div></div></div><div class="bx-st"><span class="c-st"></span><span class="mono c-cpu"></span></div><div class="small muted mono c-rps"></div>`;
+    $('#upBoxes').appendChild(el);
+    return el;
+  }
+  function paintCard(el, name, ip, tier, load, isDown, idle) {
+    const cpu = isDown ? 0 : Math.min(100, load / tier.cap * 100);
+    const over = !isDown && load > tier.cap, busy = !isDown && !over && cpu > 80;
+    el.className = 'box1 ' + (isDown ? 'down' : over ? 'over' : busy ? 'busy' : idle ? 'idle' : '') + (el.classList.contains('new') ? ' new' : '');
+    $('.bx-top b', el).textContent = name; $('.bx-top span', el).textContent = ip;
+    $('.bx-tier', el).innerHTML = `<b>${tier.n}</b> · ${tier.cap} users/s · $${tier.cost.toLocaleString()}/mo*`;
+    $('.cpu div', el).style.width = cpu.toFixed(0) + '%';
+    $('.c-st', el).innerHTML = isDown ? '<span class="er">OFFLINE</span>' : over ? '<span class="er">Overloaded: slow, timeouts</span>' : idle ? '<span class="mu">Idle: nobody calls it</span>' : busy ? '<span class="wn">Busy</span>' : '<span class="ok">Healthy</span>';
+    $('.c-cpu', el).textContent = isDown ? '—' : `CPU ${cpu.toFixed(0)}%`;
+    $('.c-rps', el).textContent = `${isDown ? 0 : Math.round(load)} users/s served`;
+  }
+  let card1 = null, card2 = null;
+  function render() {
+    const t = TIERS[st.tier];
+    $('#upTraffic').textContent = Math.round(st.traffic);
+    $('#upGauge').style.width = (st.traffic / MAXT * 100) + '%';
+    const err = st.down ? 100 : st.traffic > t.cap ? (st.traffic - t.cap) / st.traffic * 100 : 0;
+    const e = $('#upErr'); e.textContent = `errors: ${err.toFixed(0)}%`; e.className = 'small ' + (err > 0 ? 'bignum bad' : 'muted');
+    card1 = card1 || cardEl(1);
+    paintCard(card1, 'Server 1', '15.125.23.214', t, st.traffic, st.down, false);
+    if (st.second) { card2 = card2 || cardEl(2); paintCard(card2, 'Server 2', '15.125.23.215', TIERS[0], 0, false, true); }
+    $$('#upLadder span').forEach((s, i) => s.classList.toggle('cur', i === st.tier));
+    $('#downBar').classList.toggle('on', st.down);
+    const ub = $('#upBtn');
+    if (st.tier >= TIERS.length - 1) { ub.disabled = true; ub.textContent = '⛔ Hardware ceiling'; }
+  }
+  function tick() { if (st.traffic < MAXT) { st.traffic = Math.min(MAXT, st.traffic + STEP); render(); } }
+  whileVisible($('#upSim'), () => { if (!timer) timer = setInterval(tick, 600); }, () => { clearInterval(timer); timer = null; });
+  $('#upBtn').onclick = () => {
+    if (st.tier >= TIERS.length - 1) return;
+    const a = TIERS[st.tier], b = TIERS[++st.tier];
+    logTo('upLog', `⬆ ${a.n} → <b>${b.n}</b>: capacity ×${(b.cap / a.cap).toFixed(1)}, price ×${(b.cost / a.cost).toFixed(0)}.`);
+    render();
+    if (st.tier === TIERS.length - 1) {
+      logTo('upLog', '⛔ This is the biggest machine on offer. There is no bigger box to buy. Traffic keeps climbing anyway…', 'w');
+      checkGoal('#s3goals', 'ceiling', goals, 10);
+      showPlug();
+    }
+  };
+  function showPlug() {
+    const box = $('#plugBox'); box.style.display = 'block';
+    predict(box, {
+      step: 'Predict first',
+      title: 'Your one server needs a reboot for a security patch. You pull the plug. What share of users see errors?',
+      options: ['None of them (0%)', 'About half (50%)', 'All of them (100%)'],
+      correct: 2,
+      act: async () => {
+        st.down = true; render();
+        logTo('upLog', '🔌 Plug pulled. DNS still points every user at 15.125.23.214, and nothing answers there.', 'e');
+        await sleep(Q.reduced ? 50 : 1000);
+      },
+      explain: 'Every request fails. There’s one server and no spare to take over, so the whole site is down until it comes back. That’s the <b>no failover</b> problem.',
+    }).then(({ row }) => {
+      checkGoal('#s3goals', 'plug', goals, 0);
+      $('#upNote').style.display = 'block';
+      $('#addSecond').style.display = ''; $('#plugBack').style.display = '';
+      const p = document.createElement('p'); p.className = 'small'; p.style.margin = '0'; p.innerHTML = 'Fine, you think: <b>buy a second server</b>. Press <b>➕ Add a second server</b> above.';
+      row.appendChild(p);
+      maybeQuiz();
+    });
+  }
+  $('#plugBack').onclick = () => { if (!st.down) return; st.down = false; render(); logTo('upLog', '🔌 Server 1 is back. Users can reach the site again.', 'g'); };
+  $('#addSecond').onclick = () => {
+    if (st.second) { Q.toast('already added', $('#addSecond'), 'practice'); return; }
+    st.second = true; render();
+    $('#addSecond').disabled = true;
+    logTo('upLog', '➕ Server 2 is up at 15.125.23.215 and gets <b>0 requests</b>. DNS still answers 15.125.23.214, so every client goes to server 1.', 'w');
+    if (st.down) logTo('upLog', '…and server 1 is still unplugged, so the site is still down with a healthy server sitting right there.', 'e');
+    logTo('upLog', '❓ Who will send users to server 2? (Stage 4.)');
+    checkGoal('#s3goals', 'second', goals, 5);
+    maybeQuiz();
+  };
+  render();
+  function maybeQuiz() {
+    if (quizShown || goals.size < 3) return;
+    quizShown = true;
+    setTimeout(() => quizChain($('#s3quiz'), [
+      { q: 'What are the two big drawbacks of scaling up one server?',
+        options: ['A hardware ceiling and no failover', 'Slower disks and longer network trips', 'More servers to patch and monitor'], correct: 0,
+        good: 'You can’t add CPU and RAM forever, and with one box there’s no spare: when it goes down, the site goes down.',
+        bad: 'The book names two: a hard limit on how big one machine can get, and no failover or redundancy. More servers to manage is the cost of scaling <i>out</i>.' },
+      { q: 'Why did your new second server get zero traffic?',
+        options: ['Clients only know server 1’s IP address', 'It needs a day to warm up its cache first', 'The database refuses to talk to it yet'], correct: 0,
+        good: 'DNS hands out one IP and clients connect straight to it. You need something in front that spreads requests over both: a load balancer.',
+        bad: 'Clients connect straight to the one IP that DNS gives them. Nothing tells them about server 2. That’s the job of a load balancer.' },
+    ], () => setTimeout(() => Q.clearStage(3), 600)), 500);
+  }
+});
+
+/* ================= STAGE 4: the load balancer ================= */
+Q.onStage(4, () => {
+  const svg = $('#lbSvg'), CAP = 100;
+  const st = { servers: [], traffic: 80, rr: 0, predicted: false, overDone: false };
+  const goals = new Set();
+  let quizShown = false;
+  svg.innerHTML = '';
+  // static scene
+  T({ class: 'dnst', x: 110, y: 20 }, 'DNS: api.mysite.com → 88.88.88.1', svg);
+  S('rect', { class: 'net', x: 246, y: 32, width: 150, height: 262, rx: 14 }, svg);
+  T({ class: 'nett', x: 321, y: 48 }, 'PRIVATE NETWORK', svg);
+  const linkG = S('g', {}, svg);
+  S('line', { class: 'ln0', x1: 66, y1: 160, x2: 128, y2: 160 }, svg);
+  S('rect', { class: 'users', x: 6, y: 120, width: 60, height: 80, rx: 14 }, svg);
+  T({ class: 'ut', x: 36, y: 154 }, '👥', svg);
+  T({ class: 'ut', x: 36, y: 174 }, 'users', svg);
+  T({ class: 'us', x: 36, y: 216 }, 'the internet', svg);
+  S('rect', { class: 'lbbox', x: 128, y: 122, width: 92, height: 76, rx: 12 }, svg);
+  T({ class: 'lbt', x: 174, y: 146 }, 'Load', svg);
+  T({ class: 'lbt', x: 174, y: 163 }, 'balancer', svg);
+  T({ class: 'lbip', x: 174, y: 182 }, '88.88.88.1', svg);
+  T({ class: 'lbs2', x: 174, y: 214 }, 'public IP', svg);
+  const srvG = S('g', {}, svg), dotG = S('g', {}, svg);
+  const LBX = 220, LBY = 160;
+  const SX = 262, SW = 124, SH = 48;
+  function ys(n) { const top = 58, bot = 288, gap = (bot - top - n * SH) / (n + 1); return Array.from({ length: n }, (_, i) => top + gap * (i + 1) + SH * i); }
+  function alive() { return st.servers.filter(s => s.alive); }
+  function perLoad() { const a = alive().length; return a ? st.traffic / a : Infinity; }
+  function build(popId) {
+    srvG.innerHTML = ''; linkG.innerHTML = '';
+    const Y = ys(st.servers.length);
+    st.servers.forEach((s, i) => {
+      s.y = Y[i]; s.cy = Y[i] + SH / 2;
+      s.ln = S('line', { class: 'ln', x1: LBX, y1: LBY, x2: SX, y2: s.cy }, linkG);
+      const g = S('g', { class: 'sv' + (s.id === popId ? ' pop' : '') }, srvG);
+      S('rect', { class: 'body', x: SX, y: s.y, width: SW, height: SH, rx: 9 }, g);
+      T({ class: 'nm', x: SX + 9, y: s.y + 17 }, `Server ${s.id}`, g);
+      T({ class: 'ip', x: SX + 9, y: s.y + 30 }, `10.0.0.${s.id}`, g);
+      s.pct = T({ class: 'pct', x: SX + SW - 8, y: s.y + 17 }, '', g);
+      S('rect', { class: 'track', x: SX + 9, y: s.y + 36, width: SW - 18, height: 6, rx: 3 }, g);
+      s.fill = S('rect', { class: 'fill', x: SX + 9, y: s.y + 36, width: 0, height: 6, rx: 3 }, g);
+      s.g = g;
+    });
+    update();
+  }
+  function update() {
+    const pl = perLoad();
+    st.servers.forEach(s => {
+      const load = s.alive ? pl : 0, pct = load / CAP * 100;
+      const cls = !s.alive ? 'dead' : pct > 100 ? 'over' : pct > 80 ? 'busy' : '';
+      s.g.setAttribute('class', 'sv ' + cls + (s.g.classList.contains('pop') ? ' pop' : ''));
+      s.ln.setAttribute('class', 'ln' + (s.alive ? '' : ' dead'));
+      s.pct.textContent = s.alive ? `${Math.round(pct)}%` : '✕ offline';
+      s.fill.setAttribute('width', s.alive ? ((SW - 18) * Math.min(1, pct / 100)).toFixed(1) : 0);
+    });
+    const a = alive().length;
+    const errPct = a ? Math.max(0, (pl - CAP) / pl * 100) : 100;
+    $('#lbTv').textContent = st.traffic;
+    $('#lbStats').innerHTML = `<span>Healthy servers: <b>${a}/${st.servers.length}</b></span><span>Load each: <b>${a ? Math.round(pl / CAP * 100) + '%' : '—'}</b></span><span>Failing requests: <b class="${errPct > 0 ? 'bignum bad' : 'bignum good'}">${errPct.toFixed(0)}%</b></span>`;
+    $('#killBtn').textContent = st.servers[0] && !st.servers[0].alive ? '❤️ Revive server 1' : '💀 Kill server 1';
+    $('#addSrv').disabled = st.servers.length >= 4;
+    checkLoadGoals();
+  }
+  function checkLoadGoals() {
+    const a = alive().length, pl = perLoad();
+    if (!goals.has('over') && a === 2 && pl > CAP) {
+      checkGoal('#s4goals', 'over', goals, 5);
+      logTo('lbLog', `🔥 Both servers are past 100%. Requests start failing. Time to grow the pool: press <b>➕ Add server</b>.`, 'e');
+      maybeQuiz();
+    }
+    if (goals.has('over') && !goals.has('fix') && st.traffic >= 200 && a >= 3 && pl <= 80) {
+      checkGoal('#s4goals', 'fix', goals, 10);
+      logTo('lbLog', `✅ ${a} servers at ${Math.round(pl)}% each. The LB started sending requests to the new one on its own. Nothing else changed.`, 'g');
+      maybeQuiz();
+    }
+  }
+  function reset() {
+    st.servers = [{ id: 1, alive: true }, { id: 2, alive: true }]; st.traffic = 80; $('#lbTraffic').value = 80;
+    dots.forEach(d => d.el.remove()); dots.length = 0;
+    build();
+  }
+
+  // moving requests (skipped with reduced motion)
+  const dots = [];
+  let raf = null, last = 0, acc = 0;
+  function pickServer() {
+    const a = alive(); if (!a.length) return null;
+    const s = a[st.rr % a.length]; st.rr++; return s;
+  }
+  function frame(now) {
+    const dt = Math.min(0.1, (now - (last || now)) / 1000); last = now;
+    acc += dt * st.traffic / 16;
+    while (acc >= 1) { acc--; dots.push({ t: 0, phase: 0, target: null, el: S('circle', { class: 'dot', r: 4, cx: 66, cy: 160 }, dotG), jy: (Math.random() - .5) * 26 }); }
+    for (let i = dots.length - 1; i >= 0; i--) {
+      const d = dots[i];
+      d.t += dt / (d.phase === 0 ? 0.45 : d.phase === 1 ? 0.5 : 0.35);
+      if (d.phase === 0) {
+        const x = 66 + (128 - 66) * Math.min(1, d.t), y = 160 + d.jy * (1 - Math.min(1, d.t));
+        d.el.setAttribute('cx', x.toFixed(1)); d.el.setAttribute('cy', y.toFixed(1));
+        if (d.t >= 1) { d.phase = 1; d.t = 0; d.target = pickServer(); if (!d.target) { d.phase = 2; d.el.setAttribute('class', 'dot bad'); } }
+      } else if (d.phase === 1) {
+        const s = d.target;
+        if (!s.alive) { d.phase = 2; d.t = 0; d.el.setAttribute('class', 'dot bad'); continue; }
+        const x = LBX + (SX - LBX) * Math.min(1, d.t), y = LBY + (s.cy - LBY) * Math.min(1, d.t);
+        d.el.setAttribute('cx', x.toFixed(1)); d.el.setAttribute('cy', y.toFixed(1));
+        if (d.t >= 1) { d.el.remove(); dots.splice(i, 1); }
+      } else {
+        d.el.setAttribute('opacity', Math.max(0, 1 - d.t).toFixed(2));
+        d.el.setAttribute('r', (4 + d.t * 5).toFixed(1));
+        if (d.t >= 1) { d.el.remove(); dots.splice(i, 1); }
+      }
+    }
+    raf = requestAnimationFrame(frame);
+  }
+  if (!Q.reduced) whileVisible(svg, () => { if (!raf) { last = 0; raf = requestAnimationFrame(frame); } }, () => { cancelAnimationFrame(raf); raf = null; });
+
+  async function kill() {
+    const s1 = st.servers[0];
+    if (!s1.alive) return;
+    const inflight = dots.filter(d => d.phase === 1 && d.target === s1).length;
+    s1.alive = false; update();
+    logTo('lbLog', `💀 Server 1 (10.0.0.1) died.${Q.reduced ? '' : ` ${inflight} in-flight request${inflight === 1 ? '' : 's'} to it failed (red).`}`, 'e');
+    await sleep(Q.reduced ? 50 : 1200);
+    logTo('lbLog', `→ The LB stops sending to server 1. Every new request goes to server ${alive().map(s => s.id).join(', ')}. The site stays up.`, 'g');
+  }
+  function revive() {
+    const s1 = st.servers[0];
+    if (s1.alive) return;
+    s1.alive = true; update();
+    logTo('lbLog', '❤️ Server 1 is healthy again. The LB sees it and sends it traffic again.', 'g');
+    if (checkGoal('#s4goals', 'revive', goals, 5)) maybeQuiz();
+  }
+  $('#killBtn').onclick = async () => {
+    if (!st.predicted) { Q.toast('predict first ↓', $('#killBtn'), 'practice'); return; }
+    if (st.servers[0].alive) await kill(); else revive();
+  };
+  $('#addSrv').onclick = () => {
+    if (st.servers.length >= 4) return;
+    const id = st.servers.length + 1;
+    st.servers.push({ id, alive: true });
+    build(id);
+    logTo('lbLog', `➕ Server ${id} (10.0.0.${id}) joined the pool. The LB starts sending it requests right away.`);
+  };
+  $('#lbTraffic').oninput = e => { st.traffic = +e.target.value; update(); };
+  $('#probeBtn').onclick = () => {
+    logTo('lbLog', '📡 internet → 10.0.0.1 … ✗ <b>unreachable</b>. 10.x.x.x is a private address: it only works inside the network. The LB (88.88.88.1) is the only public door.', 'w');
+    if (checkGoal('#s4goals', 'probe', goals, 5)) Q.toast('bonus!', $('#probeBtn'));
+  };
+  $('#lbReset').onclick = () => { reset(); logTo('lbLog', '↻ Back to 2 servers at 80 req/s.'); };
+  reset();
+
+  predict($('#killBox'), {
+    step: 'Predict first',
+    title: 'Server 1 is about to crash. What happens to the users?',
+    options: ['Every user gets errors', 'Half the users get errors', 'They shift to server 2'],
+    correct: 2,
+    act: async () => { await kill(); },
+    explain: 'Apart from a few requests that were in flight to server 1 at that moment, users never notice. The LB sends all new traffic to server 2. The book’s next step: add a new healthy server to the pool so the load is balanced again. Now press <b>❤️ Revive server 1</b>.',
+  }).then(() => {
+    st.predicted = true; $('#killBtn').disabled = false; $('#killBtn').removeAttribute('title');
+    update();
+    checkGoal('#s4goals', 'kill', goals, 0);
+    maybeQuiz();
+  });
+
+  function maybeQuiz() {
+    if (quizShown || !['kill', 'revive', 'over', 'fix'].every(g => goals.has(g))) return;
+    quizShown = true;
+    setTimeout(() => quizChain($('#s4quiz'), [
+      { q: 'Which IP address does a user’s browser connect to now?',
+        options: ['The load balancer’s public IP', 'Server 1’s private IP address', 'Whichever server is least busy'], correct: 0,
+        good: 'DNS points the domain at the LB’s public IP (88.88.88.1 in the book’s figure). Users never see the servers.',
+        bad: 'Users only ever reach the LB’s public IP. The servers sit behind it on private IPs, and the LB picks one for each request.' },
+      { q: 'Why do the web servers get private IPs?',
+        options: ['The internet can’t reach them directly', 'Private addresses make requests faster', 'So each server can get its own domain'], correct: 0,
+        good: 'A private IP only works inside the network. Clients can’t reach the servers directly, which is better for security.',
+        bad: 'It’s about security, not speed: a private IP is unreachable from the internet, so only the LB can talk to the servers.' },
+      { q: 'After this stage, what is still a single point of failure in the book’s design?',
+        options: ['The one database server', 'The pool of web servers', 'The private network itself'], correct: 0,
+        good: 'The web tier now survives a dead server, but there’s still exactly one database. Fixing that is the next quest. (Strictly, one LB is a weak spot too: see the caveat above.)',
+        bad: 'The web pool now survives losing a server. The database is still one box with no failover. That’s the next quest.' },
+    ], () => setTimeout(() => Q.clearStage(4), 600)), 500);
+  }
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss'), {
+  name: '👹 Growth Gremlin',
+  xp: 15,
+  choices: [
+    { k: 'up', label: 'Scale up', sub: 'bigger machine' },
+    { k: 'out', label: 'Scale out + LB', sub: 'more machines behind a balancer' },
+    { k: 'split', label: 'Split tiers', sub: 'own DB server' },
+    { k: 'nosql', label: 'NoSQL store', sub: 'for this data' },
+  ],
+  scenarios: [
+    { e: '🐢', t: 'The backup that eats the app', d: 'Your app and MySQL share one box. Every night the database backup makes pages crawl, and you want to grow the web side and the DB side separately.', a: 'split', why: 'Web and database are fighting over one machine. Give the database its own server so each tier can be scaled on its own.' },
+    { e: '🌱', t: 'A slow-growing side project', d: 'Two people, one mid-size VM at 40% CPU, no uptime promise to anyone, traffic growing slowly.', a: 'up', why: 'While traffic is low, scaling up is a great option and its simplicity is the main win. Do the simplest thing that works, but know the limits: a ceiling and no failover.' },
+    { e: '🧱', t: 'Already on the biggest box', d: 'You run the largest instance your cloud sells. CPU is still pinned at 95%.', a: 'out', why: 'You’ve hit the hardware ceiling. There is no bigger box. The only way forward is more machines behind a load balancer.' },
+    { e: '💸', t: 'The investor demo died', d: 'Your only server rebooted for a kernel patch in the middle of a demo. The site was down for four minutes.', a: 'out', why: 'A bigger machine would still have rebooted. Scaling up gives no failover. Two or more servers behind an LB let you patch one at a time while the others serve.' },
+    { e: '⚡', t: 'Sessions, fast', d: 'You store session blobs by ID and need lookups in under a millisecond. No joins, ever.', a: 'nosql', why: 'Super-low latency and no relationships: two of the book’s NoSQL signals. A key-value store fits.' },
+    { e: '🌊', t: 'A flood of event logs', d: 'Terabytes of semi-structured event logs arrive every day. They are appended, then read back as JSON.', a: 'nosql', why: 'A massive amount of data, with no relationships, that you only write and read back as JSON. That matches NoSQL signals for size and serialize-only data.' },
+  ],
+  outro: 'The pattern: split the database out early, scale up while it’s cheap and safe, scale out when you hit the ceiling or need failover, and pick NoSQL only when the data calls for it.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: interview drill ================= */
+Q.onStage(6, () => {
+  function mount() {
+    $('#drillRetry').style.display = 'none';
+    Q.drill($('#drill'), {
+      prompt: 'The interviewer: <i>"We’re one server today. Walk me through your first two moves, and why."</i>',
+      placeholder: 'Today DNS gives users one IP, and that one box does everything…',
+      model: '"Today DNS hands users one IP, and that single box runs everything. My first move is to put the database on its own server, so the web tier and the data tier can grow on their own. I’d default to a relational database, unless we need very low latency, have unstructured or unrelated data, only store and load blobs, or hold huge volumes. Then NoSQL fits. Making the one box bigger works for a while, but it has a hardware ceiling and no failover. So my second move is to scale out: a load balancer on a public IP in front of several web servers on private IPs. If one server dies, traffic shifts to the others; if load grows, I add servers to the pool. What’s left is the database: it’s now the single point of failure."',
+      checks: [
+        'I traced the flow: DNS → IP → HTTP request → HTML or JSON',
+        'I split the web and data tiers, and gave the SQL vs NoSQL criteria',
+        'I named the limits of scaling up: a ceiling and no failover',
+        'I described the LB: public IP in front, private IPs behind, failover, add servers',
+        'I named the database as the next single point of failure',
+      ],
+      onDone: n => {
+        if (n >= 4) { Q.clearStage(6); return; }
+        const r = $('#drillRetry');
+        r.style.display = 'block';
+        r.innerHTML = `<b>${n} of 5. Aim for at least 4.</b> Read the model answer once more, then try again from memory. <div class="row" style="margin-top:10px"><button class="btn primary" id="drillAgain">↻ Try the drill again</button></div>`;
+        $('#drillAgain').onclick = mount;
+      },
+    });
+  }
+  mount();
+});
+
+Q.start();
+})();
+</script>
+</body>
+</html>

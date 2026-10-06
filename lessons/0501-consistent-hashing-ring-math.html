@@ -1,0 +1,1077 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Ring Math</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: server colours, stage 1 modulo table + curve chart, rings (stages 2–4), sorted array + code (stage 3) */
+:root { --s0: #5a48f0; --s1: #0d9a96; --s2: #c27400; --s3: #d4423f; --s4: #b8409a; --on-s: #ffffff; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --s0: #8f82ff; --s1: #31d3c8; --s2: #ffb547; --s3: #ff6d6a; --s4: #f07ad0; --on-s: #0e0f1d; }
+}
+:root[data-theme="dark"] { --s0: #8f82ff; --s1: #31d3c8; --s2: #ffb547; --s3: #ff6d6a; --s4: #f07ad0; --on-s: #0e0f1d; }
+
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.parth { font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin: 26px 0 6px; }
+.bignum { font-family: var(--mono); font-weight: 700; }
+.bignum.bad { color: var(--bad); }
+.bignum.good { color: var(--good); }
+.numin { font: 600 16px var(--mono); padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); min-height: 44px; width: 120px; min-width: 0; }
+.numin.ok { border-color: var(--good); background: var(--good-soft); }
+.numin.no { border-color: var(--bad); background: var(--bad-soft); animation: shake .4s; }
+.fb { margin-top: 10px; font-size: 15px; padding: 10px 12px; border-radius: 12px; display: none; }
+.fb.show { display: block; animation: rise .3s; }
+.fb.good { background: var(--good-soft); }
+.fb.bad { background: var(--bad-soft); }
+.formula { font-family: var(--mono); font-size: 13.5px; background: var(--bg-2); border-radius: 10px; padding: 8px 12px; margin: 8px 0; overflow-x: auto; }
+
+/* stage 1: modulo table */
+.dead { display: flex; gap: 10px; align-items: center; border-radius: 14px; padding: 10px 14px; background: var(--bad-soft); font-weight: 600; font-size: 15px; margin: 14px 0 10px; }
+.mtable { display: grid; gap: 4px; }
+.mrow { display: grid; grid-template-columns: minmax(0, 1fr) 42px 30px 128px; gap: 4px; align-items: center; padding: 4px 8px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); transition: background .4s, border-color .4s; }
+.mrow.head { background: none; border: 0; font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding-top: 0; padding-bottom: 0; }
+.mrow .mk { font: 600 14px var(--mono); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.mrow .mh { font: 14px var(--mono); color: var(--muted); }
+.mrow .m4 { font: 700 15px var(--mono); text-align: center; }
+.mrow .m3 { display: flex; gap: 4px; }
+.mbtn { width: 40px; height: 40px; border-radius: 10px; border: 2px solid var(--line); background: var(--panel); font: 700 15px var(--mono); padding: 0; }
+.mbtn:hover:not([disabled]) { border-color: var(--accent); }
+.mbtn.no { border-color: var(--bad); background: var(--bad-soft); animation: shake .4s; }
+.mbtn.yes { color: var(--on-s); border-color: transparent; }
+.mbtn[disabled]:not(.yes) { opacity: .25; cursor: default; }
+.mrow .mhint { grid-column: 1 / -1; font: 13px var(--mono); color: var(--bad); display: none; }
+.mrow .mhint.show { display: block; }
+.mrow.moved { background: var(--bad-soft); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
+.mrow.kept { background: var(--good-soft); border-color: color-mix(in srgb, var(--good) 45%, transparent); }
+.mcount { margin-top: 10px; font-size: 16px; min-height: 0; }
+
+/* stage 1: curve chart */
+.chart svg { max-width: 620px; margin: 0 auto; touch-action: pan-y; }
+.chart .grid line { stroke: var(--line); stroke-width: 1; }
+.chart .axis text { fill: var(--muted); font: 600 11px var(--mono); }
+.chart .axis .ttl { font: 600 11px var(--font); }
+.chart .ln { fill: none; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.chart .ln.mod { stroke: var(--bad); }
+.chart .ln.ring { stroke: var(--teal); stroke-dasharray: 7 4; }
+.chart .lab { font: 700 12px var(--font); }
+.chart .lab.mod { fill: var(--bad); }
+.chart .lab.ring { fill: var(--teal); }
+.chart .cross { stroke: var(--ink); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.chart .mk { stroke: var(--panel); stroke-width: 2.5; }
+.chart .veil { fill: var(--muted); font: 700 15px var(--font); text-anchor: middle; }
+.chart .plot { transition: opacity .5s; }
+.chart.locked .plot { opacity: 0; }
+.chart:not(.locked) .veil { display: none; }
+.slider { padding: 10px 14px 0; display: grid; gap: 4px; }
+.slider label { display: flex; justify-content: space-between; font-weight: 600; font-size: 14px; gap: 8px; flex-wrap: wrap; }
+.slider input { width: 100%; accent-color: var(--accent); height: 30px; }
+.readout { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px 14px 14px; }
+.readout div { border-radius: 12px; padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.readout b { display: block; font: 700 22px var(--mono); }
+.readout .r-mod b { color: var(--bad); }
+.readout .r-ring b { color: var(--teal); }
+
+/* rings */
+.ring svg { max-width: 420px; margin: 0 auto; }
+.ring .base { fill: none; stroke: var(--line); stroke-width: 16; }
+.ring .band { fill: none; stroke-width: 16; opacity: .45; }
+.ring .tickl { fill: var(--muted); font: 600 12px var(--mono); text-anchor: middle; dominant-baseline: central; }
+.ring .tick { stroke: var(--muted); stroke-width: 2; }
+.ring .zero { fill: var(--muted); font: 700 13px var(--mono); text-anchor: middle; }
+.ring .srv circle { stroke: var(--bg); stroke-width: 3; }
+.ring .srv text { fill: var(--on-s); font: 700 13px var(--font); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.ring .srv .posl { fill: var(--muted); font: 600 11px var(--mono); }
+.ring .srv.pop { transform-box: fill-box; transform-origin: center; animation: popin .45s cubic-bezier(.3,1.6,.5,1); }
+@keyframes popin { from { transform: scale(0); } }
+.ring .ghost circle { fill: none; stroke: var(--ink); stroke-width: 2; stroke-dasharray: 4 4; }
+.ring .ghost text { fill: var(--ink); font: 700 13px var(--font); text-anchor: middle; dominant-baseline: central; }
+.ring .leaving circle { stroke: var(--bad); stroke-width: 3; stroke-dasharray: 4 3; opacity: .55; }
+.ring .cbig { fill: var(--ink); font: 700 26px var(--mono); text-anchor: middle; }
+.ring .csmall { fill: var(--muted); font: 600 13px var(--font); text-anchor: middle; }
+.ring .walker { fill: var(--ink); }
+.ring .trail { fill: none; stroke: var(--ink); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 1 7; }
+.ring .sweep { fill: none; stroke: var(--xp); stroke-width: 30; opacity: .55; stroke-linecap: butt; }
+.ring .hiarc { fill: none; stroke: var(--warn); stroke-width: 26; opacity: .6; }
+.ring .kdot { stroke: var(--bg); stroke-width: 2.5; transition: fill .6s; }
+.ring .ktxt { fill: var(--on-s); font: 700 11.5px var(--mono); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.ring .key { cursor: pointer; }
+.ring .key:focus { outline: none; }
+.ring .key:focus .kdot, .ring .key:hover .kdot { stroke: var(--ink); }
+.ring .key .selr { fill: none; stroke: var(--xp); stroke-width: 4; display: none; }
+.ring .key.sel .selr { display: block; }
+.ring .key .res { fill: none; stroke-width: 3; display: none; }
+.ring .key.ok .res { display: block; stroke: var(--good); }
+.ring .key.fp .res, .ring .key.miss .res { display: block; stroke: var(--bad); stroke-dasharray: 4 3; }
+.ring .halo { fill: none; stroke: var(--ink); stroke-width: 2.5; transform-box: fill-box; transform-origin: center; animation: halo 1.3s ease-out forwards; }
+@keyframes halo { from { opacity: .95; transform: scale(1); } to { opacity: 0; transform: scale(2.6); } }
+.ring .keymark { fill: var(--ink); }
+.ring .keylab { fill: var(--ink); font: 700 13px var(--mono); text-anchor: middle; dominant-baseline: central; }
+
+/* stage 2: curl */
+.curl { fill: none; stroke: var(--accent); stroke-width: 6; stroke-linecap: round; }
+.curlend { fill: var(--ink); font: 700 14px var(--mono); }
+.cardq { margin-top: 14px; }
+.cardq .step { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.cardq h3 { margin: 4px 0 10px; font-size: 18px; }
+.srvpick .opt { min-width: 64px; min-height: 44px; text-align: center; font-family: var(--mono); font-weight: 700; }
+.scale { display: none; margin-top: 16px; border: 1px solid var(--line); border-radius: 14px; padding: 14px; background: var(--bg); }
+.scale.on { display: block; animation: rise .35s; }
+.scale table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 6px; }
+.scale th, .scale td { text-align: left; padding: 6px; border-bottom: 1px solid var(--line); }
+.scale th { font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.scale td { font-family: var(--mono); font-size: 13px; }
+.scale td:first-child { font-family: var(--font); font-size: 14px; }
+.reveal { display: none; }
+.reveal.on { display: block; animation: rise .35s; }
+
+/* stage 3: sorted array + code */
+.s3grid { display: grid; grid-template-columns: 1fr 260px; gap: 10px; align-items: center; padding: 12px 14px; }
+@media (max-width: 640px) { .s3grid { grid-template-columns: 1fr; } .s3grid svg { max-width: 240px; } }
+.arr { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.acol { display: grid; gap: 4px; justify-items: stretch; text-align: center; }
+.aidx { font: 600 12px var(--mono); color: var(--muted); }
+.acell { min-height: 52px; border-radius: 12px; border: 2px solid var(--line); background: var(--panel); font: 700 18px var(--mono); padding: 4px 0; display: grid; place-items: center; line-height: 1.1; transition: border-color .2s, background .2s; }
+.acell small { font: 700 11px var(--font); }
+.acell:hover:not([disabled]) { border-color: var(--accent); }
+.acell[disabled] { cursor: default; }
+.acell.mid { border-color: var(--accent); background: var(--accent-soft); }
+.acell.right { border-color: var(--good); background: var(--good-soft); }
+.acell.wrong { border-color: var(--bad); background: var(--bad-soft); animation: shake .4s; }
+.acell.end { border-style: dashed; color: var(--muted); font-size: 13px; background: none; }
+.aptr { font: 700 11.5px var(--mono); color: var(--accent); min-height: 32px; line-height: 1.3; }
+.keyask { font-size: 16px; margin-bottom: 10px; }
+.keyask b.k { font-family: var(--mono); font-size: 20px; color: var(--accent); }
+.code { background: var(--code-bg); color: var(--code-ink); border-radius: 14px; padding: 8px 6px; font-family: var(--mono); font-size: 12.5px; margin-top: 10px; }
+.code .cl { display: grid; grid-template-columns: 22px 1fr; gap: 8px; width: 100%; text-align: left; border: 2px solid transparent; background: none; color: inherit; font: inherit; padding: 6px 6px; border-radius: 8px; min-height: 36px; align-items: center; white-space: pre-wrap; }
+.code button.cl:hover:not([disabled]) { border-color: #6c74c9; background: rgba(143,130,255,.12); }
+.code .cl[disabled] { cursor: default; }
+.code .cl .ln { color: #7d84b8; text-align: right; }
+.code .cl.cm { color: #8a90b8; font-style: italic; }
+.code .cl.right { border-color: #43d98a; background: rgba(67,217,138,.14); }
+.code .cl.wrong { border-color: #ff6d6a; background: rgba(255,109,106,.14); }
+.code .cl.fix { color: #6ee7a8; }
+@media (max-width: 480px) { .code { font-size: 11.5px; padding: 6px 2px; } .code .cl { grid-template-columns: 14px 1fr; gap: 6px; padding: 6px 4px; } }
+
+/* stage 4: highlighter */
+.kchips { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+.kchip { min-width: 44px; min-height: 40px; border-radius: 10px; border: 2px solid var(--line); background: var(--bg); font: 700 14px var(--mono); padding: 0 8px; position: relative; }
+.kchip i { position: absolute; left: 4px; right: 4px; bottom: 3px; height: 3px; border-radius: 2px; }
+.kchip.sel { border-color: var(--xp); background: color-mix(in srgb, var(--xp) 22%, var(--bg)); }
+.kchip.ok { border-color: var(--good); }
+.kchip.fp, .kchip.miss { border-color: var(--bad); border-style: dashed; }
+.kchip[disabled] { cursor: default; }
+.task4 { font-size: 16px; margin: 0 0 8px; }
+.q4 { margin-top: 12px; }
+.q4 .seg4 { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.q4 .seg4 button { min-width: 48px; min-height: 42px; border-radius: 10px; border: 2px solid var(--line); background: var(--panel); font-weight: 700; }
+.q4 .seg4 button.on { border-color: var(--accent); background: var(--accent-soft); }
+.q4 .seg4 button.right { border-color: var(--good); background: var(--good-soft); }
+.q4 .seg4 button.wrong { border-color: var(--bad); background: var(--bad-soft); }
+.q4 .seg4 button[disabled] { cursor: default; }
+.tagrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.tagrow > b { font-family: var(--mono); min-width: 74px; }
+.tagrow .seg4 { margin-top: 0; }
+.legend4 { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--muted); padding: 8px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+.legend4 span { display: inline-flex; align-items: center; gap: 5px; }
+.legend4 i { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+.tally { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.tally div { border: 1px solid var(--line); border-radius: 12px; padding: 10px; background: var(--bg); font-size: 13px; color: var(--muted); }
+.tally b { display: block; font: 700 22px var(--mono); color: var(--ink); }
+@media (max-width: 480px) { .tally { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 5.1 · Design Consistent Hashing</div>
+    <h1>Ring Math</h1>
+    <p class="lede">You've seen the hash ring as a picture. Now put numbers on it: how many keys <code>% N</code> really moves, how big the ring is, how code finds a server, and exactly which keys move when a server comes or goes.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can put numbers on the rehashing problem (adding 1 server to N moves about <b>N/(N+1)</b> of keys with <code>% N</code>, but only about <b>1/(N+1)</b> on a ring), explain the hash space and how arcs become ownership shares, sketch the lookup as a <b>binary search</b> over sorted positions, and walk an interviewer through exactly which keys move, and from which server, when a node joins or leaves.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Do the rehash math</h2><div class="sub">Put an exact number on "most keys move"</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book starts with <b>N</b> cache servers. To pick a server for a key, you compute <code>serverIndex = hash(key) % N</code>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-consistent-hashing" target="_blank" rel="noopener">[1]</a> A <b>hash</b> turns the key into a big, random-looking number. <code>% N</code> keeps the remainder after dividing by N, so you always get a server number from 0 to N−1.</p>
+      <p>That works fine while N never changes. Let's see what happens when it does. Here are 8 users with small made-up hash values, spread over 4 servers.</p>
+      <div class="dead"><span>💀</span><span>One of the 4 cache servers died, so now <b>N = 3</b>. Tap the new server for each key: <code>hash % 3</code>.</span></div>
+      <div class="mtable" id="modTable" role="group" aria-label="Modulo table: fill in hash % 3 for each key"></div>
+      <div class="mcount" id="modCount"></div>
+
+      <div class="challenge boxed" id="ringGuessBox" style="display:none">
+        <div class="step">Predict</div>
+        <h3>Same 8 keys, same dead server, but placed on a <b>hash ring</b> instead. On average, how many of the 8 keys would move?</h3>
+        <div class="row"><input class="numin" id="ringGuess" type="text" inputmode="numeric" aria-label="Number of keys that move on a ring" placeholder="0–8"><button class="btn primary" id="ringGuessBtn">Check</button></div>
+        <div class="fb" id="ringGuessFb"></div>
+      </div>
+
+      <h3 class="parth">Part B · Does it get better with more servers?</h3>
+      <p>Here's the general rule. When you go from N to N+1 servers, a key stays put only if <code>hash % N</code> happens to equal <code>hash % (N+1)</code>. For random hashes that happens for <b>1 key in N+1</b>. Everything else moves. Before you see the curve, make a call.</p>
+      <div id="curvePredict"></div>
+      <div class="sim chart locked" id="curveSim">
+        <svg id="curve" viewBox="0 0 360 220" role="img" aria-label="Chart: share of keys moved when one server is added, for hash % N and for a hash ring, as the cluster grows from 2 to 100 servers"></svg>
+        <div class="slider"><label for="nSlider"><span>Cluster size before adding one: <span class="bignum" id="nVal">N = 50</span></span><span class="muted small">2 to 100 servers</span></label><input type="range" id="nSlider" min="2" max="100" step="1" value="50" disabled aria-label="Cluster size N"></div>
+        <div class="readout"><div class="r-mod">with <code>% N</code><b id="rMod">?</b><span id="rModK">of keys move</span></div><div class="r-ring">on a ring<b id="rRing">?</b><span id="rRingK">of keys move</span></div></div>
+      </div>
+      <div class="callout tip" id="curveNote" style="display:none"><b>Modulo gets worse as you grow. The ring gets better.</b> With <code>% N</code>, adding one server moves N/(N+1) of keys: 4→5 moves 80%, 9→10 moves 90%, 99→100 moves 99%. Shrinking is just as bad: N→N−1 moves (N−1)/N, so 4→3 moves 75%, exactly what your table showed. Consistent hashing promises that only about <b>k/n</b> keys move on average (k = number of keys, n = number of slots or servers).<a class="cite" href="https://en.wikipedia.org/wiki/Consistent_hashing" target="_blank" rel="noopener">[3]</a> So the (N+1)th server takes about 1/(N+1) of keys, and removing one of N servers moves about 1/N: just the dead server's own share.</div>
+      <div class="callout warn"><b>Honest caveat.</b> These clean numbers assume hashes are uniformly random and, for the ring, that every server owns an equal slice. That even split needs <i>virtual nodes</i> (Quest 5.2). On a basic ring with one random position per server, a new server might land in a huge gap or a tiny one, so the share that moves can be far above or below 1/(N+1).</div>
+      <p class="small"><a href="0002-consistent-hashing.html#s1">See it with 100 keys →</a> <span class="muted">Quest 6.2, stage 1 has the colour-grid version of this.</span></p>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Bend the number line</h2><div class="sub">Hash space, hash ring, and what an arc is worth</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The <b>hash space</b> is every value a hash function can output. The book's example is <b>SHA-1</b>, whose output runs from 0 to 2<sup>160</sup>−1. That's about 1.46 × 10<sup>48</sup> possible values.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-consistent-hashing" target="_blank" rel="noopener">[1]</a> Picture it as a very long number line. Now join its two ends.</p>
+      <div class="sim ring">
+        <svg id="ring2" viewBox="0 0 400 400" role="img" aria-label="A number line bending into the hash ring, then a toy ring from 0 to 255"></svg>
+        <div class="sim-bar"><span class="small" id="bendMsg">One number line, from 0 to 2¹⁶⁰−1.</span><button class="btn primary" id="bendBtn">↻ Bend it</button></div>
+      </div>
+      <div id="afterBend" style="display:none">
+        <p>That circle is the <b>hash ring</b>. Servers are hashed onto it (by IP address or name), and keys are hashed onto the <i>same</i> ring with the <i>same</i> function. There's no <code>% N</code> step anymore. A server's <b>partition</b> is the arc that ends at it: from the previous server (anticlockwise) up to and including the server itself. Its share of keys is that arc's length over the whole ring:</p>
+        <div class="formula">share = ((pos<sub>server</sub> − pos<sub>previous</sub>) mod S) / S &nbsp;&nbsp;<span class="muted">S = size of the hash space</span></div>
+        <p class="small muted">The <code>mod S</code> handles wrap-around: if the previous server sits just before the top and this one just after it, the plain difference is negative. On a ring of 2<sup>160</sup> positions nobody can see anything, so this <b>toy ring has 256 positions (0 to 255)</b>. The maths is identical.</p>
+        <div class="cardq challenge boxed" id="cardBox"></div>
+        <div class="scale" id="scaleBox">
+          <b>🔭 Scale it up.</b> The same arcs on the real SHA-1 ring:
+          <table>
+            <thead><tr><th>Arc</th><th>Toy ring (256)</th><th>SHA-1 ring (2<sup>160</sup>)</th></tr></thead>
+            <tbody>
+              <tr><td>a quarter</td><td>64</td><td>2<sup>158</sup> ≈ 3.7 × 10<sup>47</sup></td></tr>
+              <tr><td>a half</td><td>128</td><td>2<sup>159</sup> ≈ 7.3 × 10<sup>47</sup></td></tr>
+              <tr><td>s0's 18.75%</td><td>48</td><td>3 × 2<sup>156</sup> ≈ 2.7 × 10<sup>47</sup></td></tr>
+            </tbody>
+          </table>
+          <p class="small" style="margin-bottom:6px">So why such a huge space? Two keys (or two servers) landing on the exact same spot would be a tie the ring can't break.</p>
+          <button class="btn" id="collBtn">Show the collision maths</button>
+          <div class="reveal small" id="collMath" style="margin-top:8px">With a trillion keys (n = 10<sup>12</sup>), the chance that <i>any</i> two share a SHA-1 position is about n² / 2<sup>161</sup> = 10<sup>24</sup> / 2.9 × 10<sup>48</sup> ≈ <b>3 × 10<sup>−25</sup></b>. That will never happen. Real systems pick other sizes: Amazon's Dynamo hashes keys with MD5, a 128-bit space,<a class="cite" href="https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf" target="_blank" rel="noopener">[5]</a> and Cassandra's default Murmur3 partitioner uses 64-bit tokens from −2<sup>63</sup> to 2<sup>63</sup>−1.<a class="cite" href="https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html" target="_blank" rel="noopener">[6]</a> Ring size changes the resolution, not the idea.</div>
+        </div>
+      </div>
+      <div class="callout warn"><b>"Isn't SHA-1 broken?"</b> For security, yes: researchers have produced SHA-1 collisions on purpose. But placing keys on a ring isn't a security feature, so it doesn't matter here. Real systems usually prefer fast non-cryptographic hashes such as Murmur3 (Cassandra) or have used MD5 (Dynamo).</div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Clockwise, in code</h2><div class="sub">Server lookup is a binary search with a wrap</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book describes lookup as a walk: go clockwise from the key's position until you reach a server.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-consistent-hashing" target="_blank" rel="noopener">[1]</a> Real code never walks. It keeps every server position (a <b>token</b>) in a <b>sorted array</b> and does a <b>binary search</b> for the first token that is <b>≥ the key's hash</b>. If the hash is bigger than every token, the walk wraps past the top of the ring, so the answer is the first (smallest) token.</p>
+      <p>Toy ring, 0 to 99. Four tokens: s0 at 12, s1 at 40, s2 at 71, s3 at 93. For each key, <b>tap the token that owns it</b>, then watch the search run.</p>
+      <div class="sim ring">
+        <div class="s3grid">
+          <div>
+            <div class="keyask" id="keyAsk"></div>
+            <div class="arr" id="arr"></div>
+          </div>
+          <svg id="ring3" viewBox="0 0 300 300" role="img" aria-label="Toy ring 0 to 99 with four tokens"></svg>
+        </div>
+        <div class="simlog" id="log3" aria-live="polite"><div>tokens = [12, 40, 71, 93] · lo / mid / hi are the search pointers</div></div>
+        <div class="sim-bar"><span class="small" id="s3prog">Key 1 of 4</span><span class="row" id="s3next"></span></div>
+      </div>
+      <div class="callout"><b>Two details that matter.</b> A key that lands <i>exactly</i> on a server's position belongs to that server (the <code>≥</code> rule). And the ring is tiny <i>metadata</i>, just a sorted list of positions. Every client or router keeps a copy, and it only changes when servers join or leave. Tom White's well-known Java version does the same thing with a sorted map: look for the first entry at or after the hash, and if there isn't one, take the first entry.<a class="cite" href="https://tom-e-white.com/2007/11/consistent-hashing.html" target="_blank" rel="noopener">[4]</a></div>
+
+      <h3 class="parth">Part B · Spot the bug</h3>
+      <p>A teammate wrote this lookup. It works for most keys, but it gives the wrong server for key <b>97</b>. <b>Tap the line with the bug.</b></p>
+      <div class="code" id="code3" role="group" aria-label="Buggy lookup function, tap the buggy line"></div>
+      <div class="fb" id="bugFb"></div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Who has to move?</h2><div class="sub">The book's method for finding affected keys</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>When a server joins or leaves, you need to know exactly which keys move, because those are the ones you copy (or, in a cache, the ones that will miss). The book gives a rule for each case:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-consistent-hashing" target="_blank" rel="noopener">[1]</a></p>
+      <ul>
+        <li><b>A server joins:</b> start at the new server and go <b>anticlockwise</b> until you reach the previous server. Every key in that arc moves to the new server. They all come from the new server's clockwise neighbour, which used to own that arc.</li>
+        <li><b>A server leaves:</b> start at the leaving server and go <b>anticlockwise</b> to the previous server. Every key in that arc moves to the leaving server's <b>clockwise</b> neighbour.</li>
+      </ul>
+      <p>Nothing else on the ring changes. Grab the highlighter. Each round: <b>tap every key you think will move</b> (on the ring or the chips), answer the server question, then press <b>Apply</b>.</p>
+      <div class="sim ring">
+        <svg id="ring4" viewBox="0 0 400 400" role="img" aria-label="Toy ring 0 to 99 with servers A, B, C, D and twelve keys"></svg>
+        <div class="legend4" id="legend4"></div>
+        <div class="kchips" id="kchips" role="group" aria-label="Keys: tap to mark as moving"></div>
+      </div>
+      <div class="challenge boxed" id="round4"></div>
+      <div class="callout warn"><b>"Move" means different things.</b> In a <b>cache</b>, a moved key just means one miss, then a refill from the database. In a <b>database</b>, the keys in the affected arc must actually be copied to the new owner before it starts answering for them. The book's chapter stops at deciding <i>which</i> keys move. The good news is the rule also tells you <i>where to copy from</i>, and the copy is limited to one arc.</div>
+      <p class="small"><a href="0002-consistent-hashing.html#s4">Play with virtual nodes in the lab →</a> <span class="muted">Quest 6.2, stage 4. With virtual nodes the same rule runs once per virtual node, so a joining server pulls small arcs from several servers.</span></p>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Migration Planner</h2><div class="sub">Who has to stream data for this change?</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Ops hands you seven change tickets. For each one, call how much of the data has to move: does <b>one neighbour</b> hand over an arc, do <b>a few servers</b> each give or take a little, or does <b>nearly every key</b> move? Count the arcs that change.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">Explain a node join, with numbers</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> You assumed the arcs were even. They aren't, on a basic ring. Quest 5.2, <i>Cracks in the Ring</i>, puts numbers on the two problems with the basic ring, shows why virtual nodes fix one of them, and tours who runs this in production. Then <i>Hash It Live</i> is the full mock interview.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-consistent-hashing" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 5: Design Consistent Hashing</a>. This quest covers the first half: the rehashing problem, the hash space and ring, server lookup, adding and removing servers, and finding affected keys. Then read the original paper's introduction, <a href="https://dl.acm.org/doi/10.1145/258533.258660" target="_blank" rel="noopener">Karger et al. 1997</a>, and <a href="https://tom-e-white.com/2007/11/consistent-hashing.html" target="_blank" rel="noopener">Tom White's short post</a> for a 30-line implementation.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      The neat <b>1/(N+1)</b> only holds when every server owns an equal slice. On a basic ring with one random position per server, slices vary a lot, so a joining server might take far more or far less than its fair share. That's one reason real systems use many virtual nodes (Quest 5.2). Also, "which keys move" is only step one of a real migration. In a store like Cassandra, a joining node <i>streams</i> its new ranges from the current owners before it starts serving them.<a class="cite" href="https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html" target="_blank" rel="noopener">[6]</a> And if you ever change the hash function itself, every key and every server lands somewhere new, so treat it like a full data migration.
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"why does the lookup use ≥ and not >?"</i> or <i>"if every client keeps a copy of the ring, how do they all learn about a new server?"</i>
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 5 "Design Consistent Hashing" (ByteByteGo).</li>
+        <li>Karger et al., "Consistent Hashing and Random Trees", STOC 1997.</li>
+        <li>Wikipedia, "Consistent hashing".</li>
+        <li>Tom White, "Consistent Hashing" (2007 blog post with a sorted-map implementation).</li>
+        <li>DeCandia et al., "Dynamo: Amazon's Highly Available Key-value Store", SOSP 2007.</li>
+        <li>Apache Cassandra documentation, "Dynamo" architecture page.</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0501',
+  badge: '📐 Badge: Ring Surveyor',
+  winTitle: 'The ring adds up',
+  cheatsheet: '../reference/ch05-consistent-hashing-cheatsheet.html',
+});
+const { sleep } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+const f2 = n => (+n).toFixed(2);
+const SC = i => `var(--s${i})`;
+function pt(cx, cy, r, deg) { const a = deg * Math.PI / 180; return [cx + r * Math.sin(a), cy - r * Math.cos(a)]; }
+function arcD(cx, cy, r, a0, a1) { // clockwise arc from a0 to a1 (degrees, 0 = top)
+  let sw = ((a1 - a0) % 360 + 360) % 360; if (sw < 0.001) sw = 360;
+  const [x0, y0] = pt(cx, cy, r, a0);
+  if (sw > 359.9) { const [xm, ym] = pt(cx, cy, r, a0 + 180); return `M${f2(x0)} ${f2(y0)}A${r} ${r} 0 1 1 ${f2(xm)} ${f2(ym)}A${r} ${r} 0 1 1 ${f2(x0)} ${f2(y0)}`; }
+  const [x1, y1] = pt(cx, cy, r, a0 + sw);
+  return `M${f2(x0)} ${f2(y0)}A${r} ${r} 0 ${sw > 180 ? 1 : 0} 1 ${f2(x1)} ${f2(y1)}`;
+}
+function anim(dur, f) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 1) { f(1); return res(); }
+    const t0 = performance.now();
+    const fr = now => { const p = Math.min(1, (now - t0) / dur); f(p); p < 1 ? requestAnimationFrame(fr) : res(); };
+    requestAnimationFrame(fr);
+  });
+}
+const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+const wait = ms => sleep(Q.reduced ? 30 : ms);
+function logTo(el, html, cls) { el.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); el.scrollTop = el.scrollHeight; }
+function onAct(el, fn) {
+  el.addEventListener('click', fn);
+  el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(e); } });
+}
+function fb(el, ok, html) { el.className = 'fb show ' + (ok ? 'good' : 'bad'); el.innerHTML = html; }
+function btn(row, label, fn, primary = true) { const b = document.createElement('button'); b.className = 'btn' + (primary ? ' primary' : ''); b.textContent = label; b.onclick = fn; row.appendChild(b); return b; }
+const pct = (x, d = 1) => (x * 100).toFixed(d).replace(/\.0+$/, '') + '%';
+
+// Ring skeleton: base circle, ticks, zero label. Returns layer groups.
+function ringBase(svg, { cx, cy, R, space, ticks, zero }) {
+  svg.innerHTML = '';
+  const deg = p => p / space * 360;
+  S('circle', { class: 'base', cx, cy, r: R }, svg);
+  const L = {};
+  ['bands', 'hi', 'trail', 'keys', 'ghost', 'srv', 'fx'].forEach(k => L[k] = S('g', {}, svg));
+  const tickG = S('g', {}, svg);
+  ticks.forEach(t => {
+    const [x0, y0] = pt(cx, cy, R + 9, deg(t)), [x1, y1] = pt(cx, cy, R + 15, deg(t));
+    S('line', { class: 'tick', x1: f2(x0), y1: f2(y0), x2: f2(x1), y2: f2(y1) }, tickG);
+    if (t !== 0) { const [lx, ly] = pt(cx, cy, R + 28, deg(t)); S('text', { class: 'tickl', x: f2(lx), y: f2(ly) }, tickG).textContent = t; }
+  });
+  S('text', { class: 'zero', x: cx, y: cy - R - 22 }, tickG).textContent = zero;
+  L.cBig = S('text', { class: 'cbig', x: cx, y: cy + 4 }, svg);
+  L.cSmall = S('text', { class: 'csmall', x: cx, y: cy + 26 }, svg);
+  L.deg = deg;
+  return L;
+}
+function drawServer(L, { cx, cy, R }, s, { label, posLabel = true, cls = '', r = 17 } = {}) {
+  const a = L.deg(s.pos), [x, y] = pt(cx, cy, R, a);
+  const g = S('g', { class: 'srv ' + cls }, L.srv);
+  const c = S('circle', { cx: f2(x), cy: f2(y), r }, g); c.style.fill = SC(s.c);
+  S('text', { x: f2(x), y: f2(y) }, g).textContent = label || s.n;
+  if (posLabel) { const [lx, ly] = pt(cx, cy, R + 32, a); S('text', { class: 'posl', x: f2(lx), y: f2(ly) }, g).textContent = s.pos; }
+  return g;
+}
+async function walkOn(L, geo, from, to, r2) { // animate a dot walking clockwise from position `from` to `to`
+  const a0 = L.deg(from), sw = ((L.deg(to) - a0) % 360 + 360) % 360;
+  const trail = S('path', { class: 'trail' }, L.trail), w = S('circle', { class: 'walker', r: 6 }, L.fx);
+  await anim(Math.max(500, sw * 7), p => {
+    const a = a0 + sw * ease(p);
+    if (sw * ease(p) > .5) trail.setAttribute('d', arcD(geo.cx, geo.cy, r2, a0, a));
+    const [x, y] = pt(geo.cx, geo.cy, r2, a); w.setAttribute('cx', f2(x)); w.setAttribute('cy', f2(y));
+  });
+  setTimeout(() => { trail.remove(); w.remove(); }, 900);
+}
+
+/* ================= STAGE 1: the rehash math ================= */
+Q.onStage(1, () => {
+  const ROWS = [['alice', 1044], ['bob', 2208], ['carol', 3917], ['dave', 4521], ['erin', 5374], ['frank', 6610], ['grace', 7085], ['heidi', 8862]];
+  const st = { filled: 0, tableHeart: false, ringDone: false, curveDone: false, quizShown: false };
+  const tb = $('#modTable');
+  tb.innerHTML = `<div class="mrow head"><span>key</span><span>hash</span><span>% 4</span><span>% 3 (tap)</span></div>` +
+    ROWS.map(([k, h], i) => `<div class="mrow" data-i="${i}"><span class="mk">${k}</span><span class="mh">${h}</span><span class="m4" style="color:${SC(h % 4)}">${h % 4}</span><span class="m3">${[0, 1, 2].map(v => `<button class="mbtn" data-v="${v}" aria-label="${k}: hash % 3 = ${v}">${v}</button>`).join('')}</span><span class="mhint"></span></div>`).join('');
+  $$('.mrow[data-i]', tb).forEach(row => {
+    const [k, h] = ROWS[+row.dataset.i];
+    let missed = false;
+    $$('.mbtn', row).forEach(b => b.onclick = () => {
+      if (row.dataset.done) return;
+      const v = +b.dataset.v;
+      if (v === h % 3) {
+        row.dataset.done = '1';
+        b.classList.add('yes'); b.style.background = SC(v);
+        $$('.mbtn', row).forEach(x => x.disabled = true);
+        $('.mhint', row).classList.remove('show');
+        if (!missed) Q.addXP(3, b); else Q.toast('✓', b, 'practice');
+        if (++st.filled === ROWS.length) tableDone();
+      } else {
+        b.classList.remove('no'); void b.offsetWidth; b.classList.add('no');
+        const hint = $('.mhint', row);
+        hint.textContent = `${h} = 3 × ${Math.floor(h / 3)} + ${h % 3}  → remainder ${h % 3}`;
+        hint.classList.add('show');
+        missed = true;
+        if (!st.tableHeart) { st.tableHeart = true; Q.loseHeart(b); }
+      }
+    });
+  });
+  function tableDone() {
+    let moved = 0;
+    $$('.mrow[data-i]', tb).forEach(row => {
+      const h = ROWS[+row.dataset.i][1], m = h % 4 !== h % 3;
+      row.classList.add(m ? 'moved' : 'kept'); if (m) moved++;
+    });
+    $('#modCount').innerHTML = `<span class="bignum bad">${moved} of 8 keys moved (${Math.round(moved / 8 * 100)}%)</span>. Only alice and bob kept their server, and they're both on s0. Notice something else: the survivors got <b>renumbered</b> 0, 1, 2. If old server 1 died, everything that sat on servers 2 and 3 now has a new index too. That's part of why the mapping scrambles. In a cache, every red row is now looked up on the wrong server: a <b>miss</b> that falls through to the database.`;
+    $('#ringGuessBox').style.display = 'block';
+    maybeQuiz();
+  }
+  $('#ringGuessBtn').onclick = () => {
+    if (st.ringDone) return;
+    const inp = $('#ringGuess'), v = parseInt(inp.value, 10);
+    if (Number.isNaN(v)) { Q.toast('type a number', inp, 'practice'); return; }
+    st.ringDone = true; inp.readOnly = true; $('#ringGuessBtn').disabled = true;
+    const ok = v === 2;
+    inp.classList.add(ok ? 'ok' : 'no');
+    fb($('#ringGuessFb'), ok, (ok ? '<b>Right: about 2.</b> ' : `<b>About 2, not ${v}.</b> `) + 'On a ring, a dead server only gives away its <i>own</i> keys. Each of the 4 servers held about 1/4 of the keys, and 8 × 1/4 = 2. Everyone else keeps walking clockwise to the same server as before. Modulo moved 6.');
+    ok ? Q.addXP(10, inp) : Q.loseHeart(inp);
+    maybeQuiz();
+  };
+  $('#ringGuess').addEventListener('keydown', e => { if (e.key === 'Enter') $('#ringGuessBtn').click(); });
+
+  /* ---- Part B: the curve ---- */
+  const svg = $('#curve'), W = 360, H = 220, m = { l: 38, r: 46, t: 14, b: 34 };
+  const x = n => m.l + (n - 2) / 98 * (W - m.l - m.r), y = v => m.t + (1 - v) * (H - m.t - m.b);
+  const grid = S('g', { class: 'grid' }, svg), axis = S('g', { class: 'axis' }, svg);
+  [0, .25, .5, .75, 1].forEach(v => {
+    S('line', { x1: m.l, x2: W - m.r, y1: f2(y(v)), y2: f2(y(v)) }, grid);
+    S('text', { x: m.l - 6, y: f2(y(v) + 4), 'text-anchor': 'end' }, axis).textContent = Math.round(v * 100) + '%';
+  });
+  [2, 25, 50, 75, 100].forEach(n => S('text', { x: f2(x(n)), y: H - m.b + 15, 'text-anchor': 'middle' }, axis).textContent = n);
+  S('text', { class: 'ttl', x: f2((m.l + W - m.r) / 2), y: H - 4, 'text-anchor': 'middle' }, axis).textContent = 'servers before adding one (N)';
+  const plot = S('g', { class: 'plot' }, svg);
+  const path = f => { let d = ''; for (let n = 2; n <= 100; n++) d += (n === 2 ? 'M' : 'L') + f2(x(n)) + ' ' + f2(y(f(n))); return d; };
+  const modF = n => n / (n + 1), ringF = n => 1 / (n + 1);
+  const lm = S('path', { class: 'ln mod', d: path(modF) }, plot), lr = S('path', { class: 'ln ring', d: path(ringF) }, plot);
+  S('text', { class: 'lab mod', x: W - m.r + 11, y: f2(y(modF(100)) + 4) }, plot).textContent = '% N';
+  S('text', { class: 'lab ring', x: W - m.r + 11, y: f2(y(ringF(100)) + 4) }, plot).textContent = 'ring';
+  const cross = S('line', { class: 'cross', y1: m.t, y2: H - m.b }, plot);
+  const dm = S('circle', { class: 'mk', r: 5 }, plot), dr = S('circle', { class: 'mk', r: 5 }, plot);
+  dm.style.fill = 'var(--bad)'; dr.style.fill = 'var(--teal)';
+  S('text', { class: 'veil', x: f2((m.l + W - m.r) / 2), y: f2(y(.5)) }, svg).textContent = 'Predict first ↓';
+  let N = 50;
+  function setN(n) {
+    N = Math.max(2, Math.min(100, Math.round(n)));
+    $('#nSlider').value = N;
+    cross.setAttribute('x1', f2(x(N))); cross.setAttribute('x2', f2(x(N)));
+    dm.setAttribute('cx', f2(x(N))); dm.setAttribute('cy', f2(y(modF(N))));
+    dr.setAttribute('cx', f2(x(N))); dr.setAttribute('cy', f2(y(ringF(N))));
+    if (!st.curveDone) return;
+    $('#nVal').textContent = `N = ${N} → ${N + 1}`;
+    $('#rMod').textContent = pct(modF(N)); $('#rRing').textContent = pct(ringF(N));
+    $('#rModK').textContent = `≈ ${Math.round(modF(N) * 1e6).toLocaleString('en-US')} of 1M keys`;
+    $('#rRingK').textContent = `≈ ${Math.round(ringF(N) * 1e6).toLocaleString('en-US')} of 1M keys`;
+  }
+  setN(50);
+  $('#nSlider').addEventListener('input', e => setN(+e.target.value));
+  function fromPointer(e) {
+    if (!st.curveDone) return;
+    const r = svg.getBoundingClientRect(), sx = (e.clientX - r.left) / r.width * W;
+    if (sx < m.l - 10 || sx > W - m.r + 10) return;
+    setN(2 + (sx - m.l) / (W - m.l - m.r) * 98);
+  }
+  svg.addEventListener('pointermove', fromPointer);
+  svg.addEventListener('pointerdown', fromPointer);
+  Q.quiz($('#curvePredict'), {
+    tag: 'Predict first',
+    q: 'A cluster has N = 50 servers on <code>hash % N</code>. You add one. Roughly what share of keys move?',
+    options: ['About 2%', 'About 50%', 'About 98%'],
+    correct: 2, xp: 15,
+    good: 'A key stays only if <code>hash % 50</code> equals <code>hash % 51</code>, which is 1 key in 51. So 50/51 ≈ <b>98%</b> move. The bigger the cluster, the worse it gets. Drag the slider.',
+    bad: 'A key stays only if <code>hash % 50</code> equals <code>hash % 51</code>, which is 1 key in 51. So 50/51 ≈ <b>98%</b> move. About 2% is what a <i>ring</i> moves. Drag the slider to see both.',
+    onDone: async () => {
+      st.curveDone = true;
+      $('#curveSim').classList.remove('locked'); $('#nSlider').disabled = false;
+      if (!Q.reduced) [lm, lr].forEach(l => { const len = l.getTotalLength(); l.style.strokeDasharray = len; l.style.strokeDashoffset = len; l.getBoundingClientRect(); l.style.transition = 'stroke-dashoffset 1.2s ease'; l.style.strokeDashoffset = 0; setTimeout(() => { l.style.transition = ''; l.style.strokeDasharray = ''; l.style.strokeDashoffset = ''; }, 1300); });
+      setN(50);
+      $('#curveNote').style.display = 'block';
+      maybeQuiz();
+    },
+  });
+
+  function maybeQuiz() {
+    if (st.quizShown || st.filled < ROWS.length || !st.ringDone || !st.curveDone) return;
+    st.quizShown = true;
+    setTimeout(() => Q.quiz($('#s1quiz'), {
+      q: 'A 20-server cache using <code>hash % N</code> adds one server. Roughly what share of cached keys now miss?',
+      options: ['About 5%', 'About 50%', 'About 95%'],
+      correct: 2,
+      good: 'Going 20 → 21 moves 20/21 ≈ <b>95%</b> of keys, so nearly the whole cache misses at once. On a ring the new server would take about 1/21 of keys, <b>under 5%</b>.',
+      bad: 'With <code>% N</code>, going 20 → 21 moves 20/21 ≈ <b>95%</b> of keys. About 5% (1/21) is what a ring would move.',
+      onDone: () => setTimeout(() => Q.clearStage(1), 900),
+    }), 500);
+  }
+});
+
+/* ================= STAGE 2: bend the number line ================= */
+Q.onStage(2, () => {
+  const svg = $('#ring2'), geo = { cx: 200, cy: 200, R: 130 }, SP = 256;
+  const st = { bent: false, ci: 0, quizShown: false };
+  const curlG = S('g', {}, svg), ringG = S('g', {}, svg);
+  const curl = S('path', { class: 'curl' }, curlG);
+  const end0 = S('text', { class: 'curlend', 'text-anchor': 'start' }, curlG), end1 = S('text', { class: 'curlend', 'text-anchor': 'end' }, curlG);
+  end0.textContent = '0'; end1.textContent = '2¹⁶⁰−1';
+  const mids = [S('text', { class: 'curlend', 'text-anchor': 'middle', style: 'fill:var(--muted);font-size:12px' }, curlG)];
+  mids[0].textContent = '2¹⁵⁹';
+  // A line of growing length bends into an arch of angle 2πp while turning 180°·p, so values run clockwise from the top.
+  function curlPt(t, p) {
+    const R = geo.R, L = 320 + (2 * Math.PI * R - 320) * p, th = 2 * Math.PI * p, s = (t - .5) * L;
+    let lx, ly;
+    if (th < 1e-4) { lx = s; ly = 0; } else { const r = L / th, ph = s / r; lx = r * Math.sin(ph); ly = r * (1 - Math.cos(ph)); }
+    const a = Math.PI * p, c = Math.cos(a), sn = Math.sin(a);
+    return [200 + lx * c - ly * sn, 200 + R * p + lx * sn + ly * c];
+  }
+  function drawCurl(p) {
+    let d = '';
+    for (let i = 0; i <= 160; i++) { const [px, py] = curlPt(i / 160, p); d += (i ? 'L' : 'M') + f2(px) + ' ' + f2(py); }
+    curl.setAttribute('d', d);
+    const [x0, y0] = curlPt(0, p), [x1, y1] = curlPt(1, p), [xm, ym] = curlPt(.5, p);
+    end0.setAttribute('x', f2(x0 + 6)); end0.setAttribute('y', f2(y0 - 14));
+    end1.setAttribute('x', f2(x1 - 6)); end1.setAttribute('y', f2(y1 - 14));
+    mids[0].setAttribute('x', f2(xm)); mids[0].setAttribute('y', f2(ym + (p > .5 ? 26 : -14)));
+  }
+  drawCurl(0);
+  ringG.style.display = 'none';
+  let L = null;
+  function toyRing() {
+    L = ringBase(ringG, { ...geo, space: SP, ticks: [0, 64, 128, 192], zero: '255 ⟲ 0' });
+  }
+  $('#bendBtn').onclick = async () => {
+    const b = $('#bendBtn'); b.disabled = true;
+    curlG.style.display = ''; ringG.style.display = 'none'; curlG.style.opacity = 1;
+    $('#bendMsg').textContent = 'Bending…';
+    await anim(2400, p => drawCurl(ease(p)));
+    $('#bendMsg').textContent = 'The two ends meet at the top: 2¹⁶⁰−1 sits right next to 0.';
+    await wait(1400);
+    curlG.style.display = 'none'; ringG.style.display = '';
+    toyRing();
+    $('#bendMsg').textContent = 'Toy ring: 256 positions, 0 to 255. Same idea, readable numbers.';
+    b.disabled = false; b.textContent = '↻ Bend it again';
+    if (!st.bent) { st.bent = true; $('#afterBend').style.display = 'block'; showCard(); }
+    else drawCard(CARDS[Math.min(st.ci, CARDS.length - 1)], st.ci >= CARDS.length);
+  };
+
+  const THREE = [{ n: 's0', pos: 32, c: 0 }, { n: 's1', pos: 112, c: 1 }, { n: 's2', pos: 240, c: 2 }];
+  const CARDS = [
+    { srv: [{ n: 's0', pos: 64, c: 0 }, { n: 's1', pos: 192, c: 1 }], kind: 'num', ans: 50,
+      q: 'Two servers: s0 at 64 and s1 at 192. What share of all keys does <b>s1</b> own?',
+      why: 's1 owns the arc from s0 (64) up to itself (192): 192 − 64 = 128 positions, and 128 / 256 = <b>50%</b>.', focus: 's1' },
+    { srv: THREE, kind: 'num', ans: 18.75,
+      q: 'Three servers: s0 at 32, s1 at 112, s2 at 240. What share does <b>s0</b> own?',
+      why: 's0\'s arc starts at s2 (240), wraps past 255 to 0, and ends at 32. That\'s 16 + 32 = 48 positions. With the formula: (32 − 240) mod 256 = 48, and 48 / 256 = <b>18.75%</b>.', focus: 's0' },
+    { srv: THREE, kind: 'pick', ans: 's0', key: 250,
+      q: 'A key hashes to <b>250</b>. Which server stores it?',
+      why: 'Walk clockwise from 250: no server between 250 and 255, so the walk wraps past 0 and the first server it meets is <b>s0</b> at 32. In code: no token ≥ 250, so take the smallest token.' },
+  ];
+  function drawCard(cd, revealed) {
+    if (!L) return;
+    [L.bands, L.hi, L.srv, L.keys, L.fx, L.trail].forEach(g => g.innerHTML = '');
+    const s = cd.srv.slice().sort((a, b) => a.pos - b.pos);
+    if (revealed) s.forEach((sv, i) => {
+      const prev = s[(i - 1 + s.length) % s.length];
+      const p = S('path', { class: 'band', d: arcD(geo.cx, geo.cy, geo.R, L.deg(prev.pos), L.deg(sv.pos)) }, L.bands); p.style.stroke = SC(sv.c);
+    });
+    s.forEach(sv => drawServer(L, geo, sv));
+    if (cd.key !== undefined) {
+      const [kx, ky] = pt(geo.cx, geo.cy, geo.R - 30, L.deg(cd.key));
+      S('circle', { class: 'keymark', cx: f2(kx), cy: f2(ky), r: 7 }, L.keys);
+      const [tx, ty] = pt(geo.cx, geo.cy, geo.R - 52, L.deg(cd.key));
+      S('text', { class: 'keylab', x: f2(tx), y: f2(ty) }, L.keys).textContent = cd.key;
+    }
+    L.cBig.textContent = revealed && cd.kind === 'num' ? cd.ans + '%' : '?';
+    L.cSmall.textContent = cd.focus ? `${cd.focus}'s share` : cd.key !== undefined ? `owner of ${cd.key}` : '';
+  }
+  function showCard() {
+    const box = $('#cardBox'), cd = CARDS[st.ci];
+    let tries = 0, hearted = false, done = false;
+    drawCard(cd, false);
+    box.innerHTML = `<div class="step">Card ${st.ci + 1} of ${CARDS.length}</div><h3>${cd.q}</h3>` +
+      (cd.kind === 'num'
+        ? `<div class="row"><input class="numin" id="cardIn" type="text" inputmode="decimal" placeholder="%" aria-label="Share in percent"><span>%</span><button class="btn primary" id="cardBtn">Check</button></div>`
+        : `<div class="row srvpick">${['s0', 's1', 's2'].map(n => `<button class="opt" data-n="${n}">${n}</button>`).join('')}</div>`) +
+      `<div class="fb" id="cardFb"></div><div class="row" id="cardRow" style="margin-top:10px"></div>`;
+    const finish = async (ok, el) => {
+      done = true;
+      if (ok) Q.addXP(tries === 0 ? 15 : 5, el);
+      fb($('#cardFb'), true, (tries === 0 ? '<b>Correct.</b> ' : '<b>Got it.</b> ') + cd.why);
+      drawCard(cd, true);
+      if (cd.kind === 'pick') { const o = cd.srv.slice().sort((a, b) => a.pos - b.pos).find(x => x.pos >= cd.key) || cd.srv.slice().sort((a, b) => a.pos - b.pos)[0]; await walkOn(L, geo, cd.key, o.pos, geo.R - 30); }
+      btn($('#cardRow'), st.ci < CARDS.length - 1 ? 'Next card →' : 'Finish the cards →', () => {
+        st.ci++;
+        if (st.ci < CARDS.length) return showCard();
+        box.innerHTML = '<div class="row"><b>✓ All three cards done.</b><button class="btn" id="cardsAgain">↻ Redo the cards</button></div>';
+        $('#cardsAgain').onclick = () => { st.ci = 0; showCard(); };
+        $('#scaleBox').classList.add('on');
+        maybeQuiz();
+      });
+    };
+    const miss = (el) => {
+      tries++;
+      if (!hearted) { hearted = true; Q.loseHeart(el); }
+    };
+    if (cd.kind === 'num') {
+      const inp = $('#cardIn', box);
+      const check = () => {
+        if (done) return;
+        const v = parseFloat(inp.value.replace('%', '').replace(',', '.'));
+        if (Number.isNaN(v)) { Q.toast('type a number', inp, 'practice'); return; }
+        if (Math.abs(v - cd.ans) < 0.06) { inp.className = 'numin ok'; inp.readOnly = true; $('#cardBtn').disabled = true; finish(true, inp); return; }
+        inp.className = 'numin'; void inp.offsetWidth; inp.className = 'numin no';
+        miss(inp);
+        if (st.ci === 1) { // show the wrap-around arc
+          L.hi.innerHTML = '';
+          const hp = S('path', { class: 'hiarc' }, L.hi);
+          anim(1100, p => hp.setAttribute('d', arcD(geo.cx, geo.cy, geo.R, L.deg(240), L.deg(240) + (L.deg(32 + 256) - L.deg(240)) * Math.max(.01, ease(p)))));
+          fb($('#cardFb'), false, `<b>Not ${v}%.</b> Look at the highlighted arc: s0's partition starts at the previous server, s2 at 240, and wraps past the top.<div class="formula">share = ((32 − 240) mod 256) / 256</div>Try again.`);
+        } else {
+          fb($('#cardFb'), false, `<b>Not ${v}%.</b> s1's arc runs from the previous server (anticlockwise) to s1 itself. How many positions is that out of 256? Try again.`);
+        }
+      };
+      $('#cardBtn', box).onclick = check;
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') check(); });
+    } else {
+      $$('.srvpick .opt', box).forEach(b => b.onclick = () => {
+        if (done) return;
+        if (b.dataset.n === cd.ans) { b.classList.add('right'); $$('.srvpick .opt', box).forEach(x => x.disabled = true); finish(true, b); return; }
+        b.classList.add('wrong'); b.disabled = true;
+        miss(b);
+        fb($('#cardFb'), false, `<b>Not ${b.dataset.n}.</b> ${b.dataset.n === 's2' ? 's2 at 240 is <i>behind</i> the key (anticlockwise). Direction matters, not distance.' : 'Keep walking clockwise from 250. What do you hit first after passing 255 → 0?'} Try again.`);
+      });
+    }
+  }
+  $('#collBtn').onclick = () => { $('#collMath').classList.add('on'); $('#collBtn').style.display = 'none'; };
+
+  function maybeQuiz() {
+    if (st.quizShown) return;
+    st.quizShown = true;
+    setTimeout(() => Q.quiz($('#s2quiz'), {
+      q: 'Why does the book use a hash space as large as 0 to 2<sup>160</sup>−1?',
+      options: ['So positions almost never collide and keys spread out evenly', 'So the ring has room for up to 2^160 separate servers', 'Because comparing bigger hash values is faster for a CPU'],
+      correct: 0,
+      good: 'A huge space means two keys or servers practically never share a spot (about 3 × 10<sup>−25</sup> for a trillion keys), and positions look like a smooth random spread around the ring.',
+      bad: 'The size isn\'t about how many servers fit (you\'ll never have 2<sup>160</sup>), or speed. It\'s so that positions practically never collide and spread out smoothly around the ring.',
+      onDone: () => setTimeout(() => Q.clearStage(2), 900),
+    }), 500);
+  }
+});
+
+/* ================= STAGE 3: clockwise, in code ================= */
+Q.onStage(3, () => {
+  const TOK = [12, 40, 71, 93], KEYS = [5, 40, 41, 97];
+  const geo = { cx: 150, cy: 150, R: 100 }, SP = 100;
+  const st = { ki: 0, partA: false, bug: false, quizShown: false, busy: false };
+  const svg = $('#ring3');
+  const L = ringBase(svg, { ...geo, space: SP, ticks: [0, 50], zero: '99 ⟲ 0' });
+  TOK.forEach((p, i) => drawServer(L, geo, { n: 's' + i, pos: p, c: i }, { r: 14 }));
+  const arr = $('#arr');
+  arr.innerHTML = TOK.map((t, i) => `<div class="acol"><span class="aidx">[${i}]</span><button class="acell" data-i="${i}" aria-label="token ${t}, server s${i}">${t}<small style="color:${SC(i)}">s${i}</small></button><span class="aptr" id="ptr${i}"></span></div>`).join('') +
+    `<div class="acol"><span class="aidx">[4]</span><div class="acell end">end</div><span class="aptr" id="ptr4"></span></div>`;
+  const cells = $$('.acell[data-i]', arr), log = $('#log3');
+  const own = h => { const i = TOK.findIndex(t => t >= h); return i < 0 ? 0 : i; };
+  function ptrs(lo, mid, hi) {
+    for (let i = 0; i <= 4; i++) {
+      const tags = []; if (i === lo) tags.push('lo'); if (i === mid) tags.push('mid'); if (i === hi) tags.push('hi');
+      $('#ptr' + i).innerHTML = tags.join('<br>');
+    }
+    cells.forEach((c, i) => c.classList.toggle('mid', i === mid));
+  }
+  function showKey() {
+    const h = KEYS[st.ki];
+    st.busy = false;
+    cells.forEach(c => { c.classList.remove('right', 'wrong', 'mid'); c.disabled = false; });
+    ptrs(-1, -1, -1);
+    L.keys.innerHTML = '';
+    const [kx, ky] = pt(geo.cx, geo.cy, geo.R - 24, L.deg(h));
+    S('circle', { class: 'keymark', cx: f2(kx), cy: f2(ky), r: 6 }, L.keys);
+    const [tx, ty] = pt(geo.cx, geo.cy, geo.R - 44, L.deg(h));
+    S('text', { class: 'keylab', x: f2(tx), y: f2(ty) }, L.keys).textContent = h;
+    L.cBig.textContent = h; L.cSmall.textContent = 'key hash';
+    $('#keyAsk').innerHTML = `Key hash = <b class="k">${h}</b>. Tap the token that owns it.`;
+    $('#s3prog').textContent = `Key ${st.ki + 1} of ${KEYS.length}`;
+    $('#s3next').innerHTML = '';
+  }
+  cells.forEach(c => c.onclick = async () => {
+    if (st.busy || st.partA && st.ki >= KEYS.length) return;
+    st.busy = true;
+    const h = KEYS[st.ki], want = own(h), i = +c.dataset.i, ok = i === want;
+    cells.forEach(x => x.disabled = true);
+    c.classList.add(ok ? 'right' : 'wrong');
+    ok ? Q.addXP(5, c) : Q.loseHeart(c);
+    logTo(log, `<b>key ${h}</b>: you picked ${TOK[i]} → ${ok ? '✓' : '✗ (watch the search)'}`, ok ? 'g' : 'e');
+    // binary search animation: first token >= h, hi starts at length so "past the end" is possible
+    let lo = 0, hi = TOK.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      ptrs(lo, mid, hi);
+      await wait(750);
+      const less = TOK[mid] < h;
+      logTo(log, `lo=${lo} hi=${hi} mid=${mid}: tokens[${mid}]=${TOK[mid]} ${less ? '<' : '≥'} ${h} → ${less ? `lo=${mid + 1}` : `hi=${mid}`}`);
+      if (less) lo = mid + 1; else hi = mid;
+    }
+    ptrs(lo, -1, hi);
+    await wait(500);
+    const idx = lo % TOK.length;
+    logTo(log, lo === TOK.length ? `lo=4 is past the end → wrap: 4 % 4 = 0 → tokens[0]=${TOK[0]} → <b>s0</b>` : `stop: lo=${lo} → tokens[${lo}]=${TOK[lo]} → <b>s${lo}</b>${TOK[lo] === h ? ' (exactly on it: ≥ counts)' : ''}`, 'g');
+    cells[idx].classList.remove('wrong'); cells[idx].classList.add('right');
+    L.cBig.textContent = 's' + idx; L.cSmall.textContent = `owns ${h}`;
+    await walkOn(L, geo, h, TOK[idx], geo.R - 24);
+    const nx = $('#s3next'); nx.innerHTML = '';
+    btn(nx, st.ki < KEYS.length - 1 ? 'Next key →' : 'Done tracing →', () => {
+      st.ki++;
+      if (st.ki < KEYS.length) return showKey();
+      st.partA = true;
+      $('#keyAsk').innerHTML = '✓ All four traced. Lookup is <b>O(log T)</b> for T tokens: each step halves the range.';
+      $('#s3prog').textContent = 'Done';
+      $('#s3next').innerHTML = '';
+      btn($('#s3next'), '↻ Trace again', () => { st.ki = 0; log.innerHTML = '<div>tokens = [12, 40, 71, 93]</div>'; showKey(); }, false);
+      maybeQuiz();
+    });
+  });
+  showKey();
+
+  /* ---- Part B: spot the bug ---- */
+  const CODE = [
+    ['c', '// tokens sorted ascending; h = the key\'s hash'],
+    [1, 'function lookup(tokens, h) {'],
+    [2, '  let lo = 0, hi = tokens.length - 1;'],
+    [3, '  while (lo < hi) {'],
+    [4, '    const mid = (lo + hi) >> 1;'],
+    [5, '    if (tokens[mid] < h) lo = mid + 1;'],
+    [6, '    else hi = mid;'],
+    [7, '  }'],
+    [8, '  return tokens[lo];'],
+    [9, '}'],
+  ];
+  const esc = Q.esc;
+  $('#code3').innerHTML = CODE.map(([n, t]) => n === 'c' ? `<div class="cl cm"><span class="ln"></span><span>${esc(t)}</span></div>` : `<button class="cl" data-n="${n}" aria-label="Line ${n}: ${esc(t.trim())}"><span class="ln">${n}</span><span>${esc(t)}</span></button>`).join('');
+  $$('#code3 button.cl').forEach(b => b.onclick = () => {
+    if (st.bug) return;
+    st.bug = true;
+    const n = +b.dataset.n, ok = n === 2 || n === 8;
+    $$('#code3 button.cl').forEach(x => { x.disabled = true; if (+x.dataset.n === 2 || +x.dataset.n === 8) x.classList.add('right'); });
+    if (!ok) b.classList.add('wrong');
+    ok ? Q.addXP(20, b) : Q.loseHeart(b);
+    fb($('#bugFb'), ok, (ok ? `<b>Found it${n === 8 ? ' (line 8 is the other half of the same bug)' : ''}.</b> ` : `<b>Line ${n} is fine.</b> The bug is on lines 2 and 8. `) +
+      `Trace key 97: lo=0, hi=3 → mid=1, 40 &lt; 97 so lo=2 → mid=2, 71 &lt; 97 so lo=3 → loop ends → returns tokens[3] = <b>93</b>. But 93 is <i>behind</i> 97 (anticlockwise). With <code>hi = length − 1</code> the search can never say "past the end", so it never wraps. The fix:` +
+      `<div class="code" style="margin-top:8px"><div class="cl fix"><span class="ln">2</span><span>  let lo = 0, hi = tokens.length;</span></div><div class="cl fix"><span class="ln">8</span><span>  return tokens[lo % tokens.length];</span></div></div>Now 97 ends with lo = 4, and 4 % 4 = 0 gives tokens[0] = 12: the wrap.`);
+    maybeQuiz();
+  });
+
+  function maybeQuiz() {
+    if (st.quizShown || !st.partA || !st.bug) return;
+    st.quizShown = true;
+    setTimeout(() => Q.quiz($('#s3quiz'), {
+      q: 'Your ring has 1,000 servers with 256 virtual nodes each. About how many comparisons does one lookup take?',
+      options: ['About 18', 'About 1,000', 'About 256,000'],
+      correct: 0,
+      good: '1,000 × 256 = 256,000 tokens, and a binary search halves the range each step: log₂ 256,000 ≈ <b>18</b> comparisons. That\'s why lookup stays cheap even with lots of virtual nodes.',
+      bad: '1,000 × 256 = 256,000 tokens, but binary search halves the range each step: log₂ 256,000 ≈ <b>18</b>. Checking every token would be 256,000; checking every server makes no sense once tokens are sorted.',
+      onDone: () => setTimeout(() => Q.clearStage(3), 900),
+    }), 500);
+  }
+});
+
+/* ================= STAGE 4: who has to move? ================= */
+Q.onStage(4, () => {
+  const BASE = [{ n: 'A', pos: 10, c: 0 }, { n: 'B', pos: 35, c: 1 }, { n: 'C', pos: 60, c: 2 }, { n: 'D', pos: 85, c: 3 }];
+  const KEYS = [3, 14, 22, 30, 41, 47, 55, 63, 70, 78, 88, 95];
+  const geo = { cx: 200, cy: 200, R: 150 }, SP = 100, RK = 108;
+  const CI = { A: 0, B: 1, C: 2, D: 3, E: 4 };
+  const sortS = s => s.slice().sort((a, b) => a.pos - b.pos);
+  const ownerOf = (srv, k) => { const s = sortS(srv); return (s.find(x => x.pos >= k) || s[0]).n; };
+  const ROUNDS = [
+    { title: 'Server <b>E</b> joins at position <b>50</b> (the dashed circle).', add: [{ n: 'E', pos: 50, c: 4 }], ask: 'from', q: 'The moving keys all come <b>from</b> which server?', opts: ['A', 'B', 'C', 'D'] },
+    { title: 'Server <b>A</b> (at 10) is removed for good.', remove: 'A', ask: 'to', q: 'The moving keys all go <b>to</b> which server?', opts: ['B', 'C', 'D'] },
+    { title: 'Back to the original ring. Server <b>E</b> joins with <b>3 virtual nodes</b>, at 20, 50 and 90.', add: [{ n: 'E', pos: 20, c: 4 }, { n: 'E', pos: 50, c: 4 }, { n: 'E', pos: 90, c: 4 }], ask: 'each', q: 'Tag each key you marked with the server it comes <b>from</b>.', opts: ['A', 'B', 'C', 'D'] },
+  ];
+  const svg = $('#ring4');
+  const L = ringBase(svg, { ...geo, space: SP, ticks: [0], zero: '99 ⟲ 0' });
+  const st = { ri: 0, sel: new Set(), ans: null, tags: {}, applied: false, busy: false, quizShown: false, stats: [] };
+  let cur = BASE;
+  const kEl = new Map();
+  $('#legend4').innerHTML = ['A', 'B', 'C', 'D', 'E'].map(n => `<span><i style="background:${SC(CI[n])}"></i>${n}</span>`).join('') + '<span><i style="background:none;border:3px solid var(--xp)"></i>marked to move</span>';
+  $('#kchips').innerHTML = KEYS.map(k => `<button class="kchip" data-k="${k}" aria-pressed="false" aria-label="Key at ${k}">${k}<i></i></button>`).join('');
+  $$('#kchips .kchip').forEach(b => b.onclick = () => toggle(+b.dataset.k));
+  KEYS.forEach(k => {
+    const [x, y] = pt(geo.cx, geo.cy, RK, L.deg(k));
+    const g = S('g', { class: 'key', tabindex: 0, role: 'button', 'aria-label': `Key at ${k}`, 'aria-pressed': 'false' }, L.keys);
+    S('circle', { class: 'selr', cx: f2(x), cy: f2(y), r: 19 }, g);
+    S('circle', { class: 'res', cx: f2(x), cy: f2(y), r: 23 }, g);
+    const c = S('circle', { class: 'kdot', cx: f2(x), cy: f2(y), r: 14 }, g);
+    S('text', { class: 'ktxt', x: f2(x), y: f2(y) }, g).textContent = k;
+    onAct(g, () => toggle(k));
+    kEl.set(k, { g, c, x, y });
+  });
+  function paintKeys(srv) {
+    KEYS.forEach(k => {
+      const o = ownerOf(srv, k), col = SC(CI[o]);
+      kEl.get(k).c.style.fill = col;
+      $(`#kchips .kchip[data-k="${k}"] i`).style.background = col;
+    });
+  }
+  function drawRing(srv, ghost) {
+    [L.bands, L.srv, L.ghost, L.hi, L.fx].forEach(g => g.innerHTML = '');
+    const s = sortS(srv);
+    s.forEach((sv, i) => {
+      const prev = s[(i - 1 + s.length) % s.length];
+      const p = S('path', { class: 'band', d: arcD(geo.cx, geo.cy, geo.R, L.deg(prev.pos), L.deg(sv.pos)) }, L.bands); p.style.stroke = SC(sv.c);
+    });
+    s.forEach(sv => drawServer(L, geo, sv, { cls: ghost && ghost.leaving === sv.n ? 'leaving' : '' }));
+    (ghost && ghost.add || []).forEach(a => {
+      const [x, y] = pt(geo.cx, geo.cy, geo.R, L.deg(a.pos));
+      const g = S('g', { class: 'ghost' }, L.ghost);
+      S('circle', { cx: f2(x), cy: f2(y), r: 17 }, g);
+      S('text', { x: f2(x), y: f2(y) }, g).textContent = a.n;
+      const [lx, ly] = pt(geo.cx, geo.cy, geo.R + 32, L.deg(a.pos));
+      S('text', { x: f2(lx), y: f2(ly), style: 'font:600 11px var(--mono);fill:var(--muted)' }, g).textContent = a.pos;
+    });
+    paintKeys(srv);
+  }
+  function syncSel() {
+    KEYS.forEach(k => {
+      const on = st.sel.has(k);
+      kEl.get(k).g.classList.toggle('sel', on); kEl.get(k).g.setAttribute('aria-pressed', on);
+      const ch = $(`#kchips .kchip[data-k="${k}"]`); ch.classList.toggle('sel', on); ch.setAttribute('aria-pressed', on);
+    });
+  }
+  function toggle(k) {
+    if (st.applied || st.busy) return;
+    st.sel.has(k) ? (st.sel.delete(k), delete st.tags[k]) : st.sel.add(k);
+    syncSel(); renderQ();
+  }
+  function clearMarks() {
+    KEYS.forEach(k => { kEl.get(k).g.classList.remove('ok', 'fp', 'miss'); $(`#kchips .kchip[data-k="${k}"]`).classList.remove('ok', 'fp', 'miss'); });
+  }
+  function roundData(r) {
+    const after = r.add ? BASE.concat(r.add) : BASE.filter(s => s.n !== r.remove);
+    const moved = KEYS.filter(k => ownerOf(BASE, k) !== ownerOf(after, k));
+    const from = {}, to = {}; moved.forEach(k => { from[k] = ownerOf(BASE, k); to[k] = ownerOf(after, k); });
+    return { after, moved, from, to };
+  }
+  function showRound() {
+    const r = ROUNDS[st.ri];
+    st.sel = new Set(); st.ans = null; st.tags = {}; st.applied = false; st.busy = false;
+    cur = BASE;
+    clearMarks(); syncSel();
+    drawRing(BASE, { add: r.add, leaving: r.remove });
+    L.cBig.textContent = '12 keys'; L.cSmall.textContent = r.add ? 'E is joining' : 'A is leaving';
+    KEYS.forEach(k => $(`#kchips .kchip[data-k="${k}"]`).disabled = false);
+    $('#round4').innerHTML = `<div class="step">Round ${st.ri + 1} of ${ROUNDS.length}</div><p class="task4">${r.title} <b>Mark every key that will change server.</b></p><div class="q4" id="q4"></div><div class="row" style="margin-top:12px"><button class="btn primary" id="apply4" disabled>Apply</button><span class="small muted" id="selCount">0 keys marked</span></div><div class="explain" id="ex4"></div><div class="row" id="row4" style="margin-top:12px"></div>`;
+    $('#apply4').onclick = apply;
+    renderQ();
+  }
+  function renderQ() {
+    const r = ROUNDS[st.ri], q = $('#q4'); if (!q || st.applied) return;
+    $('#selCount').textContent = `${st.sel.size} key${st.sel.size === 1 ? '' : 's'} marked`;
+    if (r.ask !== 'each') {
+      if (!q.dataset.built) {
+        q.dataset.built = '1';
+        q.innerHTML = `<div>${r.q}</div><div class="seg4">${r.opts.map(o => `<button data-o="${o}" aria-pressed="false">${o}</button>`).join('')}</div>`;
+        $$('.seg4 button', q).forEach(b => b.onclick = () => { if (st.applied) return; st.ans = b.dataset.o; $$('.seg4 button', q).forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); }); readyCheck(); });
+      }
+    } else {
+      const ks = [...st.sel].sort((a, b) => a - b);
+      q.innerHTML = `<div>${r.q}</div>` + (ks.length ? ks.map(k => `<div class="tagrow"><b>key ${k}</b><div class="seg4">${r.opts.map(o => `<button data-k="${k}" data-o="${o}" class="${st.tags[k] === o ? 'on' : ''}" aria-pressed="${st.tags[k] === o}" aria-label="key ${k} comes from ${o}">${o}</button>`).join('')}</div></div>`).join('') : '<p class="small muted">Mark some keys first.</p>');
+      $$('.seg4 button', q).forEach(b => b.onclick = () => { if (st.applied) return; st.tags[+b.dataset.k] = b.dataset.o; renderQ(); });
+    }
+    readyCheck();
+  }
+  function readyCheck() {
+    const r = ROUNDS[st.ri], ap = $('#apply4'); if (!ap) return;
+    const ok = st.sel.size > 0 && (r.ask === 'each' ? [...st.sel].every(k => st.tags[k]) : !!st.ans);
+    ap.disabled = !ok || st.applied;
+  }
+  async function apply() {
+    if (st.applied) return;
+    st.applied = true; st.busy = true;
+    const r = ROUNDS[st.ri], d = roundData(r), ap = $('#apply4');
+    ap.disabled = true;
+    KEYS.forEach(k => $(`#kchips .kchip[data-k="${k}"]`).disabled = true);
+    $$('#q4 button').forEach(b => b.disabled = true);
+    const mv = new Set(d.moved);
+    const hits = [...st.sel].filter(k => mv.has(k)), fps = [...st.sel].filter(k => !mv.has(k)), misses = d.moved.filter(k => !st.sel.has(k));
+    let srvOk;
+    if (r.ask === 'from') srvOk = st.ans === d.from[d.moved[0]];
+    else if (r.ask === 'to') srvOk = st.ans === d.to[d.moved[0]];
+    else srvOk = hits.length > 0 && hits.every(k => st.tags[k] === d.from[k]);
+    // mark the server answer
+    if (r.ask !== 'each') {
+      const right = r.ask === 'from' ? d.from[d.moved[0]] : d.to[d.moved[0]];
+      $$('#q4 .seg4 button').forEach(b => { if (b.dataset.o === right) b.classList.add('right'); else if (b.dataset.o === st.ans) b.classList.add('wrong'); });
+    } else {
+      $$('#q4 .seg4 button').forEach(b => { const k = +b.dataset.k; if (b.dataset.o === st.tags[k]) b.classList.add(mv.has(k) && d.from[k] === b.dataset.o ? 'right' : 'wrong'); });
+    }
+    // sweep: from each changed position anticlockwise back to the previous server
+    const changed = r.add ? r.add.map(a => a.pos) : [BASE.find(s => s.n === r.remove).pos];
+    const ringFor = r.add ? sortS(d.after) : sortS(BASE);
+    L.ghost.innerHTML = '';
+    for (const p of changed) {
+      const i = ringFor.findIndex(s => s.pos === p), prev = ringFor[(i - 1 + ringFor.length) % ringFor.length].pos;
+      const sw = ((p - prev) % SP + SP) % SP;
+      const path = S('path', { class: 'sweep' }, L.hi);
+      await anim(900, q => { const e = Math.max(.02, ease(q)); path.setAttribute('d', arcD(geo.cx, geo.cy, geo.R, L.deg(p - sw * e), L.deg(p))); });
+      await wait(250);
+    }
+    // apply the change
+    cur = d.after;
+    const sweeps = [...L.hi.children];
+    drawRing(cur);
+    sweeps.forEach(s => L.hi.appendChild(s));
+    $$('.srv', L.srv).forEach(g => { if (r.add && g.textContent.startsWith('E')) g.classList.add('pop'); });
+    d.moved.forEach(k => { const o = kEl.get(k); const h = S('circle', { class: 'halo', cx: f2(o.x), cy: f2(o.y), r: 14 }, L.fx); setTimeout(() => h.remove(), 1400); });
+    hits.forEach(k => { kEl.get(k).g.classList.add('ok'); $(`#kchips .kchip[data-k="${k}"]`).classList.add('ok'); });
+    fps.forEach(k => { kEl.get(k).g.classList.add('fp'); $(`#kchips .kchip[data-k="${k}"]`).classList.add('fp'); });
+    misses.forEach(k => { kEl.get(k).g.classList.add('miss'); $(`#kchips .kchip[data-k="${k}"]`).classList.add('miss'); });
+    const srcs = [...new Set(d.moved.map(k => d.from[k]))];
+    L.cBig.textContent = `${d.moved.length}/12`; L.cSmall.textContent = 'keys moved';
+    const perfect = !fps.length && !misses.length && srvOk;
+    if (hits.length) Q.addXP(hits.length * 5, ap);
+    if (srvOk) setTimeout(() => Q.addXP(10, $('#q4')), 350);
+    if (!perfect) Q.loseHeart($('#q4'));
+    st.stats[st.ri] = { moved: d.moved.length, srcs: srcs.length };
+    const WHY = [
+      'Start at E (50) and go anticlockwise until you hit the previous server, B at 35. Keys in that arc, <b>41 and 47</b>, now belong to E. Before, they walked on to C, so <b>C</b> hands them over. A, B and D are untouched: 2 of 12 keys moved. With <code>% N</code> going 4 → 5, about 80% would have.',
+      'Start at A (10) and go anticlockwise to the previous server, D at 85, wrapping past 0. Keys in that arc, <b>88, 95 and 3</b>, keep walking clockwise past where A was and land on <b>B</b>. Only A\'s own 3 keys move: a quarter of the keys, just as 1/N predicts.',
+      'Same rule, run once per virtual node. E@20 sweeps back to A@10 and takes <b>14 from B</b>. E@50 sweeps back to B@35 and takes <b>41 and 47 from C</b>. E@90 sweeps back to D@85 and takes <b>88 from A</b>.',
+    ];
+    const verdict = perfect ? '<b>Spot on.</b> ' : `<b>${[fps.length ? `${fps.length} key${fps.length > 1 ? 's' : ''} marked that stay put (dashed red)` : '', misses.length ? `${misses.length} moving key${misses.length > 1 ? 's' : ''} missed (dashed red)` : '', !srvOk ? 'server answer off' : ''].filter(Boolean).join(' · ')}.</b> `;
+    const ex = $('#ex4'); ex.className = 'explain show ' + (perfect ? 'good' : 'bad'); ex.innerHTML = verdict + WHY[st.ri];
+    await wait(600);
+    st.busy = false;
+    const row = $('#row4');
+    btn(row, st.ri < ROUNDS.length - 1 ? 'Next round →' : 'See the tally →', () => {
+      st.ri++;
+      if (st.ri < ROUNDS.length) return showRound();
+      finishRounds();
+    });
+  }
+  function finishRounds() {
+    const s = st.stats;
+    $('#round4').innerHTML = `<div class="step">Tally</div><p class="task4">One position per server vs virtual nodes, for a server joining:</p>
+      <div class="tally"><div><b>${s[0].moved} of 12</b>keys moved in round 1, all from <b>one</b> server (C)</div><div><b>${s[2].moved} of 12</b>keys moved in round 3, pulled from <b>${s[2].srcs}</b> different servers</div><div><b>0</b>keys moved between two servers that didn't change</div></div>
+      <p class="small" style="margin-top:12px">With virtual nodes, the copy work is spread out: no single neighbour has to stream everything, and a leaving server hands small arcs to several servers instead of dumping its whole load on one. (Round 3 moved more keys only because E has three positions; with even arcs it would take about 1/5.)</p>
+      <div class="row"><button class="btn" id="again4">↻ Replay the 3 rounds</button></div>`;
+    $('#again4').onclick = () => { st.ri = 0; showRound(); };
+    drawRing(BASE); clearMarks(); st.sel.clear(); syncSel();
+    L.cBig.textContent = '12 keys'; L.cSmall.textContent = 'original ring';
+    KEYS.forEach(k => $(`#kchips .kchip[data-k="${k}"]`).disabled = true);
+    if (!st.quizShown) {
+      st.quizShown = true;
+      setTimeout(() => Q.quiz($('#s4quiz'), {
+        q: 'Server X is removed from a basic ring (one position per server). Which keys move?',
+        options: ['Keys between X and its anticlockwise neighbour; they go to X\'s clockwise neighbour', 'Keys between X and its clockwise neighbour; they go to X\'s anticlockwise neighbour', 'Every key on the ring is re-hashed and lands on a new random server'],
+        correct: 0,
+        good: 'X owned the arc from the server before it (anticlockwise) up to X. Those keys keep walking clockwise and land on the next server after X. Nothing else changes.',
+        bad: 'Go anticlockwise from X to the previous server: that\'s X\'s arc. Those keys keep walking clockwise past X and land on X\'s <b>clockwise</b> neighbour. Nothing else changes.',
+        onDone: () => setTimeout(() => Q.clearStage(4), 900),
+      }), 500);
+    }
+  }
+  showRound();
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss'), {
+  name: '🚚 Migration Planner',
+  xp: 15,
+  choices: [
+    { k: 'one', label: 'One neighbour', sub: 'a single server hands over or takes over one arc' },
+    { k: 'few', label: 'A few servers, a little each', sub: 'several small arcs change hands' },
+    { k: 'all', label: 'Nearly every key moves', sub: 'the mapping is scrambled' },
+  ],
+  scenarios: [
+    { e: '➕', t: 'A server joins a basic ring', d: 'One position per server. A new server is added.', a: 'one', why: 'It takes the arc between itself and the server anticlockwise of it, and only its clockwise neighbour gives that arc up. One source, one arc.' },
+    { e: '🧩', t: 'A server joins a virtual-node ring', d: 'Every server has 128 positions on the ring. A new server (also with 128) is added.', a: 'few', why: 'The rule runs once per virtual node: the new server takes a small arc next to each of its 128 positions, from many different servers. Lots of small transfers in parallel.' },
+    { e: '🧮', t: 'A 13th cache box', d: 'Cache clients pick a box with hash(key) % 12. Ops adds a 13th box.', a: 'all', why: 'N changed, so 12/13 ≈ <b>92%</b> of keys get a new index. That\'s the rehashing problem, and a wave of misses hits the database.' },
+    { e: '🔧', t: 'Maintenance on a basic ring', d: 'One position per server. A server is taken out for maintenance.', a: 'one', why: 'Its whole arc goes to its clockwise neighbour, and nothing else moves. (That neighbour\'s load jumps, which is one of the cracks in Quest 5.2.)' },
+    { e: '💥', t: 'A crash on a virtual-node ring', d: 'Each server has many virtual nodes. One server crashes.', a: 'few', why: 'Its many small slices each pass to whichever server is clockwise of that slice, so its load scatters across many survivors.' },
+    { e: '⚙️', t: 'Swap the hash function', d: 'To save CPU, you switch the ring\'s hash from SHA-1 to Murmur3. Same servers, same keys.', a: 'all', why: 'Every key and every server gets a brand-new position, so ownership is reshuffled almost everywhere. Plan it like a full data migration, not a config tweak.' },
+    { e: '🔁', t: 'A reboot with a new IP', d: 'Servers are placed by hashing their IP address. On a basic ring, one server reboots and comes back with a new IP.', a: 'few', why: 'It\'s a remove plus an add: its old arc goes to one neighbour, and at its new spot it takes an arc from another. Two arcs, two servers. That\'s why you hash a <b>stable server ID</b>, not something that changes.' },
+  ],
+  outro: 'Count the arcs that change. One position = one neighbour. Many virtual nodes = a little from many. A new N or a new hash function = everything.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: interview drill ================= */
+Q.onStage(6, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"We have 20 cache servers on hash % N and want to add 5 more for the holiday peak. What happens, and how would you do it instead?"</i>',
+  placeholder: 'With hash % N, going from 20 to 21 servers moves about…',
+  model: '"With hash mod N, going from 20 to 21 servers changes the server for about 20 out of every 21 keys, roughly 95%. Almost the whole cache misses at once and the database takes the hit. Instead I\'d put servers and keys on a hash ring. To find a key\'s server, I binary-search a sorted list of server positions for the first one at or after the key\'s hash, wrapping to the first if there isn\'t one. When a server joins, only the keys between it and the server anticlockwise of it move, and they come from its clockwise neighbour, so each new server takes roughly 1/(N+1) of the keys. With virtual nodes, that work is split into small arcs pulled from many servers. I\'d add the five servers one at a time and watch the miss rate between steps."',
+  checks: ['I put a number on the % N damage (about N/(N+1), so ~95% here)', 'I described lookup as the first position ≥ the hash, with a wrap at the top', 'I said exactly which keys move on a join and where they come from'],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

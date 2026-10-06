@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Forget Me, Find Me Anywhere</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: s1/s2 web-tier sim, s2 autoscaling chart, s3 GeoDNS map, s4 incident replays */
+:root { --uA: #5a48f0; --uB: #0d9a96; --uC: #c2410c; --west: #2f7fd8; --east: #b8409a; --on-u: #ffffff; --land: #e6e1d4; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --uA: #8f82ff; --uB: #31d3c8; --uC: #ffb547; --west: #5aa9ff; --east: #f07ad0; --on-u: #0e0f1d; --land: #23264a; }
+}
+:root[data-theme="dark"] { --uA: #8f82ff; --uB: #31d3c8; --uC: #ffb547; --west: #5aa9ff; --east: #f07ad0; --on-u: #0e0f1d; --land: #23264a; }
+
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.sim-bar .btn { padding: 8px 12px; font-size: 14px; min-height: 40px; }
+.seg button { min-height: 40px; }
+.seg button.on { background: var(--accent); color: #fff; }
+.ctlrow { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.ctlrow .lbl { font-size: 13px; font-weight: 700; color: var(--muted); }
+
+/* web tier sim (stages 1–2) */
+.web svg { max-width: 520px; margin: 0 auto; }
+.web .wire { stroke: var(--line); stroke-width: 2; }
+.web .wire.st { stroke-dasharray: 4 5; stroke: var(--muted); opacity: .6; }
+.web .wire.hot { stroke: var(--teal); opacity: 1; stroke-width: 3; }
+.web .usr circle { stroke: var(--bg); stroke-width: 3; }
+.web .usr text, .web .chip text { fill: var(--on-u); font: 700 13px var(--font); text-anchor: middle; dominant-baseline: central; }
+.web .box rect { fill: var(--panel); stroke: var(--line); stroke-width: 2; transition: stroke .25s, fill .25s; }
+.web .box text.t { fill: var(--ink); font: 700 13px var(--font); text-anchor: middle; }
+.web .box text.s { fill: var(--muted); font: 600 11px var(--font); text-anchor: middle; }
+.web .box.ok rect { stroke: var(--good); fill: var(--good-soft); }
+.web .box.no rect { stroke: var(--bad); fill: var(--bad-soft); }
+.web .box.dead rect { stroke: var(--bad); stroke-dasharray: 5 4; fill: var(--bg-2); }
+.web .box.dead text { opacity: .5; }
+.web .box.fresh rect { stroke: var(--accent); }
+.web .xmark { stroke: var(--bad); stroke-width: 4; stroke-linecap: round; }
+.web .bar-bg { fill: var(--bg-2); stroke: var(--line); }
+.web .bar { fill: var(--good); transition: width .4s, fill .3s; }
+.web .bar.warm { fill: var(--warn); }
+.web .bar.hot { fill: var(--bad); }
+.web .pkt { stroke: var(--bg); stroke-width: 2; }
+.web .badge circle { stroke: var(--bg); stroke-width: 2; }
+.web .badge text { fill: #fff; font: 700 13px var(--font); text-anchor: middle; dominant-baseline: central; }
+.sendrow .btn { min-width: 92px; }
+.sendrow .dotu { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+.stress { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+@media (max-width: 560px) { .stress { grid-template-columns: 1fr; } }
+.stress .btn { min-height: 44px; text-align: center; }
+.stress .btn.done { border-color: var(--good); background: var(--good-soft); }
+
+/* autoscaling chart (stage 2) */
+.asc svg { max-width: 640px; margin: 0 auto; }
+.asc .grid line { stroke: var(--line); }
+.asc .grid text { fill: var(--muted); font: 600 11px var(--mono); }
+.asc .need { fill: color-mix(in srgb, var(--teal) 22%, transparent); stroke: var(--teal); stroke-width: 2; }
+.asc .srv { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linejoin: round; }
+.asc .over { fill: var(--bad); }
+.asc .flap { fill: var(--warn); }
+.asc .clock { fill: var(--ink); font: 700 12px var(--mono); }
+.knobs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; padding: 12px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+@media (max-width: 560px) { .knobs { grid-template-columns: 1fr; } }
+.knob label { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; font-weight: 600; }
+.knob label b { font-family: var(--mono); }
+.knob input { width: 100%; accent-color: var(--accent); height: 30px; }
+.ascstats { display: flex; gap: 8px; flex-wrap: wrap; }
+.stat { font: 600 13px var(--mono); padding: 5px 9px; border-radius: 8px; background: var(--bg-2); border: 1px solid var(--line); }
+.stat.good { background: var(--good-soft); border-color: transparent; color: var(--good); }
+.stat.bad { background: var(--bad-soft); border-color: transparent; color: var(--bad); }
+.verdict { padding: 10px 14px; border-top: 1px solid var(--line); font-size: 14px; background: var(--panel); min-height: 44px; }
+.verdict.good { background: var(--good-soft); }
+.verdict.bad { background: var(--bad-soft); }
+.legend2 { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--muted); padding: 8px 14px 0; }
+.legend2 i { display: inline-block; width: 14px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+/* GeoDNS map (stage 3) */
+.geo svg { max-width: 620px; margin: 0 auto; }
+.geo .land { fill: var(--land); stroke: var(--line); stroke-width: 2; stroke-linejoin: round; }
+.geo .sea { fill: var(--muted); font: italic 600 11px var(--font); opacity: .8; }
+.geo .route { stroke-width: 2; opacity: .55; transition: opacity .3s; }
+.geo .route.blip { stroke: var(--bad) !important; stroke-dasharray: 3 4; opacity: .9; }
+.geo .city { cursor: pointer; }
+.geo .city:focus { outline: none; }
+.geo .city .hit { fill: transparent; }
+.geo .city .dot { stroke: var(--bg); stroke-width: 1.5; transition: r .4s; }
+.geo .city:hover .dot, .geo .city:focus .dot, .geo .city.sel .dot { stroke: var(--ink); stroke-width: 2.5; }
+.geo .dc rect { stroke: var(--bg); stroke-width: 3; }
+.geo .dc text { fill: #fff; font: 700 12px var(--font); text-anchor: middle; dominant-baseline: central; }
+.geo .dc .lbl { fill: var(--ink); font: 700 13px var(--font); paint-order: stroke; stroke: var(--land); stroke-width: 4px; stroke-linejoin: round; }
+.geo .dc.down rect { fill: var(--bad) !important; opacity: .5; }
+.geo .dcx { stroke: var(--bad); stroke-width: 5; stroke-linecap: round; }
+.dnsnote { font-family: var(--mono); font-size: 12.5px; color: var(--muted); padding: 8px 14px; min-height: 40px; border-top: 1px solid var(--line); background: var(--panel); word-break: break-word; }
+.dcs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+@media (max-width: 560px) { .dcs { grid-template-columns: 1fr; } }
+.dccard { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--bg); font-size: 13.5px; }
+.dccard h4 { margin: 0 0 4px; font-size: 14px; display: flex; justify-content: space-between; gap: 6px; }
+.dccard .stack { color: var(--muted); font-size: 12.5px; }
+.dccard.down { opacity: .55; }
+.lbar { position: relative; height: 16px; border-radius: 6px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; margin-top: 6px; }
+.lbar .f { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--good); transition: width .6s cubic-bezier(.2,.8,.2,1), background .3s; }
+.lbar .f.hot { background: var(--bad); }
+.lnum { font-family: var(--mono); font-size: 12px; margin-top: 4px; }
+.lnum.hot { color: var(--bad); font-weight: 700; }
+.clockrow { padding: 10px 14px 0; display: grid; gap: 2px; }
+.clockrow label { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; font-size: 14px; flex-wrap: wrap; }
+.clockrow input { width: 100%; accent-color: var(--accent); height: 30px; }
+.split { font-family: var(--mono); font-weight: 700; }
+.split .e { color: var(--east); }
+.split .w { color: var(--west); }
+
+/* incident replays (stage 4) */
+.inc svg { max-width: 560px; margin: 0 auto; }
+.inc .dcb rect { fill: var(--panel); stroke-width: 3; }
+.inc .dcb.down rect { fill: var(--bad-soft); stroke: var(--bad) !important; stroke-dasharray: 6 4; }
+.inc .dcb text { fill: var(--ink); font: 600 13px var(--font); text-anchor: middle; }
+.inc .dcb text.h { font: 700 15px var(--font); }
+.inc .dcb text.v { font: 600 13px var(--mono); fill: var(--muted); }
+.inc .dcb text.d { font: 700 13px var(--mono); }
+.inc .link { stroke-width: 3; }
+.inc .link.off { stroke: var(--line); stroke-dasharray: 2 6; }
+.inc .link.on { stroke: var(--teal); stroke-dasharray: 8 5; }
+.inc .linkt { fill: var(--muted); font: 600 11px var(--font); text-anchor: middle; }
+.inc .who circle { fill: var(--accent); stroke: var(--bg); stroke-width: 3; }
+.inc .who text { fill: var(--ink); font: 700 13px var(--font); }
+.inc .path { stroke: var(--accent); stroke-width: 3; fill: none; }
+.inc .say { font: 700 14px var(--font); text-anchor: middle; paint-order: stroke; stroke: var(--bg); stroke-width: 5px; stroke-linejoin: round; }
+.inc .say.bad { fill: var(--bad); }
+.inc .say.good { fill: var(--good); }
+.inc .say.meh { fill: var(--warn); }
+.cls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+@media (max-width: 560px) { .cls { grid-template-columns: 1fr; } }
+.cls .opt { text-align: center; }
+.inctabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.inctabs .tab { font-size: 13px; font-weight: 700; padding: 6px 10px; border-radius: 99px; background: var(--bg-2); color: var(--muted); }
+.inctabs .tab.on { background: var(--accent-soft); color: var(--accent); }
+.inctabs .tab.done { background: var(--good-soft); color: var(--good); }
+.laglab { margin-top: 18px; border: 1px solid var(--line); border-radius: 16px; padding: 14px; background: var(--bg); }
+.laglab input[type=range] { width: 100%; accent-color: var(--teal); height: 30px; }
+.orders { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.orders .col { border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; background: var(--panel); }
+.orders .col h5 { margin: 0 0 6px; font-size: 13px; }
+.orders .o { font: 600 12px var(--mono); padding: 2px 0; }
+.orders .o.miss { color: var(--bad); text-decoration: line-through; }
+.lagbar { height: 10px; border-radius: 99px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; margin-top: 4px; }
+.lagbar div { height: 100%; background: linear-gradient(90deg, var(--teal), var(--warn)); width: 0; transition: width .3s; }
+.retry { margin-top: 12px; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 1.4 · Scale From Zero to Millions of Users</div>
+    <h1>Forget Me, Find Me Anywhere</h1>
+    <p class="lede">Your web servers remember who each user is, and that memory is holding you back. Teach them to forget, let the fleet grow and shrink on its own, then open a second data center on the other coast.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can explain why stateful servers fight horizontal scaling, why sticky sessions are a workaround, how moving sessions to a shared store enables autoscaling, and how GeoDNS, failover and data sync work across data centers.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>The sticky problem</h2><div class="sub">Stateful servers</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>In <a href="0101-scale-one-box-to-load-balancer.html">Quest 1.1</a> you put a <b>load balancer</b> in front of several web servers so traffic could be shared out. There's a catch the book raises next: what the servers <i>remember</i>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">[1]</a></p>
+      <p><b>State</b> is data about a client that has to survive from one request to the next, like "this browser is logged in as User A". A <b>stateful</b> server keeps that data in its own memory. A <b>stateless</b> server keeps none.</p>
+      <p>Below, each user's <b>session</b> (their login record) lives on one server. The load balancer uses <b>round-robin</b>: it hands requests to Server 1, 2, 3, 1, 2, 3… in turn, without caring who sent them. Send a few requests.</p>
+
+      <div class="sim web">
+        <svg id="web1" role="img" aria-label="Three users, a load balancer and three web servers, each holding one user's session"></svg>
+        <div class="sim-bar">
+          <span class="ctlrow sendrow"><button class="btn" data-u="A"><span class="dotu" style="background:var(--uA)"></span>Send A</button><button class="btn" data-u="B"><span class="dotu" style="background:var(--uB)"></span>Send B</button><button class="btn" data-u="C"><span class="dotu" style="background:var(--uC)"></span>Send C</button></span>
+        </div>
+        <div class="sim-bar">
+          <span class="ctlrow"><span class="lbl">Load balancer:</span><span class="seg" id="m1"><button data-m="rr" class="on">Round-robin</button><button data-m="sticky">Sticky sessions</button></span></span>
+          <button class="btn" id="r1">↻ Reset</button>
+        </div>
+        <div class="simlog" id="log1"><div>Sessions: A on Server 1, B on Server 2, C on Server 3.</div></div>
+      </div>
+      <ul class="checklist" id="g1">
+        <li data-g="miss"><span class="box">✓</span><span>Send requests until one lands on a server that doesn't know the user</span></li>
+        <li data-g="sticky"><span class="box">✓</span><span>Switch the load balancer to <b>sticky sessions</b> and send again</span></li>
+      </ul>
+      <div class="callout" id="stickyNote" style="display:none"><b>Sticky sessions</b> (also called <i>session affinity</i>) means the load balancer always sends a given user to the same server, usually by setting a cookie on the first response.<a class="cite" href="https://docs.aws.amazon.com/elasticloadbalancing/latest/classic/elb-sticky-sessions.html" target="_blank" rel="noopener">[2]</a> Most load balancers can do it. The book's verdict: it works, but it adds overhead, it makes adding or removing servers harder, and it makes server failures hard to handle. Test those three claims below.</div>
+
+      <div class="challenge boxed" id="p1"></div>
+      <div id="q1"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Move the memory out</h2><div class="sub">Stateless web tier + autoscaling</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book's fix: take the state <b>out</b> of the web servers and put it in a <b>shared data store</b> that every server can reach. That store could be a relational database, Memcached or Redis (in-memory key-value caches), or a NoSQL database. The book picks NoSQL because it's easy to scale.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">[1]</a></p>
+      <p>Now any server can handle any request: it just looks the session up in the store. The book calls the result simpler, more robust and more scalable. Flip the switch, then rerun the three stress tests.</p>
+
+      <div class="sim web">
+        <svg id="web2" role="img" aria-label="Web tier with an optional shared session store"></svg>
+        <div class="sim-bar">
+          <span class="ctlrow sendrow"><button class="btn" data-u="A"><span class="dotu" style="background:var(--uA)"></span>Send A</button><button class="btn" data-u="B"><span class="dotu" style="background:var(--uB)"></span>Send B</button><button class="btn" data-u="C"><span class="dotu" style="background:var(--uC)"></span>Send C</button></span>
+        </div>
+        <div class="sim-bar">
+          <span class="ctlrow"><span class="lbl">Sessions live in:</span><span class="seg" id="m2"><button data-m="sticky" class="on">Each server (sticky)</button><button data-m="store">Shared store</button></span></span>
+        </div>
+        <div class="simlog" id="log2"><div>Stateful setup: sessions live in each server's memory, and the load balancer is sticky.</div></div>
+      </div>
+      <div class="stress">
+        <button class="btn" id="x2kill">💀 Kill Server 1</button>
+        <button class="btn" id="x2add">➕ Add Server 4</button>
+        <button class="btn" id="x2busy">🔥 User B gets busy</button>
+      </div>
+      <ul class="checklist" id="g2">
+        <li data-g="store"><span class="box">✓</span><span>Move sessions into the <b>shared store</b></span></li>
+        <li data-g="kill"><span class="box">✓</span><span>Kill a server: does anyone get logged out now?</span></li>
+        <li data-g="add"><span class="box">✓</span><span>Add Server 4: does it get traffic right away?</span></li>
+        <li data-g="busy"><span class="box">✓</span><span>Make B busy: where does the load go?</span></li>
+        <li data-g="day"><span class="box">✓</span><span>Autoscale through a whole day (below) with no overload, within budget</span></li>
+      </ul>
+
+      <h3 style="margin:24px 0 6px">Now let the fleet size itself</h3>
+      <p>Once servers hold no state, you can add or remove them at any moment. <b>Autoscaling</b> means doing exactly that, automatically, based on traffic. You set the rules. The demo runs one day in fast-forward: a quiet night, a morning peak and an evening spike. Each server handles 100 requests per second, and a new one takes about 10 minutes to boot.</p>
+      <div class="sim asc">
+        <div class="legend2"><span><i style="background:color-mix(in srgb, var(--teal) 40%, transparent);border:1px solid var(--teal)"></i>servers the traffic needs</span><span><i style="background:var(--accent)"></i>servers running</span><span><i style="background:var(--bad)"></i>overloaded</span><span><i style="background:var(--warn);border-radius:50%;width:10px"></i>flap (add then remove, or back)</span></div>
+        <svg id="ascSvg" viewBox="0 0 400 214" role="img" aria-label="Chart of traffic and running servers over 24 hours"></svg>
+        <div class="knobs">
+          <div class="knob"><label for="kUp"><span>Add a server when average CPU is above</span><b id="vUp">95%</b></label><input type="range" id="kUp" min="50" max="95" step="5" value="95"></div>
+          <div class="knob"><label for="kDown"><span>Remove one when it drops below</span><b id="vDown">85%</b></label><input type="range" id="kDown" min="10" max="90" step="5" value="85"></div>
+          <div class="knob"><label for="kMin"><span>Minimum servers</span><b id="vMin">2</b></label><input type="range" id="kMin" min="1" max="6" step="1" value="2"></div>
+          <div class="knob"><label for="kMax"><span>Maximum servers</span><b id="vMax">6</b></label><input type="range" id="kMax" min="4" max="16" step="1" value="6"></div>
+        </div>
+        <div class="sim-bar"><button class="btn primary" id="ascRun">▶ Run the day</button><span class="ascstats" id="ascStats"><span class="stat">🔥 overloaded: —</span><span class="stat">💸 server-hours: — / 190</span><span class="stat">🔁 flaps: —</span></span></div>
+        <div class="verdict" id="ascVerdict">Goal: <b>0 overloaded minutes</b>, at most <b>190 server-hours</b> (running 14 servers all day would cost 336), and at most <b>2 flaps</b>. The starting rules are bad on purpose.</div>
+      </div>
+      <div class="callout warn" id="flapNote" style="display:none"><b>That's thrashing.</b> When the add and remove lines sit close together, adding one server drops average CPU below the remove line, so a server is removed, CPU jumps back up, and the cycle repeats. Real autoscalers prevent this with a gap between the thresholds and a <b>cooldown</b>: after a change, wait a few minutes before making the opposite one.</div>
+      <div id="q2"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Two continents</h2><div class="sub">Data centers and GeoDNS</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Your app goes national, then international. One <b>data center</b> (DC: a building full of your servers) is far from many users and is a single point of failure. So the book adds a second one. Each DC gets its own load balancer, web servers, cache and database.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">[1]</a></p>
+      <p>How does a user's phone know which DC to talk to? <b>DNS</b> turns a name like <code>app.example.com</code> into an IP address. <b>GeoDNS</b> is a DNS service that gives a <i>different</i> answer depending on where the user is. Each user gets the address of the closest DC. The book calls this being <b>geo-routed</b>, and it writes the traffic split as x% to US-East and (100 − x)% to US-West.</p>
+      <p>Tap a city to see its DNS answer. Drag the clock: people wake up and go to bed at different times on each coast, so x moves all day.</p>
+
+      <div class="sim geo">
+        <div class="clockrow"><label for="clk"><span>Time on the East Coast: <b id="clkV" class="mono">12:00</b></span><span class="split" id="splitV"></span></label><input type="range" id="clk" min="0" max="23" step="1" value="12" aria-label="Time of day on the East Coast"></div>
+        <svg id="map" viewBox="0 0 400 250" role="img" aria-label="Map of the United States with two data centers and user cities"></svg>
+        <div class="dnsnote" id="dns">Tap a city dot. Dot size = how many users are active there right now.</div>
+        <div class="dcs">
+          <div class="dccard" id="dcW"><h4><span style="color:var(--west)">■ US-West</span><span class="mono small" id="dcWs">healthy</span></h4><div class="stack">LB · web × <span id="dcWn">4</span> · cache · DB</div><div class="lbar"><div class="f" id="dcWf"></div></div><div class="lnum" id="dcWl"></div></div>
+          <div class="dccard" id="dcE"><h4><span style="color:var(--east)">■ US-East</span><span class="mono small" id="dcEs">healthy</span></h4><div class="stack">LB · web × <span id="dcEn">6</span> · cache · DB</div><div class="lbar"><div class="f" id="dcEf"></div></div><div class="lnum" id="dcEl"></div></div>
+        </div>
+        <div class="sim-bar"><button class="btn" id="capBtn" disabled>＋ Add a web server to US-East</button><button class="btn" id="restore" disabled>🔧 Bring US-West back</button></div>
+      </div>
+      <ul class="checklist" id="g3">
+        <li data-g="tap"><span class="box">✓</span><span>Tap a city to see what GeoDNS answers</span></li>
+        <li data-g="clock"><span class="box">✓</span><span>Drag the clock and watch the split change</span></li>
+        <li data-g="out"><span class="box">✓</span><span>Call the outage below, then watch it happen</span></li>
+        <li data-g="cap"><span class="box">✓</span><span>Make sure US-East can carry everyone</span></li>
+      </ul>
+      <div class="challenge boxed" id="p3"></div>
+      <div class="callout warn" id="ttlNote" style="display:none"><b>Honest caveat: DNS failover isn't instant.</b> Phones and internet providers cache DNS answers for a set time (the record's TTL, "time to live"). Until that runs out, some users keep trying the dead DC. Teams keep the TTL short (seconds to a minute), or use <i>anycast</i> addresses and global load balancers, which can reroute faster.</div>
+      <div id="q3"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>The hard parts</h2><div class="sub">Redirection, data sync, test and deploy</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Two DCs sound great until something goes wrong. The book names three problems you have to solve:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">[1]</a></p>
+      <ul>
+        <li><b>Traffic redirection</b>: you need a reliable way to send each user to the right DC. GeoDNS does this by sending users to the nearest one.</li>
+        <li><b>Data synchronization</b>: each region may use its own local database and cache. After a failover, users can land in a DC that doesn't have their data. The usual fix is to <b>replicate</b> (copy) data across DCs. The book points to Netflix, which copies data between regions <i>asynchronously</i>, meaning in the background a moment after each write.<a class="cite" href="https://netflixtechblog.com/active-active-for-multi-regional-resiliency-c47719f6685b" target="_blank" rel="noopener">[3]</a></li>
+        <li><b>Test and deployment</b>: test the app from several locations, and use automated deployment tools so every DC runs the same version.</li>
+      </ul>
+      <p>Three incidents follow. Play each one, name the problem, then pick the fix.</p>
+      <div class="inctabs" id="itabs"></div>
+      <div class="sim inc">
+        <svg id="incSvg" viewBox="0 0 400 200" role="img" aria-label="Two data centers during an incident replay"></svg>
+        <div class="simlog" id="log4"><div>Press ▶ to replay the incident.</div></div>
+      </div>
+      <div class="challenge" id="incBox"></div>
+
+      <div class="laglab" id="lagLab">
+        <b>⏱️ Bonus lab: replication lag</b>
+        <p class="small" style="margin:6px 0">Asynchronous replication is never perfectly up to date. The gap between a write landing in US-East and its copy reaching US-West is the <b>replication lag</b>. You met the same thing between a master and its replicas in <a href="0102-scale-database-replication.html">Quest 1.2</a>. Set the lag, then fail over. One order arrives every half second.</p>
+        <label for="lag" class="small" style="display:flex;justify-content:space-between;font-weight:600"><span>Lag on the East → West link</span><b class="mono" id="lagV">2.0 s</b></label>
+        <input type="range" id="lag" min="0" max="3" step="0.5" value="2" aria-label="Replication lag in seconds">
+        <div class="lagbar"><div id="lagFill"></div></div>
+        <div class="row" style="margin-top:10px"><button class="btn primary" id="lagGo">💥 US-East dies: fail over now</button></div>
+        <div class="orders" id="orders" style="display:none"></div>
+        <p class="small" id="lagMsg" style="margin:8px 0 0"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Wandering Session</h2><div class="sub">Keep users logged in, wherever they land</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Seven pages from the on-call phone. For each one, pick the move that fixes it: a <b>shared session store</b>, <b>sticky sessions</b>, <b>GeoDNS routing</b>, or <b>replicating data</b> across DCs.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">The interview answer, in your words</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div id="drillMsg"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> Your web tier is stateless and spread across two DCs. Next, some work shouldn't happen inside a web request at all. Quest 1.5, <a href="0105-scale-queues-observability-sharding.html"><i>Queues, Gauges &amp; Shards</i></a>, hands it to a message queue, adds logging and metrics, and finally splits the database.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 1: "Scale From Zero To Millions Of Users"</a>, the sections "Stateless web tier" and "Data center". Then read the <a href="https://12factor.net/processes" target="_blank" rel="noopener">Twelve-Factor App page on processes</a>, a one-page argument for stateless servers (it calls sticky sessions a violation), and Netflix's <a href="https://netflixtechblog.com/active-active-for-multi-regional-resiliency-c47719f6685b" target="_blank" rel="noopener">Active-Active for Multi-Regional Resiliency</a>, the study the book cites.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <ul style="margin:0;padding-left:20px">
+        <li><b>A third stateless option.</b> Signed tokens such as JWTs carry the session inside the client's request, so no store lookup is needed. The catch: you can't easily revoke one before it expires.</li>
+        <li><b>Sticky isn't always wrong.</b> Long-lived connections like WebSockets stay on one server by nature. The chat design in World 12 keeps stateful connection servers on purpose.</li>
+        <li><b>DNS failover is slow-ish.</b> Cached answers live for their TTL, so some users keep hitting a dead DC for a while. Anycast and global load balancers fail over faster.</li>
+        <li><b>Writes in two regions conflict.</b> If both DCs accept writes to the same data (active-active), two writes can collide. Many teams keep one region as the database writer (active-passive) or give each user a home region.</li>
+        <li><b>The numbers are made up.</b> The book's x% / (100 − x)% split and its DC names are illustrative, and so are this quest's autoscaling numbers.</li>
+      </ul>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"if sessions are in Redis, isn't Redis the new single point of failure?"</i> or <i>"how does a user's phone actually find the nearest DC?"</i> Follow-up questions are part of the quest.
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 1 "Scale From Zero To Millions Of Users": stateless web tier, data center (ByteByteGo).</li>
+        <li>AWS documentation, "Configure sticky sessions for your Classic Load Balancer".</li>
+        <li>Netflix Technology Blog, "Active-Active for Multi-Regional Resiliency" (2013).</li>
+        <li>Adam Wiggins, <i>The Twelve-Factor App</i>, "VI. Processes".</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0104',
+  winTitle: 'Stateless and worldwide!',
+  badge: '🌍 Badge: Globe Spanner',
+  cheatsheet: '../reference/ch01-scaling-cheatsheet.html',
+});
+const { sleep, shuffle } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function T(parent, x, y, txt, cls, extra) { const t = S('text', Object.assign({ x, y }, cls ? { class: cls } : {}, extra || {}), parent); t.textContent = txt; return t; }
+function anim(dur, f) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 1) { f(1); return res(); }
+    const t0 = performance.now();
+    const fr = now => { const p = Math.min(1, (now - t0) / dur); f(p); p < 1 ? requestAnimationFrame(fr) : res(); };
+    requestAnimationFrame(fr);
+  });
+}
+const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+const wait = ms => sleep(Q.reduced ? Math.min(ms, 40) : ms);
+function logTo(el, html, cls) { el.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); el.scrollTop = el.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); Q.addXP(xp || 5, li);
+  return true;
+}
+// Predict-then-watch round. Resolves after the learner picks and the action has played.
+function predict(box, { step, title, options, correct, act, explain, xp = 15 }) {
+  box.innerHTML = `${step ? `<div class="step">${step}</div>` : ''}<h3>${title}</h3><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+  const opts = $('.opts', box);
+  let busy = false;
+  return new Promise(resolve => {
+    shuffle(options.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = async () => {
+        if (busy) return; busy = true;
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        b.classList.add('picked');
+        await act();
+        const ok = i === correct;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-i="${correct}"]`, opts).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + explain;
+        ok ? Q.addXP(xp, b) : Q.loseHeart(b);
+        resolve({ ok, row: $('.row', box) });
+      };
+      opts.appendChild(b);
+    });
+  });
+}
+function nextBtn(row, label, fn, primary = true) {
+  const b = document.createElement('button'); b.className = 'btn' + (primary ? ' primary' : ''); b.textContent = label; b.onclick = fn; row.appendChild(b); return b;
+}
+// Two quizzes in a row, then clear the stage.
+function twoQuizzes(mount, a, b, n) {
+  if (mount.dataset.shown) return; mount.dataset.shown = '1';
+  setTimeout(() => Q.quiz(mount, Object.assign({}, a, { tag: 'Check 1 of 2', onDone: () => setTimeout(() => Q.quiz(mount, Object.assign({}, b, { tag: 'Check 2 of 2', onDone: () => setTimeout(() => Q.clearStage(n), 900) })), 500) })), 400);
+}
+
+/* ================= web tier sim (stages 1 and 2) ================= */
+const USERS = { A: { x: 110, c: 'var(--uA)' }, B: { x: 200, c: 'var(--uB)' }, C: { x: 290, c: 'var(--uC)' } };
+const HOT = 7;
+function makeWebSim(svg, logEl, { withStore = false, onMode } = {}) {
+  const H = withStore ? 322 : 246;
+  svg.setAttribute('viewBox', `0 0 400 ${H}`);
+  let servers, mode, rr, pins, store, chain = Promise.resolve();
+  const bars = new Map(), boxes = new Map();
+  const base = S('g', {}, svg), fx = S('g', {}, svg);
+  const xs = () => servers.length <= 3 ? [80, 200, 320] : [62, 154, 246, 338];
+  const sx = id => xs()[servers.findIndex(s => s.id === id)];
+
+  function reset(m) {
+    mode = m;
+    servers = [1, 2, 3].map((id, i) => ({ id, alive: true, load: 0, sess: new Set(m === 'store' ? [] : ['ABC'[i]]) }));
+    store = new Set(m === 'store' ? ['A', 'B', 'C'] : []);
+    pins = { A: 1, B: 2, C: 3 };
+    rr = 1;
+    fx.innerHTML = '';
+    draw();
+    onMode && onMode(mode);
+  }
+  function setMode(m) {
+    if (m === mode) return;
+    if (m === 'store') { servers.forEach(s => { s.sess.forEach(u => store.add(u)); s.sess.clear(); }); ['A', 'B', 'C'].forEach(u => store.add(u)); }
+    if (mode === 'store' && m !== 'store') { reset(m); return; }
+    mode = m; draw(); onMode && onMode(mode);
+  }
+  function draw() {
+    base.innerHTML = ''; bars.clear(); boxes.clear();
+    const X = xs();
+    // wires
+    Object.values(USERS).forEach(u => S('line', { class: 'wire', x1: u.x, y1: 44, x2: 200, y2: 74 }, base));
+    servers.forEach((s, i) => S('line', { class: 'wire', x1: 200, y1: 108, x2: X[i], y2: 140 }, base));
+    if (withStore && mode === 'store') servers.forEach((s, i) => S('line', { class: 'wire st', 'data-st': s.id, x1: X[i], y1: 238, x2: 200, y2: 262 }, base));
+    // users
+    for (const [k, u] of Object.entries(USERS)) { const g = S('g', { class: 'usr' }, base); S('circle', { cx: u.x, cy: 26, r: 17, fill: u.c }, g); T(g, u.x, 26, k); }
+    // load balancer
+    const lb = S('g', { class: 'box' }, base); S('rect', { x: 130, y: 74, width: 140, height: 34, rx: 9 }, lb);
+    T(lb, 200, 95, 'Load balancer', 't');
+    // servers
+    servers.forEach((s, i) => {
+      const x = X[i], g = S('g', { class: 'box' + (s.alive ? '' : ' dead') + (s.fresh ? ' fresh' : '') }, base);
+      S('rect', { x: x - 40, y: 140, width: 80, height: 72, rx: 10 }, g);
+      T(g, x, 158, 'Server ' + s.id, 't');
+      if (!s.alive) { S('line', { class: 'xmark', x1: x - 14, y1: 172, x2: x + 14, y2: 200 }, g); S('line', { class: 'xmark', x1: x + 14, y1: 172, x2: x - 14, y2: 200 }, g); }
+      else if (mode === 'store') T(g, x, 190, 'no sessions', 's');
+      else {
+        const us = [...s.sess].sort();
+        if (!us.length) T(g, x, 190, 'empty', 's');
+        us.forEach((u, j) => { const cx = x + (j - (us.length - 1) / 2) * 24; const c = S('g', { class: 'chip' }, g); S('circle', { cx, cy: 188, r: 11, fill: USERS[u].c }, c); T(c, cx, 188, u); });
+      }
+      S('rect', { class: 'bar-bg', x: x - 40, y: 220, width: 80, height: 10, rx: 4 }, base);
+      const b = S('rect', { class: 'bar', x: x - 40, y: 220, width: 0, height: 10, rx: 4 }, base);
+      bars.set(s.id, b); boxes.set(s.id, g);
+    });
+    // store
+    if (withStore && mode === 'store') {
+      const g = S('g', { class: 'box' }, base);
+      S('rect', { x: 92, y: 262, width: 216, height: 54, rx: 12 }, g);
+      T(g, 200, 280, 'Shared session store (NoSQL)', 't');
+      [...store].sort().forEach((u, j, a) => { const cx = 200 + (j - (a.length - 1) / 2) * 26; const c = S('g', { class: 'chip' }, g); S('circle', { cx, cy: 300, r: 10, fill: USERS[u].c }, c); T(c, cx, 300, u); });
+    }
+    paintBars();
+  }
+  function paintBars() {
+    servers.forEach(s => { const b = bars.get(s.id); if (!b) return; const w = Math.min(1, s.load / 10) * 80; b.setAttribute('width', w.toFixed(1)); b.setAttribute('class', 'bar' + (s.load >= HOT ? ' hot' : s.load >= 4 ? ' warm' : '')); });
+  }
+  const timer = setInterval(() => { let ch = false; servers && servers.forEach(s => { if (s.load > 0) { s.load--; ch = true; } }); if (ch) paintBars(); }, 650);
+  void timer;
+
+  function nextRR() { const alive = servers.filter(s => s.alive); const s = alive[rr % alive.length]; rr++; return s; }
+  async function move(dot, x0, y0, x1, y1, ms) { await anim(ms, p => { const e = ease(p); dot.setAttribute('cx', (x0 + (x1 - x0) * e).toFixed(1)); dot.setAttribute('cy', (y0 + (y1 - y0) * e).toFixed(1)); }); }
+  async function doSend(u, fast) {
+    let s, repin = false;
+    if (mode === 'sticky') { s = servers.find(x => x.id === pins[u]); if (!s || !s.alive) { s = nextRR(); pins[u] = s.id; repin = true; } }
+    else s = nextRR();
+    const ok = mode === 'store' ? store.has(u) : s.sess.has(u);
+    const ms = fast ? 55 : 230;
+    const dot = S('circle', { class: 'pkt', r: 7, cx: USERS[u].x, cy: 44, fill: USERS[u].c }, fx);
+    await move(dot, USERS[u].x, 44, 200, 91, ms);
+    const x = sx(s.id);
+    await move(dot, 200, 108, x, 150, ms);
+    if (mode === 'store' && !fast) {
+      const ln = $(`line[data-st="${s.id}"]`, svg); if (ln) ln.classList.add('hot');
+      await move(dot, x, 238, 200, 270, 160); await move(dot, 200, 270, x, 238, 160);
+      if (ln) ln.classList.remove('hot');
+    }
+    dot.remove();
+    s.load++; paintBars();
+    const g = boxes.get(s.id);
+    if (g) { g.classList.remove('ok', 'no'); void g.getBBox(); g.classList.add(ok ? 'ok' : 'no'); setTimeout(() => g.classList.remove('ok', 'no'), fast ? 250 : 800); }
+    const bd = S('g', { class: 'badge' }, fx); S('circle', { cx: x + 34, cy: 140, r: 11, fill: ok ? 'var(--good)' : 'var(--bad)' }, bd); T(bd, x + 34, 140, ok ? '✓' : '✗');
+    setTimeout(() => bd.remove(), fast ? 250 : 900);
+    let relog = false;
+    if (!ok && mode === 'sticky') { s.sess.add(u); relog = true; setTimeout(draw, fast ? 60 : 500); }
+    if (!fast) {
+      if (ok) logTo(logEl, mode === 'store' ? `${u} → Server ${s.id} → looks up ${u}'s session in the shared store → ✓ served` : `${u} → Server ${s.id} → has ${u}'s session → ✓ served`, 'g');
+      else logTo(logEl, `${u} → Server ${s.id}${repin ? ' (its old server is gone, so the LB picks a new one)' : ''} → no session for ${u} → ✗ "who are you? please log in again"${relog ? ` · ${u} logs in again, new session on Server ${s.id}` : ''}`, 'e');
+    }
+    return { ok, s: s.id, repin };
+  }
+  function send(u, fast) { const p = chain.then(() => doSend(u, fast)); chain = p.catch(() => {}); return p; }
+  async function burst(u, n) {
+    const counts = {};
+    for (let i = 0; i < n; i++) { const r = await send(u, true); counts[r.s] = (counts[r.s] || 0) + 1; }
+    return counts;
+  }
+  function kill(id) { const s = servers.find(x => x.id === id); s.alive = false; s.sess.clear(); s.load = 0; draw(); }
+  function add() { if (servers.length >= 4) return; servers.push({ id: 4, alive: true, load: 0, sess: new Set(), fresh: true }); draw(); }
+  return { reset, setMode, send, burst, kill, add, get mode() { return mode; }, get servers() { return servers; }, idle: () => chain };
+}
+function bindSeg(seg, fn) { $$('button', seg).forEach(b => b.onclick = () => fn(b.dataset.m)); }
+function showSeg(seg, m) { $$('button', seg).forEach(b => b.classList.toggle('on', b.dataset.m === m)); }
+
+/* ================= STAGE 1: the sticky problem ================= */
+Q.onStage(1, () => {
+  const log = $('#log1'), goals = new Set(), done = new Set();
+  const sim = makeWebSim($('#web1'), log, { onMode: m => showSeg($('#m1'), m) });
+  sim.reset('rr');
+  bindSeg($('#m1'), m => { sim.setMode(m); logTo(log, m === 'sticky' ? 'LB switched to <b>sticky sessions</b>: each user now goes back to the server that holds their session.' : 'LB switched to <b>round-robin</b>.'); if (m === 'sticky') $('#stickyNote').style.display = 'block'; });
+  $('#r1').onclick = () => { sim.reset('rr'); log.innerHTML = '<div>Reset. Sessions: A on Server 1, B on Server 2, C on Server 3.</div>'; };
+  $$('#s1 .sendrow .btn').forEach(b => b.onclick = async () => {
+    const r = await sim.send(b.dataset.u);
+    if (!r.ok && sim.mode === 'rr') checkGoal('#g1', 'miss', goals);
+    if (r.ok && sim.mode === 'sticky') { checkGoal('#g1', 'sticky', goals); $('#stickyNote').style.display = 'block'; }
+    maybeQuiz();
+  });
+  const ROUNDS = [
+    { title: 'Sticky sessions are on. <b>Server 1 crashes.</b> What happens to User A on their next click?',
+      options: ['A is logged out and has to sign in again', 'A carries on, because Server 2 has a copy', 'A waits until Server 1 has rebooted'], correct: 0,
+      act: async () => { sim.reset('sticky'); await wait(300); sim.kill(1); logTo(log, '💀 Server 1 crashed. Its memory, and A’s session with it, is gone.', 'w'); await wait(400); await sim.send('A'); await wait(500); },
+      explain: 'A’s session existed only in Server 1’s memory. The load balancer has to pin A to a new server, and that server has never heard of A. Every user on a crashed server gets logged out at once. That’s the “hard to handle failures” cost.' },
+    { title: 'Traffic is growing, so you <b>add Server 4</b>. How much of A, B and C’s traffic moves onto it?',
+      options: ['None of it, they stay pinned to old servers', 'About a quarter of it, straight away', 'Only User A’s, since Server 1 is oldest'], correct: 0,
+      act: async () => { sim.reset('sticky'); await wait(300); sim.add(); logTo(log, '➕ Server 4 joined the pool.', 'g'); await wait(300); for (const u of ['A', 'B', 'C', 'A', 'B', 'C']) await sim.send(u); logTo(log, 'Server 4 served 0 requests. Only brand-new sessions would ever land there.', 'w'); await wait(300); },
+      explain: 'Everyone already logged in is pinned to their old server, so the new one sits idle. It only fills up as new users arrive and old sessions expire. That’s the “adding servers is harder” cost: new capacity doesn’t help the people causing today’s load.' },
+    { title: '<b>User B</b> suddenly sends a burst of requests (think: a scraper, or a power user). What do the servers look like?',
+      options: ['Server 2 overloads while 1 and 3 sit idle', 'The burst is shared across all three servers', 'The load balancer blocks B for a while'], correct: 0,
+      act: async () => { sim.reset('sticky'); await wait(300); const c = await sim.burst('B', 12); logTo(log, `🔥 B sent 12 requests: ${Object.entries(c).map(([k, v]) => `Server ${k} got ${v}`).join(', ')}. Servers 1 and 3 got none.`, 'e'); await wait(400); },
+      explain: 'Stickiness pins <i>all</i> of B’s traffic to B’s server. The load balancer can’t move it, so one server runs hot while the others idle. Plain load balancers don’t block users either; that’s a rate limiter’s job.' },
+  ];
+  let ri = 0;
+  async function round() {
+    const r = ROUNDS[ri];
+    const { row } = await predict($('#p1'), { step: `Stress test ${ri + 1} of 3 · predict first`, title: r.title, options: r.options, correct: r.correct, act: r.act, explain: r.explain });
+    nextBtn(row, ri < ROUNDS.length - 1 ? 'Next stress test →' : 'Done with the stress tests', () => {
+      ri++;
+      if (ri < ROUNDS.length) return round();
+      done.add('rounds');
+      $('#p1').innerHTML = '<div class="row"><span class="small muted">All three stress tests called.</span><button class="btn" id="p1again">↻ Replay them</button></div>';
+      $('#p1again').onclick = () => { ri = 0; round(); };
+      maybeQuiz();
+    });
+  }
+  round();
+  function maybeQuiz() {
+    if (!done.has('rounds') || goals.size < 2) return;
+    twoQuizzes($('#q1'), {
+      q: 'Round-robin is on. User A’s request lands on Server 2 and fails. Why?',
+      options: ['A’s session data exists only on Server 1', 'Server 2 is too busy to check A’s login', 'The load balancer dropped A’s login cookie'], correct: 0,
+      good: 'Server 1 is <b>stateful</b>: it holds A’s session in its own memory. Server 2 has no record of A, so authentication fails.',
+      bad: 'Nothing is busy or dropped. The session is simply stored in Server 1’s memory, and Server 2 can’t see it. That’s what “stateful” means.',
+    }, {
+      q: 'Which two costs does the book pin on sticky sessions?',
+      options: ['Adding/removing servers and failures get hard', 'DNS lookups slow down and caches go stale', 'Browsers store more cookies and use more RAM'], correct: 0,
+      good: 'Exactly what your stress tests showed: a new server sits idle, a dead server logs its users out, and one busy user can’t be spread out. On top of that, the load balancer does extra work to track who goes where.',
+      bad: 'Look back at the stress tests: a new server got no traffic, and a dead server logged its users out. Scaling the pool and surviving failures are the costs.',
+    }, 1);
+  }
+});
+
+/* ================= STAGE 2: stateless + autoscaling ================= */
+Q.onStage(2, () => {
+  const log = $('#log2'), goals = new Set();
+  const sim = makeWebSim($('#web2'), log, { withStore: true, onMode: m => showSeg($('#m2'), m) });
+  sim.reset('sticky');
+  let busy = false;
+  bindSeg($('#m2'), m => {
+    if (busy) return;
+    sim.setMode(m);
+    if (m === 'store') { logTo(log, '📦 Sessions moved to the shared store. The web servers now keep nothing between requests, and the LB is back to plain round-robin.', 'g'); checkGoal('#g2', 'store', goals); maybeQuiz(); }
+    else logTo(log, 'Back to the stateful setup: sessions in each server, sticky LB.');
+  });
+  $$('#s2 .sendrow .btn').forEach(b => b.onclick = () => sim.send(b.dataset.u));
+  async function stress(btn, g, fn) {
+    if (busy) return; busy = true;
+    const m = sim.mode; sim.reset(m); await wait(250);
+    const good = await fn(m);
+    busy = false;
+    if (m === 'store' && good) { btn.classList.add('done'); if (checkGoal('#g2', g, goals)) maybeQuiz(); }
+    else if (m !== 'store') logTo(log, '↳ That was the stateful setup. Switch to <b>Shared store</b> and run it again.', 'w');
+  }
+  $('#x2kill').onclick = e => stress(e.currentTarget, 'kill', async m => {
+    sim.kill(1); logTo(log, '💀 Server 1 crashed.', 'w'); await wait(300);
+    const a = await sim.send('A'); const b = await sim.send('A');
+    if (m === 'store' && a.ok && b.ok) { logTo(log, '→ Nobody was logged out. Server 1 held no state, so losing it lost nothing.', 'g'); return true; }
+    return false;
+  });
+  $('#x2add').onclick = e => stress(e.currentTarget, 'add', async m => {
+    sim.add(); logTo(log, '➕ Server 4 joined.', 'g'); await wait(300);
+    const hits = {}; for (const u of ['A', 'B', 'C', 'A', 'B', 'C', 'A', 'B']) { const r = await sim.send(u); hits[r.s] = (hits[r.s] || 0) + 1; }
+    logTo(log, `Server 4 served ${hits[4] || 0} of 8 requests.`, hits[4] ? 'g' : 'w');
+    return !!hits[4];
+  });
+  $('#x2busy').onclick = e => stress(e.currentTarget, 'busy', async m => {
+    const c = await sim.burst('B', 12), mx = Math.max(...Object.values(c));
+    logTo(log, `🔥 B sent 12 requests: ${Object.entries(c).map(([k, v]) => `S${k}: ${v}`).join(', ')}.${mx >= HOT ? ' One server is overloaded.' : ' Spread evenly, nobody overloaded.'}`, mx >= HOT ? 'e' : 'g');
+    return mx < HOT;
+  });
+
+  /* ---- autoscaling ---- */
+  const KP = [[0, 140], [5, 120], [6.5, 200], [9, 620], [11, 560], [13, 520], [17, 520], [18.5, 640], [20, 1000], [21, 900], [22.5, 420], [24, 160]];
+  const demand = h => { for (let i = 0; i < KP.length - 1; i++) { const [a, x] = KP[i], [b, y] = KP[i + 1]; if (h >= a && h <= b) { const p = (h - a) / (b - a), s = p * p * (3 - 2 * p); return x + (y - x) * s; } } return 140; };
+  const BUDGET = 190, STEPS = 144, CAP = 100, SMAX = 16;
+  function simulate(up, down, mn, mx) {
+    let n = Math.max(mn, 2), pend = 0, over = 0, sh = 0, last = 0, lastT = -99, flaps = 0;
+    const tr = [];
+    for (let t = 0; t < STEPS; t++) {
+      n += pend; pend = 0;
+      const d = demand(t / 6), cpu = d / (n * CAP) * 100;
+      const o = cpu > 100; if (o) over += 10;
+      sh += n / 6;
+      let flap = false;
+      if (cpu > up && n < mx) { pend = 1; if (last === -1 && t - lastT <= 3) { flaps++; flap = true; } last = 1; lastT = t; }
+      else if (cpu < down && n > mn) { n--; if (last === 1 && t - lastT <= 3) { flaps++; flap = true; } last = -1; lastT = t; }
+      tr.push({ t, need: d / CAP, n: o ? n : n, over: o, flap });
+    }
+    return { tr, over, sh: Math.round(sh), flaps };
+  }
+  const svg = $('#ascSvg');
+  const X0 = 34, X1 = 392, Y0 = 186, Y1 = 14;
+  const xOf = t => X0 + (X1 - X0) * t / STEPS, yOf = s => Y0 - (Y0 - Y1) * Math.min(s, SMAX) / SMAX;
+  function chartBase() {
+    svg.innerHTML = '';
+    const g = S('g', { class: 'grid' }, svg);
+    [0, 4, 8, 12, 16].forEach(s => { S('line', { x1: X0, x2: X1, y1: yOf(s), y2: yOf(s) }, g); T(g, X0 - 6, yOf(s) + 4, s, null, { 'text-anchor': 'end' }); });
+    [0, 6, 12, 18, 24].forEach(h => T(g, xOf(h * 6), 206, (h < 10 ? '0' : '') + h + ':00', null, { 'text-anchor': h === 0 ? 'start' : h === 24 ? 'end' : 'middle' }));
+    let d = `M${xOf(0)} ${yOf(0)}`;
+    for (let t = 0; t <= STEPS; t++) d += `L${xOf(t).toFixed(1)} ${yOf(demand(t / 6) / CAP).toFixed(1)}`;
+    d += `L${xOf(STEPS)} ${yOf(0)}Z`;
+    S('path', { class: 'need', d }, svg);
+  }
+  function chartRun(res) {
+    const clipId = 'ascClip';
+    const defs = S('defs', {}, svg), cp = S('clipPath', { id: clipId }, defs), cr = S('rect', { x: 0, y: 0, width: X0, height: 214 }, cp);
+    const g = S('g', { 'clip-path': `url(#${clipId})` }, svg);
+    res.tr.forEach(p => { if (p.over) S('rect', { class: 'over', x: xOf(p.t), y: Y0 + 2, width: (X1 - X0) / STEPS + .4, height: 6 }, g); });
+    let d = '';
+    res.tr.forEach((p, i) => { const x0 = xOf(p.t), x1 = xOf(p.t + 1), y = yOf(p.n); d += (i ? `L${x0.toFixed(1)} ${y.toFixed(1)}` : `M${x0.toFixed(1)} ${y.toFixed(1)}`) + `L${x1.toFixed(1)} ${y.toFixed(1)}`; });
+    S('path', { class: 'srv', d }, g);
+    res.tr.forEach(p => { if (p.flap) S('circle', { class: 'flap', cx: xOf(p.t), cy: yOf(p.n) - 9, r: 4 }, g); });
+    const clock = T(svg, X1, 10, '', 'clock', { 'text-anchor': 'end' });
+    return anim(2600, p => {
+      const w = X0 + (X1 - X0) * p + 1; cr.setAttribute('width', w.toFixed(1));
+      const m = Math.round(p * 24 * 60), hh = Math.min(23, Math.floor(m / 60)), mm = p >= 1 ? 59 : m % 60;
+      clock.textContent = p >= 1 ? 'end of day' : `${String(hh).padStart(2, '0')}:${String(mm - mm % 10).padStart(2, '0')}`;
+    });
+  }
+  const K = { up: $('#kUp'), down: $('#kDown'), min: $('#kMin'), max: $('#kMax') };
+  function syncKnobs(src) {
+    let up = +K.up.value, down = +K.down.value, mn = +K.min.value, mx = +K.max.value;
+    if (down >= up) { if (src === 'down') { up = Math.min(95, down + 5); if (down >= up) down = up - 5; } else down = up - 5; K.up.value = up; K.down.value = down; }
+    if (mn > mx) { if (src === 'min') K.max.value = mx = mn; else K.min.value = mn = mx; }
+    $('#vUp').textContent = up + '%'; $('#vDown').textContent = down + '%'; $('#vMin').textContent = mn; $('#vMax').textContent = mx;
+  }
+  Object.entries(K).forEach(([k, el]) => el.addEventListener('input', () => syncKnobs(k)));
+  syncKnobs();
+  chartBase();
+  let running = false;
+  $('#ascRun').onclick = async () => {
+    if (running) return; running = true;
+    const btn = $('#ascRun'); btn.disabled = true; Object.values(K).forEach(el => el.disabled = true);
+    const up = +K.up.value, down = +K.down.value, mn = +K.min.value, mx = +K.max.value;
+    const res = simulate(up, down, mn, mx);
+    chartBase();
+    $('#ascVerdict').className = 'verdict'; $('#ascVerdict').textContent = 'Running the day…';
+    await chartRun(res);
+    const okO = res.over === 0, okB = res.sh <= BUDGET, okF = res.flaps <= 2;
+    $('#ascStats').innerHTML = `<span class="stat ${okO ? 'good' : 'bad'}">🔥 overloaded: ${res.over} min</span><span class="stat ${okB ? 'good' : 'bad'}">💸 server-hours: ${res.sh} / ${BUDGET}</span><span class="stat ${okF ? 'good' : 'bad'}">🔁 flaps: ${res.flaps}</span>`;
+    const why = [];
+    if (!okO) why.push(mx < 11 ? `The evening spike needs about 10 servers at 100% CPU, and your maximum is ${mx}. Raise the maximum.` : `Servers were added too late. A new one takes 10 minutes to boot, so adding only above ${up}% CPU leaves no headroom for a fast spike. Add sooner.`);
+    if (!okB) why.push(`${res.sh} server-hours is over budget. Idle servers cost money: remove them sooner (raise the remove line), trigger adds a bit later, or lower the minimum.`);
+    if (!okF) { why.push('Servers kept flapping on and off. The add and remove lines are too close together.'); $('#flapNote').style.display = 'block'; }
+    const v = $('#ascVerdict');
+    if (okO && okB && okF) {
+      v.className = 'verdict good';
+      v.innerHTML = `<b>Day survived.</b> No overloaded minutes, ${res.sh} server-hours (a fixed fleet sized for the peak would burn 336), and only ${res.flaps} flap${res.flaps === 1 ? '' : 's'}. Real autoscalers often aim for an average CPU somewhere around 50–70%, keeping headroom for spikes while new servers boot.`;
+      if (!goals.has('day')) { Q.addXP(20, v); checkGoal('#g2', 'day', goals); maybeQuiz(); }
+    } else { v.className = 'verdict bad'; v.innerHTML = '<b>Not yet.</b> ' + why.join(' '); }
+    btn.disabled = false; btn.textContent = '▶ Run it again'; Object.values(K).forEach(el => el.disabled = false); running = false;
+  };
+
+  function maybeQuiz() {
+    if (goals.size < 5) return;
+    twoQuizzes($('#q2'), {
+      q: 'After this change, where does User A’s session data live?',
+      options: ['In a shared store that every web server reads', 'In the memory of the first server A ever hit', 'Inside the load balancer’s routing table'], correct: 0,
+      good: 'State moved out of the web tier into a shared, persistent store (NoSQL in the book). Any server can fetch it, so any server can serve A.',
+      bad: 'The whole point was to get it <i>out</i> of the web servers and the LB. It lives in a shared data store that every web server can reach.',
+    }, {
+      q: 'What does <b>autoscaling</b> mean in the book?',
+      options: ['Adding or removing web servers automatically with load', 'Moving one server to bigger hardware when it slows', 'Copying the database to a new region every night'], correct: 0,
+      good: 'Web servers come and go automatically as traffic rises and falls. It only works because the servers are stateless, so removing one loses nothing.',
+      bad: 'Bigger hardware is vertical scaling, and copying data is replication. Autoscaling adds and removes web servers automatically as traffic changes.',
+    }, 2);
+  }
+});
+
+/* ================= STAGE 3: GeoDNS map ================= */
+Q.onStage(3, () => {
+  const svg = $('#map'), goals = new Set();
+  const DC = { W: { x: 72, y: 96, name: 'US-West', ip: '198.51.100.20', c: 'var(--west)' }, E: { x: 318, y: 126, name: 'US-East', ip: '203.0.113.10', c: 'var(--east)' } };
+  const CITIES = [
+    ['Seattle', 52, 58, -3, 4], ['Portland', 42, 82, -3, 2.5], ['San Francisco', 34, 132, -3, 5], ['Los Angeles', 58, 172, -3, 9], ['Phoenix', 104, 180, -2, 4],
+    ['Salt Lake City', 112, 106, -2, 1.5], ['Denver', 158, 118, -2, 3], ['Dallas', 210, 188, -1, 6.5], ['Houston', 226, 212, -1, 6], ['Minneapolis', 230, 70, -1, 3],
+    ['Chicago', 266, 94, -1, 9], ['Atlanta', 292, 172, 0, 5], ['Miami', 330, 222, 0, 6], ['Washington', 336, 112, 0, 5], ['New York', 352, 88, 0, 14], ['Boston', 368, 64, 0, 4],
+  ].map(([name, x, y, off, w]) => ({ name, x, y, off, w }));
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  CITIES.forEach(c => c.home = dist(c, DC.W) < dist(c, DC.E) ? 'W' : 'E');
+  const ACT = [[0, .35], [3, .1], [6, .2], [9, .62], [12, .72], [17, .78], [20, 1], [23, .55], [24, .35]];
+  const act = h => { h = ((h % 24) + 24) % 24; for (let i = 0; i < ACT.length - 1; i++) { const [a, x] = ACT[i], [b, y] = ACT[i + 1]; if (h >= a && h <= b) return x + (y - x) * (h - a) / (b - a); } return .35; };
+  const PER = 14; // % of all traffic one web server can carry
+  const st = { hour: 12, westUp: true, nE: 6, nW: 4, sel: null };
+  const capOf = k => st['n' + k] * PER;
+  const route = c => st.westUp ? c.home : 'E';
+  function shares() {
+    let e = 0, w = 0; CITIES.forEach(c => { const a = c.w * act(st.hour + c.off); route(c) === 'E' ? e += a : w += a; });
+    const t = e + w; return { e: Math.round(e / t * 100), w: Math.round(w / t * 100) };
+  }
+  // static map
+  S('path', { class: 'land', d: 'M24 46 L118 36 L230 40 L262 52 L300 46 L344 50 L372 38 L386 56 L372 78 L360 104 L346 136 L326 162 L338 198 L346 232 L330 238 L310 204 L286 194 L256 196 L238 214 L222 236 L204 220 L186 204 L150 206 L116 200 L82 192 L50 180 L32 152 L22 112 Z' }, svg);
+  T(svg, 6, 236, 'Pacific', 'sea'); T(svg, 398, 200, 'Atlantic', 'sea', { 'text-anchor': 'end' });
+  const routeG = S('g', {}, svg), cityG = S('g', {}, svg), dcG = S('g', {}, svg);
+  const cityEls = CITIES.map(c => {
+    const g = S('g', { class: 'city', tabindex: 0, role: 'button', 'aria-label': `${c.name}: show its DNS answer` }, cityG);
+    S('circle', { class: 'hit', cx: c.x, cy: c.y, r: 13 }, g);
+    const dot = S('circle', { class: 'dot', cx: c.x, cy: c.y, r: 5 }, g);
+    const ln = S('line', { class: 'route', x1: c.x, y1: c.y, x2: DC[c.home].x, y2: DC[c.home].y }, routeG);
+    const pick = () => { st.sel = c; cityEls.forEach(o => o.g.classList.toggle('sel', o.c === c)); dnsNote(); if (checkGoal('#g3', 'tap', goals)) maybeQuiz(); };
+    g.addEventListener('click', pick);
+    g.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
+    return { c, g, dot, ln };
+  });
+  const dcEls = {};
+  for (const k of ['W', 'E']) {
+    const d = DC[k], g = S('g', { class: 'dc' }, dcG);
+    S('rect', { x: d.x - 15, y: d.y - 15, width: 30, height: 30, rx: 7, fill: d.c }, g);
+    T(g, d.x, d.y, 'DC');
+    T(g, d.x + (k === 'W' ? 20 : -20), d.y + (k === 'W' ? -18 : 28), d.name, 'lbl', { 'text-anchor': k === 'W' ? 'start' : 'end' });
+    dcEls[k] = g;
+  }
+  let xG = null;
+  function dnsNote() {
+    const c = st.sel; if (!c) return;
+    const r = route(c), d = DC[r];
+    $('#dns').innerHTML = `📍 ${c.name} asks for <b>app.example.com</b> → GeoDNS answers <b style="color:${d.c}">${d.ip}</b> (${d.name}${!st.westUp && c.home === 'W' ? ', because US-West is down' : ', the nearest DC'})`;
+  }
+  function paint() {
+    cityEls.forEach(({ c, dot, ln }) => {
+      const a = act(st.hour + c.off), r = route(c);
+      dot.setAttribute('r', (2.5 + Math.sqrt(c.w * a) * 1.7).toFixed(1));
+      dot.style.fill = DC[r].c;
+      if (!ln.classList.contains('blip')) { ln.setAttribute('x2', DC[r].x); ln.setAttribute('y2', DC[r].y); ln.style.stroke = DC[r].c; }
+      ln.setAttribute('stroke-width', (1 + a * 2.2).toFixed(1));
+    });
+    const s = shares(), h = st.hour;
+    $('#clkV').textContent = `${String(h).padStart(2, '0')}:00`;
+    $('#splitV').innerHTML = `<span class="e">East ${s.e}%</span> · <span class="w">West ${s.w}%</span>`;
+    const card = (k, share, cap, up) => {
+      const over = share > cap;
+      $(`#dc${k}f`).style.width = (up ? Math.min(100, share / cap * 100) : 0) + '%';
+      $(`#dc${k}f`).classList.toggle('hot', up && over);
+      const l = $(`#dc${k}l`);
+      l.textContent = up ? `${share}% of all traffic · built for ${cap}%${over ? ' · OVERLOADED' : ''}` : 'offline · 0% of traffic';
+      l.classList.toggle('hot', up && over);
+      $(`#dc${k}`).classList.toggle('down', !up);
+      $(`#dc${k}s`).textContent = up ? (over ? 'over capacity' : 'healthy') : 'outage';
+      $(`#dc${k}n`).textContent = st['n' + k];
+    };
+    card('W', s.w, capOf('W'), st.westUp); card('E', s.e, capOf('E'), true);
+    dcEls.W.classList.toggle('down', !st.westUp);
+    if (!st.westUp && !xG) { xG = S('g', {}, dcG); const { x, y } = DC.W; S('line', { class: 'dcx', x1: x - 12, y1: y - 12, x2: x + 12, y2: y + 12 }, xG); S('line', { class: 'dcx', x1: x + 12, y1: y - 12, x2: x - 12, y2: y + 12 }, xG); }
+    if (st.westUp && xG) { xG.remove(); xG = null; }
+    dnsNote();
+    const need = !st.westUp && s.e > capOf('E');
+    $('#capBtn').disabled = st.westUp || !need;
+  }
+  $('#clk').addEventListener('input', e => { st.hour = +e.target.value; paint(); if (checkGoal('#g3', 'clock', goals)) maybeQuiz(); });
+  paint();
+
+  async function outage() {
+    st.westUp = false;
+    const west = cityEls.filter(o => o.c.home === 'W');
+    west.forEach(o => o.ln.classList.add('blip'));
+    paint();
+    await wait(700);
+    await anim(700, p => west.forEach(o => { const e = ease(p); o.ln.setAttribute('x2', (DC.W.x + (DC.E.x - DC.W.x) * e).toFixed(1)); o.ln.setAttribute('y2', (DC.W.y + (DC.E.y - DC.W.y) * e).toFixed(1)); }));
+    west.forEach(o => o.ln.classList.remove('blip'));
+    paint();
+    $('#restore').disabled = false;
+  }
+  function runPredict() {
+    predict($('#p3'), {
+      step: 'Predict first',
+      title: '💥 US-West has a major outage: power, network, everything. Where do West Coast users go?',
+      options: ['GeoDNS starts sending them to US-East', 'Nowhere: they see errors until it’s back', 'They queue at US-West’s load balancer'], correct: 0,
+      act: outage,
+      explain: 'The book’s rule for a significant DC outage: send <b>all</b> traffic to the healthy DC, so 100% now lands on US-East. But look at its card: it was built for its normal share, not for everyone. Fix that with the button under the map.',
+    }).then(({ row }) => {
+      $('#ttlNote').style.display = 'block';
+      if (checkGoal('#g3', 'out', goals)) maybeQuiz();
+      nextBtn(row, '↻ Predict again', () => { restore(); runPredict(); }, false);
+    });
+  }
+  function restore() { st.westUp = true; st.nE = 6; cityEls.forEach(o => o.ln.classList.remove('blip')); $('#restore').disabled = true; paint(); }
+  $('#restore').onclick = restore;
+  $('#capBtn').onclick = e => {
+    st.nE++; paint();
+    const s = shares();
+    Q.toast(`US-East: ${st.nE} web servers`, e.currentTarget, 'practice');
+    if (s.e <= capOf('E')) {
+      $('#dns').innerHTML = `✅ US-East now has room for ${capOf('E')}% of traffic. In real life you can't buy servers mid-outage in seconds, so teams keep this <b>headroom</b> ready, or autoscale fast.`;
+      if (checkGoal('#g3', 'cap', goals, 10)) maybeQuiz();
+    }
+  };
+  runPredict();
+  function maybeQuiz() {
+    if (goals.size < 4) return;
+    twoQuizzes($('#q3'), {
+      q: 'What does <b>GeoDNS</b> do?',
+      options: ['Answers with a different IP based on user location', 'Copies DNS records into every data center nightly', 'Encrypts DNS lookups so providers can’t see them'], correct: 0,
+      good: 'It’s DNS that looks at where the request comes from and returns the address of a nearby DC. That’s how users get geo-routed.',
+      bad: 'GeoDNS resolves the same name to different IP addresses depending on where the user is, so each user is sent to a nearby DC.',
+    }, {
+      q: 'A whole data center goes down. What does the book do with its traffic?',
+      options: ['Sends all of it to the healthy data center', 'Shows a maintenance page until it recovers', 'Spreads it over the dead DC’s spare servers'], correct: 0,
+      good: 'All traffic goes to the healthy DC (100% to US-East in the book’s example). That’s why each DC needs headroom to carry everyone.',
+      bad: 'The book fails over: 100% of traffic goes to the healthy DC. The dead DC’s servers can’t help, since the whole site is down.',
+    }, 3);
+  }
+});
+
+/* ================= STAGE 4: incident replays ================= */
+Q.onStage(4, () => {
+  const svg = $('#incSvg'), log = $('#log4');
+  const CH = { R: 'Traffic redirection', D: 'Data synchronization', T: 'Test & deployment' };
+  const INC = [
+    { key: 'D', name: 'Missing orders',
+      init: { W: { up: true, ver: 'app v41', db: 'orders: none' }, E: { up: true, ver: 'app v41', db: 'orders: 0' }, link: 'off', who: 'Maya (Virginia)', at: 'E', say: null },
+      play: async s => {
+        for (let i = 1; i <= 3; i++) { s.E.db = `orders: ${i}`; draw(s); logTo(log, `Maya places order #${100 + i} → stored in US-East's DB`); await wait(500); }
+        logTo(log, 'US-West has never seen Maya. Nothing copies data between the DCs.', 'w'); await wait(600);
+        s.E.up = false; draw(s); logTo(log, '💥 US-East goes down. GeoDNS fails over: Maya is sent to US-West.', 'e'); await wait(700);
+        s.at = 'W'; draw(s); await wait(500);
+        s.say = ['bad', '“My orders: none”?!']; draw(s); logTo(log, 'Maya opens “My orders” in US-West → <b>empty</b>. Her last hour of orders is missing.', 'e');
+      },
+      fix: ['Replicate each DC’s data to the other DC', 'Add more web servers to the US-West DC'], fixOk: 0,
+      why: 'The DCs had separate databases with nothing copying between them, so failover landed Maya where her data didn’t exist. Replicate data across DCs (the book cites Netflix’s asynchronous multi-region replication) so the healthy DC already has it.',
+      after: s => { s.link = 'on'; s.W.db = 'orders: 3'; s.say = ['good', '“My orders: 3” ✓']; } },
+    { key: 'T', name: 'Half-shipped release',
+      init: { W: { up: true, ver: 'app v41', db: 'cart API v1' }, E: { up: true, ver: 'app v41', db: 'cart API v1' }, link: 'on', who: 'Ben (Boston)', at: 'E', say: null },
+      play: async s => {
+        logTo(log, 'Friday: an engineer deploys v42 by hand. They finish US-West and plan to do East on Monday.'); await wait(500);
+        s.W.ver = 'app v42 ✨'; s.W.db = 'cart API v2'; draw(s); await wait(600);
+        logTo(log, 'The new mobile app (already in the app stores) calls the new <code>/v2/cart</code> endpoint.', 'w'); await wait(600);
+        s.say = ['meh', 'West users: fine ✓']; draw(s); await wait(600);
+        s.say = ['bad', 'Ben: “Error 404” ✗']; draw(s); logTo(log, 'Ben is routed to US-East, which still runs v41 → <b>404 Not Found</b> on every checkout. Tests only ran against US-West.', 'e');
+      },
+      fix: ['Ship each release to every DC with automation', 'Move all East users onto US-West for good'], fixOk: 0,
+      why: 'Two DCs running different versions is a deployment problem. The book’s answer: automated deployment tools that roll the same version out to every DC, plus testing the app from several locations, not just one.',
+      after: s => { s.E.ver = 'app v42 ✨'; s.E.db = 'cart API v2'; s.say = ['good', 'Ben: checkout works ✓']; } },
+    { key: 'R', name: 'The long way round',
+      init: { W: { up: true, ver: 'app v42', db: 'healthy' }, E: { up: true, ver: 'app v42', db: 'healthy' }, link: 'on', who: 'Kai (Seattle)', at: 'W', say: null },
+      play: async s => {
+        logTo(log, 'Both DCs are healthy and in sync. Kai opens the app in Seattle.'); await wait(500);
+        logTo(log, 'DNS lookup: app.example.com → 203.0.113.10 … that’s US-East, in Virginia.', 'w'); s.at = 'E'; draw(s); await wait(700);
+        s.say = ['bad', 'Kai: +70 ms on every request']; draw(s); logTo(log, 'Every request crosses the continent and back. A rule change last week left one record pointing everyone at US-East.', 'e');
+      },
+      fix: ['Fix the GeoDNS rules to pick the nearest DC', 'Copy Seattle users’ data into the Virginia DC'], fixOk: 0,
+      why: 'Nothing is broken or out of sync. Users are just being sent to the wrong DC. That’s traffic redirection, and the tool is GeoDNS: route each user to the nearest healthy DC.',
+      after: s => { s.at = 'W'; s.say = ['good', 'Kai: served from US-West ✓']; } },
+  ];
+  const doneSet = new Set();
+  let cur = 0, state = null;
+  function draw(s) {
+    svg.innerHTML = '';
+    const P = { W: 76, E: 324 };
+    // link
+    S('line', { class: 'link ' + s.link, x1: 148, y1: 150, x2: 252, y2: 150 }, svg);
+    T(svg, 200, 140, s.link === 'on' ? 'replication ⇄' : 'no sync', 'linkt');
+    for (const k of ['W', 'E']) {
+      const d = s[k], g = S('g', { class: 'dcb' + (d.up ? '' : ' down') }, svg);
+      S('rect', { x: P[k] - 70, y: 86, width: 140, height: 104, rx: 12, stroke: k === 'W' ? 'var(--west)' : 'var(--east)' }, g);
+      T(g, P[k], 108, (k === 'W' ? 'US-West' : 'US-East') + (d.up ? '' : ' 💥'), 'h');
+      T(g, P[k], 128, d.ver, 'v');
+      T(g, P[k], 156, 'DB', null);
+      T(g, P[k], 177, d.db, 'd');
+    }
+    const ux = 150, uy = 22, g = S('g', { class: 'who' }, svg);
+    S('path', { class: 'path', d: `M${ux} ${uy + 10} Q ${ux} 70 ${P[s.at]} 86`, stroke: s.at === 'W' ? 'var(--west)' : 'var(--east)', style: `stroke:${s.at === 'W' ? 'var(--west)' : 'var(--east)'}` }, svg);
+    S('circle', { cx: ux, cy: uy, r: 10 }, g);
+    T(g, ux + 16, uy + 4, s.who, null, { 'text-anchor': 'start' });
+    if (s.say) T(svg, 200, 62, s.say[1], 'say ' + s.say[0]);
+  }
+  const clone = o => JSON.parse(JSON.stringify(o));
+  function tabs() { $('#itabs').innerHTML = INC.map((x, i) => `<span class="tab${i === cur ? ' on' : ''}${doneSet.has(i) ? ' done' : ''}">${doneSet.has(i) ? '✓ ' : ''}Incident ${i + 1}: ${x.name}</span>`).join(''); }
+  function load(i) {
+    cur = i; tabs();
+    const inc = INC[i]; state = clone(inc.init); draw(state);
+    log.innerHTML = '<div>Press ▶ to replay the incident.</div>';
+    const box = $('#incBox');
+    box.innerHTML = `<div class="step">Incident ${i + 1} of 3</div><h3>${inc.name}</h3><div class="row"><button class="btn primary" id="play">▶ Play the incident</button></div><div id="incQ"></div>`;
+    $('#play').onclick = async e => { e.currentTarget.disabled = true; await inc.play(state); classify(inc); };
+  }
+  function classify(inc) {
+    const q = $('#incQ');
+    q.innerHTML = `<p style="margin:14px 0 8px"><b>Which of the book’s three challenges is this?</b></p><div class="cls">${shuffle(Object.keys(CH)).map(k => `<button class="opt" data-k="${k}">${CH[k]}</button>`).join('')}</div><div class="explain" id="ex1"></div><div id="fixQ"></div>`;
+    $$('.cls .opt', q).forEach(b => b.onclick = () => {
+      $$('.cls .opt', q).forEach(x => x.disabled = true);
+      const ok = b.dataset.k === inc.key;
+      b.classList.add(ok ? 'right' : 'wrong'); if (!ok) $(`.cls .opt[data-k="${inc.key}"]`, q).classList.add('right');
+      const ex = $('#ex1'); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+      ex.innerHTML = ok ? `<b>Right: ${CH[inc.key]}.</b>` : `<b>It’s ${CH[inc.key]}.</b>`;
+      ok ? Q.addXP(10, b) : Q.loseHeart(b);
+      fix(inc);
+    });
+  }
+  function fix(inc) {
+    const f = $('#fixQ');
+    f.innerHTML = `<p style="margin:14px 0 8px"><b>Pick the fix.</b></p><div class="opts">${shuffle(inc.fix.map((t, i) => ({ t, i }))).map(o => `<button class="opt" data-i="${o.i}">${o.t}</button>`).join('')}</div><div class="explain" id="ex2"></div><div class="row" style="margin-top:12px" id="incNext"></div>`;
+    $$('.opts .opt', f).forEach(b => b.onclick = () => {
+      $$('.opts .opt', f).forEach(x => x.disabled = true);
+      const ok = +b.dataset.i === inc.fixOk;
+      b.classList.add(ok ? 'right' : 'wrong'); if (!ok) $(`.opts .opt[data-i="${inc.fixOk}"]`, f).classList.add('right');
+      const ex = $('#ex2'); ex.className = 'explain show ' + (ok ? 'good' : 'bad'); ex.innerHTML = (ok ? '<b>Fixed.</b> ' : '<b>Not that one.</b> ') + inc.why;
+      ok ? Q.addXP(10, b) : Q.loseHeart(b);
+      inc.after(state); draw(state); logTo(log, `✅ Fix applied: ${inc.fix[inc.fixOk]}.`, 'g');
+      doneSet.add(cur); tabs();
+      const row = $('#incNext');
+      const todo = [0, 1, 2].filter(k => !doneSet.has(k));
+      if (todo.length) nextBtn(row, `Next: incident ${(todo.find(k => k > cur) ?? todo[0]) + 1} →`, () => load(todo.find(k => k > cur) ?? todo[0]));
+      else {
+        nextBtn(row, '↻ Replay incident 1', () => load(0), false);
+        setTimeout(() => Q.clearStage(4), 900);
+      }
+    });
+  }
+  load(0);
+
+  /* bonus: replication lag lab */
+  let lagDone = false;
+  const lagEl = $('#lag');
+  const lagPaint = () => { const L = +lagEl.value; $('#lagV').textContent = L.toFixed(1) + ' s'; $('#lagFill').style.width = (L / 3 * 100) + '%'; };
+  lagEl.addEventListener('input', lagPaint); lagPaint();
+  $('#lagGo').onclick = e => {
+    const L = +lagEl.value, miss = Math.round(L / 0.5), N = 8;
+    const ids = Array.from({ length: N }, (_, i) => 201 + i);
+    $('#orders').style.display = 'grid';
+    $('#orders').innerHTML = `<div class="col"><h5 style="color:var(--east)">US-East (dead)</h5>${ids.map(id => `<div class="o">order #${id}</div>`).join('')}</div>
+      <div class="col"><h5 style="color:var(--west)">US-West (now serving)</h5>${ids.map((id, i) => `<div class="o${i >= N - miss ? ' miss' : ''}">order #${id}${i >= N - miss ? ' (lost)' : ''}</div>`).join('')}</div>`;
+    $('#lagMsg').innerHTML = miss ? `With ${L.toFixed(1)} s of lag, the last <b>${miss}</b> order${miss === 1 ? '' : 's'} never made it across. Users who placed them see them vanish. That's the price of <i>asynchronous</i> replication: fast writes, but a failover can lose the newest data. Waiting for the other DC to confirm each write (synchronous) avoids this but adds cross-country delay to every write.` : 'With zero lag nothing is lost, but real cross-region replication always lags a little. Try a bigger number.';
+    if (miss && !lagDone) { lagDone = true; Q.addXP(10, e.currentTarget); }
+  };
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss'), {
+  name: '🧳 The Wandering Session',
+  xp: 10,
+  choices: [
+    { k: 'stateless', label: 'Shared session store', sub: 'make the web tier stateless' },
+    { k: 'sticky', label: 'Sticky sessions', sub: 'pin users to a server' },
+    { k: 'geodns', label: 'GeoDNS routing', sub: 'send users to a DC' },
+    { k: 'replicate', label: 'Replicate across DCs', sub: 'keep data in sync' },
+  ],
+  scenarios: [
+    { e: '🚪', t: 'Logged out after a scale-up', d: 'You added a second web server behind round-robin. Users now get logged out at random.', a: 'stateless', why: 'Sessions live in each server’s memory, so half of all requests land on a server that doesn’t know the user. Move sessions to a shared store and any server can answer.' },
+    { e: '🛒', t: 'Carts vanish at night', d: 'Autoscaling removes servers when traffic drops at night. Users on those servers lose their shopping carts.', a: 'stateless', why: 'Autoscaling assumes servers can disappear safely. If carts live in server memory they die with the server. Keep them in a shared store and removing a server loses nothing.' },
+    { e: '🩹', t: 'Legacy app, fix needed tonight', d: 'An old app keeps carts in process memory. The rewrite is scheduled for next quarter, but users are losing carts behind the load balancer today.', a: 'sticky', why: 'Sticky sessions are the honest stopgap: one load balancer setting, no code change. Write down the debt (failures and scaling stay painful) and plan the move to a shared store.' },
+    { e: '🇪🇺', t: 'Europe feels slow', d: 'Everything runs in the US and European users see an extra 150 ms. You’ve just opened an EU data center.', a: 'geodns', why: 'The new DC only helps if users reach it. GeoDNS answers European users with the EU DC’s address, so they’re geo-routed to the nearest one.' },
+    { e: '🌑', t: 'US-East goes dark', d: 'A whole region is down. How do its users reach US-West?', a: 'geodns', why: 'Failover is a routing change: GeoDNS stops handing out US-East’s address and sends 100% of traffic to the healthy DC. Remember the TTL caveat: cached answers take a little while to expire.' },
+    { e: '📭', t: 'Orders missing after failover', d: 'East users fail over to West, and their recent orders aren’t there.', a: 'replicate', why: 'The traffic arrived fine. The data didn’t. Replicate data across DCs so the healthy one already has it, and accept that async replication may still lose the last few seconds.' },
+    { e: '💸', t: 'Spot-instance savings', d: 'Finance wants cheap spot instances, which the cloud can take back with a two-minute warning. Web servers must be killable at any time.', a: 'stateless', why: 'A server that can vanish any minute must hold nothing that matters. With a stateless web tier, killing one just means the next request goes to another server.' },
+  ],
+  outro: 'The pattern: state belongs in a shared store, not in web servers. GeoDNS decides which DC a user reaches, and replication makes sure their data is there when they arrive.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: interview drill ================= */
+Q.onStage(6, () => {
+  const CHECKS = ['The stateful problem, and why sticky sessions are only a workaround', 'A shared session store, so any server can serve any request, enabling autoscaling', 'GeoDNS routing to the nearest DC, plus full failover to the healthy one', 'Data sync across DCs (async replication and its lag)', 'Test and deploy the same version everywhere with automation'];
+  function run() {
+    $('#drillMsg').innerHTML = '';
+    Q.drill($('#drill'), {
+      prompt: 'The interviewer: <i>"We’re going global, and our web servers keep sessions in memory. What changes?"</i>',
+      placeholder: 'First I’d make the web tier stateless…',
+      model: '"First, make the web tier stateless. With sessions in memory, each user has to keep hitting the same server. Sticky sessions hide that, but adding servers, removing them or losing one gets painful. I\'d move sessions into a shared store, say a NoSQL or Redis cluster, so any server can serve any request. Then the web tier can autoscale on load. Next, add a second data center. GeoDNS sends each user to the nearest one, and if a DC fails, all traffic moves to the healthy one, so each DC needs headroom. The hard parts are keeping data in sync across DCs, usually with asynchronous replication, which means a failover can lose a few seconds of recent writes, and testing and deploying the same version everywhere with automated tooling."',
+      checks: CHECKS,
+      minWords: 25,
+      onDone: n => {
+        if (n >= 4) { setTimeout(() => Q.clearStage(6), 700); return; }
+        $('#drillMsg').innerHTML = `<div class="callout warn retry"><b>${n} of 5. Not locked in yet.</b> A senior answer hits at least 4 of these. Reread the model answer, then try again from memory.<div class="row" style="margin-top:8px"><button class="btn primary" id="drillAgain">↻ Try again</button></div></div>`;
+        $('#drillAgain').onclick = run;
+      },
+    });
+  }
+  run();
+});
+
+Q.start();
+})();
+</script>
+</body>
+</html>

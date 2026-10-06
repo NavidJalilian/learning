@@ -1,0 +1,1217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Faster, Safer, Cheaper</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: s1 upload race, s2 pipeline timeline, s3 vault + URL checks, s4 long-tail cost lab, s5 pager + status board */
+:root { --v0: #5a48f0; --v1: #0d9a96; --v2: #c27400; --v3: #2f7fd8; --v4: #b8409a; --on-v: #ffffff; --cdn: #5a48f0; --origin: #0d9a96; --hatch: #a9a5b8; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --v0: #8f82ff; --v1: #31d3c8; --v2: #ffb547; --v3: #5aa9ff; --v4: #f07ad0; --on-v: #0e0f1d; --cdn: #8f82ff; --origin: #31d3c8; --hatch: #5d5a78; }
+}
+:root[data-theme="dark"] { --v0: #8f82ff; --v1: #31d3c8; --v2: #ffb547; --v3: #5aa9ff; --v4: #f07ad0; --on-v: #0e0f1d; --cdn: #8f82ff; --origin: #31d3c8; --hatch: #5d5a78; }
+
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.challenge.boxed:empty { display: none; }
+.challenge h3 + .opts { margin-bottom: 6px; }
+.bignum { font-family: var(--mono); font-weight: 700; }
+.bignum.good { color: var(--good); } .bignum.bad { color: var(--bad); } .bignum.warn { color: var(--warn); }
+.seg button { min-height: 40px; }
+.seg button[disabled] { opacity: .45; cursor: not-allowed; }
+.cap { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+
+/* ---------- stage 1: upload race ---------- */
+.racehead { padding: 12px 14px 4px; font-size: 14px; font-weight: 600; display: flex; gap: 6px 10px; flex-wrap: wrap; align-items: center; }
+.racehead .where { font-family: var(--mono); font-size: 13px; padding: 3px 8px; border-radius: 8px; background: var(--bg-2); border: 1px solid var(--line); }
+.racehead .where.far { background: var(--warn-soft); border-color: transparent; }
+.lane { padding: 10px 14px 6px; }
+.lname { font-size: 14px; margin-bottom: 6px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.lname span { color: var(--muted); }
+.abar { position: relative; height: 30px; border-radius: 9px; background: var(--bg-2); border: 1px solid var(--line); overflow: visible; }
+.afill { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 8px; background: var(--accent); }
+.abar.setup .afill { background: var(--warn); }
+.abar.down { border-color: var(--bad); background: var(--bad-soft); }
+.abar.done .afill { background: var(--good); }
+.amark { position: absolute; top: -5px; bottom: -5px; width: 2px; margin-left: -1px; background: var(--bad); }
+.amark span { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 12px; font-weight: 700; color: var(--bad); white-space: nowrap; }
+.abar .atxt { position: absolute; inset: 0; display: grid; place-items: center; font: 700 12.5px var(--mono); color: var(--ink); mix-blend-mode: normal; }
+.chunks { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
+.ck { position: relative; height: 38px; border-radius: 7px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; }
+.ck i { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: var(--accent); }
+.ck b { position: absolute; inset: 0; display: grid; place-items: center; font: 700 11px var(--mono); color: var(--ink); }
+.ck.setup { border-color: var(--warn); }
+.ck.setup i { background: var(--warn); }
+.ck.done i { background: var(--good); height: 100% !important; }
+.ck.done b { color: #fff; }
+.ck.lost { border-color: var(--bad); background: var(--bad-soft); }
+.ck.lost b { color: var(--bad); }
+.lstat { font-size: 13px; color: var(--muted); min-height: 20px; margin-top: 5px; font-family: var(--mono); }
+.lstat.win { color: var(--good); font-weight: 700; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12.5px; color: var(--muted); padding: 2px 14px 10px; }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+.pgroup { margin-bottom: 14px; }
+.pgroup h3 { margin: 4px 0 10px; font-size: 17px; }
+
+/* ---------- stage 2: pipeline timeline ---------- */
+.pipe-ctl { display: grid; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.pipe-ctl .lab { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 14px; font-weight: 600; }
+.pipe-ctl .lab > span:first-child { min-width: 92px; color: var(--muted); }
+#tl { display: block; width: 100%; max-width: 640px; margin: 0 auto; height: auto; }
+.tl-lab { fill: var(--ink); font: 600 11px var(--font); }
+.tl-ax { stroke: var(--line); }
+.tl-tick { fill: var(--muted); font: 600 9.5px var(--mono); text-anchor: middle; }
+.tl-row { fill: var(--bg-2); }
+.tl-blk { stroke: var(--bg); stroke-width: 1; }
+.tl-num { fill: var(--on-v); font: 700 9.5px var(--mono); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.tl-wait { fill: url(#hatch); stroke: var(--hatch); stroke-width: .8; }
+.tl-hatch line { stroke: var(--hatch); stroke-width: 2; }
+.tl-q { fill: var(--warn); opacity: .85; }
+.tl-cur { stroke: var(--ink); stroke-width: 1.5; }
+.tl-qn { fill: var(--warn); font: 700 9.5px var(--mono); }
+.pstats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+@media (max-width: 560px) { .pstats { grid-template-columns: 1fr; } }
+.pstats div { font-size: 13px; color: var(--muted); }
+.pstats b { display: block; font: 700 18px var(--mono); color: var(--ink); }
+
+/* ---------- stage 3: vault ---------- */
+#seq { display: block; width: 100%; max-width: 520px; margin: 0 auto; height: auto; }
+.sq-box { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; }
+.sq-h { fill: var(--ink); font: 700 12.5px var(--font); text-anchor: middle; dominant-baseline: central; }
+.sq-life { stroke: var(--line); stroke-width: 2; stroke-dasharray: 4 4; }
+.sq-arrow { stroke: var(--ink); stroke-width: 2; fill: none; }
+.sq-arrow.ret { stroke-dasharray: 6 4; }
+.sq-arrow.vid { stroke: var(--accent); stroke-width: 3; }
+.ah { fill: var(--ink); }
+.ah.vid { fill: var(--accent); }
+.sq-t { fill: var(--ink); font: 600 11.5px var(--font); text-anchor: middle; }
+.sq-n { fill: var(--muted); font: 600 10.5px var(--font); text-anchor: middle; }
+.sq-step { transition: opacity .5s; }
+.sq-step.hide { opacity: 0; }
+.att { border: 1px solid var(--line); border-radius: 14px; padding: 14px; background: var(--bg); }
+.att-h { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 8px; }
+.att-h b { color: var(--ink); font-family: var(--mono); }
+.urlraw { font-family: var(--mono); font-size: 12.5px; background: var(--code-bg); color: var(--code-ink); padding: 10px 12px; border-radius: 10px; word-break: break-all; line-height: 1.45; }
+.urlraw .chg { color: #ffb36b; font-weight: 700; text-decoration: underline; }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 6px; margin: 10px 0; }
+.fields div { border: 1px solid var(--line); border-radius: 10px; padding: 6px 9px; background: var(--panel); font-size: 12px; color: var(--muted); }
+.fields b { display: block; font: 700 13px var(--mono); color: var(--ink); word-break: break-all; }
+.stamps { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.stamps .opt { text-align: center; font-weight: 700; min-height: 46px; }
+.chk { margin-top: 10px; display: grid; gap: 4px; font: 12.5px var(--mono); }
+.chk div { padding: 6px 9px; border-radius: 8px; background: var(--bg-2); word-break: break-word; }
+.chk .y { color: var(--good); } .chk .n { color: var(--bad); }
+.dots3 { display: flex; gap: 6px; margin: 10px 0 0; }
+.dots3 span { width: 12px; height: 12px; border-radius: 50%; background: var(--line); }
+.dots3 span.ok { background: var(--good); } .dots3 span.no { background: var(--bad); }
+
+/* ---------- stage 4: long-tail cost lab ---------- */
+#tail { display: block; width: 100%; max-width: 640px; margin: 0 auto; height: auto; }
+.tc-head { fill: var(--cdn); opacity: .85; }
+.tc-tail { fill: var(--origin); opacity: .55; }
+.tc-ax { stroke: var(--line); }
+.tc-t { fill: var(--muted); font: 600 10px var(--font); }
+.tc-mark { stroke: var(--ink); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.tc-lab { fill: var(--ink); font: 700 11.5px var(--mono); }
+.slider { padding: 10px 14px 0; display: grid; gap: 4px; }
+.slider label { display: flex; justify-content: space-between; font-weight: 600; font-size: 14px; gap: 8px; flex-wrap: wrap; }
+.slider input { width: 100%; accent-color: var(--accent); height: 30px; }
+.slider input[disabled] { opacity: .4; }
+.tacs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px 14px 14px; }
+@media (max-width: 560px) { .tacs { grid-template-columns: 1fr; } }
+.tac { text-align: left; border: 2px solid var(--line); background: var(--panel); border-radius: 12px; padding: 9px 12px; min-height: 48px; font-size: 14px; font-weight: 600; transition: border-color .2s, background .2s; }
+.tac small { display: block; font-weight: 500; color: var(--muted); font-size: 12.5px; }
+.tac:hover:not([disabled]) { border-color: var(--accent); }
+.tac[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.tac[aria-pressed="true"]::after { content: " ✓"; color: var(--accent); }
+.tac[disabled] { opacity: .45; cursor: not-allowed; }
+.bill { padding: 14px; border-top: 1px solid var(--line); background: var(--panel); }
+.billtop { display: flex; align-items: baseline; gap: 6px 14px; flex-wrap: wrap; }
+.billtop .big { font: 700 28px var(--mono); transition: color .3s; }
+.billtop .big.ok { color: var(--good); } .billtop .big.no { color: var(--bad); }
+.billbar { position: relative; height: 24px; margin: 24px 0 10px; border-radius: 8px; background: var(--bg-2); border: 1px solid var(--line); display: flex; }
+.billbar .bs { height: 100%; transition: width .45s cubic-bezier(.2,.8,.2,1); min-width: 0; }
+.billbar .bs:first-child { border-radius: 7px 0 0 7px; }
+.billbar .tgt { position: absolute; top: -6px; bottom: -6px; width: 3px; margin-left: -1px; background: var(--ink); border-radius: 2px; }
+.billbar .tgt span { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font: 700 11px var(--mono); white-space: nowrap; color: var(--ink); }
+.bleg { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 4px 14px; font-size: 13px; }
+.bleg div { display: flex; gap: 6px; align-items: center; }
+.bleg i { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+.bleg span { flex: 1; color: var(--muted); }
+.bleg b { font-family: var(--mono); font-size: 12.5px; white-space: nowrap; }
+.light { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 13.5px; background: var(--bg); margin-top: 10px; }
+.light i { width: 16px; height: 16px; border-radius: 50%; flex: none; margin-top: 3px; background: var(--muted); transition: background .3s; }
+.light.g i { background: var(--good); box-shadow: 0 0 0 4px var(--good-soft); }
+.light.a i { background: var(--warn); box-shadow: 0 0 0 4px var(--warn-soft); }
+.light.r i { background: var(--bad); box-shadow: 0 0 0 4px var(--bad-soft); }
+.light b { font-family: var(--mono); }
+.flags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.flag { font-size: 12.5px; font-weight: 700; padding: 4px 10px; border-radius: 99px; background: var(--warn-soft); color: var(--ink); }
+
+/* ---------- stage 5: pager + board ---------- */
+.phone { background: var(--code-bg); color: var(--code-ink); border-radius: 22px; padding: 14px 16px; max-width: 460px; margin: 0 auto; border: 4px solid color-mix(in srgb, var(--code-bg) 70%, var(--muted)); }
+.ph-top { display: flex; justify-content: space-between; font: 700 12px var(--mono); opacity: .8; margin-bottom: 8px; }
+.ph-msg { font: 600 14.5px var(--mono); min-height: 70px; line-height: 1.45; }
+.ph-msg .pg { color: #ff8a8a; font-weight: 700; display: block; margin-bottom: 4px; }
+.ph-msg.ring { animation: buzz .45s; }
+@keyframes buzz { 20%, 60% { transform: translateX(-3px); } 40%, 80% { transform: translateX(3px); } }
+.ph-timer { height: 6px; border-radius: 99px; background: #2a2e4d; margin-top: 10px; overflow: hidden; }
+.ph-timer div { height: 100%; width: 100%; background: #6ee7a8; border-radius: 99px; }
+.ph-timer div.low { background: #ffb36b; }
+.ph-timer div.out { background: #ff8a8a; }
+.ph-tt { font: 600 11.5px var(--mono); opacity: .75; margin-top: 4px; min-height: 16px; }
+.pgarea { max-width: 460px; margin: 12px auto 0; }
+.board { display: grid; grid-template-columns: repeat(auto-fill, minmax(135px, 1fr)); gap: 6px; margin-top: 14px; }
+.tile { border: 2px solid var(--line); border-radius: 10px; padding: 7px 8px; font-size: 12.5px; min-width: 0; font-weight: 600; background: var(--panel); display: flex; gap: 6px; align-items: center; line-height: 1.2; transition: border-color .3s, background .3s; }
+.tile span:nth-child(2) { flex: 1; min-width: 0; }
+.tile .st { flex: none; font-size: 12px; }
+.tile.alert { border-color: var(--bad); background: var(--bad-soft); animation: tpulse 1s ease-in-out infinite; }
+.tile.fixed { border-color: var(--good); background: var(--good-soft); }
+.tile.miss { border-color: var(--warn); background: var(--warn-soft); }
+@keyframes tpulse { 50% { border-color: transparent; } }
+.pb { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 12px; }
+.pb th, .pb td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.pb th { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.pb td:first-child { font-weight: 600; white-space: nowrap; }
+@media (max-width: 480px) { .pb td:first-child { white-space: normal; } }
+.sort-item .row .opt { min-height: 40px; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 14.5 · Design YouTube</div>
+    <h1>Faster, Safer, Cheaper</h1>
+    <p class="lede">Your YouTube clone works. Now the interviewer pushes on it: make uploads faster, stop strangers uploading into other people's folders, cut the $150,000-a-day CDN bill, and tell me what happens when each box dies.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can list the book's optimisations by category (speed, safety, cost), explain pre-signed URLs and the long-tail CDN strategy, and answer "what happens if X goes down?" for every component.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Upload speed run</h2><div class="sub">Chunks, resumes and nearby upload centers</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>A raw video can be gigabytes. The book's first speed trick: don't send it as one giant piece. Cut it into <b>chunks</b> along <b>GOP</b> boundaries. A GOP (group of pictures) is a short run of frames, usually a few seconds, that can be decoded on its own. You met it in <a href="1403-youtube-transcoding-and-dag.html">Quest 14.3</a>. The book says the client app can do this splitting itself.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-youtube" target="_blank" rel="noopener">[1]</a></p>
+      <p>Chunks buy you two things. They can travel <b>in parallel</b>. And the upload becomes <b>resumable</b>: after a failure you carry on from the last finished chunk instead of starting again from byte 0.</p>
+      <p>Two copies of you upload the same <b>1 GB</b> video, each over a <b>50 Mbit/s</b> connection (about 6.25 MB per second). When Lane A reaches 70%, the network drops for 5 seconds. Predict first, then press Go.</p>
+
+      <div class="sim" id="race">
+        <div class="racehead"><span>📱 You, 50 Mbit/s →</span><span class="where" id="rcWhere"></span></div>
+        <div class="lane">
+          <div class="lname"><b>Lane A · one 1 GB upload</b><span>no chunks, no resume</span></div>
+          <div class="abar" id="aBar"><div class="afill"></div><div class="amark" style="left:70%"><span>💥 70%</span></div><div class="atxt" id="aTxt">0 MB</div></div>
+          <div class="lstat" id="aStat"></div>
+        </div>
+        <div class="lane">
+          <div class="lname"><b>Lane B · 10 chunks of 100 MB</b><span>4 at a time, resumable</span></div>
+          <div class="chunks" id="chunks"></div>
+          <div class="lstat" id="bStat"></div>
+        </div>
+        <div class="legend"><span><i style="background:var(--warn)"></i>setting up the request</span><span><i style="background:var(--accent)"></i>sending</span><span><i style="background:var(--good)"></i>done</span><span><i style="background:var(--bad)"></i>lost in the drop</span></div>
+        <div class="sim-bar">
+          <span>Clock: <span class="bignum" id="rcT">0 s</span></span>
+          <span class="seg" id="rcSeg" role="group" aria-label="Upload center distance"><button data-w="near" class="on" aria-pressed="true" disabled>Near · 20 ms</button><button data-w="far" aria-pressed="false" disabled>Far · 200 ms</button></span>
+          <button class="btn primary" id="rcGo" disabled>▶ Go</button>
+        </div>
+        <div class="simlog" id="rcLog"><div>Make both predictions below to unlock Go.</div></div>
+      </div>
+      <div class="challenge boxed" id="rcPredict"></div>
+      <ul class="checklist" id="s1goals">
+        <li data-g="race"><span class="box">✓</span><span>Predict, then run the race</span></li>
+        <li data-g="far"><span class="box">✓</span><span>Move the upload center overseas (predict first)</span></li>
+        <li data-g="near"><span class="box">✓</span><span>Bring it back near and watch Lane B speed up</span></li>
+      </ul>
+      <div class="callout tip" id="rcNear" style="display:none"><b>Upload centers close to users.</b> The book's second speed trick: users in North America upload to a center in North America, users in Asia to one in Asia. It suggests using the CDN's edge servers as those upload centers.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-youtube" target="_blank" rel="noopener">[1]</a> A shorter path means fewer round trips, fewer hops where a packet can get lost, and a single connection that can actually fill your link.</div>
+      <div class="callout warn"><b>Honest caveats.</b> (1) Real uploaders usually chunk by <i>bytes</i>, not by GOP. Amazon S3's multipart upload<a class="cite" href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html" target="_blank" rel="noopener">[4]</a> and YouTube's own resumable upload protocol<a class="cite" href="https://developers.google.com/youtube/v3/guides/using_resumable_upload_protocol" target="_blank" rel="noopener">[5]</a> both work this way, and GOP-aware splitting happens on the server. The book's client-side GOP split is possible but less common. (2) "Use the CDN as upload centers" really means <i>edge ingest</i>, for example S3 Transfer Acceleration, which routes uploads through CloudFront edge locations.<a class="cite" href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/transfer-acceleration.html" target="_blank" rel="noopener">[10]</a> Not every CDN offers it. (3) The per-connection speeds in this race are made up. Real TCP with big buffers can do better over long paths, but long, lossy paths still slow a single connection down.</div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Queues between everything</h2><div class="sub">Loose coupling for parallelism</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Inside the transcoding pipeline from <a href="1404-youtube-transcoding-architecture.html">Quest 14.4</a>, a video moves through three modules: <b>Download</b> (fetch the original from storage), <b>Encoding</b> (transcode it), and <b>Upload</b> (write the result to encoded storage).</p>
+      <p>The book's third speed trick is "parallelism everywhere": make the system <b>loosely coupled</b> by putting <b>message queues</b> between the modules.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-youtube" target="_blank" rel="noopener">[1]</a> A message queue is a buffer: producers drop work into it, and consumers pick it up at their own pace. Without one, the encoder has to wait for the download module to hand each video over. With one, nobody waits on anybody directly. If there's work in the queue, encoders can grab it in parallel.</p>
+      <p>Ten videos, with different sizes, go through the pipeline. Run it with <b>no queues</b> first. Grey stripes mean a module has finished its work but is <b>stuck</b>, holding the video until the next module is free.</p>
+
+      <div class="sim">
+        <div class="pipe-ctl">
+          <div class="lab"><span>Wiring</span><span class="seg" id="pMode" role="group" aria-label="Wiring"><button data-v="noq" class="on" aria-pressed="true">No queues</button><button data-v="q" aria-pressed="false" disabled>Queues</button></span></div>
+          <div class="lab"><span>Encoders</span><span class="seg" id="pW" role="group" aria-label="Encoding workers"><button data-v="1" class="on" aria-pressed="true" disabled>1</button><button data-v="2" aria-pressed="false" disabled>2</button><button data-v="3" aria-pressed="false" disabled>3</button></span><span class="small muted" id="pWhint">needs queues</span></div>
+          <div class="lab"><span>Load</span><span class="seg" id="pLoad" role="group" aria-label="Load"><button data-v="10" class="on" aria-pressed="true">10 videos</button><button data-v="20" aria-pressed="false" disabled>Burst: 20 at once</button></span><button class="btn primary" id="pRun" style="margin-left:auto">▶ Run</button></div>
+        </div>
+        <svg id="tl" viewBox="0 0 420 150" role="img" aria-label="Timeline of the download, encoding and upload modules"></svg>
+        <div class="pstats"><div><b id="pTot">—</b>total time</div><div><b id="pBlk">—</b>download module stuck</div><div><b id="pQ">—</b>queue peak</div></div>
+        <div class="simlog" id="pLog"><div>Press Run. Each coloured block is one video; the number is its id.</div></div>
+      </div>
+      <div class="challenge boxed" id="pPredict"></div>
+      <ul class="checklist" id="s2goals">
+        <li data-g="noq"><span class="box">✓</span><span>Run the pipeline with no queues</span></li>
+        <li data-g="q"><span class="box">✓</span><span>Predict, then run it with queues and 2 encoders</span></li>
+        <li data-g="burst"><span class="box">✓</span><span>Drop a burst of 20 uploads, with queues and without</span></li>
+      </ul>
+      <div class="callout tip" id="pNote" style="display:none"><b>The queue alone isn't the speed-up.</b> Try queues with just <b>1</b> encoder: the total barely moves, because encoding is the slowest step. What the queue buys you is <i>decoupling</i>. The download module never waits, a burst becomes a backlog instead of a jam, and you can add encoders without rewiring anything. That is the "high parallelism" the book is after.</div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Lock the vault</h2><div class="sub">Pre-signed URLs and protecting videos</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Safety, part one: only an authorised user should be able to upload, and only to the right place. The book's answer is a <b>pre-signed upload URL</b>. That's a storage link with a permission slip built in: it names one object, an expiry time and an allowed method, plus a <b>signature</b>. The signature is a code computed from those fields with a secret key that only your servers hold.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-youtube" target="_blank" rel="noopener">[1]</a><a class="cite" href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/PresignedUrlUploadObject.html" target="_blank" rel="noopener">[2]</a> "Pre-signed URL" is Amazon S3's name. Azure Blob Storage calls the same idea a <b>Shared Access Signature</b> (SAS).<a class="cite" href="https://learn.microsoft.com/en-us/rest/api/storageservices/delegate-access-with-shared-access-signature" target="_blank" rel="noopener">[3]</a></p>
+
+      <div class="sim">
+        <svg id="seq" viewBox="0 0 432 262" role="img" aria-label="Sequence diagram: the client asks the API servers for a pre-signed URL, gets it back, then uploads the video straight to cloud storage"></svg>
+        <div class="sim-bar"><span class="small muted">Watch who talks to whom, and where the video bytes go.</span><button class="btn primary" id="sqPlay">▶ Play the 3 steps</button></div>
+      </div>
+
+      <div class="challenge" id="bouncer" style="display:none">
+        <div class="step">Part 1 · The bouncer</div>
+        <h3>You're the storage door. Accept the upload, or reject it with a 403?</h3>
+        <p class="small muted" style="margin-top:-6px">Storage takes the fields from the URL, re-computes the signature with the secret key and compares. It also checks the clock. Fields someone edited <i>after</i> the URL was issued are underlined in <span style="color:var(--warn);font-weight:700">orange</span>.</p>
+        <div id="attBox"></div>
+        <div class="dots3" id="attDots"></div>
+      </div>
+
+      <div class="challenge" id="threats" style="display:none">
+        <div class="step">Part 2 · Protect the videos</div>
+        <h3>Match each threat to its defence</h3>
+        <p class="small">Safety, part two: once a video is stored, how do you stop people copying it? The book lists three options:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-youtube" target="_blank" rel="noopener">[1]</a></p>
+        <ul class="small">
+          <li><b>DRM</b> (digital rights management): the player and a licence server work together so only licensed devices can decrypt and play. The big three: Apple <b>FairPlay</b><a class="cite" href="https://developer.apple.com/streaming/fps/" target="_blank" rel="noopener">[7]</a>, Google <b>Widevine</b><a class="cite" href="https://www.widevine.com/" target="_blank" rel="noopener">[6]</a> and Microsoft <b>PlayReady</b>.</li>
+          <li><b>AES encryption</b>: encrypt the video and attach an authorisation policy. It's decrypted at playback, so only authorised users can watch it.</li>
+          <li><b>Visual watermarking</b>: an image laid over the video with identifying information, such as your company's logo or name.</li>
+        </ul>
+        <div class="sort" id="thSort"></div>
+      </div>
+      <div class="callout warn" id="vaultNote" style="display:none"><b>Honest caveat.</b> AES encryption without a real DRM system (say, HLS with AES-128 and a key URL) is weaker: anyone who can fetch the key can decrypt the video. Watermarks don't block copying. They deter it and help you trace a leak. And nothing stops someone filming a screen with a camera.</div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Tame the long tail</h2><div class="sub">Cut the $150k/day CDN bill</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>In <a href="1401-youtube-scope-and-estimate.html">Quest 14.1</a> you estimated the CDN bill at about <b>$150,000 a day</b>, if every view is served from the CDN.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-youtube" target="_blank" rel="noopener">[1]</a> The CDN is crucial, but it's expensive. The book's way in: YouTube views follow a <b>long-tail distribution</b>. A few videos are watched constantly, and most get few or no views. Measurement studies of YouTube found the same pattern.<a class="cite" href="https://arxiv.org/abs/0707.3670" target="_blank" rel="noopener">[9]</a></p>
+      <p>Below are 1,000 videos sorted by views, most popular on the left. The slider decides how many of the top videos live on the CDN. The rest are served from your own <b>high-capacity video servers</b>, which are cheaper but farther from viewers.</p>
+
+      <div class="sim">
+        <svg id="tail" viewBox="0 0 420 190" role="img" aria-label="Long-tail chart of views for 1,000 videos, split into CDN and video servers"></svg>
+        <div class="slider"><label for="tSlider"><span>Top <span class="bignum" id="tX">100%</span> of videos on the CDN</span><span class="muted small" id="tXv">1,000 videos</span></label><input type="range" id="tSlider" min="0" max="100" step="1" value="100" aria-label="Percent of videos on the CDN" disabled></div>
+        <div class="tacs" id="tacs">
+          <button class="tac" data-t="few" aria-pressed="false" disabled>Fewer encodings for the tail<small>keep 2 renditions, not 7, for unpopular videos</small></button>
+          <button class="tac" data-t="od" aria-pressed="false" disabled>Encode short videos on demand<small>transcode when someone first watches</small></button>
+          <button class="tac" data-t="reg" aria-pressed="false" disabled>Region-only distribution<small>a video popular in one region stays there</small></button>
+          <button class="tac" data-t="own" aria-pressed="false" disabled>Own CDN + ISP partnership<small>the Netflix route: boxes inside ISPs</small></button>
+        </div>
+        <div class="bill">
+          <div class="billtop"><span class="small muted">Daily bill</span><span class="big" id="bTot">$180k</span><span class="small muted">target: under <b>$100k</b> with latency green</span></div>
+          <div class="billbar" id="bBar"></div>
+          <div class="bleg" id="bLeg"></div>
+          <div class="light" id="bLat"><i></i><div>Average viewer latency: <b id="bLatV">40 ms</b> <span class="muted small" id="bLatT"></span></div></div>
+          <div class="flags" id="bFlags"></div>
+        </div>
+        <div class="simlog" id="tLog"><div>Toy model: CDN delivery = $90k × share of views on the CDN; edge copies = $60k × share of videos on the CDN; video servers cost 40% as much per view; encoding + storage = $30k.</div></div>
+      </div>
+      <div class="challenge boxed" id="tPredict"></div>
+      <ul class="checklist" id="s4goals">
+        <li data-g="pred"><span class="box">✓</span><span>Predict how much of the viewing the top 10% of videos get</span></li>
+        <li data-g="win"><span class="box">✓</span><span>Get the bill under <b>$100k/day</b> with latency still green</span></li>
+      </ul>
+      <div class="callout tip"><b>The book's four cost tricks</b>, all built on the long tail:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-youtube" target="_blank" rel="noopener">[1]</a> (1) serve only the most popular videos from the CDN, and the rest from your video servers; (2) store fewer encoded versions of unpopular videos, and encode short videos on demand; (3) don't copy region-only hits to other regions; (4) build your own CDN and partner with ISPs (internet service providers, the companies that connect homes to the internet), like Netflix does.<a class="cite" href="https://openconnect.netflix.com/" target="_blank" rel="noopener">[8]</a> That last one is a giant project. It makes sense only for very large streaming companies. All four depend on popularity, access patterns and video size, so the book says to <b>analyse historical viewing patterns first</b>.</div>
+      <div class="callout warn"><b>Honest caveat.</b> Every dollar figure here except the $150k is invented to make the trade-offs visible. In reality, Netflix gives its Open Connect boxes to ISPs for free, because both sides save on traffic.<a class="cite" href="https://openconnect.netflix.com/" target="_blank" rel="noopener">[8]</a> YouTube runs a similar programme, Google Global Cache.</div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Incident pager</h2><div class="sub">The book's error-handling playbook</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Interviewers love asking what happens when something fails. The book splits errors into two kinds:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-youtube" target="_blank" rel="noopener">[1]</a></p>
+      <ul>
+        <li><b>Recoverable</b>: it might work next time, like a video segment that fails to transcode. Retry a few times. If it keeps failing and the system decides it can't be fixed, return a proper error code to the client.</li>
+        <li><b>Non-recoverable</b>: retrying can never help, like a malformed video file. Stop all the tasks for that video and return an error code.</li>
+      </ul>
+      <div class="challenge" id="errSortBox">
+        <div class="step">Warm-up</div>
+        <h3>Recoverable or not?</h3>
+        <div class="sort" id="errSort"></div>
+      </div>
+
+      <div class="challenge">
+        <div class="step">Your on-call shift</div>
+        <h3>11 pages, one per component. Pick the book's fix.</h3>
+        <p class="small muted" style="margin-top:-6px">Each page gives you 15 seconds. Answer in time for 4 XP. A late answer still counts but pays 1 XP. A wrong fix costs a heart. Words you'll need: <b>stateless</b> means a server keeps no user data between requests; a <b>replica</b> is a synced copy of a database, cache or queue; the <b>primary</b> is the copy that takes writes (the book says <i>master</i> and <i>slave</i>).</p>
+        <div class="phone" aria-live="polite">
+          <div class="ph-top"><span>🔔 ON-CALL · video platform</span><span id="pgN">0 / 11</span></div>
+          <div class="ph-msg" id="pgMsg">Quiet so far. Start your shift when you're ready.</div>
+          <div class="ph-timer"><div id="pgBar"></div></div>
+          <div class="ph-tt" id="pgTT"></div>
+        </div>
+        <div class="pgarea">
+          <div class="opts" id="pgOpts"></div>
+          <div class="explain" id="pgEx"></div>
+          <div class="row" id="pgRow" style="margin-top:12px"><button class="btn primary" id="pgStart">📟 Start the shift</button></div>
+        </div>
+        <p class="cap" style="margin-top:16px">Status board</p>
+        <div class="board" id="board"></div>
+        <div id="recap"></div>
+      </div>
+      <div class="callout warn"><b>Honest caveats.</b> Promoting a replica to primary can lose the last few writes if replication was asynchronous (the primary didn't wait for the replica to confirm). And "retry a few times" needs two partners: <b>backoff</b> (wait longer between tries, so you don't hammer a struggling service) and <b>idempotent</b> tasks (running one twice gives the same result as running it once).</div>
+      <div id="s5quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Boss: The Penny-Pinching Pirate</h2><div class="sub">Speed, safety, cost, failure</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The Pirate wants your uploads slow, your videos stolen, your bill sky-high and your workers dead. Six situations, one move each. You need <b>5 of 6</b> to sink the ship.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 7 ================= -->
+  <section class="stage" data-stage="7" id="s7">
+    <div class="stage-h"><div class="num">7</div><div><h2>Say it like a senior</h2><div class="sub">Optimise out loud</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next up: the chapter boss.</b> In <a href="1406-youtube-boss-design-it-live.html">Design YouTube Live</a> you run the whole interview: scope it, estimate it, sketch the upload and streaming flows, dive into transcoding, then close with the optimisations and failure answers from this quest.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-youtube" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 14 "Design YouTube"</a>, Step 3: the "System optimizations" section (speed, safety, cost-saving) and "Error handling". Both are short and worth reading in full. Then skim AWS's page on <a href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/PresignedUrlUploadObject.html" target="_blank" rel="noopener">uploading with presigned URLs</a> to see what a real one looks like.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <p style="margin-top:0"><b>What the signature really covers.</b> An S3 pre-signed URL is signed with AWS Signature Version 4, which covers the method, the path (bucket and key), the host and the query parameters, including the expiry. Change any one of them and the signature no longer matches.<a class="cite" href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/PresignedUrlUploadObject.html" target="_blank" rel="noopener">[2]</a> The URL also stops working early if the credentials that signed it expire.</p>
+      <p><b>Resumable uploads in practice.</b> YouTube's API starts a resumable session, then the client sends bytes. After a drop, the client asks how many bytes arrived and continues from there.<a class="cite" href="https://developers.google.com/youtube/v3/guides/using_resumable_upload_protocol" target="_blank" rel="noopener">[5]</a> S3 multipart upload sends numbered parts in parallel and stitches them together at the end.<a class="cite" href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html" target="_blank" rel="noopener">[4]</a> Both chunk by bytes.</p>
+      <p><b>Failover isn't free.</b> Promoting a replica can drop the last asynchronously replicated writes, and a new cache node starts empty (cold), so it sends extra load to the database until it warms up.</p>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"if a pre-signed URL leaks, what can an attacker do with it?"</i> or <i>"how does a CDN know which videos are popular?"</i>
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 14 "Design YouTube" (ByteByteGo).</li>
+        <li>AWS, "Uploading objects with presigned URLs", Amazon S3 User Guide.</li>
+        <li>Microsoft, "Delegate access with a shared access signature", Azure Storage REST API docs.</li>
+        <li>AWS, "Uploading and copying objects using multipart upload", Amazon S3 User Guide.</li>
+        <li>Google, "Resumable uploads", YouTube Data API guide.</li>
+        <li>Google Widevine DRM.</li>
+        <li>Apple, FairPlay Streaming.</li>
+        <li>Netflix Open Connect.</li>
+        <li>Cheng, Dale, Liu, "Understanding the Characteristics of Internet Short Video Sharing: YouTube as a Case Study", 2007.</li>
+        <li>AWS, "Configuring fast, secure file transfers using Amazon S3 Transfer Acceleration", Amazon S3 User Guide.</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '1405',
+  winTitle: 'Faster, safer, cheaper, and still standing',
+  badge: '⚙️ Badge: Tuning Wizard',
+  cheatsheet: '../reference/ch14-youtube-cheatsheet.html',
+});
+const { sleep, shuffle } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); if (xp) Q.addXP(xp, li);
+  return true;
+}
+function setSeg(seg, v) { $$('button', seg).forEach(b => { const on = b.dataset.v === String(v) || b.dataset.w === String(v); b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); }); }
+function nextBtn(row, label, fn, primary = true) { const b = document.createElement('button'); b.className = 'btn' + (primary ? ' primary' : ''); b.textContent = label; b.onclick = fn; row.appendChild(b); return b; }
+// Predict-then-watch: pick an option, the action plays, then the answer is revealed.
+function predict(box, { step, title, options, correct, act, explain, xp = 10 }) {
+  box.innerHTML = `${step ? `<div class="step">${step}</div>` : ''}<h3>${title}</h3><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+  const opts = $('.opts', box);
+  let busy = false;
+  return new Promise(resolve => {
+    shuffle(options.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = async () => {
+        if (busy) return; busy = true;
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        b.classList.add('picked');
+        await act();
+        const ok = i === correct;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-i="${correct}"]`, opts).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + explain;
+        ok ? Q.addXP(xp, b) : Q.loseHeart(b);
+        resolve({ ok, row: $('.row', box) });
+      };
+      opts.appendChild(b);
+    });
+  });
+}
+// Two quizzes in a row, then clear the stage.
+function quizPair(mount, n, list) {
+  let i = 0;
+  const go = () => {
+    const cfg = list[i++], last = i === list.length;
+    Q.quiz(mount, Object.assign({ xp: 15, tag: `Check ${i} of ${list.length}` }, cfg, { onDone: () => last ? setTimeout(() => Q.clearStage(n), 900) : setTimeout(go, 600) }));
+  };
+  go();
+}
+// Sort items into buckets (one click each). Resolves when all are answered.
+function sorter(mount, items, buckets, xp) {
+  return new Promise(resolve => {
+    let left = items.length;
+    mount.innerHTML = shuffle(items.map((s, i) => ({ s, i }))).map(({ s, i }) => `<div class="sort-item" data-t="${i}"><p>${s.t}</p><div class="row">${buckets.map(b => `<button class="opt" data-k="${b.k}">${b.label}</button>`).join('')}</div><div class="explain"></div></div>`).join('');
+    $$('.sort-item', mount).forEach(item => {
+      const s = items[+item.dataset.t];
+      $$('.opt', item).forEach(b => b.onclick = () => {
+        $$('.opt', item).forEach(x => x.disabled = true);
+        const ok = b.dataset.k === s.a;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-k="${s.a}"]`, item).classList.add('right');
+        const ex = $('.explain', item); ex.className = 'explain show ' + (ok ? 'good' : 'bad'); ex.innerHTML = s.why;
+        ok ? Q.addXP(xp, b) : Q.loseHeart(b);
+        if (--left === 0) resolve();
+      });
+    });
+  });
+}
+const fmtS = s => s >= 100 ? `${Math.round(s)} s` : `${s.toFixed(1)} s`;
+
+/* ================= STAGE 1: upload race ================= */
+Q.onStage(1, () => {
+  const LINK = 6.25, FILE = 1000, CH = 100, NCH = 10, PAR = 4, OUT = 5, DROP = 700;
+  const WH = {
+    near: { rtt: 0.02, cap: 12.5, label: '🏢 upload center nearby · 20 ms round trip' },
+    far: { rtt: 0.2, cap: 1.25, label: '🌍 upload center overseas · 200 ms round trip' },
+  };
+  let where = 'near', busy = false, races = 0, ranFar = false, farB = null;
+  const goals = new Set();
+  $('#chunks').innerHTML = Array.from({ length: NCH }, (_, i) => `<div class="ck"><i></i><b>${i + 1}</b></div>`).join('');
+  const cks = $$('#chunks .ck');
+
+  // Precompute the whole race (both lanes, each with its own 50 Mbit/s link), then play it back.
+  function simulate(w) {
+    const { rtt, cap } = WH[w], setup = 3 * rtt, DT = 0.02;
+    const A = { p: 0, ph: 'setup', t0: 0, done: null, lost: 0 };
+    const B = { ch: Array.from({ length: NCH }, () => ({ p: 0, st: 'wait', s0: 0 })), done: null, lost: 0, lostN: 0 };
+    let t = 0, dropAt = null, downUntil = -1;
+    const frames = [], FSTEP = w === 'far' ? 2 : 0.5;
+    let nextF = 0;
+    const snap = () => frames.push({ t, a: { p: A.p, ph: A.ph }, b: B.ch.map(c => [c.st, c.p]), down: t < downUntil });
+    while ((A.done === null || B.done === null) && t < 6000) {
+      const down = t < downUntil;
+      if (!down) {
+        // lane A
+        if (A.done === null) {
+          if (A.ph === 'down') { A.ph = 'setup'; A.t0 = t; }
+          if (A.ph === 'setup' && t - A.t0 >= setup) A.ph = 'send';
+          if (A.ph === 'send') {
+            A.p += Math.min(cap, LINK) * DT;
+            if (dropAt === null && A.p >= DROP) {
+              dropAt = t; downUntil = t + OUT; A.lost = A.p; A.p = 0; A.ph = 'down';
+              B.ch.forEach(c => { if (c.st === 'setup' || c.st === 'send') { B.lost += c.p; B.lostN++; c.p = 0; c.st = 'lost'; } });
+            } else if (A.p >= FILE) { A.p = FILE; A.ph = 'done'; A.done = t; }
+          }
+        }
+        // lane B
+        if (B.done === null && !(t < downUntil)) {
+          B.ch.forEach(c => { if (c.st === 'lost') c.st = 'wait'; });
+          let active = B.ch.filter(c => c.st === 'setup' || c.st === 'send').length;
+          for (const c of B.ch) { if (active >= PAR) break; if (c.st === 'wait') { c.st = 'setup'; c.s0 = t; active++; } }
+          B.ch.forEach(c => { if (c.st === 'setup' && t - c.s0 >= setup) c.st = 'send'; });
+          const sending = B.ch.filter(c => c.st === 'send');
+          const rate = sending.length ? Math.min(cap, LINK / sending.length) : 0;
+          sending.forEach(c => { c.p += rate * DT; if (c.p >= CH) { c.p = CH; c.st = 'done'; } });
+          if (B.ch.every(c => c.st === 'done')) B.done = t;
+        }
+      }
+      if (t >= nextF) { snap(); nextF += FSTEP; }
+      t += DT;
+    }
+    snap();
+    return { frames, A, B, dropAt, end: t };
+  }
+  function draw(f, r) {
+    $('#rcT').textContent = `${Math.round(f.t)} s`;
+    const bar = $('#aBar');
+    $('.afill', bar).style.width = (f.a.p / FILE * 100) + '%';
+    bar.className = 'abar ' + (f.down ? 'down' : f.a.ph === 'done' ? 'done' : f.a.ph === 'setup' ? 'setup' : '');
+    $('#aTxt').textContent = f.down && r && f.t >= r.dropAt ? '💥 connection lost, back to 0' : `${Math.round(f.a.p)} MB`;
+    f.b.forEach(([st, p], i) => {
+      const c = cks[i];
+      c.className = 'ck ' + (st === 'wait' ? '' : st);
+      $('i', c).style.height = (p / CH * 100) + '%';
+    });
+  }
+  function reset() { draw({ t: 0, a: { p: 0, ph: 'setup' }, b: cks.map(() => ['wait', 0]), down: false }); $('#aStat').textContent = ''; $('#bStat').textContent = ''; $('#aStat').className = 'lstat'; $('#bStat').className = 'lstat'; }
+  function setWhere(w) {
+    where = w; setSeg($('#rcSeg'), w);
+    const el = $('#rcWhere'); el.textContent = WH[w].label; el.className = 'where' + (w === 'far' ? ' far' : '');
+  }
+  async function run() {
+    if (busy) return null;
+    busy = true; $('#rcGo').disabled = true; $$('#rcSeg button').forEach(b => b.disabled = true);
+    const r = simulate(where);
+    reset();
+    const dur = Q.reduced ? 0 : 5500, last = r.frames[r.frames.length - 1];
+    await new Promise(res => {
+      if (!dur) { draw(last, r); return res(); }
+      const t0 = performance.now();
+      const tick = now => {
+        const p = Math.max(0, Math.min(1, (now - t0) / dur));
+        draw(r.frames[Math.min(r.frames.length - 1, Math.floor(p * (r.frames.length - 1)))], r);
+        p < 1 ? requestAnimationFrame(tick) : res();
+      };
+      requestAnimationFrame(tick);
+    });
+    draw(last, r);
+    const aWin = r.A.done > r.B.done;
+    $('#aStat').textContent = `done at ${fmtS(r.A.done)} · re-sent ${Math.round(r.A.lost)} MB`;
+    $('#bStat').textContent = `done at ${fmtS(r.B.done)} · re-sent ${Math.round(r.B.lost)} MB` + (r.dropAt !== null && r.B.done < r.dropAt ? ' · finished before the drop' : '');
+    $('#bStat').className = 'lstat' + (aWin ? ' win' : ''); $('#aStat').className = 'lstat' + (aWin ? '' : ' win');
+    const w = where === 'far' ? 'overseas' : 'nearby';
+    if (r.dropAt !== null) logTo('rcLog', `💥 ${w}: at ${Math.round(r.dropAt)} s the network dropped. Lane A lost ${Math.round(r.A.lost)} MB and restarted from 0. Lane B lost ${r.B.lostN} chunk${r.B.lostN === 1 ? '' : 's'} in flight (${Math.round(r.B.lost)} MB).`, 'w');
+    logTo('rcLog', `🏁 ${w}: Lane B ${fmtS(r.B.done)}, Lane A ${fmtS(r.A.done)}.`, 'g');
+    races++;
+    busy = false; $('#rcGo').disabled = false;
+    if (ranFar || races > 1) $$('#rcSeg button').forEach(b => b.disabled = false);
+    return r;
+  }
+  setWhere('near'); reset();
+
+  // ---- part 1: two predictions, then Go ----
+  const P1 = [
+    { k: 'win', title: 'Which lane finishes first?', options: ['Lane A: one big upload', 'Lane B: 10 chunks, 4 at a time', 'A tie: same link, same speed'], correct: 1 },
+    { k: 'waste', title: 'When the drop hits, how much upload time does Lane A throw away? (Hint: 6.25 MB per second.)', options: ['About 10 seconds', 'About 110 seconds', 'About 270 seconds'], correct: 1 },
+  ];
+  const picks = {};
+  const box = $('#rcPredict');
+  box.innerHTML = `<div class="step">Predict first</div>` + P1.map(p => `<div class="pgroup" data-k="${p.k}"><h3>${p.title}</h3><div class="opts">${p.options.map((o, i) => `<button class="opt" data-i="${i}">${o}</button>`).join('')}</div></div>`).join('') + `<div class="explain"></div>`;
+  P1.forEach(p => {
+    const g = $(`.pgroup[data-k="${p.k}"]`, box);
+    $$('.opt', g).forEach(b => b.onclick = () => {
+      $$('.opt', g).forEach(x => x.classList.remove('picked')); b.classList.add('picked'); picks[p.k] = +b.dataset.i;
+      if (Object.keys(picks).length === P1.length && !busy) { $('#rcGo').disabled = false; $('#rcLog').innerHTML = '<div>Predictions locked in? Press Go.</div>'; }
+    });
+  });
+  let part = 1;
+  $('#rcGo').onclick = async () => {
+    if (part === 1) {
+      $$('.opt', box).forEach(x => x.disabled = true);
+      const r = await run();
+      if (!r) return;
+      part = 2;
+      let html = '';
+      P1.forEach(p => {
+        const g = $(`.pgroup[data-k="${p.k}"]`, box), ok = picks[p.k] === p.correct, b = $(`.opt[data-i="${picks[p.k]}"]`, g);
+        b.classList.add(ok ? 'right' : 'wrong'); if (!ok) $(`.opt[data-i="${p.correct}"]`, g).classList.add('right');
+        ok ? Q.addXP(10, b) : Q.loseHeart(b);
+      });
+      html = `<b>Lane B wins: ${fmtS(r.B.done)} against ${fmtS(r.A.done)}.</b> Lane A had sent 700 MB, which is 700 ÷ 6.25 = <b>112 seconds</b> of uploading, and the drop threw all of it away. Lane B lost only the ${r.B.lostN} chunks that were in flight (${Math.round(r.B.lost)} MB) and kept every finished one. Smaller chunks would lose even less. On a nearby center, parallelism didn't add raw speed here, since one connection already fills the link. The win is <b>resumability</b>.`;
+      const ex = $('.explain', box); ex.className = 'explain show good'; ex.innerHTML = html;
+      checkGoal('#s1goals', 'race', goals);
+      setTimeout(part2, 700);
+    } else {
+      const was = where;
+      const r = await run();
+      if (r && was === 'near' && ranFar && checkGoal('#s1goals', 'near', goals, 5)) {
+        logTo('rcLog', `✓ Back near: Lane B went from ${fmtS(farB || 242)} overseas to ${fmtS(r.B.done)}, even though the drop hit it this time.`, 'g');
+        $('#rcNear').style.display = 'block';
+        maybeQuiz();
+      }
+    }
+  };
+  function part2() {
+    const holder = document.createElement('div'); holder.className = 'challenge boxed'; holder.style.marginTop = '12px';
+    box.after(holder);
+    predict(holder, {
+      step: 'Part 2 · Predict, then watch',
+      title: 'Your users are in India, but the only upload center is overseas: <b>200 ms</b> per round trip instead of 20 ms. Each chunk needs about <b>3 round trips</b> just to set up its request. How long is that setup now?',
+      options: ['About 60 ms, the same as before', 'About 600 ms, ten times longer', 'About 6 s, a hundred times longer'],
+      correct: 1,
+      act: async () => { setWhere('far'); ranFar = true; const r = await run(); if (r) farB = r.B.done; checkGoal('#s1goals', 'far', goals); },
+      explain: '3 × 200 ms = 0.6 s per chunk, ten times the 0.06 s you had nearby. Setup is still small next to a 100 MB transfer. The bigger hit is speed: over a long path, one connection waits a full round trip for each "got it" from the server, and lost packets slow it down for longer. In this race, one connection gets only 10 Mbit/s of your 50. Lane A crawled. Lane B ran 4 connections at once and still used 40 Mbit/s. Now switch back to <b>Near</b> and press Go.',
+    }).then(() => { $$('#rcSeg button').forEach(b => b.disabled = busy); });
+  }
+  $$('#rcSeg button').forEach(b => b.onclick = () => { if (!busy) { setWhere(b.dataset.w); reset(); } });
+  let quizShown = false;
+  function maybeQuiz() {
+    if (quizShown || goals.size < 3) return;
+    quizShown = true;
+    quizPair($('#s1quiz'), 1, [
+      { q: 'What two things does a chunked upload give you that one big upload doesn’t?',
+        options: ['Chunks travel in parallel, and a failure only resends the unfinished chunks', 'A smaller total file, and transcoding that starts while bytes still arrive', 'Encryption for every chunk, and a free copy to every CDN region at once'],
+        correct: 0,
+        good: 'Parallel transfer and resumability. The book pairs them: split by GOP, send the pieces, and after a failure carry on from the last finished chunk.',
+        bad: 'Chunks don’t shrink or encrypt anything. They let pieces travel in <b>parallel</b>, and they make the upload <b>resumable</b>: a failure only costs the chunks in flight.' },
+      { q: 'Why does the book put upload centers close to users?',
+        options: ['Shorter round trips and fewer hops make uploads faster and steadier', 'Nearby centers store fewer renditions, so they need less disk space', 'The API servers can skip checking who is allowed to upload there'],
+        correct: 0,
+        good: 'Distance costs round trips, and each hop is another place to lose packets. The book suggests using CDN edges as upload centers.',
+        bad: 'It’s about the network path. A nearby center means shorter round trips and fewer hops, so uploads are faster and fail less. Security checks still apply.' },
+    ]);
+  }
+});
+
+/* ================= STAGE 2: queues between modules ================= */
+Q.onStage(2, () => {
+  const D = [2, 1, 2, 2, 1, 3, 2, 1, 2, 2], E = [6, 4, 7, 5, 8, 4, 6, 5, 7, 6], U = [2, 1, 2, 2, 3, 1, 2, 2, 2, 1];
+  const job = n => ({ d: n === 20 ? D.concat(D) : D, e: n === 20 ? E.concat(E) : E, u: n === 20 ? U.concat(U) : U });
+  const st = { mode: 'noq', w: 1, load: 10 };
+  const goals = new Set(), burstSeen = new Set();
+  let busy = false, predicted = false;
+
+  // No queues: each module holds one video until the next module is free to take it.
+  function schedNoQ({ d, e, u }) {
+    const rows = [{ name: 'Download', b: [] }, { name: 'Encode', b: [] }, { name: 'Upload', b: [] }];
+    let Drel = 0, Erel = 0, Ufin = 0, blocked = 0;
+    d.forEach((_, i) => {
+      const dS = Drel, dE = dS + d[i], h1 = Math.max(dE, Erel);
+      rows[0].b.push({ s: dS, f: dE, i }); if (h1 > dE) { rows[0].b.push({ s: dE, f: h1, i, wait: 1 }); blocked += h1 - dE; }
+      Drel = h1;
+      const ef = h1 + e[i], h2 = Math.max(ef, Ufin);
+      rows[1].b.push({ s: h1, f: ef, i }); if (h2 > ef) rows[1].b.push({ s: ef, f: h2, i, wait: 1 });
+      Erel = h2;
+      rows[2].b.push({ s: h2, f: h2 + u[i], i }); Ufin = h2 + u[i];
+    });
+    return { rows, total: Ufin, blocked, qpeak: null };
+  }
+  // Queues: download runs back to back; W encoders pull from the queue; upload takes whatever finishes first.
+  function schedQ({ d, e, u }, W) {
+    const rows = [{ name: 'Download', b: [] }];
+    const enc = Array.from({ length: W }, (_, k) => ({ name: W === 1 ? 'Encode' : `Encode ${k + 1}`, b: [] }));
+    const up = { name: 'Upload', b: [] };
+    let t = 0; const dE = [];
+    d.forEach((x, i) => { rows[0].b.push({ s: t, f: t + x, i }); t += x; dE.push(t); });
+    const wf = Array(W).fill(0), eS = [], eF = [];
+    d.forEach((_, i) => {
+      let k = 0; for (let j = 1; j < W; j++) if (wf[j] < wf[k]) k = j;
+      const s = Math.max(dE[i], wf[k]); wf[k] = s + e[i]; eS.push(s); eF.push(wf[k]); enc[k].b.push({ s, f: wf[k], i });
+    });
+    let uf = 0;
+    [...eF.keys()].sort((a, b) => eF[a] - eF[b] || a - b).forEach(i => { const s = Math.max(uf, eF[i]); up.b.push({ s, f: s + u[i], i }); uf = s + u[i]; });
+    const qd = []; let qpeak = 0;
+    for (let x = 0; x < uf; x++) { const n = dE.filter((v, i) => v <= x && eS[i] > x).length; qd.push(n); qpeak = Math.max(qpeak, n); }
+    return { rows: [...rows, { name: 'Queue', q: qd }, ...enc, up], total: uf, blocked: 0, qpeak };
+  }
+  const sched = () => st.mode === 'noq' ? schedNoQ(job(st.load)) : schedQ(job(st.load), st.w);
+  const svg = $('#tl');
+  function drawTL(sc, prog) {
+    const tMax = schedNoQ(job(st.load)).total, L = 70, PW = 342, RH = 24, G = 6, top = 6;
+    const H = top + sc.rows.length * (RH + G) + 22;
+    svg.setAttribute('viewBox', `0 0 420 ${H}`);
+    svg.innerHTML = '';
+    const defs = S('defs', {}, svg);
+    const pat = S('pattern', { id: 'hatch', width: 6, height: 6, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)', class: 'tl-hatch' }, defs);
+    S('line', { x1: 0, y1: 0, x2: 0, y2: 6 }, pat);
+    const clip = S('clipPath', { id: 'tlclip' }, defs);
+    const cr = S('rect', { x: 0, y: 0, width: L + PW * prog, height: H }, clip);
+    const x = t => L + t / tMax * PW;
+    for (let t = 0; t <= tMax; t += st.load === 20 ? 20 : 10) {
+      S('line', { class: 'tl-ax', x1: x(t), x2: x(t), y1: top, y2: H - 18 }, svg);
+      S('text', { class: 'tl-tick', x: x(t), y: H - 6 }, svg).textContent = t;
+    }
+    S('text', { class: 'tl-tick', x: 30, y: H - 6 }, svg).textContent = 'min →';
+    sc.rows.forEach((row, ri) => {
+      const y = top + ri * (RH + G);
+      S('text', { class: 'tl-lab', x: 4, y: y + RH / 2 + 4 }, svg).textContent = row.name;
+      S('rect', { class: 'tl-row', x: L, y, width: PW, height: RH, rx: 4 }, svg);
+    });
+    const g = S('g', { 'clip-path': 'url(#tlclip)' }, svg);
+    sc.rows.forEach((row, ri) => {
+      const y = top + ri * (RH + G);
+      if (row.q) {
+        const mx = Math.max(4, ...row.q);
+        row.q.forEach((n, t) => { if (n) S('rect', { class: 'tl-q', x: x(t), y: y + RH - RH * n / mx, width: Math.max(.5, x(t + 1) - x(t)), height: RH * n / mx }, g); });
+        const pk = row.q.indexOf(Math.max(...row.q));
+        if (pk >= 0 && row.q[pk]) S('text', { class: 'tl-qn', x: Math.min(x(pk) + 3, L + PW - 40), y: y + 10 }, g).textContent = `peak ${row.q[pk]}`;
+        return;
+      }
+      row.b.forEach(b => {
+        const w = x(b.f) - x(b.s);
+        if (b.wait) { S('rect', { class: 'tl-wait', x: x(b.s), y: y + 3, width: w, height: RH - 6, rx: 2 }, g); return; }
+        const r = S('rect', { class: 'tl-blk', x: x(b.s), y, width: w, height: RH, rx: 3 }, g); r.style.fill = `var(--v${b.i % 5})`;
+        if (w > 11) S('text', { class: 'tl-num', x: x(b.s) + w / 2, y: y + RH / 2 }, g).textContent = b.i + 1;
+      });
+    });
+    if (prog < 1) S('line', { class: 'tl-cur', x1: L + PW * prog, x2: L + PW * prog, y1: top, y2: H - 18 }, svg);
+    return cr;
+  }
+  async function run() {
+    if (busy) return null;
+    busy = true; $('#pRun').disabled = true;
+    const sc = sched(), tMax = schedNoQ(job(st.load)).total, end = sc.total / tMax;
+    if (Q.reduced) drawTL(sc, 1);
+    else await new Promise(res => { const t0 = performance.now(), dur = 2400; const tick = now => { const p = Math.max(0, Math.min(1, (now - t0) / dur)); drawTL(sc, p * end); p < 1 ? requestAnimationFrame(tick) : res(); }; requestAnimationFrame(tick); });
+    drawTL(sc, 1);
+    $('#pTot').textContent = `${sc.total} min`;
+    $('#pBlk').textContent = st.mode === 'noq' ? `${sc.blocked} min` : '0 min'; $('#pBlk').className = sc.blocked ? 'bignum bad' : 'bignum good';
+    $('#pQ').textContent = st.mode === 'noq' ? 'no queue' : `${sc.qpeak} video${sc.qpeak === 1 ? '' : 's'}`;
+    const desc = st.mode === 'noq' ? 'no queues' : `queues + ${st.w} encoder${st.w > 1 ? 's' : ''}`;
+    logTo('pLog', `${st.load} videos, ${desc}: done in <b>${sc.total} min</b>` + (st.mode === 'noq' ? `, download module stuck for ${sc.blocked} min.` : `, download never stuck, queue peaked at ${sc.qpeak}.`), st.mode === 'noq' ? 'w' : 'g');
+    if (st.mode === 'q' && st.w === 1) { logTo('pLog', 'Same total as no queues: encoding is the slowest step, and one encoder is one encoder.', 'w'); $('#pNote').style.display = 'block'; }
+    busy = false; $('#pRun').disabled = false;
+    after(sc);
+    return sc;
+  }
+  function after(sc) {
+    if (st.mode === 'noq' && st.load === 10 && checkGoal('#s2goals', 'noq', goals) && !predicted) askPredict();
+    if (st.load === 20 && predicted) {
+      burstSeen.add(st.mode);
+      if (burstSeen.size === 2 && checkGoal('#s2goals', 'burst', goals, 10)) { logTo('pLog', '✓ Burst: without queues the jam backs up into the download module. With queues it becomes a backlog that drains.', 'g'); $('#pNote').style.display = 'block'; maybeQuiz(); }
+    }
+  }
+  function enable() {
+    $$('#pMode button, #pLoad button').forEach(b => b.disabled = false);
+    $$('#pW button').forEach(b => b.disabled = st.mode !== 'q');
+    $('#pWhint').style.display = st.mode === 'q' ? 'none' : '';
+  }
+  function askPredict() {
+    const q = schedQ(job(10), 2).total, base = schedNoQ(job(10)).total;
+    predict($('#pPredict'), {
+      step: 'Predict, then watch',
+      title: `Now put queues between the modules and run <b>2 encoders</b> at once. The no-queue run took ${base} min. What's the new total?`,
+      options: [`About ${base} min, no change`, `About ${q} min`, 'About 15 min'],
+      correct: 1,
+      act: async () => { st.mode = 'q'; st.w = 2; setSeg($('#pMode'), 'q'); setSeg($('#pW'), 2); await run(); },
+      explain: `${q} min. The download module never waits now, so it finishes early, and the two encoders work through the queue side by side. It's not quite half of ${base}: downloads and uploads still take time, and the last videos still have to be encoded one after another. Now try the <b>burst</b>, with queues and without.`,
+      xp: 15,
+    }).then(() => { predicted = true; checkGoal('#s2goals', 'q', goals); enable(); });
+  }
+  $$('#pMode button').forEach(b => b.onclick = () => { if (busy) return; st.mode = b.dataset.v; if (st.mode === 'noq') { st.w = 1; setSeg($('#pW'), 1); } setSeg($('#pMode'), st.mode); enable(); drawTL(sched(), 0); });
+  $$('#pW button').forEach(b => b.onclick = () => { if (busy) return; st.w = +b.dataset.v; setSeg($('#pW'), st.w); drawTL(sched(), 0); });
+  $$('#pLoad button').forEach(b => b.onclick = () => { if (busy) return; st.load = +b.dataset.v; setSeg($('#pLoad'), st.load); drawTL(sched(), 0); });
+  $('#pRun').onclick = run;
+  drawTL(sched(), 0);
+  let quizShown = false;
+  function maybeQuiz() {
+    if (quizShown || goals.size < 3) return;
+    quizShown = true;
+    quizPair($('#s2quiz'), 2, [
+      { q: 'With a queue between them, what does the encoding module stop doing?',
+        options: ['Waiting for the download module to hand over each video', 'Checking that each uploaded file is a valid video file', 'Writing its encoded output into storage when it is done'],
+        correct: 0,
+        good: 'It no longer waits on the download module directly. If there are jobs in the queue, encoders pick them up, several at once if you run several.',
+        bad: 'Validation and writing output still happen. What the queue removes is the <b>synchronous wait</b>: the encoder no longer sits idle until the download module hands something over.' },
+      { q: 'Which of these is a real cost of putting queues between modules?',
+        options: ['More moving parts, and one video is harder to trace end to end', 'Modules can no longer run on separate machines or in other places', 'The slowest module gets slower, since the queue copies all the data'],
+        correct: 0,
+        good: 'Queues are infrastructure you have to run and monitor, and a video’s journey is now spread over several hops. You’ll want per-video tracing and queue-depth alerts.',
+        bad: 'Queues actually make it <i>easier</i> to spread modules across machines. Their cost is operational: more moving parts to run, and it’s harder to follow one video end to end or measure its total latency.' },
+    ]);
+  }
+});
+
+/* ================= STAGE 3: lock the vault ================= */
+Q.onStage(3, () => {
+  // --- sequence diagram ---
+  const svg = $('#seq');
+  const X = { c: 64, a: 212, s: 364 };
+  const defs = S('defs', {}, svg);
+  [['ahd', 'ah'], ['ahv', 'ah vid']].forEach(([id, cls]) => { const m = S('marker', { id, viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' }, defs); S('path', { d: 'M0 0L10 5L0 10z', class: cls }, m); });
+  [['c', '📱 Client'], ['a', '🖥️ API servers'], ['s', '🗄️ Cloud storage']].forEach(([k, t]) => {
+    S('line', { class: 'sq-life', x1: X[k], x2: X[k], y1: 40, y2: 252 }, svg);
+    S('rect', { class: 'sq-box', x: X[k] - 62, y: 8, width: 124, height: 30, rx: 9 }, svg);
+    S('text', { class: 'sq-h', x: X[k], y: 23 }, svg).textContent = t;
+  });
+  const steps = [];
+  const step = () => { const g = S('g', { class: 'sq-step hide' }, svg); steps.push(g); return g; };
+  let g = step();
+  S('line', { class: 'sq-arrow', x1: X.c, y1: 78, x2: X.a - 4, y2: 78, 'marker-end': 'url(#ahd)' }, g);
+  S('text', { class: 'sq-t', x: (X.c + X.a) / 2, y: 70 }, g).textContent = '① may I upload?';
+  S('text', { class: 'sq-n', x: (X.c + X.a) / 2, y: 94 }, g).textContent = 'HTTP request + login';
+  g = step();
+  S('text', { class: 'sq-n', x: X.a, y: 116 }, g).textContent = '🔑 signs key + expiry + method';
+  S('line', { class: 'sq-arrow ret', x1: X.a, y1: 140, x2: X.c + 4, y2: 140, 'marker-end': 'url(#ahd)' }, g);
+  S('text', { class: 'sq-t', x: (X.c + X.a) / 2, y: 132 }, g).textContent = '② pre-signed URL';
+  S('text', { class: 'sq-n', x: (X.c + X.a) / 2, y: 156 }, g).textContent = 'valid for this one object';
+  g = step();
+  S('line', { class: 'sq-arrow vid', x1: X.c, y1: 200, x2: X.s - 4, y2: 200, 'marker-end': 'url(#ahv)' }, g);
+  S('text', { class: 'sq-t', x: (X.c + X.s) / 2, y: 191 }, g).textContent = '③ PUT the video, using the URL';
+  S('text', { class: 'sq-n', x: (X.c + X.s) / 2, y: 217 }, g).textContent = 'the bytes skip the API servers';
+  g = step();
+  const ck = S('text', { class: 'sq-n', x: 428, y: 240 }, g); ck.style.textAnchor = 'end'; ck.textContent = '✓ signature  ✓ not expired';
+  let played = false;
+  $('#sqPlay').onclick = async () => {
+    $('#sqPlay').disabled = true;
+    steps.forEach(s => s.classList.add('hide'));
+    for (const s of steps) { await sleep(Q.reduced ? 0 : 750); s.classList.remove('hide'); }
+    $('#sqPlay').disabled = false; $('#sqPlay').textContent = '↻ Replay';
+    if (!played) { played = true; $('#bouncer').style.display = 'block'; startBouncer(); }
+  };
+
+  // --- the bouncer ---
+  const SECRET = 'k3y-only-servers-know';
+  function sig(m, bucket, key, exp) { let h = 0x811c9dc5; for (const c of [SECRET, m, bucket, key, exp].join('|')) { h ^= c.codePointAt(0); h = Math.imul(h, 0x01000193); } h ^= h >>> 15; h = Math.imul(h, 0x2c1b3c6d); h ^= h >>> 12; return (h >>> 0).toString(16).padStart(8, '0'); }
+  const NOW = '10:22';
+  const base = { m: 'PUT', bucket: 'vids-upload', key: 'user123/video.mp4', exp: '10:30' };
+  const ATT = [
+    { f: { ...base }, sigFor: base, chg: [], a: 'ok', why: 'Every field matches what was signed, and 10:30 is still in the future. The upload goes straight into <code>user123/video.mp4</code>.' },
+    { f: { ...base, key: 'user123/clip2.mp4', exp: '10:35' }, sigFor: { ...base, key: 'user123/clip2.mp4', exp: '10:35' }, chg: [], a: 'ok', why: 'A different object, but nobody edited this URL: your API servers signed it for <code>clip2.mp4</code>. Storage doesn’t need to know the user. It only checks that the signature matches the fields and that the clock is before 10:35.' },
+    { f: { ...base, exp: '10:12' }, sigFor: { ...base, exp: '10:12' }, chg: [], a: 'no', why: 'The signature is genuine: it was issued for 10:12. But it’s 10:22 now, so the URL expired 10 minutes ago. Short expiry limits the damage if a URL leaks.' },
+    { f: { ...base, key: 'user999/video.mp4' }, sigFor: base, chg: ['key'], a: 'no', why: 'Someone edited the object key to write into user999’s folder, but kept the old signature. Storage re-computes the signature over the new key and gets a different code. Without the secret key, nobody can make a matching one.' },
+    { f: { ...base, bucket: 'vids-public' }, sigFor: base, chg: ['bucket'], a: 'no', why: 'Same key, same expiry, but a different bucket. The bucket is part of what was signed, so the codes don’t match. A pre-signed URL is good for exactly one place.' },
+  ].map(a => ({ ...a, s: sig(a.sigFor.m, a.sigFor.bucket, a.sigFor.key, a.sigFor.exp) }));
+  const order = shuffle(ATT);
+  let ai = 0;
+  $('#attDots').innerHTML = order.map(() => '<span></span>').join('');
+  function startBouncer() { ai = 0; showAtt(); }
+  function showAtt() {
+    const a = order[ai], f = a.f, c = k => a.chg.includes(k) ? ' class="chg"' : '';
+    $('#attBox').innerHTML = `<div class="att">
+      <div class="att-h"><span>Upload attempt ${ai + 1} of ${order.length}</span><span>clock at the storage door: <b>${NOW}</b></span></div>
+      <div class="urlraw">${f.m} https://<span${c('bucket')}>${f.bucket}</span>.storage.example/<span${c('key')}>${f.key}</span>?expires=<span${c('exp')}>${f.exp}</span>&amp;sig=${a.s}</div>
+      <div class="fields"><div>method<b>${f.m}</b></div><div>bucket<b>${f.bucket}</b></div><div>object key<b>${f.key}</b></div><div>expires<b>${f.exp}</b></div><div>signature<b>${a.s}</b></div></div>
+      <div class="stamps"><button class="opt" data-v="ok">✅ ACCEPT</button><button class="opt" data-v="no">⛔ REJECT · 403</button></div>
+      <div class="chk"></div><div class="explain"></div><div class="row" style="margin-top:10px"></div></div>`;
+    $$('#attBox .stamps .opt').forEach(b => b.onclick = () => {
+      $$('#attBox .stamps .opt').forEach(x => x.disabled = true);
+      const ok = b.dataset.v === a.a;
+      b.classList.add(ok ? 'right' : 'wrong');
+      if (!ok) $(`#attBox .stamps .opt[data-v="${a.a}"]`).classList.add('right');
+      const re = sig(f.m, f.bucket, f.key, f.exp), sOk = re === a.s, eOk = f.exp > NOW;
+      $('#attBox .chk').innerHTML = `<div>re-sign(${f.m}, ${f.bucket}, ${f.key}, ${f.exp}) = ${re} <span class="${sOk ? 'y' : 'n'}">${sOk ? '✓ matches' : '✗ ≠ ' + a.s}</span></div><div>expires ${f.exp} vs now ${NOW} <span class="${eOk ? 'y' : 'n'}">${eOk ? '✓ still valid' : '✗ expired'}</span></div>`;
+      const ex = $('#attBox .explain'); ex.className = 'explain show ' + (ok ? 'good' : 'bad'); ex.innerHTML = `<b>${a.a === 'ok' ? 'Accept' : 'Reject (403 Forbidden)'}.</b> ${a.why}`;
+      $$('#attDots span')[ai].className = ok ? 'ok' : 'no';
+      ok ? Q.addXP(5, b) : Q.loseHeart(b);
+      nextBtn($('#attBox .row'), ai < order.length - 1 ? 'Next attempt →' : 'On to part 2 →', () => {
+        ai++;
+        if (ai < order.length) return showAtt();
+        $('#attBox').innerHTML = `<div class="callout tip" style="margin:0"><b>The rule.</b> The signature covers the method, bucket, key and expiry, so changing any one of them breaks it, and only your servers hold the key to make a new one. Notice too that the video never touched your API servers. They only handed out the permission slip.</div>`;
+        startThreats();
+      });
+    });
+  }
+  // --- threat match ---
+  let threatsStarted = false;
+  function startThreats() {
+    if (threatsStarted) return; threatsStarted = true;
+    $('#threats').style.display = 'block';
+    sorter($('#thSort'), [
+      { t: '🏴‍☠️ Someone downloads the full movie file and re-uploads it on another site.', a: 'drm', why: 'Encrypt it: DRM (FairPlay, Widevine, PlayReady) or AES encryption with an authorisation policy. Without a licence or key, the downloaded bytes won’t play.' },
+      { t: '🕵️ A stranger tries to upload a file into another user’s folder.', a: 'url', why: 'That’s an upload problem, so it’s the pre-signed URL: each one is scoped to a single object and expires soon.' },
+      { t: '🔎 A leaked clip shows up online and you need to know where it came from.', a: 'wm', why: 'A visual watermark carries identifying information in the picture itself, so it survives the copy and points back to the source.' },
+    ], [{ k: 'drm', label: 'DRM / AES encryption' }, { k: 'url', label: 'Pre-signed URL' }, { k: 'wm', label: 'Visual watermark' }], 5).then(() => {
+      $('#vaultNote').style.display = 'block';
+      setTimeout(() => quizPair($('#s3quiz'), 3, [
+        { q: 'With pre-signed URLs, does the video file pass through the API servers?',
+          options: ['No: they hand out the URL, and the client uploads straight to storage', 'Yes: they receive the file, sign it, and then forward it to storage', 'Only for big files: small ones go direct, big ones get relayed'],
+          correct: 0,
+          good: 'Step 3 goes client → storage. The API servers only check who you are and sign the URL. That also keeps gigabytes of video off them.',
+          bad: 'In the book’s 3-step flow, the API servers only issue the URL. The client then uploads <b>directly to storage</b> with it.' },
+        { q: 'Which three DRM systems does the book name?',
+          options: ['Apple FairPlay, Google Widevine and Microsoft PlayReady', 'Apple FairPlay, Google Cloud Armor and Microsoft Defender', 'Netflix Open Connect, Google Widevine and AWS KMS'],
+          correct: 0,
+          good: 'FairPlay (Apple devices), Widevine (Chrome, Android and many TVs) and PlayReady (Windows, Xbox and many TVs). Big services usually support all three.',
+          bad: 'The book’s three are Apple <b>FairPlay</b>, Google <b>Widevine</b> and Microsoft <b>PlayReady</b>. Cloud Armor and Defender are security products, Open Connect is Netflix’s CDN, and KMS stores keys.' },
+      ]), 600);
+    });
+  }
+});
+
+/* ================= STAGE 4: the long tail ================= */
+Q.onStage(4, () => {
+  const N = 1000, ZS = 1.15;
+  const v = Array.from({ length: N }, (_, i) => 1 / Math.pow(i + 1, ZS)), T = v.reduce((a, b) => a + b, 0);
+  const cum = [0]; v.forEach((x, i) => cum.push(cum[i] + x / T));
+  const st = { X: 100, t: { few: false, od: false, reg: false, own: false } };
+  const goals = new Set();
+  const TARGET = 100, LAT_OK = 80, LAT_MEH = 110;
+  function bill() {
+    const n = st.X / 100, vs = cum[Math.round(st.X * 10)], t = st.t, own = t.own ? 0.35 : 1;
+    const tf = (t.few ? 0.5 : 1) * (t.od ? 0.6 : 1);
+    const lines = [
+      { k: 'del', name: 'CDN delivery', c: 'var(--cdn)', v: 90 * vs * own },
+      { k: 'cop', name: 'CDN edge copies', c: 'color-mix(in srgb, var(--cdn) 55%, var(--bg))', v: 60 * n * (t.reg ? 0.5 : 1) * own },
+      { k: 'org', name: 'Video servers', c: 'var(--origin)', v: 90 * (1 - vs) * 0.4 },
+      { k: 'enc', name: 'Encoding + storage', c: 'var(--warn)', v: 30 * (n + (1 - n) * tf) },
+    ];
+    if (t.own) lines.push({ k: 'own', name: 'Own CDN build (per day)', c: 'var(--bad)', v: 25 });
+    const tot = lines.reduce((s, l) => s + l.v, 0);
+    const lat = (t.own ? 20 : 40) * vs + 200 * (1 - vs);
+    return { lines, tot, lat, vs };
+  }
+  // chart
+  const svg = $('#tail'), L = 34, PW = 376, TOP = 12, PH = 140, yMax = Math.sqrt(v[0]);
+  const xr = i => L + i / N * PW, yr = val => TOP + PH - Math.sqrt(val) / yMax * PH;
+  function area(a, b) {
+    if (b <= a) return '';
+    let d = `M${xr(a).toFixed(1)} ${TOP + PH}`;
+    for (let i = a; i < b; i++) d += `L${xr(i).toFixed(1)} ${yr(v[i]).toFixed(1)}L${xr(i + 1).toFixed(1)} ${yr(v[i]).toFixed(1)}`;
+    return d + `L${xr(b).toFixed(1)} ${TOP + PH}Z`;
+  }
+  S('line', { class: 'tc-ax', x1: L, x2: L + PW, y1: TOP + PH, y2: TOP + PH }, svg);
+  S('line', { class: 'tc-ax', x1: L, x2: L, y1: TOP, y2: TOP + PH }, svg);
+  [[0, '#1'], [250, '250'], [500, '500'], [750, '750'], [1000, '1,000']].forEach(([i, t]) => { const tx = S('text', { class: 'tc-t', x: xr(i), y: TOP + PH + 14, 'text-anchor': i === 0 ? 'start' : i === 1000 ? 'end' : 'middle' }, svg); tx.textContent = t; });
+  const yl = S('text', { class: 'tc-t', x: 10, y: TOP + PH / 2, transform: `rotate(-90 10 ${TOP + PH / 2})`, 'text-anchor': 'middle' }, svg); yl.textContent = 'views';
+  S('text', { class: 'tc-t', x: L + PW, y: TOP + PH + 28, 'text-anchor': 'end' }, svg).textContent = 'videos ranked by views (height squashed so the tail shows)';
+  const pHead = S('path', { class: 'tc-head' }, svg), pTail = S('path', { class: 'tc-tail' }, svg);
+  const mark = S('line', { class: 'tc-mark', y1: TOP - 4, y2: TOP + PH }, svg);
+  const lab = S('text', { class: 'tc-lab', y: TOP + 26 }, svg);
+  function render() {
+    const k = Math.round(st.X * 10), b = bill();
+    pHead.setAttribute('d', area(0, k)); pTail.setAttribute('d', area(k, N));
+    mark.setAttribute('x1', xr(k)); mark.setAttribute('x2', xr(k));
+    lab.textContent = `top ${st.X}% → ${Math.round(b.vs * 100)}% of views`;
+    const lx = xr(k) + 6, right = lx > L + PW - 150;
+    lab.setAttribute('x', right ? xr(k) - 6 : lx); lab.setAttribute('text-anchor', right ? 'end' : 'start');
+    $('#tX').textContent = st.X + '%'; $('#tXv').textContent = `${k.toLocaleString('en-US')} video${k === 1 ? '' : 's'} on the CDN`;
+    const ok = b.tot < TARGET;
+    $('#bTot').textContent = `$${b.tot.toFixed(1)}k`; $('#bTot').className = 'big ' + (ok ? 'ok' : 'no');
+    const MAXB = 180;
+    $('#bBar').innerHTML = b.lines.map(l => `<div class="bs" style="width:${l.v / MAXB * 100}%;background:${l.c}"></div>`).join('') + `<div class="tgt" style="left:${TARGET / MAXB * 100}%"><span>$100k</span></div>`;
+    $('#bLeg').innerHTML = b.lines.map(l => `<div><i style="background:${l.c}"></i><span>${l.name}</span><b>$${l.v.toFixed(1)}k</b></div>`).join('');
+    const lat = Math.round(b.lat), cls = lat <= LAT_OK ? 'g' : lat <= LAT_MEH ? 'a' : 'r';
+    $('#bLat').className = 'light ' + cls; $('#bLatV').textContent = `${lat} ms`;
+    $('#bLatT').textContent = cls === 'g' ? '(green: 80 ms or less)' : cls === 'a' ? '(amber: too many views come from far-away video servers)' : '(red: most viewers are streaming from far away)';
+    const fl = [];
+    if (st.t.od) fl.push('⏳ first viewer of a tail video waits for it to encode');
+    if (st.t.own) fl.push('🏗️ multi-year build, big upfront cost');
+    $('#bFlags').innerHTML = fl.map(f => `<span class="flag">${f}</span>`).join('');
+    return { b, ok: ok && cls === 'g' };
+  }
+  function update() {
+    const r = render();
+    if (r.ok && goals.has('pred') && !goals.has('win')) {
+      checkGoal('#s4goals', 'win', goals, 20);
+      const on = Object.keys(st.t).filter(k => st.t[k]).map(k => ({ few: 'fewer tail encodings', od: 'on-demand encoding', reg: 'region-only', own: 'own CDN' }[k]));
+      logTo('tLog', `✓ $${r.b.tot.toFixed(1)}k/day at ${Math.round(r.b.lat)} ms with the top ${st.X}% on the CDN${on.length ? ' + ' + on.join(', ') : ''}. The slider alone can’t get there; you need it plus at least one tactic.`, 'g');
+      maybeQuiz();
+    }
+  }
+  $('#tSlider').addEventListener('input', e => { st.X = +e.target.value; update(); });
+  $$('#tacs .tac').forEach(b => b.onclick = () => {
+    const k = b.dataset.t; st.t[k] = !st.t[k]; b.setAttribute('aria-pressed', st.t[k]);
+    const msg = { few: 'Unpopular videos keep only a couple of renditions.', od: 'Short tail videos get encoded on first view. Cheap, but that first viewer waits.', reg: 'Regional hits stay in their region, so fewer edge copies.', own: 'Your own boxes inside ISPs: cheap per view and close to users, but a giant project.' }[k];
+    logTo('tLog', `${st.t[k] ? '＋' : '－'} ${b.firstChild.textContent}${st.t[k] ? ': ' + msg : ''}`);
+    update();
+  });
+  render();
+  predict($('#tPredict'), {
+    step: 'Predict first',
+    title: 'In this chart, what share of all views goes to the <b>top 10%</b> of videos (the 100 most popular)?',
+    options: ['About 10% of views', 'About 40% of views', 'About 80% of views'],
+    correct: 2,
+    act: async () => {
+      $('#tSlider').disabled = false; $$('#tacs .tac').forEach(b => b.disabled = false);
+      for (let x = 100; x >= 10; x -= 6) { st.X = Math.max(10, x); $('#tSlider').value = st.X; render(); await sleep(Q.reduced ? 0 : 40); }
+      st.X = 10; $('#tSlider').value = 10; render();
+    },
+    explain: 'About 80%. That’s the long tail: a small head gets most of the views. So caching just the head covers most traffic, and the 900 tail videos stop costing you CDN edge copies. Now find a mix that gets the bill <b>under $100k/day</b> while latency stays green.',
+  }).then(() => { checkGoal('#s4goals', 'pred', goals); update(); });
+  let quizShown = false;
+  function maybeQuiz() {
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => quizPair($('#s4quiz'), 4, [
+      { q: 'Why does “only the popular videos on the CDN” work so well?',
+        options: ['Most views hit a small set of videos, so caching them covers most traffic', 'Popular videos are smaller files, so the CDN charges less to store them', 'A CDN can’t stream unpopular videos, so they have to go elsewhere anyway'],
+        correct: 0,
+        good: 'That’s the long tail. The head is a small number of videos but most of the views, so the CDN still serves most traffic while you stop paying to keep the tail at every edge.',
+        bad: 'File size and CDN ability have nothing to do with it. It’s the <b>long tail</b>: a small head gets most of the views, so keeping only the head on the CDN still covers most traffic.' },
+      { q: 'What does the book say to do before choosing any of these cost tricks?',
+        options: ['Study historical viewing data: popularity, region and video size', 'Move every video to the cheapest storage tier, then measure it', 'Build your own CDN first, because the other tricks depend on it'],
+        correct: 0,
+        good: 'Every trick depends on content popularity, user access patterns and video size, so you analyse historical viewing patterns before you optimise.',
+        bad: 'The book’s point is to <b>measure first</b>. These optimisations depend on popularity, access patterns and video size, so analyse historical viewing data before choosing.' },
+    ]), 500);
+  }
+});
+
+/* ================= STAGE 5: incident pager ================= */
+Q.onStage(5, () => {
+  let sortDone = false, shiftDone = false, quizShown = false;
+  sorter($('#errSort'), [
+    { t: 'A request to storage timed out.', a: 'r', why: 'Recoverable. A timeout is often temporary, so retry (with backoff).' },
+    { t: 'One video segment failed to transcode, once.', a: 'r', why: 'Recoverable. This is the book’s own example: retry a few times before giving up with an error code.' },
+    { t: 'The file says it’s an MP4, but the bytes inside are malformed.', a: 'n', why: 'Non-recoverable. This is the book’s example of a malformed video format. Retrying will fail the same way every time, so stop the tasks and return an error code.' },
+    { t: 'The uploader’s Wi-Fi blipped for 2 seconds.', a: 'r', why: 'Recoverable. Retry, and thanks to chunked uploads, only the chunks in flight are resent.' },
+    { t: 'The container is corrupt, and no decoder can open it.', a: 'n', why: 'Non-recoverable. The input itself is broken, so no retry can fix it.' },
+    { t: 'The worker running an encode crashed.', a: 'r', why: 'Recoverable. The video is fine. Run the task again on another worker.' },
+  ], [{ k: 'r', label: '🔁 Recoverable' }, { k: 'n', label: '🛑 Non-recoverable' }], 3).then(() => { sortDone = true; maybeQuiz(); });
+
+  const PAGES = [
+    { k: 'up', e: '📤', name: 'Upload', pg: 'Upload of video #4812 failed at chunk 37: connection reset.', fix: 'Retry the upload a few times', alt: ['Mark the video as malformed and stop', 'Promote a storage replica to primary'], why: 'An upload error is recoverable. The book says retry a few times, and with chunks that means resending only what didn’t arrive.' },
+    { k: 'split', e: '✂️', name: 'Video splitter', pg: 'App v2.1 (old version) can’t split videos by GOP.', fix: 'Send the whole video; split on the server', alt: ['Reject the upload with an error code', 'Retry the split on the same phone forever'], why: 'Older clients that can’t split by GOP pass the whole video up, and the server does the splitting.' },
+    { k: 'tx', e: '🎞️', name: 'Transcoding', pg: 'Segment 12 of video #77 failed to transcode.', fix: 'Retry the transcoding task', alt: ['Regenerate the whole DAG from scratch', 'Fail over to a different API server'], why: 'A transcoding error is the book’s classic recoverable error: retry. Only if it keeps failing do you return an error code.' },
+    { k: 'pre', e: '🧩', name: 'Pre\u00ADprocessor', pg: 'Preprocessor crashed while building the DAG for video #301.', fix: 'Regenerate the DAG diagram', alt: ['Promote a task worker to scheduler', 'Tell the user the video is malformed'], why: 'The preprocessor builds the DAG (the task graph you wired in <a href="1403-youtube-transcoding-and-dag.html">Quest 14.3</a>). If it errors, regenerate the DAG.' },
+    { k: 'dag', e: '📅', name: 'DAG scheduler', pg: 'DAG scheduler error: task “encode-720p” of #301 was lost.', fix: 'Reschedule the task', alt: ['Re-upload the original video file', 'Bring up a new metadata cache node'], why: 'If the DAG scheduler fails, reschedule the task. The DAG still describes what has to run.' },
+    { k: 'rmq', e: '📨', name: 'Resource manager queue', pg: 'Resource manager’s task queue is down.', fix: 'Switch over to a replica of the queue', alt: ['Keep retrying the same dead queue', 'Split every video on the server'], why: 'The queue is replicated. If it goes down, use a replica.' },
+    { k: 'wk', e: '👷', name: 'Task worker', pg: 'Task worker #9 died in the middle of an encode.', fix: 'Retry the task on a new worker', alt: ['Stop every task for that video', 'Promote a queue replica to primary'], why: 'The video is fine and only the worker died, so retry the task on a new worker.' },
+    { k: 'api', e: '🌐', name: 'API servers', pg: 'API server api-3 is unreachable.', fix: 'Send requests to another API server', alt: ['Restore api-3’s sessions from backup', 'Promote an API replica to be master'], why: 'API servers are stateless (no user data lives on them), so any other API server can take the requests.' },
+    { k: 'mc', e: '⚡', name: 'Metadata cache', pg: 'Metadata cache node cache-2 is down.', fix: 'Read other replicas; replace the node', alt: ['Rebuild the cache by re-transcoding', 'Promote the cache node to DB primary'], why: 'Cache data is replicated several times, so read from the other nodes and bring up a new cache server to replace the dead one.' },
+    { k: 'dbm', e: '🗄️', name: 'Metadata DB primary', pg: 'Metadata DB primary is unreachable. Writes are failing.', fix: 'Promote one replica to be the primary', alt: ['Retry writes on the dead primary', 'Send all writes to the cache for now'], why: 'If the master goes down, promote one of the slaves (replicas) to be the new master.' },
+    { k: 'dbs', e: '📚', name: 'Metadata DB replica', pg: 'Metadata DB read replica db-r2 is down.', fix: 'Read from another replica; replace it', alt: ['Promote db-r2 back to primary', 'Stop serving reads until it is fixed'], why: 'If a slave goes down, read from another one and bring up a new database server to replace it.' },
+  ];
+  const board = $('#board');
+  board.innerHTML = PAGES.map(p => `<div class="tile" data-k="${p.k}"><span>${p.e}</span><span>${p.name}</span><span class="st">●</span></div>`).join('');
+  const tile = k => $(`.tile[data-k="${k}"]`, board);
+  let pi = 0, timer = null, firstPass = true;
+  const LIMIT = 15;
+  function stopTimer() { if (timer) { clearInterval(timer); timer = null; } }
+  function showPage() {
+    const p = PAGES[pi];
+    $('#pgN').textContent = `${pi + 1} / ${PAGES.length}`;
+    const msg = $('#pgMsg'); msg.innerHTML = `<span class="pg">PAGE ${p.e} ${Q.esc(p.name)}</span>${Q.esc(p.pg)}`;
+    msg.classList.remove('ring'); void msg.offsetWidth; if (!Q.reduced) msg.classList.add('ring');
+    tile(p.k).className = 'tile alert'; $('.st', tile(p.k)).textContent = '🔴';
+    const ex = $('#pgEx'); ex.className = 'explain'; ex.innerHTML = '';
+    $('#pgRow').innerHTML = '';
+    const opts = $('#pgOpts'); opts.innerHTML = '';
+    let late = false;
+    const t0 = Date.now(), bar = $('#pgBar');
+    bar.className = ''; bar.style.width = '100%'; $('#pgTT').textContent = `${LIMIT} s left`;
+    stopTimer();
+    timer = setInterval(() => {
+      const left = Math.max(0, LIMIT - (Date.now() - t0) / 1000);
+      bar.style.width = (left / LIMIT * 100) + '%';
+      bar.className = left === 0 ? 'out' : left < 5 ? 'low' : '';
+      $('#pgTT').textContent = left > 0 ? `${Math.ceil(left)} s left` : '⏰ Too slow: this page now pays 1 XP. Still pick a fix.';
+      if (left === 0) { late = true; stopTimer(); }
+    }, 200);
+    shuffle([p.fix, ...p.alt].map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o;
+      b.onclick = () => {
+        stopTimer();
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        const ok = i === 0;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $$('.opt', opts).find(x => x.textContent === p.fix).classList.add('right');
+        ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = `<b>${ok ? (late ? 'Right, but late.' : 'Fixed.') : 'Not that one.'}</b> ${p.why}`;
+        tile(p.k).className = 'tile ' + (ok ? 'fixed' : 'miss'); $('.st', tile(p.k)).textContent = ok ? '✅' : '⚠️';
+        if (firstPass) { ok ? Q.addXP(late ? 1 : 4, b) : Q.loseHeart(b); } else Q.toast(ok ? '✓ practice' : '✗ practice', b, 'practice');
+        nextBtn($('#pgRow'), pi < PAGES.length - 1 ? 'Next page →' : '🏁 End the shift', () => { pi++; pi < PAGES.length ? showPage() : endShift(); });
+      };
+      opts.appendChild(b);
+    });
+  }
+  function endShift() {
+    stopTimer();
+    const fixed = $$('.tile.fixed', board).length;
+    $('#pgN').textContent = `${PAGES.length} / ${PAGES.length}`;
+    $('#pgMsg').innerHTML = `<span class="pg" style="color:#6ee7a8">SHIFT OVER</span>${fixed} of ${PAGES.length} fixed by you. ${fixed === PAGES.length ? 'Not one escalation.' : 'The amber tiles needed a senior to step in.'}`;
+    $('#pgBar').style.width = '0'; $('#pgTT').textContent = '';
+    $('#pgOpts').innerHTML = ''; $('#pgEx').className = 'explain';
+    $('#pgRow').innerHTML = ''; nextBtn($('#pgRow'), '↻ Replay the shift (practice)', () => { firstPass = false; startShift(); }, false);
+    $('#recap').innerHTML = `<p class="cap" style="margin-top:16px">The book's playbook</p><table class="pb"><thead><tr><th>When this fails…</th><th>…do this</th></tr></thead><tbody>${PAGES.map(p => `<tr><td>${p.e} ${p.name}</td><td>${p.fix}</td></tr>`).join('')}</tbody></table>`;
+    if (!shiftDone) { shiftDone = true; maybeQuiz(); }
+  }
+  function startShift() {
+    pi = 0;
+    $$('.tile', board).forEach(t => { t.className = 'tile'; $('.st', t).textContent = '●'; });
+    showPage();
+  }
+  $('#pgStart').onclick = startShift;
+  function maybeQuiz() {
+    if (quizShown || !sortDone || !shiftDone) return;
+    quizShown = true;
+    setTimeout(() => quizPair($('#s5quiz'), 5, [
+      { q: 'Why can any API server take any request when one of them dies?',
+        options: ['They’re stateless: user data lives in the database and cache', 'Each API server keeps a full copy of every user’s session', 'The load balancer replays the dead server’s memory onto them'],
+        correct: 0,
+        good: 'Stateless servers hold nothing a user depends on between requests, so the load balancer simply routes around the dead one.',
+        bad: 'The point is that API servers hold <b>no</b> state. Data lives in the metadata DB and cache, so any server can answer any request.' },
+      { q: 'The metadata database primary dies. What’s the book’s move?',
+        options: ['Promote one of the replicas to be the new primary', 'Retry the writes on the old primary until it returns', 'Send all writes to the metadata cache for the time being'],
+        correct: 0,
+        good: 'Promote a replica (the book’s “slave”) to master. Watch for the caveat: with asynchronous replication, the newest writes may be missing.',
+        bad: 'Retrying a dead primary just stalls, and the cache isn’t a system of record. The book <b>promotes a replica to primary</b>.' },
+    ]), 500);
+  }
+});
+
+/* ================= STAGE 6: boss ================= */
+Q.onStage(6, () => {
+  const SC = [
+    { e: '🐢', t: 'Uploads crawl in India', d: 'Users in India say big uploads are slow, and when the Wi-Fi blips they start again from zero. The only upload center is in Virginia.', a: 'chunk',
+      choices: [{ k: 'chunk', label: 'Chunks + nearby upload centers', sub: 'GOP chunks, resumable, CDN as upload centers' }, { k: 'api', label: 'Bigger API upload servers', sub: 'more CPU for the upload handler' }, { k: 'enc', label: 'More transcoding workers', sub: 'transcode each video faster' }],
+      why: 'Two problems, two fixes: restart-from-zero means you need chunked, <b>resumable</b> uploads, and slow means the path is too long, so add <b>upload centers near users</b>. Transcoding speed doesn’t help a slow upload.' },
+    { e: '🕵️', t: 'Uploading into a stranger’s folder', d: 'Your upload endpoint is one fixed storage URL. Someone uses it to drop files into another user’s folder.', a: 'url',
+      choices: [{ k: 'url', label: 'Pre-signed URL per object', sub: 'one key, one method, short expiry' }, { k: 'wm', label: 'Visual watermark', sub: 'logo laid over the video' }, { k: 'drm', label: 'DRM at playback', sub: 'Widevine / FairPlay / PlayReady' }],
+      why: 'Issue a <b>pre-signed URL</b> per upload. It’s signed for one object and expires soon, so it can’t be pointed at someone else’s folder. Watermarks and DRM protect playback, not uploads.' },
+    { e: '💸', t: 'Finance: the CDN bill is out of control', d: 'Every video, in all 7 renditions, is pushed to every CDN region. Most of them are watched a handful of times.', a: 'tail',
+      choices: [{ k: 'tail', label: 'Head on CDN, tail elsewhere', sub: '+ fewer tail renditions, regional only' }, { k: 'buy', label: 'Buy more CDN capacity', sub: 'negotiate a bulk discount' }, { k: 'low', label: 'Lower quality for all', sub: 're-encode every video smaller' }],
+      why: 'Use the <b>long tail</b>: popular videos on the CDN, the rest on your video servers, fewer renditions for the tail, and regional hits kept regional. Base it on viewing history.' },
+    { e: '🏴‍☠️', t: 'A premium film is being pirated', d: 'A paid film keeps showing up as full-quality files on pirate sites.', a: 'drm',
+      choices: [{ k: 'drm', label: 'DRM or AES encryption', sub: '+ a watermark to trace the leak' }, { k: 'url', label: 'Pre-signed upload URLs', sub: 'short-lived upload links' }, { k: 'cdn', label: 'Serve it only from the CDN', sub: 'faster edge delivery' }],
+      why: 'Encrypt playback with <b>DRM</b> (FairPlay, Widevine, PlayReady) or <b>AES encryption</b> with an authorisation policy, and add a watermark so leaks can be traced. Pre-signed URLs protect uploads, not playback.' },
+    { e: '👷', t: 'A task worker crashed mid-encode', d: 'Worker #14 died halfway through encoding the 1080p version of a video.', a: 'retry',
+      choices: [{ k: 'retry', label: 'Retry on a new worker', sub: 'the task goes back in the queue' }, { k: 'fail', label: 'Fail the video', sub: 'return an error code to the user' }, { k: 'promote', label: 'Promote a DB replica', sub: 'make it the new primary' }],
+      why: 'The video is fine, so this is recoverable: <b>retry the task on a new worker</b>. Ideally the task is idempotent, so running it twice is harmless.' },
+    { e: '🧟', t: 'Not a video at all', d: 'An “upload” turns out to be a renamed .zip file. The transcoder has already failed on it 3 times.', a: 'stop',
+      choices: [{ k: 'stop', label: 'Stop its tasks, return an error', sub: 'non-recoverable, so no retries' }, { k: 'retry', label: 'Keep retrying with backoff', sub: 'it might work next time' }, { k: 'split', label: 'Split it on the server', sub: 'the old-client fallback' }],
+      why: 'A malformed format is <b>non-recoverable</b>. Stop the running tasks for that video and return a proper error code. Retrying forever just burns workers.' },
+  ];
+  let rounds = 0;
+  function fight() {
+    rounds++;
+    Q.boss($('#boss'), {
+      name: '🏴‍☠️ Penny-Pinching Pirate' + (rounds > 1 ? ' · rematch' : ''),
+      xp: rounds > 1 ? 5 : 10,
+      choices: SC[0].choices,
+      scenarios: rounds > 1 ? shuffle(SC) : SC,
+      outro: 'Speed: chunks + nearby centers + queues. Safety: pre-signed URLs + DRM/AES + watermarks. Cost: the long tail. Failures: retry what can recover, stop what can’t.',
+      onDone: wins => {
+        if (wins >= 5) { setTimeout(() => Q.clearStage(6), 600); return; }
+        const row = document.createElement('div'); row.className = 'row'; row.style.marginTop = '12px';
+        $('#boss').appendChild(row);
+        const p = document.createElement('p'); p.className = 'small'; p.innerHTML = `You need <b>5 of 6</b> to sink the ship. The Pirate patches the hull…`;
+        row.before(p);
+        nextBtn(row, '⚔️ Rematch (half XP)', fight);
+      },
+    });
+  }
+  fight();
+});
+
+/* ================= STAGE 7: drill ================= */
+Q.onStage(7, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"OK, the design works. How would you make it faster, safer and cheaper? And what happens when parts of it fail?"</i>',
+  placeholder: 'For speed, I’d split uploads into chunks…',
+  model: '"<b>Speed:</b> the client splits the video into GOP-aligned chunks and uploads them in parallel, so a failure only resends the unfinished chunks. Upload centers sit close to users, for example on CDN edges. Message queues between the download, encoding and upload modules decouple them, so they run in parallel. <b>Safety:</b> clients get a pre-signed URL from the API servers (a SAS on Azure) and upload directly to storage, so only authorised users can write, and only to that one object. For playback, use DRM (FairPlay, Widevine, PlayReady), or AES encryption with an authorisation policy, plus visual watermarks. <b>Cost:</b> views follow a long tail, so only the popular head goes on the CDN and the tail comes from our video servers. Unpopular videos get fewer renditions, short ones can be encoded on demand, regional hits stay regional, and at huge scale we could build our own CDN with ISPs, like Netflix. All of that is driven by historical viewing data. <b>Failures:</b> recoverable errors get a few retries, then an error code. Non-recoverable ones, like a malformed file, stop the tasks and return an error code right away. Per component: API servers are stateless, so traffic goes to another one. A crashed worker\'s task is retried on a new worker. The queue fails over to a replica. A dead cache node is replaced while reads go to other replicas. If the DB primary dies, a replica gets promoted."',
+  checks: [
+    '<b>Speed:</b> chunked (GOP) resumable parallel uploads, upload centers near users, queues between modules',
+    '<b>Safety:</b> pre-signed upload URLs, plus DRM / AES encryption / watermarks for playback',
+    '<b>Cost:</b> long tail, so only the popular videos go on the CDN, plus fewer or on-demand tail encodings, regional distribution and own CDN, based on viewing data',
+    '<b>Errors:</b> retry then error code vs stop + error code, and per-component failover (stateless API, new worker, replica promotion, cache replacement)',
+  ],
+  onDone: () => Q.clearStage(7),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

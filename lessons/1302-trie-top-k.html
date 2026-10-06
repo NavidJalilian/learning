@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Grow the Trie</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: trie drawings (s1–s4), word chips + predictor (s1), step-through counters, cost bar,
+   million-node blob (s2), switches, big-O readout, memory gauge (s3), copy table (s4) */
+:root { --reuse: #2f7fd8; --reuse-soft: #e3efff; --edge: #b9b3a6; --badge: #f0b400; --badge-ink: #1c1a26; --blob: #cfc9bc; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --reuse: #5aa9ff; --reuse-soft: #13284a; --edge: #3d4170; --badge: #ffd23f; --badge-ink: #1c1a26; --blob: #2f3355; }
+}
+:root[data-theme="dark"] { --reuse: #5aa9ff; --reuse-soft: #13284a; --edge: #3d4170; --badge: #ffd23f; --badge-ink: #1c1a26; --blob: #2f3355; }
+
+[hidden] { display: none !important; }
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.bignum { font-family: var(--mono); font-weight: 700; }
+.stepper { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; }
+.stepper .btn { min-width: 44px; min-height: 42px; padding: 4px 12px; font-size: 20px; line-height: 1; }
+.stepper .bignum { font-size: 24px; min-width: 28px; text-align: center; }
+
+/* ---------- trie drawing ---------- */
+.tsvg { display: block; width: 100%; height: auto; max-width: 640px; margin: 0 auto; }
+#t2, #t3, #t4 { max-width: 540px; }
+.tsvg .edge { stroke: var(--edge); stroke-width: 2.5; transition: stroke .3s, opacity .3s; }
+.tsvg .tn > rect { fill: var(--panel); stroke: var(--line); stroke-width: 2; transition: fill .3s, stroke .3s; }
+.tsvg .tn text { fill: var(--ink); font: 700 18px var(--mono); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.tsvg .tn text .ch { fill: var(--accent); }
+.tsvg .tn.root > text { font: 600 14px var(--font); fill: var(--muted); }
+.tsvg .tn.root > rect { stroke-dasharray: 4 3; }
+.tsvg .tn { transform-box: fill-box; transform-origin: center; transition: opacity .3s; }
+.tsvg .tn[role="button"] { cursor: pointer; }
+.tsvg .tn[role="button"]:hover > rect, .tsvg .tn:focus > rect { stroke: var(--ink); }
+.tsvg .tn:focus { outline: none; }
+.tsvg .fb circle { fill: var(--badge); stroke: var(--bg); stroke-width: 2; }
+.tsvg .fb text { fill: var(--badge-ink); font: 700 13px var(--mono); }
+.tsvg .fb { transition: opacity .3s; }
+.tsvg .fb.off { opacity: 0; }
+.tsvg .hid { opacity: 0; }
+.tsvg .tn.new > rect { fill: var(--good-soft); stroke: var(--good); }
+.tsvg .tn.reuse > rect { fill: var(--reuse-soft); stroke: var(--reuse); }
+.tsvg .tn.path > rect { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 3; }
+.tsvg .edge.path { stroke: var(--accent); stroke-width: 4; }
+.tsvg .tn.visit > rect { fill: var(--teal-soft); stroke: var(--teal); }
+.tsvg .edge.visit { stroke: var(--teal); }
+.tsvg .tn.hot > rect { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 3; }
+.tsvg .edge.hot { stroke: var(--warn); stroke-width: 4; }
+.tsvg .tn.ok > rect { fill: var(--good-soft); stroke: var(--good); stroke-width: 3; }
+.tsvg .tn.no > rect { fill: var(--bad-soft); stroke: var(--bad); }
+.tsvg .tn.dim { opacity: .35; }
+.tsvg .tn.popin { animation: popin .45s cubic-bezier(.3,1.6,.5,1); }
+.tsvg .tn.blink { animation: blinkn .6s; }
+@keyframes popin { from { transform: scale(0); } }
+@keyframes blinkn { 40% { transform: scale(1.18); } }
+.tsvg .ct rect { fill: var(--teal); }
+.tsvg .ct text { fill: #fff; font: 700 12px var(--mono); text-anchor: middle; dominant-baseline: central; }
+.tsvg .ct { transition: opacity .35s; }
+.tsvg .ct.off { opacity: 0; }
+
+/* ---------- s1: word chips, streak ---------- */
+.wchips { display: flex; flex-wrap: wrap; gap: 8px; }
+.wchip { min-height: 42px; border: 2px solid var(--line); background: var(--panel); border-radius: 12px; padding: 6px 12px; font: 700 15px var(--mono); display: inline-flex; gap: 8px; align-items: center; }
+.wchip i { font-style: normal; font-size: 12px; background: var(--badge); color: var(--badge-ink); border-radius: 99px; padding: 1px 7px; }
+.wchip:hover:not([disabled]) { border-color: var(--accent); }
+.wchip.sel { border-color: var(--accent); background: var(--accent-soft); }
+.wchip[disabled] { opacity: .4; cursor: default; text-decoration: line-through; }
+.streak { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; font-weight: 600; }
+.streak span { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--line); display: inline-block; transition: background .3s, border-color .3s; }
+.streak span.on { background: var(--good); border-color: var(--good); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 14px; height: 14px; border-radius: 4px; display: inline-block; border: 2px solid; }
+
+/* ---------- s2/s3: prefix input, counters, results ---------- */
+.qrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 12px 14px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.qrow label { font-weight: 700; font-size: 14px; }
+.qrow input { width: 110px; min-height: 42px; border-radius: 12px; border: 2px solid var(--line); background: var(--bg); color: var(--ink); font: 700 17px var(--mono); padding: 4px 12px; }
+.qrow input:focus { border-color: var(--accent); outline: none; }
+.qrow .btn { padding: 9px 12px; font-size: 14px; min-height: 42px; }
+.qhint { font-size: 13px; color: var(--warn); min-height: 0; padding: 0 14px; }
+.qhint:not(:empty) { padding: 6px 14px; }
+.meters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 12px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+.meter { border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; background: var(--bg); text-align: center; transition: opacity .3s, border-color .3s; }
+.meter b { display: block; font: 700 22px var(--mono); line-height: 1.2; }
+.meter span { font-size: 12px; color: var(--muted); display: block; line-height: 1.3; }
+.meter.grey { opacity: .35; }
+.meter.flash { border-color: var(--accent); }
+.costbar { padding: 10px 14px 12px; border-top: 1px solid var(--line); background: var(--panel); font-size: 13px; }
+.ctrack { display: flex; height: 22px; border-radius: 7px; overflow: hidden; background: var(--bg-2); border: 1px solid var(--line); margin-top: 6px; }
+.ctrack div { height: 100%; width: 0; transition: width .6s cubic-bezier(.2,.8,.2,1); }
+.c-p { background: var(--accent); } .c-c { background: var(--teal); } .c-s { background: var(--warn); }
+.ckey { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; color: var(--muted); font-family: var(--mono); font-size: 12px; }
+.ckey i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.found { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px; min-height: 52px; border-top: 1px solid var(--line); background: var(--panel); align-items: center; }
+.found:empty::before { content: attr(data-empty); color: var(--muted); font-size: 13px; }
+.qc { font: 600 13.5px var(--mono); padding: 6px 10px; border-radius: 9px; border: 1px solid var(--line); background: var(--bg); animation: rise .3s; }
+.qc b { color: var(--muted); font-weight: 600; }
+.qc.win { border-color: var(--good); background: var(--good-soft); box-shadow: 0 0 0 1px var(--good); }
+.qc.lose { opacity: .45; }
+.drop { list-style: none; margin: 0; padding: 6px 0; min-height: 44px; border-top: 1px solid var(--line); background: var(--panel); }
+.drop:empty::before { content: attr(data-empty); display: block; padding: 6px 16px; color: var(--muted); font-size: 13px; }
+.drop li { padding: 5px 16px; font-size: 15px; display: flex; gap: 10px; align-items: center; animation: rise .3s; }
+.drop li::before { content: "🔍"; font-size: 12px; opacity: .5; }
+.drop li span { color: var(--muted); }
+.drop li em { margin-left: auto; font: 600 12px var(--mono); color: var(--muted); font-style: normal; }
+
+/* ---------- s2: worst case blob ---------- */
+.blobwrap { padding: 8px 14px 14px; }
+.blob .d { fill: var(--blob); transition: fill .2s; }
+.blob .d.lit { fill: var(--warn); }
+.blob .lbl { fill: var(--muted); font: 600 13px var(--font); text-anchor: middle; }
+.blob .lbl.a { fill: var(--warn); font-weight: 700; }
+.budget { margin-top: 10px; font-size: 14px; }
+.btrack { position: relative; height: 20px; border-radius: 7px; background: var(--bg-2); border: 1px solid var(--line); margin-top: 6px; overflow: visible; }
+.btrack .bfill { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 6px; background: linear-gradient(90deg, var(--warn), var(--bad)); transition: width .25s linear; }
+.btrack .bline { position: absolute; top: -6px; bottom: -6px; left: 40%; width: 3px; margin-left: -1px; background: var(--ink); border-radius: 2px; }
+.btrack .blab { position: absolute; top: -22px; left: 40%; transform: translateX(-50%); font: 700 11px var(--mono); white-space: nowrap; }
+.bnums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 26px; }
+.bnums .meter b { font-size: 18px; overflow-wrap: anywhere; }
+
+/* ---------- s3: switches, big-O readout, memory ---------- */
+.switches { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.sw { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 12px 6px 8px; border-radius: 12px; border: 2px solid var(--line); background: var(--bg); font-weight: 600; font-size: 14px; text-align: left; }
+.sw .knob { width: 40px; height: 24px; border-radius: 99px; background: var(--line); position: relative; flex: none; transition: background .25s; }
+.sw .knob::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .25s; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+.sw[aria-checked="true"] { border-color: var(--good); }
+.sw[aria-checked="true"] .knob { background: var(--good); }
+.sw[aria-checked="true"] .knob::after { transform: translateX(16px); }
+.sw[disabled] { opacity: .45; cursor: not-allowed; }
+.bigo { display: grid; gap: 6px; padding: 12px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+.br { display: flex; justify-content: space-between; gap: 10px; align-items: center; font-size: 14px; padding: 6px 10px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); transition: opacity .3s, background .3s; }
+.br b { font-family: var(--mono); white-space: nowrap; }
+.br.off { opacity: .4; text-decoration: line-through; }
+.br.fast b { color: var(--good); }
+.br.tot { background: var(--accent-soft); border-color: transparent; font-weight: 700; }
+.br.tot.win { background: var(--good-soft); }
+.mem { padding: 10px 14px 12px; border-top: 1px solid var(--line); background: var(--panel); font-size: 14px; }
+.mtrack { display: flex; height: 18px; border-radius: 6px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; margin-top: 6px; }
+.mtrack div { height: 100%; transition: width .7s cubic-bezier(.2,.8,.2,1); }
+.m-n { background: var(--accent); } .m-c { background: var(--teal); }
+.inspect { padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); font-size: 14px; min-height: 44px; }
+.inspect code { font-size: 13px; }
+.predrow { display: grid; grid-template-columns: 1fr; gap: 10px; margin: 10px 0; }
+.predrow > div { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.predrow .seg button { min-height: 40px; padding: 6px 12px; }
+.seg button.on { background: var(--accent); color: #fff; }
+.seg button[disabled] { cursor: default; }
+
+/* ---------- s4: copy table ---------- */
+.ctab { width: 100%; border-collapse: collapse; font: 13px var(--mono); }
+.ctab th, .ctab td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.ctab th { font: 700 11px var(--font); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.ctab td:first-child { font-weight: 700; white-space: nowrap; }
+.ctab .e { display: inline-block; margin: 1px 6px 1px 0; white-space: nowrap; }
+.ctab .e.beer { transition: background .3s; border-radius: 5px; padding: 0 3px; }
+.ctab.mark .e.beer { background: var(--warn-soft); color: var(--warn); font-weight: 700; }
+.ctab tr.chg td { animation: flashrow 1.2s; }
+.ctab tr.chg td:first-child { box-shadow: inset 4px 0 0 var(--good); }
+@keyframes flashrow { 30% { background: var(--good-soft); } }
+.tapscore { font-size: 14px; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 13.2 · Design a Search Autocomplete System</div>
+    <h1>Grow the Trie</h1>
+    <p class="lede">In <a href="1301-autocomplete-scope-and-estimation.html">Quest 13.1</a> the SQL table had to find and sort every <code>tw…</code> row on every keystroke. Now you'll build the data structure that replaces it: a tree of letters that already knows its top 5 before anyone asks.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can draw a trie, explain why the naive top-k lookup is <b>O(p) + O(c) + O(c log c)</b>, and show how <b>capping the prefix length</b> and <b>caching the top-k queries at every node</b> make it <b>O(1)</b>, and say what that speed costs in memory.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Plant a trie</h2><div class="sub">A tree where every path spells a prefix</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>A <b>trie</b> (say "try") is a tree built for storing strings compactly. The name comes from re<b>trie</b>val.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system" target="_blank" rel="noopener">[1]</a><a class="cite" href="https://en.wikipedia.org/wiki/Trie" target="_blank" rel="noopener">[2]</a> Three rules:</p>
+      <ul>
+        <li>The <b>root</b> stands for the empty string. Nothing typed yet.</li>
+        <li>Each node adds <b>one character</b>. The path from the root down to a node spells a <b>prefix</b> (the start of a query). Below, each node shows the prefix it spells, with its own new letter in colour.</li>
+        <li>Words that start the same way <b>share nodes</b>. <code>tree</code>, <code>try</code> and <code>true</code> all go through <code>t → tr</code>.</li>
+      </ul>
+      <p>For ranking, the node where a whole query ends also stores how often people searched it: its <b>frequency</b> (the yellow badge). The six words and counts are the book's example.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system" target="_blank" rel="noopener">[1]</a></p>
+      <p><b>Your move:</b> pick a word, <b>predict</b> how many <i>new</i> nodes it will add, then grow it. Reused nodes flash <span style="color:var(--reuse);font-weight:700">blue</span>, new ones pop in <span style="color:var(--good);font-weight:700">green</span>. Get <b>3 right in a row</b>.</p>
+
+      <div class="sim">
+        <svg class="tsvg" id="t1" viewBox="0 0 604 312" role="img" aria-label="A trie being built from the words tree, try, true, toy, wish and win"></svg>
+        <div class="sim-bar"><div class="wchips" id="w1"></div></div>
+        <div class="sim-bar">
+          <div class="legend"><span><i style="border-color:var(--good);background:var(--good-soft)"></i>new node</span><span><i style="border-color:var(--reuse);background:var(--reuse-soft)"></i>reused node</span><span><i style="border-color:var(--badge);background:var(--badge)"></i>frequency</span></div>
+          <span class="streak" id="streak1" aria-label="Streak">Streak <span></span><span></span><span></span></span>
+        </div>
+        <div class="simlog" id="log1"><div>Only the root so far: the empty string.</div></div>
+      </div>
+      <div class="challenge boxed" id="p1">
+        <div class="step">Predict first</div>
+        <h3 id="p1q">Pick a word above to plant it.</h3>
+        <div class="row" id="p1ctl" hidden>
+          <span class="stepper"><button class="btn" id="p1m" aria-label="One fewer new node">−</button><span class="bignum" id="p1v" aria-live="polite">0</span><button class="btn" id="p1p" aria-label="One more new node">+</button></span>
+          <span class="small muted">new nodes</span>
+          <button class="btn primary" id="p1go">🌱 Grow it</button>
+        </div>
+        <div class="explain" id="p1ex"></div>
+        <div class="row" style="margin-top:12px"><button class="btn" id="p1reset">↻ Dig it up (empty trie)</button></div>
+      </div>
+      <div class="callout warn"><b>Honest caveat: 26 children?</b> The book gives every node 26 child slots, one per letter a–z.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system" target="_blank" rel="noopener">[1]</a> But its own example queries contain spaces (<i>twin peak</i>), so you'd need at least 27, plus digits and other alphabets. Real code usually keeps each node's children in a small map (letter → child) instead of a fixed array.<a class="cite" href="https://en.wikipedia.org/wiki/Trie" target="_blank" rel="noopener">[2]</a></div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Top-k the slow way</h2><div class="sub">Three steps, three costs</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Autocomplete needs the <b>top k</b> queries for a prefix: the k most frequent ones that start with it. First, three letters the book uses:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system" target="_blank" rel="noopener">[1]</a></p>
+      <ul>
+        <li><b>p</b> = length of the prefix (<code>be</code> → p = 2)</li>
+        <li><b>n</b> = total number of nodes in the trie</li>
+        <li><b>c</b> = number of nodes below the prefix node (its whole subtree)</li>
+      </ul>
+      <p>The naive lookup takes three steps. <b>① Find the prefix node:</b> walk down one letter at a time, O(p). <b>② Collect:</b> visit every node in its subtree and keep the ones that are real queries, O(c). <b>③ Sort</b> them by frequency and take the top k, O(c log c). <i>O(…)</i> is "big-O": how the work grows as the input grows.</p>
+      <p><b>Your move:</b> type <code>be</code> and run the three steps in order. Here <b>k = 2</b>, as in the book's example.</p>
+
+      <div class="sim">
+        <div class="qrow">
+          <label for="in2">Prefix</label><input id="in2" type="text" placeholder="be" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="8">
+          <button class="btn primary" id="b2find" disabled>① Find prefix</button>
+          <button class="btn primary" id="b2col" disabled>② Collect</button>
+          <button class="btn primary" id="b2sort" disabled>③ Sort &amp; take top 2</button>
+        </div>
+        <div class="qhint" id="h2"></div>
+        <div id="small2">
+          <svg class="tsvg" id="t2" viewBox="60 0 480 320" role="img" aria-label="A small trie of b-words: be 15, bee 20, beer 10, best 35, bet 29"></svg>
+        </div>
+        <div class="blobwrap" id="blob2" hidden>
+          <svg class="tsvg blob" id="blobsvg" viewBox="0 0 600 250" role="img" aria-label="A dense blob standing for a one-million-node trie, with the a-subtree lighting up"></svg>
+          <div class="budget">
+            <div class="row" style="justify-content:space-between"><b>Time for this one keystroke</b><span class="bignum" id="ms2">0 ms</span></div>
+            <div class="btrack"><div class="bfill" id="bfill2"></div><div class="bline"></div><div class="blab">100 ms budget</div></div>
+            <div class="bnums">
+              <div class="meter"><b id="wp">0</b><span>p (prefix length)</span></div>
+              <div class="meter"><b id="wc">0</b><span>c (nodes visited)</span></div>
+              <div class="meter"><b id="ws">0</b><span>c log c (sort steps)</span></div>
+            </div>
+            <p class="small muted" style="margin:10px 0 0">Toy cost model: 0.1 µs per step, about one trip to memory. The numbers are made up so you can see the shape; the shape is real.</p>
+          </div>
+        </div>
+        <div class="meters" id="m2">
+          <div class="meter"><b id="mp">0</b><span>p · steps to find the node</span></div>
+          <div class="meter"><b id="mc">0</b><span>c · nodes visited</span></div>
+          <div class="meter"><b id="ms">0</b><span>items sorted</span></div>
+        </div>
+        <div class="costbar">
+          <b>Work for this lookup</b> <span class="muted mono" id="cost2">0 steps</span>
+          <div class="ctrack"><div class="c-p" id="cp"></div><div class="c-c" id="cc"></div><div class="c-s" id="cs"></div></div>
+          <div class="ckey"><span><i class="c-p"></i>p</span><span><i class="c-c"></i>c</span><span><i class="c-s"></i>c log c</span></div>
+        </div>
+        <div class="found" id="found2" data-empty="Queries found under the prefix land here."></div>
+        <ul class="drop" id="drop2" data-empty="Suggestions dropdown (top 2)"></ul>
+        <div class="sim-bar">
+          <button class="btn" id="b2worst">💥 Worst case: a 1,000,000-node trie</button>
+          <button class="btn" id="b2back" hidden>← Back to the small trie</button>
+        </div>
+        <div class="simlog" id="log2"><div>Type a prefix, then press ①.</div></div>
+      </div>
+      <ul class="checklist" id="s2goals">
+        <li data-g="naive"><span class="box">✓</span><span>Run all three steps for <code>be</code></span></li>
+        <li data-g="worst"><span class="box">✓</span><span>Run the worst case: one letter on a big trie</span></li>
+      </ul>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Two cheats that buy O(1)</h2><div class="sub">Cap the prefix, cache the answers</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book makes the lookup fast with two tricks.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system" target="_blank" rel="noopener">[1]</a></p>
+      <ul>
+        <li><b>✂️ Limit the prefix length.</b> People rarely type long queries, so cap p at a small number such as <b>50</b>. Walking at most 50 steps is a fixed, small amount of work, so finding the node counts as <b>O(1)</b> (constant time: it doesn't grow with the data).</li>
+        <li><b>📋 Cache the top queries at every node.</b> Store the top k right on each node. 5 to 10 suggestions are plenty, so k stays small; the book keeps 5. Node <code>be</code> holds <code>[best 35, bet 29, bee 20, be 15, beer 10]</code>. No walking the subtree, no sorting.</li>
+      </ul>
+      <div class="challenge boxed" id="pred3">
+        <div class="step">Predict first</div>
+        <h3>You're about to switch on 📋 caching. What happens to…</h3>
+        <div class="predrow">
+          <div><span><b>(a)</b> the time to look up <code>be</code>?</span><span class="seg" data-p="time"><button data-v="down">Faster</button><button data-v="same">Same</button><button data-v="up">Slower</button></span></div>
+          <div><span><b>(b)</b> the memory the trie uses?</span><span class="seg" data-p="mem"><button data-v="down">Less</button><button data-v="same">Same</button><button data-v="up">More</button></span></div>
+        </div>
+        <div class="row"><button class="btn primary" id="lock3" disabled>🔒 Lock in my prediction</button></div>
+        <div class="explain" id="pex3"></div>
+      </div>
+
+      <div class="sim">
+        <div class="switches">
+          <button class="sw" id="swCap" role="switch" aria-checked="false"><span class="knob"></span>✂️ Cap prefix at 50</button>
+          <button class="sw" id="swCache" role="switch" aria-checked="false" disabled title="Lock in your prediction first"><span class="knob"></span>📋 Cache top 5 at every node</button>
+        </div>
+        <div class="qrow">
+          <label for="in3">Prefix</label><input id="in3" type="text" value="be" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="8">
+          <button class="btn primary" id="b3look">🔍 Look up top 5</button>
+        </div>
+        <div class="qhint" id="h3"></div>
+        <svg class="tsvg" id="t3" viewBox="60 0 480 320" role="img" aria-label="The b-word trie. Tap a node to see what it stores."></svg>
+        <div class="inspect" id="insp3"><span class="muted">Tap any node to see what it stores.</span></div>
+        <div class="meters">
+          <div class="meter" id="m3t"><b id="v3t">–</b><span>nodes touched</span></div>
+          <div class="meter" id="m3s"><b id="v3s">–</b><span>items sorted</span></div>
+          <div class="meter" id="m3p"><b id="v3p">–</b><span>max steps to find node</span></div>
+        </div>
+        <div class="bigo" id="bigo3"></div>
+        <div class="mem">
+          <div class="row" style="justify-content:space-between"><b>Memory: things stored</b><span class="mono" id="memv">8 nodes</span></div>
+          <div class="mtrack"><div class="m-n" id="memn" style="width:27.6%"></div><div class="m-c" id="memc" style="width:0"></div></div>
+          <div class="ckey"><span><i class="m-n"></i>trie nodes</span><span><i class="m-c"></i>cached list entries</span></div>
+        </div>
+        <ul class="drop" id="drop3" data-empty="Suggestions dropdown (top 5)"></ul>
+        <div class="simlog" id="log3"><div>Both switches off: this is the slow trie from stage 2.</div></div>
+      </div>
+      <ul class="checklist" id="s3goals">
+        <li data-g="slow"><span class="box">✓</span><span>Look up <code>be</code> with caching <b>off</b> (the slow way)</span></li>
+        <li data-g="fast"><span class="box">✓</span><span>Look up <code>be</code> with caching <b>on</b></span></li>
+        <li data-g="o1"><span class="box">✓</span><span>Turn on both switches and look up <code>be</code>: total <b>O(1)</b></span></li>
+      </ul>
+      <div class="callout tip"><b>Remember "tw" from <a href="1301-autocomplete-scope-and-estimation.html">Quest 13.1</a>?</b> With caching, node <code>tw</code> simply stores <code>[twitter 35, twitch 29, twilight 25, twin peak 21, twitch prime 18]</code>. The SQL table had to find and sort every <code>tw…</code> row on every keystroke. The trie reads one list.</div>
+      <div class="callout warn"><b>Honest caveat: "O(1)" is a bit of a trick.</b> Finding the node is really O(p). It only counts as constant because p is capped at 50. If an interviewer pushes, say "bounded by the max prefix length". The book also trades memory for this: every node now carries a list. The book judges that worth it, because speed is the top requirement.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system" target="_blank" rel="noopener">[1]</a></div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Pay for speed</h2><div class="sub">Count the copies</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Caching the top 5 at every node means one query gets <b>copied</b> into the list of every node above it where it makes the top 5. That's the memory bill. There's a second bill: when a query's count changes, every list holding it may have to change too.</p>
+      <p>Below is the cached trie from stage 3, with <code>beer</code> (frequency 10) in <span style="color:var(--warn);font-weight:700">orange</span>, and every node's cached list in the table.</p>
+      <div class="sim">
+        <svg class="tsvg" id="t4" viewBox="60 0 480 320" role="img" aria-label="The b-word trie with beer highlighted. Nodes can be tapped."></svg>
+        <div style="padding:6px 14px 12px;background:var(--panel);border-top:1px solid var(--line);overflow-x:auto">
+          <table class="ctab" id="tab4"><thead><tr><th>node</th><th>cached top 5</th></tr></thead><tbody></tbody></table>
+        </div>
+        <div class="simlog" id="log4"><div>Every node holds its own top-5 list.</div></div>
+      </div>
+      <div id="q4a"></div>
+      <div class="challenge boxed" id="part4b" style="margin-top:16px">
+        <div class="step">Part (b) · tap the nodes</div>
+        <h3><code>beer</code> gets popular: its count climbs from 10 to 30. Which nodes' lists might change? Tap every one of them on the trie.</h3>
+        <div class="row"><span class="tapscore" id="tap4">Found 0 / 5</span><button class="btn primary" id="bump4" hidden>▶ Bump beer to 30</button></div>
+        <div class="explain" id="ex4"></div>
+      </div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Lag Hydra</h2><div class="sub">Choose the right trie move</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The interviewer has five follow-ups about your trie. Each one is a new head on the Hydra. Pick the answer you'd give out loud.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">Explain the trie in 60 seconds</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> Who builds these tries and their cached lists, and how often? The book rebuilds them from search logs every week, and stores them in a key-value store. That's Quest 13.3, <a href="1303-data-gathering-service.html"><i>The Weekly Harvest</i></a>.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-search-autocomplete-system" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 13: "Design a Search Autocomplete System"</a>, Step 3, the part on the trie data structure (basic trie, top-k algorithm, the two optimizations). For the data structure itself, the <a href="https://en.wikipedia.org/wiki/Trie" target="_blank" rel="noopener">Wikipedia article on tries</a> is a good short read, including the compressed version (radix tree).
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <ul style="margin:0;padding-left:20px">
+        <li><b>The trie becomes a table.</b> Once every node stores its top k, the useful data is really a map: <i>prefix → top-k list</i>. Many production systems skip the in-memory tree and store exactly that. Prefixy, for example, keeps one sorted set per prefix in Redis.<a class="cite" href="https://medium.com/@prefixyteam/how-we-built-prefixy-a-scalable-prefix-search-service-for-powering-autocomplete-c20f98e2eff1" target="_blank" rel="noopener">[3]</a> The book gets there too, in the next quest, when it stores the trie in a key-value store.</li>
+        <li><b>"O(1)" means "bounded".</b> Lookup is O(p) with p capped at 50. Say it that way if pushed.</li>
+        <li><b>Ranking is more than counts.</b> The book ranks by historical frequency only. Real systems also weigh freshness, location and personal history.</li>
+        <li><b>Smaller tries.</b> Long single-child chains (like <code>w → wi → wis → wish</code>) can be merged into one node. That's a radix tree, and it saves a lot of nodes.<a class="cite" href="https://en.wikipedia.org/wiki/Trie" target="_blank" rel="noopener">[2]</a></li>
+      </ul>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"how much memory do the cached lists really add for millions of queries?"</i> or <i>"why not store only the top 5 at the root and filter?"</i> Follow-up questions are part of the quest.
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 13 "Design a Search Autocomplete System", Step 3, trie data structure (ByteByteGo).</li>
+        <li>Wikipedia, "Trie".</li>
+        <li>Prefixy team, "How We Built Prefixy: A Scalable Prefix Search Service for Powering Autocomplete", Medium.</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '1302',
+  winTitle: 'Top 5 in a single hop',
+  badge: '🌳 Badge: Trie Tender',
+  cheatsheet: '../reference/ch13-autocomplete-cheatsheet.html',
+});
+const { sleep, shuffle, esc } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ================= shared helpers ================= */
+const wait = ms => sleep(Q.reduced ? 0 : ms);
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+const onKey = (el, fn) => el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(e); } });
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); Q.addXP(xp || 10, li);
+  return true;
+}
+// Several Q.quiz() cards in a row, then done().
+function quizChain(mount, list, done) {
+  let i = 0;
+  const next = () => {
+    if (i >= list.length) return done();
+    const cfg = list[i++];
+    const box = Q.quiz(mount, { ...cfg, onDone: () => setTimeout(next, 450) });
+    if (i > 1) setTimeout(() => box.scrollIntoView({ behavior: Q.reduced ? 'auto' : 'smooth', block: 'nearest' }), 50);
+  };
+  next();
+}
+function anim(dur, f) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 1) { f(1); return res(); }
+    const t0 = performance.now();
+    const fr = now => { const p = Math.min(1, (now - t0) / dur); f(p); p < 1 ? requestAnimationFrame(fr) : res(); };
+    requestAnimationFrame(fr);
+  });
+}
+const fmt = n => Math.round(n).toLocaleString('en-US');
+const fmtC = n => n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : fmt(n);
+const log2 = x => x > 1 ? Math.log2(x) : 0;
+function blink(el) { if (Q.reduced) return; el.classList.remove('blink'); void el.getBBox(); el.classList.add('blink'); }
+
+/* Draw a trie. spec: [{ id: 'tr', x, y, parent: 't', freq? }]; the root has id '' and parent null. */
+function trieView(svg, spec, { onTap, label } = {}) {
+  svg.innerHTML = '';
+  const eG = S('g', {}, svg), nG = S('g', {}, svg);
+  const by = {}, nodes = {}, edges = {};
+  spec.forEach(n => { by[n.id] = n; });
+  spec.forEach(n => {
+    if (n.parent === null) return;
+    const p = by[n.parent];
+    edges[n.id] = S('line', { class: 'edge', x1: p.x, y1: p.y + 16, x2: n.x, y2: n.y - 16 }, eG);
+  });
+  spec.forEach(n => {
+    const root = n.id === '';
+    const w = root ? 58 : 24 + n.id.length * 11;
+    const g = S('g', { class: 'tn' + (root ? ' root' : '') }, nG);
+    S('rect', { x: n.x - w / 2, y: n.y - 16, width: w, height: 32, rx: 10 }, g);
+    const t = S('text', { x: n.x, y: n.y + 1 }, g);
+    if (root) t.textContent = 'root';
+    else { S('tspan', {}, t).textContent = n.id.slice(0, -1); S('tspan', { class: 'ch' }, t).textContent = n.id.slice(-1); }
+    let fb = null;
+    if (n.freq != null) {
+      fb = S('g', { class: 'fb' }, g);
+      S('circle', { cx: n.x + w / 2 + 3, cy: n.y - 16, r: 14 }, fb);
+      S('text', { x: n.x + w / 2 + 3, y: n.y - 15 }, fb).textContent = n.freq;
+    }
+    if (onTap) {
+      g.setAttribute('role', 'button'); g.setAttribute('tabindex', '0');
+      g.setAttribute('aria-label', label ? label(n) : `node ${root ? 'root' : n.id}`);
+      g.addEventListener('click', () => onTap(n.id, g));
+      onKey(g, () => onTap(n.id, g));
+    }
+    nodes[n.id] = { g, w, n, fb };
+  });
+  const children = id => spec.filter(n => n.parent === id).map(n => n.id);
+  const api = {
+    by, nodes, children,
+    g: id => nodes[id].g,
+    cls(id, c, on = true) { nodes[id].g.classList.toggle(c, on); if (edges[id]) edges[id].classList.toggle(c, on); },
+    clear(...cs) { spec.forEach(n => cs.forEach(c => api.cls(n.id, c, false))); },
+    show(id, on = true) { api.cls(id, 'hid', !on); },
+    badge(id, on = true) { if (nodes[id].fb) nodes[id].fb.classList.toggle('off', !on); },
+    subtree(id) { const out = []; (function walk(x) { out.push(x); children(x).forEach(walk); })(id); return out; },
+    // top-k queries in the subtree of id, highest frequency first
+    topk(id, k) { return api.subtree(id).filter(x => by[x].freq != null).map(x => [x, by[x].freq]).sort((a, b) => b[1] - a[1]).slice(0, k); },
+  };
+  return api;
+}
+// prefixes of a word, from the root: '' , 'b', 'be', ...
+const pathTo = w => Array.from({ length: w.length + 1 }, (_, i) => w.slice(0, i));
+
+// The book's "be" example (k = 2 → best, bet). Used in stages 2, 3 and 4.
+const B_TRIE = [
+  { id: '', x: 300, y: 30, parent: null },
+  { id: 'b', x: 300, y: 95, parent: '' },
+  { id: 'be', x: 300, y: 160, parent: 'b', freq: 15 },
+  { id: 'bee', x: 140, y: 225, parent: 'be', freq: 20 },
+  { id: 'bes', x: 300, y: 225, parent: 'be' },
+  { id: 'bet', x: 460, y: 225, parent: 'be', freq: 29 },
+  { id: 'beer', x: 140, y: 290, parent: 'bee', freq: 10 },
+  { id: 'best', x: 300, y: 290, parent: 'bes', freq: 35 },
+];
+const B_IDS = B_TRIE.map(n => n.id).filter(Boolean);
+function renderDrop(ul, prefix, list) {
+  ul.innerHTML = list.map(([q, f]) => `<li><b>${esc(q.slice(0, prefix.length))}</b><span>${esc(q.slice(prefix.length))}</span><em>${f}</em></li>`).join('');
+}
+
+/* ================= STAGE 1: plant a trie ================= */
+Q.onStage(1, () => {
+  const WORDS = [['tree', 10], ['try', 29], ['true', 35], ['toy', 14], ['wish', 25], ['win', 50]];
+  const SPEC = [
+    { id: '', x: 375, y: 30, parent: null },
+    { id: 't', x: 250, y: 95, parent: '' }, { id: 'w', x: 500, y: 95, parent: '' },
+    { id: 'tr', x: 150, y: 160, parent: 't' }, { id: 'to', x: 350, y: 160, parent: 't' }, { id: 'wi', x: 500, y: 160, parent: 'w' },
+    { id: 'tre', x: 50, y: 225, parent: 'tr' }, { id: 'tru', x: 150, y: 225, parent: 'tr' }, { id: 'try', x: 250, y: 225, parent: 'tr', freq: 29 },
+    { id: 'toy', x: 350, y: 225, parent: 'to', freq: 14 }, { id: 'win', x: 450, y: 225, parent: 'wi', freq: 50 }, { id: 'wis', x: 550, y: 225, parent: 'wi' },
+    { id: 'tree', x: 50, y: 290, parent: 'tre', freq: 10 }, { id: 'true', x: 150, y: 290, parent: 'tru', freq: 35 }, { id: 'wish', x: 550, y: 290, parent: 'wis', freq: 25 },
+  ];
+  const tv = trieView($('#t1'), SPEC);
+  const have = new Set(['']);
+  let sel = null, guess = 0, streak = 0, busy = false, quizShown = false;
+  const planted = new Set();
+  function emptyTrie() {
+    have.clear(); have.add(''); planted.clear();
+    SPEC.forEach(n => { if (n.id) { tv.show(n.id, false); tv.badge(n.id, false); } });
+    tv.clear('new', 'reuse', 'popin');
+  }
+  function chips() {
+    $('#w1').innerHTML = WORDS.map(([w, f]) => `<button class="wchip${sel === w ? ' sel' : ''}" data-w="${w}" ${planted.has(w) || busy ? 'disabled' : ''} aria-label="Plant ${w}, frequency ${f}">${w}<i>${f}</i></button>`).join('');
+    $$('#w1 .wchip').forEach(b => b.onclick = () => pick(b.dataset.w));
+  }
+  function paintStreak() { $$('#streak1 span').forEach((s, i) => s.classList.toggle('on', i < Math.min(streak, 3))); $('#streak1').setAttribute('aria-label', `Streak ${Math.min(streak, 3)} of 3`); }
+  function pick(w) {
+    if (busy) return;
+    sel = w; guess = 0; $('#p1v').textContent = '0';
+    $('#p1q').innerHTML = `How many <b>new</b> nodes will <code>${w}</code> add to the trie as it stands now?`;
+    $('#p1ctl').hidden = false; $('#p1ex').className = 'explain';
+    chips();
+  }
+  $('#p1m').onclick = () => { guess = Math.max(0, guess - 1); $('#p1v').textContent = guess; };
+  $('#p1p').onclick = () => { guess = Math.min(6, guess + 1); $('#p1v').textContent = guess; };
+  $('#p1go').onclick = async () => {
+    if (busy || !sel) return;
+    busy = true; const w = sel; $('#p1go').disabled = true; chips();
+    const added = [], reused = [];
+    tv.clear('new', 'reuse');
+    tv.cls('', 'reuse'); blink(tv.g(''));
+    await wait(300);
+    for (const pre of pathTo(w).slice(1)) {
+      if (have.has(pre)) { reused.push(pre); tv.cls(pre, 'reuse'); blink(tv.g(pre)); }
+      else {
+        added.push(pre); have.add(pre); tv.show(pre); tv.cls(pre, 'new');
+        const g = tv.g(pre); g.classList.remove('popin'); void g.getBBox(); if (!Q.reduced) g.classList.add('popin');
+      }
+      await wait(420);
+    }
+    tv.badge(w, true); planted.add(w);
+    await wait(250);
+    const ok = guess === added.length;
+    const ex = $('#p1ex');
+    ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+    ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Not quite.</b> ') +
+      `<code>${w}</code> added <b>${added.length}</b> new node${added.length === 1 ? '' : 's'}${added.length ? ` (${added.map(x => `<code>${x}</code>`).join(', ')})` : ''}` +
+      (reused.length ? ` and reused ${reused.length} (${reused.map(x => `<code>${x}</code>`).join(', ')}).` : '. Nothing to reuse yet: no other word starts the same way.') +
+      ` Its end node now stores frequency <b>${tv.by[w].freq}</b>.` + (ok ? '' : ` You said ${guess}. Count the letters that aren't already on the path.`);
+    logTo('log1', `${w}: +${added.length} new, ${reused.length} reused · trie has ${have.size - 1} nodes + root`, ok ? 'g' : 'w');
+    if (ok) { streak++; Q.addXP(10, $('#p1go')); } else { streak = 0; Q.loseHeart($('#p1go')); }
+    paintStreak();
+    busy = false; sel = null; $('#p1go').disabled = false; $('#p1ctl').hidden = true;
+    $('#p1q').textContent = planted.size === WORDS.length ? 'All six are planted. Dig the trie up to plant them again in a new order.' : 'Pick the next word.';
+    chips();
+    if (streak >= 3 && !quizShown) showQuiz();
+  };
+  $('#p1reset').onclick = () => {
+    if (busy) return;
+    emptyTrie(); sel = null; $('#p1ctl').hidden = true; $('#p1ex').className = 'explain';
+    $('#p1q').textContent = 'Fresh soil. Pick a word to plant.';
+    logTo('log1', '↻ dug up: only the root again'); chips();
+  };
+  function showQuiz() {
+    quizShown = true;
+    logTo('log1', '3 in a row. The trie has taken root.', 'g');
+    setTimeout(() => Q.quiz($('#s1quiz'), {
+      q: 'In a trie, what does a single node stand for?',
+      options: ['The prefix spelled from the root down to it', 'One complete word that users have searched', 'How often one letter is typed by all users'],
+      correct: 0,
+      good: 'Each node is a <b>prefix</b>: read the letters on the path from the root and you get it. Only some nodes are also complete queries; those carry a frequency.',
+      bad: 'Each node is a <b>prefix</b>, spelled by the path from the root. <code>tr</code> is a node, but nobody searched for "tr". Only nodes where a whole query ends carry a frequency.',
+      onDone: () => setTimeout(() => Q.clearStage(1), 900),
+    }), 500);
+  }
+  emptyTrie(); chips(); paintStreak();
+});
+
+/* ================= STAGE 2: top-k the slow way ================= */
+Q.onStage(2, () => {
+  const tv = trieView($('#t2'), B_TRIE);
+  const goals = new Set();
+  const inp = $('#in2'), bFind = $('#b2find'), bCol = $('#b2col'), bSort = $('#b2sort');
+  let st = 0, pre = '', busy = false, found = [], quizShown = false, worstBusy = false;
+  const K = 2, MAXU = 30;
+  function cost(p, c, s) {
+    $('#cp').style.width = (p / MAXU * 100) + '%'; $('#cc').style.width = (c / MAXU * 100) + '%'; $('#cs').style.width = (s / MAXU * 100) + '%';
+    $('#cost2').textContent = `${(p + c + s).toFixed(1).replace(/\.0$/, '')} steps (p ${p} + c ${c} + c log c ${s.toFixed(1)})`;
+  }
+  function buttons() {
+    const v = inp.value.trim().toLowerCase();
+    bFind.disabled = busy || st !== 0 || !B_IDS.includes(v);
+    bCol.disabled = busy || st !== 1; bSort.disabled = busy || st !== 2;
+    $('#h2').textContent = v && !B_IDS.includes(v) && st === 0 ? `No node for “${v}” in this little trie. Try be.` : '';
+  }
+  function resetRun() {
+    st = 0; found = []; tv.clear('path', 'visit', 'dim');
+    ['#mp', '#mc', '#ms'].forEach(s => $(s).textContent = '0');
+    $('#found2').innerHTML = ''; $('#drop2').innerHTML = ''; cost(0, 0, 0); buttons();
+  }
+  inp.addEventListener('input', () => { if (!busy) resetRun(); });
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter' && !bFind.disabled) bFind.click(); });
+  bFind.onclick = async () => {
+    pre = inp.value.trim().toLowerCase(); if (!B_IDS.includes(pre)) return;
+    busy = true; buttons(); inp.disabled = true;
+    tv.cls('', 'path'); await wait(250);
+    const path = pathTo(pre).slice(1);
+    for (let i = 0; i < path.length; i++) { tv.cls(path[i], 'path'); blink(tv.g(path[i])); $('#mp').textContent = i + 1; await wait(400); }
+    cost(pre.length, 0, 0);
+    logTo('log2', `① walked ${pre.length} step${pre.length === 1 ? '' : 's'} from the root to <b>${pre}</b>: O(p), p = ${pre.length}`);
+    st = 1; busy = false; inp.disabled = false; buttons();
+  };
+  bCol.onclick = async () => {
+    busy = true; buttons(); inp.disabled = true;
+    B_TRIE.forEach(n => { if (!tv.subtree(pre).includes(n.id) && !pathTo(pre).includes(n.id)) tv.cls(n.id, 'dim'); });
+    const sub = tv.subtree(pre);
+    let c = 0;
+    for (const id of sub) {
+      c++; tv.cls(id, 'visit'); blink(tv.g(id)); $('#mc').textContent = c;
+      if (tv.by[id].freq != null) { found.push([id, tv.by[id].freq]); $('#found2').insertAdjacentHTML('beforeend', `<span class="qc" data-q="${id}">${id} <b>${tv.by[id].freq}</b></span>`); }
+      await wait(380);
+    }
+    cost(pre.length, c, 0);
+    logTo('log2', `② visited all <b>${c}</b> nodes in ${pre}’s subtree (${pre} included), found ${found.length} real quer${found.length === 1 ? 'y' : 'ies'}: O(c), c = ${c}`);
+    st = 2; busy = false; inp.disabled = false; buttons();
+  };
+  bSort.onclick = async () => {
+    busy = true; buttons(); inp.disabled = true;
+    const box = $('#found2'), els = $$('.qc', box);
+    const before = new Map(els.map(e => [e, e.getBoundingClientRect()]));
+    const sorted = found.slice().sort((a, b) => b[1] - a[1]);
+    sorted.forEach(([q]) => box.appendChild($(`.qc[data-q="${q}"]`, box)));
+    if (!Q.reduced) els.forEach(e => {
+      const a = before.get(e), b = e.getBoundingClientRect();
+      e.style.transition = 'none'; e.style.transform = `translate(${a.left - b.left}px, ${a.top - b.top}px)`;
+      requestAnimationFrame(() => requestAnimationFrame(() => { e.style.transition = 'transform .6s cubic-bezier(.2,.8,.2,1)'; e.style.transform = ''; }));
+    });
+    $('#ms').textContent = sorted.length;
+    await wait(700);
+    sorted.forEach(([q], i) => $(`.qc[data-q="${q}"]`, box).classList.add(i < K ? 'win' : 'lose'));
+    const c = tv.subtree(pre).length;
+    cost(pre.length, c, c * log2(c));
+    renderDrop($('#drop2'), pre, sorted.slice(0, K));
+    logTo('log2', `③ sorted ${sorted.length} by frequency, kept the top ${K}: <b>${sorted.slice(0, K).map(x => `${x[0]} (${x[1]})`).join(', ')}</b>. O(c log c)`, 'g');
+    st = 3; busy = false; inp.disabled = false; buttons();
+    if (pre === 'be' && checkGoal('#s2goals', 'naive', goals, 20)) maybeQuiz();
+  };
+
+  /* worst case: a million-node blob */
+  const blob = $('#blobsvg');
+  let rs = 7; const rnd = () => { rs = (rs * 1103515245 + 12345) % 2147483648; return rs / 2147483648; };
+  const dots = [];
+  for (let i = 0; i < 620; i++) {
+    const d = Math.pow(rnd(), 0.7), u = rnd();
+    const x = 300 + (u - 0.5) * 560 * Math.pow(d, 0.85), y = 26 + d * 186;
+    const el = S('circle', { class: 'd', cx: x.toFixed(1), cy: y.toFixed(1), r: 3.2 }, blob);
+    dots.push({ el, a: u < 0.12 && d > 0.06, y });
+  }
+  S('circle', { class: 'd lit', cx: 300, cy: 22, r: 6 }, blob);
+  S('text', { class: 'lbl a', x: 70, y: 238 }, blob).textContent = 'a…';
+  S('text', { class: 'lbl', x: 300, y: 238 }, blob).textContent = '1,000,000 nodes (each dot ≈ 1,600)';
+  S('text', { class: 'lbl', x: 545, y: 238 }, blob).textContent = '…z';
+  const aDots = dots.filter(d => d.a).sort((p, q) => p.y - q.y);
+  const W = { p: 1, c: 120000 };
+  W.s = W.c * Math.log2(W.c); W.ms = (W.p + W.c + W.s) * 0.1 / 1000;
+  $('#b2worst').onclick = async () => {
+    if (busy || worstBusy) return;
+    worstBusy = true; $('#b2worst').disabled = true;
+    $('#small2').hidden = true; $('#blob2').hidden = false; $('#m2').hidden = true; $('#found2').hidden = true; $('#drop2').hidden = true;
+    $('.costbar', $('#s2')).hidden = true; $('.qrow', $('#s2')).hidden = true; $('#h2').hidden = true;
+    dots.forEach(d => d.el.classList.remove('lit'));
+    $('#wp').textContent = '0'; $('#wc').textContent = '0'; $('#ws').textContent = '0'; $('#ms2').textContent = '0 ms'; $('#bfill2').style.width = '0';
+    logTo('log2', '💥 1,000,000-node trie. The user types one letter: <b>a</b>.', 'w');
+    await wait(300);
+    $('#wp').textContent = '1';
+    const msAt = (c, s) => (1 + c + s) * 0.1 / 1000;
+    const bar = ms => { $('#bfill2').style.width = Math.min(100, ms / 250 * 100) + '%'; $('#ms2').textContent = ms.toFixed(ms < 10 ? 1 : 0) + ' ms'; };
+    await anim(1800, p => {
+      const c = W.c * p; $('#wc').textContent = fmt(c);
+      aDots.slice(0, Math.round(aDots.length * p)).forEach(d => d.el.classList.add('lit'));
+      bar(msAt(c, 0));
+    });
+    await anim(1600, p => { const s = W.s * p; $('#ws').textContent = fmtC(s); bar(msAt(W.c, s)); });
+    bar(W.ms);
+    logTo('log2', `visited ${fmt(W.c)} nodes, then about ${fmt(W.s)} sort steps → ≈ <b>${Math.round(W.ms)} ms</b> for ONE keystroke. Budget: 100 ms. And <a href="1301-autocomplete-scope-and-estimation.html">Quest 13.1</a> says ~24,000 of these arrive every second.`, 'e');
+    $('#b2back').hidden = false; worstBusy = false;
+    if (checkGoal('#s2goals', 'worst', goals, 20)) maybeQuiz();
+  };
+  $('#b2back').onclick = () => {
+    $('#small2').hidden = false; $('#blob2').hidden = true; $('#m2').hidden = false; $('#found2').hidden = false; $('#drop2').hidden = false;
+    $('.costbar', $('#s2')).hidden = false; $('.qrow', $('#s2')).hidden = false; $('#h2').hidden = false;
+    $('#b2back').hidden = true; $('#b2worst').disabled = false;
+  };
+  function maybeQuiz() {
+    if (quizShown || goals.size < 2) return;
+    quizShown = true;
+    setTimeout(() => quizChain($('#s2quiz'), [
+      { q: 'A user types one letter, like <code>a</code>, into a huge trie. Which part of the naive lookup hurts most?',
+        options: ['Walking the whole subtree, then sorting it', 'Finding the prefix node, one step per letter', 'Sending the final top 5 back to the browser'],
+        correct: 0,
+        good: 'With p = 1 the walk to the node is one step. But c, the subtree under <code>a</code>, is huge, so O(c) to collect and O(c log c) to sort dominate. Short prefixes are the worst case.',
+        bad: 'Finding the node costs only p steps, and p = 1. The subtree under a one-letter prefix is enormous, so collecting it, O(c), and sorting it, O(c log c), dominate.' },
+      { q: 'Prefix <code>be</code>, k = 2. What does the naive algorithm return?',
+        options: ['best (35) and bet (29)', 'bee (20) and beer (10)', 'be (15) and bee (20)'],
+        correct: 0,
+        good: 'The subtree holds be 15, bee 20, beer 10, best 35, bet 29. Sorted, the top two are <b>best</b> and <b>bet</b>.',
+        bad: 'Sort the five queries under <code>be</code> by frequency: best 35, bet 29, bee 20, be 15, beer 10. The top two are <b>best</b> and <b>bet</b>.' },
+    ], () => setTimeout(() => Q.clearStage(2), 700)), 500);
+  }
+  resetRun();
+});
+
+/* ================= STAGE 3: two cheats that buy O(1) ================= */
+Q.onStage(3, () => {
+  const K = 5;
+  let cap = false, cache = false, locked = false, revealed = false, busy = false, quizShown = false;
+  const pred = {}, goals = new Set();
+  const tv = trieView($('#t3'), B_TRIE, { onTap: id => inspect(id), label: n => `Node ${n.id || 'root'}: show what it stores` });
+  // little teal tags: how many entries each node caches
+  const tags = {};
+  B_TRIE.forEach(n => {
+    const w = tv.nodes[n.id].w, cnt = tv.topk(n.id, K).length;
+    const g = S('g', { class: 'ct off' }, tv.g(n.id));
+    S('rect', { x: n.x - w / 2 - 30, y: n.y - 11, width: 26, height: 22, rx: 6 }, g);
+    S('text', { x: n.x - w / 2 - 17, y: n.y }, g).textContent = cnt;
+    tags[n.id] = g;
+  });
+  const entries = B_TRIE.reduce((s, n) => s + tv.topk(n.id, K).length, 0); // 21
+  const NODES = B_TRIE.length; // 8
+
+  /* prediction */
+  $$('#pred3 .seg').forEach(seg => $$('button', seg).forEach(b => b.onclick = () => {
+    if (locked) return;
+    $$('button', seg).forEach(x => x.classList.toggle('on', x === b)); pred[seg.dataset.p] = b.dataset.v;
+    $('#lock3').disabled = !(pred.time && pred.mem);
+  }));
+  $('#lock3').onclick = () => {
+    locked = true; $('#lock3').disabled = true; $$('#pred3 .seg button').forEach(b => b.disabled = true);
+    $('#swCache').disabled = false; $('#swCache').title = '';
+    const ex = $('#pex3'); ex.className = 'explain show'; ex.innerHTML = 'Locked in. Now flip <b>📋 Cache top 5 at every node</b> and watch.';
+  };
+  async function reveal() {
+    revealed = true;
+    const okT = pred.time === 'down', okM = pred.mem === 'up';
+    const ex = $('#pex3');
+    ex.className = 'explain show ' + (okT && okM ? 'good' : 'bad');
+    ex.innerHTML = `<b>(a) Lookup time: faster.</b> ${okT ? '✓ You called it.' : '✗ You said ' + ({ same: 'same', up: 'slower' })[pred.time] + '.'} No walk through the subtree and no sort: the node already holds the answer.<br>
+      <b>(b) Memory: more.</b> ${okM ? '✓ You called it.' : '✗ You said ' + ({ same: 'same', down: 'less' })[pred.mem] + '.'} Every node now carries a list: ${entries} extra entries on top of ${NODES} nodes in this tiny trie. Speed was bought with space.`;
+    okT ? Q.addXP(15, ex) : Q.loseHeart(ex);
+    okM ? Q.addXP(15, ex) : Q.loseHeart(ex);
+    maybeQuiz();
+  }
+
+  /* switches */
+  function sw(el, on) { el.setAttribute('aria-checked', on ? 'true' : 'false'); }
+  $('#swCap').onclick = () => { if (busy) return; cap = !cap; sw($('#swCap'), cap); logTo('log3', cap ? '✂️ prefix capped at 50 characters' : '✂️ cap removed: p can be any length'); render(); };
+  $('#swCache').onclick = async () => {
+    if (busy || !locked) return;
+    cache = !cache; sw($('#swCache'), cache); render();
+    logTo('log3', cache ? `📋 every node now stores its top ${K}` : '📋 caching off: nodes store only letters and counts', cache ? 'w' : '');
+    if (cache && !revealed) { $('#in3').value = 'be'; await lookup(); reveal(); }
+  };
+  function render() {
+    Object.values(tags).forEach(t => t.classList.toggle('off', !cache));
+    const used = NODES + (cache ? entries : 0), max = NODES + entries;
+    $('#memn').style.width = (NODES / max * 100) + '%'; $('#memc').style.width = (cache ? entries / max * 100 : 0) + '%';
+    $('#memv').textContent = cache ? `${NODES} nodes + ${entries} cached entries = ${used}` : `${NODES} nodes`;
+    const find = cap ? 'O(1)' : 'O(p)';
+    const tot = cache ? (cap ? 'O(1)' : 'O(p)') : `${find} + O(c) + O(c log c)`;
+    $('#bigo3').innerHTML = `
+      <div class="br${cap ? ' fast' : ''}"><span>① Find the prefix node${cap ? ' <span class="muted small">(p ≤ 50)</span>' : ''}</span><b>${find}</b></div>
+      ${cache ? `<div class="br fast"><span>② Read the node's cached top ${K}</span><b>O(1)</b></div>` : `<div class="br"><span>② Collect the whole subtree</span><b>O(c)</b></div>`}
+      <div class="br${cache ? ' off' : ''}"><span>③ Sort, take the top k</span><b>${cache ? 'skipped' : 'O(c log c)'}</b></div>
+      <div class="br tot${cap && cache ? ' win' : ''}"><span>Total per keystroke</span><b>${tot}</b></div>`;
+    $('#v3p').textContent = cap ? '≤ 50' : 'p, any';
+    $('#m3s').classList.toggle('grey', cache);
+  }
+  function inspect(id) {
+    const n = tv.by[id], name = id ? `<code>${id}</code>` : 'the <b>root</b>';
+    const own = n.freq != null ? ` It is also a real query (frequency ${n.freq}).` : '';
+    $('#insp3').innerHTML = cache
+      ? `${name} caches: ${tv.topk(id, K).map(([q, f]) => `<code>${q} ${f}</code>`).join(' ')}${own}`
+      : `${name} stores only its letter and child links.${own} Caching is off, so no list.`;
+    blink(tv.g(id));
+  }
+  async function lookup() {
+    const pre = $('#in3').value.trim().toLowerCase();
+    if (!B_IDS.includes(pre)) { $('#h3').textContent = `No node for “${pre}” in this little trie. Try be.`; return; }
+    $('#h3').textContent = '';
+    busy = true; $('#b3look').disabled = true; $('#swCap').disabled = true; $('#swCache').disabled = true;
+    tv.clear('path', 'visit', 'dim'); $('#drop3').innerHTML = '';
+    let touched = 0; $('#v3t').textContent = '0'; $('#v3s').textContent = cache ? '–' : '0';
+    tv.cls('', 'path');
+    for (const id of pathTo(pre).slice(1)) { tv.cls(id, 'path'); blink(tv.g(id)); touched++; $('#v3t').textContent = touched; await wait(cache ? 300 : 260); }
+    let list;
+    if (cache) {
+      list = tv.topk(pre, K);
+      inspect(pre);
+      logTo('log3', `${pre}: walked ${pre.length} step${pre.length === 1 ? '' : 's'}, read the cached list. Touched <b>${touched}</b> nodes, sorted <b>nothing</b>.`, 'g');
+    } else {
+      for (const id of tv.subtree(pre).slice(1)) { tv.cls(id, 'visit'); touched++; $('#v3t').textContent = touched; await wait(220); }
+      list = tv.topk(pre, K);
+      $('#v3s').textContent = tv.topk(pre, 99).length;
+      await wait(300);
+      logTo('log3', `${pre}: walked to the node, visited its whole subtree, sorted ${tv.topk(pre, 99).length}. Touched <b>${touched}</b> nodes.`, 'w');
+    }
+    $('#m3t').classList.add('flash'); setTimeout(() => $('#m3t').classList.remove('flash'), 700);
+    renderDrop($('#drop3'), pre, list);
+    busy = false; $('#b3look').disabled = false; $('#swCap').disabled = false; $('#swCache').disabled = !locked;
+    if (pre === 'be') {
+      if (!cache) checkGoal('#s3goals', 'slow', goals, 10);
+      if (cache) checkGoal('#s3goals', 'fast', goals, 10);
+      if (cache && cap) { checkGoal('#s3goals', 'o1', goals, 10); }
+      maybeQuiz();
+    }
+  }
+  $('#b3look').onclick = () => { if (!busy) lookup(); };
+  $('#in3').addEventListener('keydown', e => { if (e.key === 'Enter' && !busy) lookup(); });
+  function maybeQuiz() {
+    if (quizShown || goals.size < 3 || !revealed) return;
+    quizShown = true;
+    setTimeout(() => quizChain($('#s3quiz'), [
+      { q: 'Why is it safe to cap the prefix at about 50 characters?',
+        options: ['Real queries are almost never that long', 'A trie cannot hold strings past 50 letters', 'Browsers block typing past 50 characters'],
+        correct: 0,
+        good: 'People rarely type long queries, so a cap of 50 almost never cuts anything real, and it bounds the walk to a fixed number of steps.',
+        bad: 'Tries can hold any length, and browsers don\'t block it. The cap is safe because <b>real queries are almost never that long</b>, so it bounds the walk at no real cost.' },
+      { q: 'Why does each node cache only the top 5–10 queries, not all of them?',
+        options: ['We only show ~5, and it keeps memory small', 'A node can only hold ten child pointers', 'Sorting more than ten items would be slow'],
+        correct: 0,
+        good: 'The dropdown shows about 5, so storing more buys nothing. A small k also keeps the copied lists, and the memory bill, small.',
+        bad: 'Nothing limits a node to ten pointers, and the cached list is built ahead of time, not sorted per request. The point: we only <b>show</b> about 5, and a small k keeps memory small.' },
+    ], () => setTimeout(() => Q.clearStage(3), 700)), 500);
+  }
+  render();
+});
+
+/* ================= STAGE 4: pay for speed ================= */
+Q.onStage(4, () => {
+  const K = 5, ON_PATH = pathTo('beer'); // '', b, be, bee, beer
+  const freq = Object.fromEntries(B_TRIE.filter(n => n.freq != null).map(n => [n.id, n.freq]));
+  let partA = false, bumped = false, busy = false;
+  const hit = new Set();
+  const tv = trieView($('#t4'), B_TRIE, { onTap: (id, g) => tap(id, g), label: n => `Node ${n.id || 'root'}: tap if its list might change` });
+  tv.cls('beer', 'hot');
+  const NAME = id => id || 'root';
+  const listOf = id => tv.subtree(id).filter(x => freq[x] != null).map(x => [x, freq[x]]).sort((a, b) => b[1] - a[1]).slice(0, K);
+  function table(changed) {
+    $('#tab4 tbody').innerHTML = B_TRIE.map(n => `<tr data-n="${n.id}" class="${changed && changed.has(n.id) ? 'chg' : ''}"><td>${NAME(n.id)}</td><td>${listOf(n.id).map(([q, f]) => `<span class="e${q === 'beer' ? ' beer' : ''}">${q} ${f}</span>`).join('')}</td></tr>`).join('');
+  }
+  table();
+  Q.quiz($('#q4a'), {
+    tag: 'Part (a) · count the copies',
+    q: 'At most, in how many nodes\' cached lists can <code>beer</code> appear?',
+    options: ['In 3 of the lists', 'In 4 of the lists', 'In 5 of the lists', 'In 8 of the lists'],
+    correct: 2,
+    good: '<b>5</b>: root, <code>b</code>, <code>be</code>, <code>bee</code> and <code>beer</code>, every node on its path. In general a query of length L can sit in up to <b>L + 1</b> lists: one per prefix, plus the root. Now look at the table: every copy is marked.',
+    bad: 'Only nodes on the path to <code>beer</code> have it in their subtree, so only they can list it: root, <code>b</code>, <code>be</code>, <code>bee</code>, <code>beer</code>. That\'s <b>5</b>, or <b>L + 1</b> for a query of length L.',
+    onDone: () => { partA = true; $('#tab4').classList.add('mark'); logTo('log4', 'beer is copied into 5 lists: root, b, be, bee, beer.', 'w'); maybeDone(); },
+  });
+  function tap(id, g) {
+    if (bumped || busy) return;
+    if (hit.has(id)) return;
+    if (ON_PATH.includes(id)) {
+      hit.add(id); tv.cls(id, 'ok'); Q.addXP(5, $('#tap4'));
+      logTo('log4', `✓ ${NAME(id)}: beer is in its subtree, so its list holds beer and may change.`, 'g');
+      $('#tap4').textContent = `Found ${hit.size} / 5`;
+      if (hit.size === ON_PATH.length) { $('#bump4').hidden = false; $('#tap4').textContent = 'Found 5 / 5 ✓'; }
+    } else {
+      tv.cls(id, 'no'); setTimeout(() => tv.cls(id, 'no', false), 900);
+      Q.loseHeart($('#tap4'));
+      logTo('log4', `✗ ${NAME(id)} is not on beer's path. beer isn't in its subtree, so its list can never contain beer.`, 'e');
+    }
+  }
+  $('#bump4').onclick = async () => {
+    if (bumped || busy) return;
+    busy = true; $('#bump4').disabled = true;
+    const before = Object.fromEntries(B_TRIE.map(n => [n.id, JSON.stringify(listOf(n.id))]));
+    await anim(900, p => { freq.beer = Math.round(10 + 20 * p); tv.nodes.beer.fb.querySelector('text').textContent = freq.beer; });
+    freq.beer = 30; tv.nodes.beer.fb.querySelector('text').textContent = 30;
+    const changed = new Set(B_TRIE.filter(n => JSON.stringify(listOf(n.id)) !== before[n.id]).map(n => n.id));
+    table(changed);
+    const ex = $('#ex4'); ex.className = 'explain show good';
+    ex.innerHTML = `Exactly the <b>${changed.size}</b> nodes on beer's path got a new list (green bar in the table). <code>bes</code>, <code>best</code> and <code>bet</code> didn't move. One count change rippled all the way up to the root. With millions of queries changing, that's a lot of writes, which is why the book rebuilds the trie in batches. More on that in <a href="1303-data-gathering-service.html">Quest 13.3</a>.`;
+    logTo('log4', `beer 10 → 30: ${[...changed].map(NAME).join(', ')} updated. Root now: ${listOf('').map(([q, f]) => q + ' ' + f).join(', ')}.`, 'w');
+    bumped = true; busy = false; maybeDone();
+  };
+  let quizShown = false;
+  function maybeDone() {
+    if (quizShown || !partA || !bumped) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s4quiz'), {
+      tag: 'Final check',
+      q: 'A query has L letters. In at most how many cached top-k lists can it be stored?',
+      options: ['L + 1: each of its prefixes, plus the root', 'Exactly 1: only on its own end node', 'k: one copy for each slot of the top k'],
+      correct: 0,
+      good: 'One list per node on its path: L prefix nodes plus the root. That\'s both the memory bill and the update bill.',
+      bad: 'Every node on the path has the query in its subtree, so each one may list it: L prefix nodes plus the root, <b>L + 1</b>.',
+      onDone: () => setTimeout(() => Q.clearStage(4), 900),
+    }), 500);
+  }
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss'), {
+  name: '🐉 The Lag Hydra',
+  xp: 15,
+  scenarios: [
+    { e: '🐢', t: '"Lookups are slow, but only for one-letter prefixes. Why?"', d: 'Your trie has no optimizations yet.',
+      choices: [{ k: 'sub', label: 'Huge subtree', sub: 'walk + sort over a giant c' }, { k: 'find', label: 'Long walk', sub: 'finding the node takes p steps' }, { k: 'net', label: 'Slow network', sub: 'one letter means more requests' }],
+      a: 'sub', why: 'p = 1, so finding the node is one step. But the subtree under one letter holds a big slice of the whole trie: O(c) to collect it and O(c log c) to sort it.' },
+    { e: '⚡', t: '"Make the lookup O(1)."', d: 'You may change what each node stores.',
+      choices: [{ k: 'cc', label: 'Cap + cache', sub: 'max prefix 50, top k on nodes' }, { k: 'shard', label: 'Shard it', sub: 'split the trie across servers' }, { k: 'idx', label: 'Index SQL', sub: 'add an index on the query column' }],
+      a: 'cc', why: 'Capping p makes finding the node a bounded number of steps. Caching the top k on every node removes the walk and the sort. Sharding spreads load, but each lookup is still the same slow algorithm.' },
+    { e: '🧠', t: '"Isn\'t caching a list at every node wasteful?"', d: 'The interviewer raises an eyebrow.',
+      choices: [{ k: 'trade', label: 'Yes, on purpose', sub: 'space for time; k is small' }, { k: 'free', label: 'No, it\'s free', sub: 'lists reuse the child links' }, { k: 'drop', label: 'Yes, drop it', sub: 'sort per request instead' }],
+      a: 'trade', why: 'It does cost memory: each query is copied into up to L + 1 lists. The book accepts that because fast response is the top requirement, and keeping k at 5–10 bounds the extra space.' },
+    { e: '📋', t: '"A user pastes a 200-character query."', d: 'Your prefix cap is 50.',
+      choices: [{ k: 'cut', label: 'Use first 50', sub: 'long queries are rare anyway' }, { k: 'walk', label: 'Walk all 200', sub: 'go as deep as the text goes' }, { k: 'err', label: 'Return error', sub: 'reject input over the limit' }],
+      a: 'cut', why: 'The cap means the trie only goes 50 deep, so you look up the first 50 characters. Queries that long are rare, and suggestions for them are rarely useful. Walking 200 breaks the bound that made lookup O(1).' },
+    { e: '🗺️', t: '"Why a tree at all? Use a hash map: prefix → top 5."', d: 'The interviewer pushes on your data structure.',
+      choices: [{ k: 'same', label: 'Same thing', sub: 'a cached trie is that map' }, { k: 'nostr', label: 'Can\'t hash', sub: 'maps can\'t key on strings' }, { k: 'slow', label: 'Maps are slow', sub: 'hash lookups beat O(1)' }],
+      a: 'same', why: 'Once every node stores its top k, the trie <i>is</i> effectively a prefix → top-k table. The tree is how you build those lists cheaply, since each node\'s list comes from its children\'s. Stored in a key-value DB, it becomes exactly that map (next quest).' },
+  ],
+  outro: 'Slow for short prefixes → cap + cache. Cost → memory and ripple updates. A cached trie is really a prefix → top-k table.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: interview drill ================= */
+Q.onStage(6, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"Walk me through how your trie returns the top 5 suggestions for a prefix. What does it cost, and how do you make it fast?"</i>',
+  placeholder: 'A trie is a tree where the root is the empty string…',
+  model: '"A trie is a tree where the root is the empty string and every node is a prefix: the path from the root spells it. Nodes where a full query ends also store its frequency. The naive top-k has three steps: walk p letters to the prefix node, O(p); visit its whole subtree to collect the queries, O(c); sort them and keep the top k, O(c log c). For a one-letter prefix, c is huge. Two fixes: cap the prefix at around 50 characters, so finding the node is bounded, effectively O(1); and cache the top 5 at every node, so returning them is O(1) with no walk and no sort. The price is memory: each query is copied into up to L + 1 lists. And when a count changes, every ancestor\'s list may need an update, so we rebuild in batches."',
+  checks: [
+    'Root = empty string, nodes = prefixes, query nodes store a frequency',
+    'Naive top-k: O(p) find + O(c) collect + O(c log c) sort',
+    'Cap the prefix (~50) so finding the node is O(1)',
+    'Cache the top k on every node so returning it is O(1)',
+    'Named the cost: much more memory (space for time)',
+    'Said a count change ripples up to every ancestor\'s list',
+  ],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

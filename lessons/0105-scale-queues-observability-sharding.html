@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Queues, Gauges &amp; Shards</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: shard colours, queue sim (stage 1), metric bins (stage 2), shard router (stage 3), shard trouble panels (stage 4) */
+:root { --s0: #5a48f0; --s1: #0d9a96; --s2: #c27400; --s3: #d4423f; --s4: #2f7fd8; --s5: #b8409a; --s6: #1d9a52; --s7: #7c6a4a; --on-s: #ffffff; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --s0: #8f82ff; --s1: #31d3c8; --s2: #ffb547; --s3: #ff6d6a; --s4: #5aa9ff; --s5: #f07ad0; --s6: #43d98a; --s7: #c4a77a; --on-s: #0e0f1d; }
+}
+:root[data-theme="dark"] { --s0: #8f82ff; --s1: #31d3c8; --s2: #ffb547; --s3: #ff6d6a; --s4: #5aa9ff; --s5: #f07ad0; --s6: #43d98a; --s7: #c4a77a; --on-s: #0e0f1d; }
+
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.bignum { font-family: var(--mono); font-weight: 700; }
+.bignum.bad { color: var(--bad); }
+.bignum.good { color: var(--good); }
+.bignum.warn { color: var(--warn); }
+
+/* ---------- stage 1: queue sim ---------- */
+.qtop { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px 0; font-size: 14px; }
+.qsim { display: grid; grid-template-columns: 1fr 18px 1fr 18px 1fr; gap: 6px; padding: 12px; align-items: stretch; }
+.qcol { min-width: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); padding: 8px; transition: opacity .3s; position: relative; }
+.qcol.off { opacity: .38; }
+.qcol .offtag { display: none; position: absolute; right: 8px; top: 8px; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.qcol.off .offtag { display: block; }
+.qlab { font-weight: 700; font-size: 13px; margin-bottom: 6px; line-height: 1.2; }
+.qlab small { display: block; font-weight: 500; color: var(--muted); font-size: 11.5px; }
+.qarrow { align-self: center; color: var(--muted); font-weight: 700; text-align: center; font-size: 18px; }
+.qarrow.flow { color: var(--teal); animation: nudge 1s infinite; }
+@keyframes nudge { 50% { transform: translateX(3px); } }
+#webs { display: grid; gap: 6px; }
+.web { border: 1px solid var(--line); border-radius: 8px; padding: 6px; font-size: 12px; background: var(--bg); }
+.web b { font-family: var(--mono); font-size: 12px; }
+.threads { display: grid; gap: 3px; margin-top: 4px; }
+.th { display: block; height: 8px; border-radius: 4px; background: var(--bg-2); overflow: hidden; border: 1px solid var(--line); }
+.th span { display: block; height: 100%; width: 0; background: var(--warn); transition: width .25s; }
+.web.queued .threads { display: none; }
+.wmsg { color: var(--muted); font-size: 11.5px; margin-top: 4px; min-height: 16px; line-height: 1.3; }
+.wmsg.bad { color: var(--bad); font-weight: 700; }
+.wmsg.good { color: var(--good); font-weight: 700; }
+.qslots { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; }
+.qslots i { aspect-ratio: 1; border-radius: 3px; background: var(--bg-2); border: 1px solid var(--line); transition: background .2s; }
+.qslots i.on { background: var(--teal); border-color: transparent; }
+.qslots.hot i.on { background: var(--warn); }
+.qslots.full i.on { background: var(--bad); }
+.wgrid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+.wk { border: 1px solid var(--line); border-radius: 6px; padding: 3px 2px; font-size: 10.5px; text-align: center; background: var(--bg); display: none; min-width: 0; }
+.wk.on { display: block; animation: rise .3s; }
+.wk b { font-family: var(--mono); display: block; line-height: 1.2; }
+.wbar { display: block; height: 6px; border-radius: 3px; background: var(--bg-2); overflow: hidden; margin-top: 2px; }
+.wbar span { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+.wk.dead { background: var(--bad-soft); border-color: var(--bad); }
+.stats1 { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13.5px; }
+.stats1 b { font-family: var(--mono); }
+.ctl1 .btn { padding: 8px 12px; font-size: 14px; }
+.ctl1 .stepper { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
+.ctl1 .stepper .btn { min-width: 44px; min-height: 40px; font-size: 18px; padding: 4px 10px; line-height: 1; }
+.slider1 { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 200px; }
+.slider1 input { flex: 1; accent-color: var(--accent); height: 28px; min-width: 0; }
+.seg button { min-height: 32px; }
+@media (max-width: 560px) {
+  .qsim { grid-template-columns: 1fr; }
+  .qarrow { transform: rotate(90deg); height: 18px; }
+  .qarrow.flow { animation: none; }
+  #webs { grid-template-columns: 1fr 1fr; }
+}
+
+/* ---------- stage 2: metric bins ---------- */
+.mdeck { display: grid; gap: 6px; justify-items: center; margin-top: 14px; }
+.mcount { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.mcard { width: 100%; max-width: 440px; border: 2px solid var(--accent); border-radius: 16px; padding: 16px; background: var(--panel); text-align: center; font-weight: 600; font-size: 17px; min-height: 86px; display: grid; place-items: center; box-shadow: var(--shadow); }
+.mcard.shake { animation: shake .4s; }
+.mcard.go { animation: cardgo .45s forwards; }
+@keyframes cardgo { to { opacity: 0; transform: translateY(26px) scale(.85); } }
+.bins { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 14px; }
+@media (min-width: 700px) { .bins { grid-template-columns: repeat(4, 1fr); } }
+.bin { text-align: left; border: 2px dashed var(--line); border-radius: 14px; background: var(--bg); padding: 10px; min-height: 112px; display: flex; flex-direction: column; gap: 4px; transition: border-color .2s, background .2s; }
+.bin:hover:not([disabled]) { border-color: var(--accent); }
+.bin[disabled] { cursor: default; }
+.bin.flash { border-color: var(--good); background: var(--good-soft); }
+.bin .bt { font-weight: 700; font-size: 14px; display: block; }
+.bin .bs { color: var(--muted); font-size: 12px; line-height: 1.3; display: block; }
+.bin .chips { margin-top: 4px; }
+.bin .chip { font-family: var(--font); font-size: 11.5px; animation: rise .35s; }
+
+/* ---------- stage 3: shard router ---------- */
+.uid { text-align: center; padding: 14px 12px 6px; }
+.uid .big { font: 700 28px var(--mono); }
+.uid .eq { font-family: var(--mono); color: var(--muted); font-size: 14px; min-height: 22px; }
+.shards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 6px 12px 14px; }
+.shardbox { border: 2px solid var(--line); border-radius: 12px; background: var(--panel); padding: 8px 4px; min-height: 124px; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+.shardbox:hover:not([disabled]) { border-color: var(--accent); }
+.shardbox[disabled] { cursor: default; }
+.shardbox .hd { font-weight: 700; font-size: 13px; }
+.shardbox .sch { font: 600 10px var(--mono); color: var(--muted); }
+.shardbox .rows { display: flex; flex-direction: column; gap: 3px; width: 100%; align-items: center; }
+.rowchip { font: 600 12px var(--mono); padding: 2px 6px; border-radius: 6px; color: var(--on-s); animation: slidein .5s cubic-bezier(.3,1.4,.5,1); }
+@keyframes slidein { from { transform: translateY(-34px); opacity: 0; } }
+.shardbox.ping { animation: blip .5s; }
+@keyframes blip { 45% { transform: scale(1.06); } }
+.keycards { display: grid; gap: 10px; grid-template-columns: repeat(3, 1fr); margin-top: 12px; }
+@media (max-width: 700px) { .keycards { grid-template-columns: 1fr; } }
+.keycard { border: 2px solid var(--line); border-radius: 14px; padding: 12px; background: var(--panel); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.keycard.right { border-color: var(--good); background: var(--good-soft); }
+.keycard.wrong { border-color: var(--bad); }
+.keycard h4 { margin: 0; font: 700 15px var(--mono); }
+.keycard .kd { font-size: 12.5px; color: var(--muted); line-height: 1.35; }
+.mbars { display: grid; gap: 5px; margin: 4px 0; }
+.mbar { display: grid; grid-template-columns: 22px 1fr 40px; gap: 6px; align-items: center; font: 600 12px var(--mono); }
+.mbar .tr { height: 14px; background: var(--bg-2); border-radius: 4px; overflow: hidden; border: 1px solid var(--line); position: relative; }
+.mbar .fl { height: 100%; width: 0; }
+.mbar .fair { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; background: var(--ink); opacity: .55; }
+.mbar .n { text-align: right; }
+.keycard .neww { font-size: 12px; font-weight: 600; min-height: 18px; }
+.keycard .btn { margin-top: auto; padding: 8px 10px; font-size: 14px; }
+
+/* ---------- stage 4: shard trouble ---------- */
+.panel4 { border: 2px dashed var(--line); border-radius: 16px; padding: 14px; margin-top: 16px; }
+.panel4.done { border-style: solid; border-color: var(--good); }
+.panel4 h3 { margin: 0 0 6px; font-size: 17px; }
+.panel4 .tagl { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
+.rsgrid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; padding: 12px; }
+.rsbox { border: 1px solid var(--line); border-radius: 10px; padding: 6px 3px; background: var(--panel); min-height: 92px; transition: opacity .4s; min-width: 0; }
+.rsbox.ghost { opacity: .3; border-style: dashed; }
+.rsbox .hd { font: 700 11px var(--mono); text-align: center; margin-bottom: 4px; white-space: nowrap; }
+.rsdots { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; }
+.rsdots i { width: 6px; height: 6px; border-radius: 2px; }
+.rsdots i.mv { box-shadow: 0 0 0 1.5px var(--ink); animation: blip .6s; }
+.rsnote { font-family: var(--mono); font-size: 13px; text-align: center; padding: 0 12px 10px; min-height: 22px; }
+.hot { padding: 12px 14px; }
+.hotrow { display: grid; grid-template-columns: 70px 1fr 74px; gap: 8px; align-items: center; font-size: 13px; margin: 6px 0; animation: rise .35s; }
+.hotrow .nm { font-weight: 700; font-family: var(--mono); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hotrow .tr { position: relative; height: 18px; background: var(--bg-2); border-radius: 5px; border: 1px solid var(--line); overflow: hidden; }
+.hotrow .fl { position: absolute; inset: 0 auto 0 0; width: 0; transition: width .7s cubic-bezier(.2,.8,.2,1), background .3s; background: var(--teal); }
+.hotrow.over .fl { background: var(--bad); }
+.hotrow.warm .fl { background: var(--warn); }
+.hotrow .capl { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink); }
+.hotrow .q { font-family: var(--mono); text-align: right; white-space: nowrap; font-size: 12px; }
+@media (max-width: 420px) { .hotrow { grid-template-columns: 58px 1fr 66px; gap: 6px; } .hotrow .nm, .hotrow .q { font-size: 11px; } }
+.hotrow.over .q { color: var(--bad); font-weight: 700; }
+.celebs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.celebs .btn { padding: 8px 12px; font-size: 14px; min-height: 40px; }
+.celebs .btn.on { background: var(--warn-soft); border-color: var(--warn); }
+.tbls { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; margin-top: 10px; }
+@media (max-width: 600px) { .tbls { grid-template-columns: 1fr; } }
+.tbl { border: 1px solid var(--line); border-radius: 10px; overflow-x: auto; background: var(--panel); }
+.tbl .tc { font-size: 12px; font-weight: 700; padding: 6px 8px; background: var(--bg-2); display: flex; justify-content: space-between; gap: 6px; }
+.tbl table { width: 100%; border-collapse: collapse; font: 12px var(--mono); }
+.tbl th, .tbl td { padding: 4px 8px; border-top: 1px solid var(--line); text-align: left; white-space: nowrap; }
+.tbl th { color: var(--muted); font-weight: 600; }
+.tbl .newcol { background: var(--good-soft); color: var(--good); font-weight: 700; animation: rise .5s; }
+.qcard { margin-top: 10px; border-radius: 12px; padding: 10px 12px; background: var(--accent-soft); font-size: 14px; }
+.qcard code { background: transparent; padding: 0; }
+.stack { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; font-size: 13px; }
+.stack span.b { border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; background: var(--panel); font-weight: 600; }
+.stack span.b.new { border-color: var(--teal); background: var(--teal-soft); }
+.stack span.ar { color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 1.5 · Scale From Zero to Millions of Users</div>
+    <h1>Queues, Gauges &amp; Shards</h1>
+    <p class="lede">Your photo app is a hit. Uploads time out, nobody can tell which server is sick, and the database is running out of room. You'll fix all three: put a queue in the middle, put gauges on everything, and cut the database into shards.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can explain how a <b>message queue</b> decouples producers and consumers, name the <b>three levels of metrics</b>, say why scaling the database <b>up</b> runs out, and <b>shard</b> by a key while naming the three sharding headaches: <b>resharding, celebrities, joins</b>.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Drop it in the queue</h2><div class="sub">Producers, consumers, decoupling</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Some work is slow. In the book's example, users upload photos and pick filters: crop, sharpen, blur. Each one takes seconds of CPU.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">[1]</a> If the web server does that work while the user waits, the user's request waits too.</p>
+      <p>A <b>message queue</b> sits between two parts of a system and holds work for later. The book describes it as a <i>durable</i> component (it keeps messages until someone handles them), stored in memory, that supports <b>asynchronous</b> communication: the sender drops a message and moves on, without waiting for the work to finish.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">[1]</a><a class="cite" href="https://en.wikipedia.org/wiki/Message_queue" target="_blank" rel="noopener">[5]</a></p>
+      <ul>
+        <li><b>Producers</b> (also called <i>publishers</i>) create messages and put them on the queue. Here: web servers posting "filter photo #812".</li>
+        <li><b>Consumers</b> (also called <i>subscribers</i>) connect to the queue, take messages, and do the work. Here: photo-processing <b>workers</b>.</li>
+      </ul>
+
+      <div class="sim" id="qsimWrap">
+        <div class="qtop"><span class="seg" aria-label="mode"><span id="modeInline" class="on">Inline</span><span id="modeQueue">Queue on</span></span><span class="mono small" id="qClock">t = 0 s</span></div>
+        <div class="qsim">
+          <div class="qcol" id="prodCol"><div class="qlab">Producers<small>2 web servers</small></div><div id="webs"></div></div>
+          <div class="qarrow" id="arr1" aria-hidden="true">›</div>
+          <div class="qcol off" id="queueCol"><span class="offtag">off</span><div class="qlab">Queue<small><span id="qDepth">0</span> / 50 jobs waiting</small></div><div class="qslots" id="qslots"></div></div>
+          <div class="qarrow" id="arr2" aria-hidden="true">›</div>
+          <div class="qcol off" id="workCol"><span class="offtag">none</span><div class="qlab">Consumers<small><span id="wCount">0</span> photo workers</small></div><div class="wgrid" id="wgrid"></div></div>
+        </div>
+        <div class="sim-bar ctl1" id="ctl1"></div>
+        <div class="sim-bar"><div class="stats1" id="stats1"></div></div>
+        <div class="simlog" id="q1log"><div>Inline mode: each web server has 3 threads. Filtering one photo ties up a thread for 3 s. The phone gives up after 5 s.</div></div>
+      </div>
+      <ul class="checklist" id="s1goals">
+        <li data-g="inline"><span class="box">✓</span><span>Inline mode: push uploads past what the web servers can filter, and watch 5 uploads time out</span></li>
+        <li data-g="day"><span class="box">✓</span><span>Queue on: get through a 60-second traffic day with the queue under <b>50</b>, finishing with <b>5 or fewer</b> workers</span></li>
+        <li data-g="crash"><span class="box">✓</span><span>Predict, then watch: every worker crashes for 10 seconds</span></li>
+      </ul>
+      <div class="challenge boxed" id="s1pred" style="display:none"></div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Gauges on the dashboard</h2><div class="sub">Logging, metrics, automation</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>A small site can get by on luck. Once it serves a big business, the book says, good tooling stops being optional.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">[1]</a> It names three kinds:</p>
+      <ul>
+        <li><b>Logging.</b> Error logs tell you what went wrong. You can read them on each server, but it's far easier to ship them all to one <b>central log service</b> where you search them in one place.</li>
+        <li><b>Metrics</b> are numbers you track over time, at three levels:
+          <ul>
+            <li><b>Host level:</b> one machine's health. CPU, memory, disk I/O (how busy its disk is reading and writing).</li>
+            <li><b>Aggregated level:</b> a whole tier at once, such as the performance of the entire database tier or cache tier.</li>
+            <li><b>Key business metrics:</b> what the company cares about. Daily active users, retention (how many come back), revenue.</li>
+          </ul></li>
+        <li><b>Automation.</b> When the system gets big, let machines do the checking. <b>Continuous integration</b> (CI) runs automated checks on every code check-in, so problems show up early. Automating build, test and deploy makes developers faster too.<a class="cite" href="https://martinfowler.com/articles/continuousIntegration.html" target="_blank" rel="noopener">[6]</a></li>
+      </ul>
+      <p>Sort ten things your team wants on the wall. Tap the bin each card belongs in.</p>
+      <div class="mdeck"><div class="mcount" id="mCount">Card 1 of 10</div><div class="mcard" id="mCard" aria-live="polite"></div></div>
+      <div class="bins" id="bins">
+        <button class="bin" data-b="host"><span class="bt">🖥️ Host metric</span><span class="bs">one machine's CPU, memory, disk</span><span class="chips"></span></button>
+        <button class="bin" data-b="agg"><span class="bt">🧱 Aggregated metric</span><span class="bs">a whole tier at once</span><span class="chips"></span></button>
+        <button class="bin" data-b="biz"><span class="bt">💰 Business metric</span><span class="bs">users, retention, money</span><span class="chips"></span></button>
+        <button class="bin" data-b="not"><span class="bt">🧰 Not a metric</span><span class="bs">logging or automation</span><span class="chips"></span></button>
+      </div>
+      <div class="explain" id="mExplain"></div>
+      <div id="s2quiz"></div>
+      <div class="callout tip" id="s2design" style="display:none"><b>Your design so far.</b> The book's picture at this point adds two things to the stack from <a href="0101-scale-one-box-to-load-balancer.html">Quests 1.1</a>–<a href="0104-scale-stateless-and-data-centers.html">1.4</a>: a message queue (looser coupling, and work survives a crash) and a tools box for logging, monitoring, metrics and automation.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">[1]</a>
+        <div class="stack"><span class="b">Users</span><span class="ar">→</span><span class="b">GeoDNS</span><span class="ar">→</span><span class="b">Load balancer (per DC)</span><span class="ar">→</span><span class="b">Stateless web tier</span><span class="ar">→</span><span class="b new">Message queue</span><span class="ar">→</span><span class="b new">Workers</span><span class="ar">·</span><span class="b">Cache</span><span class="ar">·</span><span class="b">Session store</span><span class="ar">·</span><span class="b">DB (master + replicas)</span><span class="ar">·</span><span class="b">CDN for static files</span><span class="ar">·</span><span class="b">× 2 data centers</span><span class="ar">·</span><span class="b new">Logs · metrics · CI</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Bigger box or more boxes?</h2><div class="sub">Scaling the database: up vs sharding</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The database is filling up. You have two ways out, the same two you met for web servers in <a href="0101-scale-one-box-to-load-balancer.html">Quest 1.1</a>.</p>
+      <p><b>Scale up (vertical):</b> buy a bigger machine with more CPU, RAM and disk. It goes further than you'd think. The book notes that Amazon RDS offered database servers with <b>24 TB of RAM</b>, and that Stack Overflow in 2013 served <b>over 10 million monthly unique visitors</b> with just <b>one master database</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">[1]</a><a class="cite" href="https://nickcraver.com/blog/2013/11/22/what-it-takes-to-run-stack-overflow/" target="_blank" rel="noopener">[2]</a> But it has three drawbacks:</p>
+      <ul>
+        <li><b>Hardware has a ceiling.</b> With enough users, even the biggest box isn't enough.</li>
+        <li><b>Single point of failure.</b> Everything rides on one machine. If it dies, so does your app.</li>
+        <li><b>Cost.</b> The most powerful servers cost far more per unit of power.</li>
+      </ul>
+      <p><b>Scale out (horizontal), called sharding:</b> split one large database into smaller, easier-to-manage parts called <b>shards</b>.<a class="cite" href="https://en.wikipedia.org/wiki/Shard_(database_architecture)" target="_blank" rel="noopener">[4]</a> Every shard has the <b>same schema</b> (the same tables and columns), but each holds <b>different rows</b>, with no overlap. To decide where a row goes, you pick a <b>sharding key</b> (also called a <i>partition key</i>): one or more columns whose value picks the shard. The book's example puts users on 4 shards with <code>shard = user_id % 4</code>. (<code>%</code> means "remainder after dividing", so the answer is always 0–3.)</p>
+
+      <div class="sim" id="routeSim">
+        <div class="uid"><div class="small muted">Route this new user. Tap the shard it belongs on.</div><div class="big" id="uidBig">user_id 17</div><div class="eq" id="uidEq">17 % 4 = ?</div></div>
+        <div class="shards" id="shards3"></div>
+        <div class="sim-bar"><span class="small">Routed: <span class="bignum" id="routeN">0 / 5</span></span><span class="small muted">every shard: users(user_id, name, …)</span></div>
+      </div>
+
+      <div class="challenge boxed" id="keyPick">
+        <div class="step">Pick the key</div>
+        <h3>Which sharding key spreads 1,000 users evenly across 4 shards?</h3>
+        <p class="small muted" style="margin-top:0">Each card shows where 1,000 users would land. The thin line marks a fair share (250 each).</p>
+        <div class="keycards" id="keycards"></div>
+        <div class="explain" id="keyExplain"></div>
+      </div>
+      <ul class="checklist" id="s3goals">
+        <li data-g="route"><span class="box">✓</span><span>Route all 5 users with <code>user_id % 4</code></span></li>
+        <li data-g="key"><span class="box">✓</span><span>Pick the sharding key that spreads load evenly</span></li>
+      </ul>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Shard trouble</h2><div class="sub">Resharding, celebrities, joins</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Sharding works, but the book warns it brings new problems.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">[1]</a> Here are the three it names. Work through all three panels, in any order.</p>
+      <ul class="checklist" id="s4goals">
+        <li data-g="reshard"><span class="box">✓</span><span><b>A.</b> Resharding: add a 5th shard, two ways</span></li>
+        <li data-g="celeb"><span class="box">✓</span><span><b>B.</b> Celebrities: cool down a hotspot shard</span></li>
+        <li data-g="join"><span class="box">✓</span><span><b>C.</b> Joins: answer a query that spans two shards</span></li>
+      </ul>
+
+      <div class="panel4" id="pA">
+        <div class="tagl">Panel A</div>
+        <h3>Resharding</h3>
+        <p class="small">You need to <b>reshard</b> (change how rows map to shards, and move data to match) in two cases. Either a shard can't hold more because you grew fast, or some shards fill up faster than others because the data isn't spread evenly. The book calls that second one <b>shard exhaustion</b>. Here, 100 users sit on 4 shards by <code>user_id % 4</code>. Shard 4 is waiting to join.</p>
+        <div class="sim">
+          <div class="rsgrid" id="rsgrid"></div>
+          <div class="rsnote" id="rsNote">shard = user_id % 4</div>
+        </div>
+        <div class="challenge" id="rsPred"></div>
+        <div class="row" id="rsCHrow" style="display:none;margin-top:10px"><button class="btn primary" id="rsCH">Now do it with consistent hashing →</button></div>
+        <div class="callout" id="rsNoteCH" style="display:none"><b>Why it's so different.</b> With <code>% N</code>, a user stays put only if <code>id % 4</code> equals <code>id % 5</code>, which happens for 1 id in 5. <b>Consistent hashing</b> places shards and keys on a ring, so a new shard only takes a slice from its neighbours: about 1/5 of the users here. The book points to it as the common fix for resharding (it gets its own chapter). Try it hands-on in <a href="0002-consistent-hashing.html">Quest 6.2, Slice the Keyspace</a>.</div>
+      </div>
+
+      <div class="panel4" id="pB">
+        <div class="tagl">Panel B</div>
+        <h3>The celebrity problem</h3>
+        <p class="small">Also called the <b>hotspot key</b> problem: one shard gets far more traffic than the others and buckles. In a social app, three of the biggest stars all happen to live on shard 2. Tap each one to make them go viral. The black line is what one shard can handle (8,000 queries per second, or QPS).</p>
+        <div class="sim"><div class="hot" id="hot"></div></div>
+        <div class="celebs" id="celebs"></div>
+        <div class="challenge" id="hotFix" style="display:none"></div>
+      </div>
+
+      <div class="panel4" id="pC">
+        <div class="tagl">Panel C</div>
+        <h3>Joins across shards</h3>
+        <p class="small">A <b>join</b> combines rows from two tables, like posts plus the names of their authors. On one database that's a single query. Once the tables live on different servers, the database can't do it for you.</p>
+        <div class="qcard">🔎 Feed query: <b>"Show the latest posts with their author names."</b></div>
+        <div class="tbls" id="tbls"></div>
+        <div class="opts" id="joinOpts" style="margin-top:12px"></div>
+        <div class="explain" id="joinExplain"></div>
+      </div>
+
+      <div class="callout tip" id="s4design" style="display:none"><b>Where the book lands.</b> Its final picture for this chapter shards the database tier to handle growing traffic, and moves some non-relational features (say, likes or activity feeds) into a <b>NoSQL</b> store to take load off the relational database.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">[1]</a>
+        <div class="stack"><span class="b">Web tier</span><span class="ar">→</span><span class="b new">Shard 0</span><span class="b new">Shard 1</span><span class="b new">Shard 2</span><span class="b new">Shard 3</span><span class="ar">+</span><span class="b new">NoSQL store</span></div>
+      </div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Hydra of Hotspots</h2><div class="sub">Queue it, watch it, or split it</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Eight production fires. For each one, pick the tool you'd reach for <b>first</b>: put a <b>queue</b> in between, add <b>logs, metrics or automation</b>, <b>shard</b> the data, or <b>fix the shard layout</b> you already have.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">The interview answer, in your words</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="explain" id="drillMsg"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next up: the chapter boss.</b> In <a href="0106-scale-boss-millions-live.html"><i>Zero to Millions, Live</i></a> you'll scale a startup from one server to millions of users in a mock interview, using every tool from Quests 1.1 to 1.5.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 1: "Scale From Zero To Millions Of Users"</a>, the sections from "Message queue" to "Database scaling". Then skim Nick Craver's <a href="https://nickcraver.com/blog/2013/11/22/what-it-takes-to-run-stack-overflow/" target="_blank" rel="noopener">What it takes to run Stack Overflow (2013)</a> for a real example of how far a scaled-up database can go.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <ul style="margin:0;padding-left:20px">
+        <li><b>"Stored in memory" is a simplification.</b> Real brokers such as Kafka, RabbitMQ (with durable queues) and Amazon SQS write messages to disk or to replicated storage so they survive a crash. Most deliver <b>at least once</b>, so a job can arrive twice. Make consumers <b>idempotent</b>: running the same job twice must be harmless.</li>
+        <li><b><code>user_id % N</code> is a teaching example.</b> Production systems usually use consistent hashing, range-based sharding (by key ranges) or directory-based sharding (a lookup table), so adding a shard doesn't move most of the data.</li>
+        <li><b>Sharding is often a last resort.</b> Many teams first try read replicas (<a href="0102-scale-database-replication.html">Quest 1.2</a>), caching (<a href="0103-scale-cache-and-cdn.html">Quest 1.3</a>), archiving cold data and a bigger box. Sharding makes transactions, joins and schema changes much harder.</li>
+        <li><b>The numbers are dated.</b> The 24 TB RDS figure and the 2013 Stack Overflow figure come from the book. Check current instance sizes before you quote them; AWS lists its largest memory machines on its <a href="https://aws.amazon.com/ec2/instance-types/high-memory/" target="_blank" rel="noopener">High Memory instances</a> page.<a class="cite" href="https://aws.amazon.com/ec2/instance-types/high-memory/" target="_blank" rel="noopener">[3]</a></li>
+        <li><b>A shard per celebrity fixes reads, not every hotspot.</b> A key that takes huge numbers of <i>writes</i> may also need <b>key salting</b> (adding a small random suffix so one key's writes spread over several shards) or splitting the key across shards.</li>
+      </ul>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"what happens if a worker crashes halfway through a job?"</i> or <i>"how would I pick a sharding key for a chat app?"</i>
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 1 "Scale From Zero To Millions Of Users" (ByteByteGo).</li>
+        <li>Nick Craver, "What it takes to run Stack Overflow", 2013.</li>
+        <li>Amazon Web Services, "Amazon EC2 High Memory instances".</li>
+        <li>Wikipedia, "Shard (database architecture)".</li>
+        <li>Wikipedia, "Message queue".</li>
+        <li>Martin Fowler, "Continuous Integration".</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0105',
+  winTitle: 'Decoupled, observed, sharded!',
+  badge: '🧩 Badge: Shard Smith',
+  cheatsheet: '../reference/ch01-scaling-cheatsheet.html',
+});
+const { sleep, shuffle } = Q;
+const BOOK = '<a class="cite" href="https://bytebytego.com/courses/system-design-interview/scale-from-zero-to-millions-of-users" target="_blank" rel="noopener">[1]</a>';
+const SC = i => `var(--s${i})`;
+const fmt = n => n.toLocaleString('en-US');
+
+/* ================= shared helpers ================= */
+// FNV-1a + murmur finaliser: a small, well-mixed 32-bit hash
+function hash32(str) {
+  let h = 0x811c9dc5;
+  for (const c of str) { h ^= c.codePointAt(0); h = Math.imul(h, 0x01000193); }
+  h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16;
+  return h >>> 0;
+}
+function logTo(el, html, cls) { el.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); while (el.children.length > 60) el.firstChild.remove(); el.scrollTop = el.scrollHeight; }
+// Tick a checklist goal once. xp 0 = no XP for the tick itself.
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done');
+  if (xp) Q.addXP(xp, li);
+  return true;
+}
+// Predict-then-watch round. Resolves after the learner picks and the action has played.
+function predict(box, { step, title, options, correct, act, explain, xp = 15 }) {
+  box.innerHTML = `${step ? `<div class="step">${step}</div>` : ''}<h3>${title}</h3><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+  const opts = $('.opts', box);
+  let busy = false;
+  return new Promise(resolve => {
+    shuffle(options.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = async () => {
+        if (busy) return; busy = true;
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        b.classList.add('picked');
+        await act();
+        const ok = i === correct;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-i="${correct}"]`, opts).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + explain;
+        if (ok) { xp ? Q.addXP(xp, b) : Q.toast('✓ practice', b, 'practice'); } else Q.loseHeart(b);
+        resolve({ ok, row: $('.row', box) });
+      };
+      opts.appendChild(b);
+    });
+  });
+}
+// Several Q.quiz() questions in a row, each appearing after the previous is answered.
+function quizChain(mount, list, onAll) {
+  mount.innerHTML = '';
+  let i = 0;
+  const step = () => Q.quiz(mount, { ...list[i], tag: list.length > 1 ? `Check ${i + 1} of ${list.length}` : 'Check', onDone: () => { i++; if (i < list.length) setTimeout(step, 450); else setTimeout(onAll, 900); } });
+  step();
+}
+
+/* ================= STAGE 1: the queue ================= */
+Q.onStage(1, () => {
+  const goals = new Set();
+  const MAXW = 15, LIMIT = 50, DAY = [1, 2, 3, 4, 2, 1], JIT = [0, 1, 0, -1];
+  const webs = $('#webs'), slotsEl = $('#qslots'), wgrid = $('#wgrid'), ctl = $('#ctl1'), stats = $('#stats1'), log = $('#q1log');
+  slotsEl.innerHTML = Array.from({ length: LIMIT }, () => '<i></i>').join('');
+  const slotEls = $$('i', slotsEl);
+  wgrid.innerHTML = Array.from({ length: MAXW }, (_, i) => `<div class="wk"><b>w${i + 1}</b><span class="wbar"><span></span></span></div>`).join('');
+  const wkEls = $$('.wk', wgrid);
+  webs.innerHTML = [0, 1].map(i => `<div class="web"><b>web-${i + 1}</b><div class="threads">${[0, 1, 2].map(() => '<span class="th"><span></span></span>').join('')}</div><div class="wmsg"></div></div>`).join('');
+  const webEls = $$('.web', webs);
+
+  let mode = 'inline', timer = null, gen = 0, speed = 1;
+  // inline state
+  const IN = { rate: 1, web: null, ok: 0, to: 0, resp: [], rr: 0, t: 0, running: false };
+  // queue state
+  const QS = { depth: 0, workers: [], t: 0, accepted: 0, done: 0, maxDepth: 0, running: false, rate: 0, crashed: false };
+
+  function stop() { gen++; clearTimeout(timer); timer = null; IN.running = false; QS.running = false; }
+  function loop(fn, ms) { const g = gen; const go = () => { if (g !== gen) return; if (fn() !== false) timer = setTimeout(go, typeof ms === 'function' ? ms() : ms); }; timer = setTimeout(go, typeof ms === 'function' ? ms() : ms); }
+
+  function setMode(m) {
+    mode = m;
+    $('#modeInline').className = m === 'inline' ? 'on' : '';
+    $('#modeQueue').className = m === 'queue' ? 'on' : '';
+    $('#queueCol').classList.toggle('off', m === 'inline');
+    $('#workCol').classList.toggle('off', m === 'inline');
+    webEls.forEach(w => w.classList.toggle('queued', m === 'queue'));
+    draw();
+  }
+
+  /* ----- drawing ----- */
+  function draw() {
+    if (mode === 'inline') {
+      const busy = IN.web ? IN.web : [{ slots: [null, null, null], wait: [] }, { slots: [null, null, null], wait: [] }];
+      webEls.forEach((w, i) => {
+        $$('.th span', w).forEach((s, j) => { const sl = busy[i].slots[j]; s.style.width = sl ? ((sl.p + 1) / 3 * 100) + '%' : '0'; });
+        const m = $('.wmsg', w), n = busy[i].wait.length;
+        m.textContent = n ? `${n} waiting for a thread` : 'threads free';
+        m.className = 'wmsg' + (n >= 2 ? ' bad' : '');
+      });
+      paintQueue(0); paintWorkers([]);
+      $('#qClock').textContent = `t = ${IN.t} s`;
+      const avg = IN.resp.length ? (IN.resp.slice(-8).reduce((a, b) => a + b, 0) / Math.min(8, IN.resp.length)).toFixed(1) : '—';
+      stats.innerHTML = `<span>Uploads/s: <b>${IN.rate}</b></span><span>Can filter: <b>2/s</b></span><span>Upload response: <b class="${avg !== '—' && +avg > 3 ? 'bignum warn' : ''}">${avg}${avg === '—' ? '' : ' s'}</b></span><span>Timed out: <b class="bignum ${IN.to ? 'bad' : ''}">${IN.to}</b></span>`;
+      $('#arr1').classList.remove('flow'); $('#arr2').classList.remove('flow');
+    } else {
+      webEls.forEach(w => { const m = $('.wmsg', w); m.textContent = QS.rate ? `publishing ~${QS.rate}/s · 202 Accepted in 40 ms` : 'idle'; m.className = 'wmsg' + (QS.rate ? ' good' : ''); });
+      paintQueue(QS.depth); paintWorkers(QS.workers);
+      $('#qClock').textContent = `t = ${QS.t} s`;
+      const alive = QS.workers.filter(w => !w.dead).length;
+      stats.innerHTML = `<span>Uploads/s: <b>${QS.rate}</b></span><span>Workers clear: <b>${(alive / 3).toFixed(alive % 3 ? 1 : 0)}/s</b></span><span>Uploads failed: <b class="bignum good">0</b></span><span>Photos done: <b>${QS.done}</b></span>`;
+      $('#arr1').classList.toggle('flow', QS.running && QS.rate > 0);
+      $('#arr2').classList.toggle('flow', QS.running && alive > 0 && QS.depth > 0);
+    }
+  }
+  function paintQueue(d) {
+    slotEls.forEach((s, i) => s.classList.toggle('on', i < d));
+    slotsEl.classList.toggle('hot', d >= 35 && d < LIMIT);
+    slotsEl.classList.toggle('full', d >= LIMIT);
+    $('#qDepth').textContent = d;
+  }
+  function paintWorkers(ws) {
+    wkEls.forEach((el, i) => {
+      const w = ws[i];
+      el.classList.toggle('on', !!w);
+      if (!w) return;
+      el.classList.toggle('dead', !!w.dead);
+      $('b', el).textContent = w.dead ? '💀' : 'w' + (i + 1);
+      $('.wbar span', el).style.width = !w.dead && w.p >= 0 ? ((w.p + 1) / 3 * 100) + '%' : '0';
+    });
+    $('#wCount').textContent = ws.filter(w => !w.dead).length;
+  }
+
+  /* ----- phase 1: inline ----- */
+  function inlineTick() {
+    IN.t++;
+    IN.web.forEach(w => {
+      w.slots = w.slots.map(s => { if (!s) return null; s.p++; if (s.p >= 3) { IN.ok++; IN.resp.push(3 + s.waited); return null; } return s; });
+    });
+    for (let k = 0; k < IN.rate; k++) IN.web[IN.rr++ % 2].wait.push({ age: 0 });
+    let timedOut = 0;
+    IN.web.forEach(w => {
+      for (let j = 0; j < 3; j++) if (!w.slots[j] && w.wait.length) { const r = w.wait.shift(); w.slots[j] = { p: 0, waited: r.age }; }
+      w.wait.forEach(r => r.age++);
+      const keep = w.wait.filter(r => r.age <= 2); timedOut += w.wait.length - keep.length; w.wait = keep;
+    });
+    if (timedOut) { IN.to += timedOut; logTo(log, `t=${IN.t}s ⏱ ${timedOut} upload${timedOut > 1 ? 's' : ''} timed out (504). The phone waited 5 s and gave up.`, 'e'); }
+    draw();
+    if (IN.to >= 5 && checkGoal('#s1goals', 'inline', goals, 10)) {
+      logTo(log, 'Both web servers are stuck filtering photos, so new uploads wait in line and time out. The web tier and the slow work are tied together.', 'w');
+      renderCtl();
+    }
+  }
+  function startInline() {
+    stop(); setMode('inline');
+    IN.web = [{ slots: [null, null, null], wait: [] }, { slots: [null, null, null], wait: [] }];
+    IN.ok = 0; IN.to = 0; IN.resp = []; IN.rr = 0; IN.t = 0; IN.running = true;
+    logTo(log, `▶ Inline mode at ${IN.rate} upload${IN.rate > 1 ? 's' : ''}/s. Drag the slider up.`);
+    loop(inlineTick, 450);
+    renderCtl();
+  }
+
+  /* ----- phase 2: the day ----- */
+  function resetQueue(nWorkers) {
+    QS.depth = 0; QS.t = 0; QS.accepted = 0; QS.done = 0; QS.maxDepth = 0; QS.rate = 0; QS.crashed = false;
+    QS.workers = Array.from({ length: nWorkers }, () => ({ p: -1, dead: false }));
+  }
+  function workStep() {
+    QS.workers.forEach(w => { if (w.dead) return; if (w.p >= 0) { w.p++; if (w.p >= 3) { w.p = -1; QS.done++; } } });
+    QS.workers.forEach(w => { if (!w.dead && w.p < 0 && QS.depth > 0) { QS.depth--; w.p = 0; } });
+  }
+  function dayTick() {
+    const base = DAY[Math.min(5, Math.floor(QS.t / 10))];
+    const prevBase = QS.t ? DAY[Math.min(5, Math.floor((QS.t - 1) / 10))] : 0;
+    if (base !== prevBase) logTo(log, `t=${QS.t}s traffic is now ~${base} upload${base > 1 ? 's' : ''}/s → you need about ${base * 3} workers to keep up`, base > prevBase ? 'w' : 'g');
+    QS.rate = base;
+    const arr = Math.max(0, base + JIT[QS.t % 4]);
+    QS.depth += arr; QS.accepted += arr;
+    workStep();
+    QS.t++;
+    QS.maxDepth = Math.max(QS.maxDepth, QS.depth);
+    draw();
+    if (QS.depth >= LIMIT) {
+      stop(); draw();
+      logTo(log, `💥 t=${QS.t}s: 50 jobs waiting. Uploads still succeed, but filtered photos now show up minutes late. Add workers sooner. Retry the day.`, 'e');
+      renderCtl('failed');
+      return false;
+    }
+    if (QS.t >= 60) {
+      stop(); QS.rate = 0; draw();
+      const n = QS.workers.length;
+      if (n <= 5) {
+        logTo(log, `🏁 Day over. Peak queue ${QS.maxDepth}, ${QS.accepted} uploads accepted, 0 failed, ${n} workers at the end. Producers and consumers scaled separately.`, 'g');
+        checkGoal('#s1goals', 'day', goals, 20);
+        renderCtl('won');
+        showCrash();
+      } else {
+        logTo(log, `🏁 Survived, but you ended the quiet evening paying for ${n} workers when about 3 would do. Remove workers when the queue is near empty. Retry the day.`, 'w');
+        renderCtl('failed');
+      }
+      return false;
+    }
+  }
+  function prepDay() {
+    stop(); setMode('queue'); resetQueue(3); draw();
+    logTo(log, '✅ Queue on. Web servers now only publish a job and answer at once. 3 workers consume jobs; each finishes one photo every 3 s, so N workers clear N/3 jobs per second.', 'g');
+    renderCtl('ready');
+  }
+  function startDay() {
+    stop(); setMode('queue'); resetQueue(3); QS.running = true; draw();
+    logTo(log, '▶ The day begins. Keep the queue under 50, and scale back down when traffic drops.');
+    loop(dayTick, () => 500 / speed);
+    renderCtl('running');
+  }
+  function addWorker() {
+    if (QS.workers.length >= MAXW) { Q.toast('max 15 workers', $('#wAdd'), 'practice'); return; }
+    QS.workers.push({ p: -1, dead: false }); draw();
+  }
+  function removeWorker() {
+    if (QS.workers.length <= 1) { Q.toast('keep at least 1', $('#wRem'), 'practice'); return; }
+    let i = -1;
+    for (let k = QS.workers.length - 1; k >= 0; k--) if (QS.workers[k].p < 0) { i = k; break; }
+    if (i < 0) { i = QS.workers.length - 1; QS.depth++; logTo(log, `w${i + 1} stopped mid-job. It never acknowledged the message, so the job goes back on the queue.`, 'w'); }
+    QS.workers.splice(i, 1); draw();
+  }
+
+  /* ----- controls ----- */
+  function renderCtl(state) {
+    if (mode === 'inline') {
+      ctl.innerHTML = `<label class="slider1" for="rate1"><span class="small" style="white-space:nowrap">Uploads/s: <b id="rateVal">${IN.rate}</b></span><input type="range" id="rate1" min="1" max="6" step="1" value="${IN.rate}" aria-label="Uploads per second"></label>
+        <span class="row">${IN.running ? '' : '<button class="btn primary" id="inGo">▶ Start uploads</button>'}${goals.has('inline') ? '<button class="btn primary" id="toQueue">Turn the queue on →</button>' : ''}</span>`;
+      $('#rate1').addEventListener('input', e => { IN.rate = +e.target.value; $('#rateVal').textContent = IN.rate; draw(); });
+      const go = $('#inGo'); if (go) go.onclick = startInline;
+      const tq = $('#toQueue'); if (tq) tq.onclick = prepDay;
+      return;
+    }
+    const running = state === 'running';
+    ctl.innerHTML = `<span class="stepper"><button class="btn" id="wRem" aria-label="Remove a worker">−</button><span>workers</span><button class="btn" id="wAdd" aria-label="Add a worker">+</button></span>
+      <span class="seg" aria-label="speed"><button data-sp="1" class="${speed === 1 ? 'on' : ''}">1×</button><button data-sp="2" class="${speed === 2 ? 'on' : ''}">2×</button></span>
+      <span class="row">${running ? '' : `<button class="btn primary" id="dayGo">${state === 'ready' ? '▶ Start the day' : '↻ Replay the day'}</button>`}<button class="btn" id="backInline">← Inline</button></span>`;
+    $('#wAdd').onclick = addWorker; $('#wRem').onclick = removeWorker;
+    $('#wAdd').disabled = $('#wRem').disabled = !running;
+    $$('.seg button', ctl).forEach(b => b.onclick = () => { speed = +b.dataset.sp; $$('.seg button', ctl).forEach(x => x.classList.toggle('on', x === b)); });
+    const dg = $('#dayGo'); if (dg) dg.onclick = startDay;
+    $('#backInline').onclick = () => { stop(); setMode('inline'); IN.web = null; IN.t = 0; IN.to = 0; IN.resp = []; draw(); renderCtl(); };
+  }
+
+  /* ----- phase 3: predict the crash ----- */
+  let crashShown = false;
+  function showCrash() {
+    if (crashShown) return; crashShown = true;
+    const box = $('#s1pred'); box.style.display = 'block';
+    runCrash(box);
+  }
+  let crashRuns = 0;
+  function runCrash(box) {
+    predict(box, {
+      xp: crashRuns++ ? 0 : 15,
+      step: 'Predict, then watch',
+      title: 'Traffic is steady at 1 upload/s with 6 workers. Then <b>every worker crashes for 10 seconds</b>. What do users see?',
+      options: ['Uploads start failing with errors', 'Uploads still work; jobs pile up', 'Half of the uploads get dropped'],
+      correct: 1,
+      act: async () => {
+        stop(); setMode('queue'); resetQueue(6); QS.running = true; QS.rate = 1; draw(); renderCtl('crash');
+        $('#wAdd').disabled = $('#wRem').disabled = true; const dg = $('#dayGo'); if (dg) dg.disabled = true;
+        const g = gen, T = Q.reduced ? 60 : 220;
+        logTo(log, '▶ Crash drill: 1 upload/s, 6 workers.');
+        for (let t = 0; t < 34; t++) {
+          if (g !== gen) return;
+          if (t === 3) {
+            QS.workers.forEach(w => { if (w.p >= 0) QS.depth++; w.p = -1; w.dead = true; });
+            logTo(log, `💀 t=${t}s all workers down. Their half-done jobs return to the queue.`, 'e');
+          }
+          if (t === 13) { QS.workers.forEach(w => { w.dead = false; }); logTo(log, `🔧 t=${t}s workers back. Draining the backlog…`, 'g'); }
+          QS.depth += 1; QS.accepted += 1; workStep(); QS.t = t + 1; QS.maxDepth = Math.max(QS.maxDepth, QS.depth); draw();
+          await sleep(T);
+          if (t > 16 && QS.depth <= 1) break;
+        }
+        QS.running = false; draw();
+        logTo(log, `Peak backlog ${QS.maxDepth} jobs. ${QS.accepted} uploads accepted, 0 failed.`, 'g');
+        renderCtl('won');
+      },
+      explain: 'Producers never talk to workers directly, so the web servers kept accepting uploads and publishing jobs. The jobs simply waited in the queue and drained once the workers came back. That is <b>decoupling</b>: each side can be down or busy without breaking the other. The book stresses this works both ways: the consumer can also keep reading while the producer is unavailable.' + BOOK,
+    }).then(({ row }) => {
+      checkGoal('#s1goals', 'crash', goals, 0);
+      const again = document.createElement('button'); again.className = 'btn'; again.textContent = '↻ Run the crash again'; again.onclick = () => runCrash(box); row.appendChild(again);
+      maybeQuiz();
+    });
+  }
+  let quizShown = false;
+  function maybeQuiz() {
+    if (quizShown) return; quizShown = true;
+    quizChain($('#s1quiz'), [
+      { q: 'What are the two roles on either side of a message queue?',
+        options: ['Producers publish, consumers process', 'Masters write, slaves only read', 'Clients ask, load balancers answer'], correct: 0,
+        good: 'Producers (publishers) put messages on the queue. Consumers (subscribers) take them off and do the work. Neither has to know the other is there.',
+        bad: 'That pair is from another part of the chapter. Around a queue, <b>producers</b> (publishers) put messages on and <b>consumers</b> (subscribers) take them off and do the work.' },
+      { q: 'All afternoon the queue keeps getting longer. What is your first move?',
+        options: ['Add more consumer workers', 'Add more producer web servers', 'Give the queue more memory'], correct: 0,
+        good: 'A growing queue means consumers are slower than producers. Producers and consumers scale on their own, so add workers when the queue grows and remove them when it is mostly empty.' + BOOK,
+        bad: 'A growing queue means jobs come in faster than workers finish them. More producers would make it worse, and a bigger queue just stores a longer wait. <b>Add consumers</b>, and remove them again when the queue is mostly empty.' },
+    ], () => Q.clearStage(1));
+  }
+
+  setMode('inline'); renderCtl();
+});
+
+/* ================= STAGE 2: metric bins ================= */
+Q.onStage(2, () => {
+  const BINS = { host: 'Host metric', agg: 'Aggregated metric', biz: 'Business metric', not: 'Not a metric' };
+  const CARDS = [
+    { t: 'CPU usage on web-7', a: 'host', why: 'One machine’s CPU: host level.', hint: 'It’s about a single named machine.' },
+    { t: 'Disk I/O on db-2', a: 'host', why: 'How hard one server’s disk is working: host level.', hint: 'Look at the name: one server.' },
+    { t: 'Memory used on cache-1', a: 'host', why: 'One box’s RAM: host level.', hint: 'Which single machine is this about?' },
+    { t: 'p99 latency of the whole database tier', a: 'agg', why: 'One number for an entire tier: aggregated level. (p99 = the time 99% of queries beat.)', hint: 'It covers a whole tier, not one machine.' },
+    { t: 'Hit rate of the cache tier', a: 'agg', why: 'Measured across every cache server together: aggregated level.', hint: 'It describes all the cache servers at once.' },
+    { t: 'Daily active users', a: 'biz', why: 'A key business metric the book names.', hint: 'Would the CEO ask about this one?' },
+    { t: 'Week-4 retention', a: 'biz', why: 'How many users still come back after four weeks: a key business metric.', hint: 'It’s about users, not machines.' },
+    { t: 'Revenue per day', a: 'biz', why: 'Money: a key business metric.', hint: 'Who watches this number most closely?' },
+    { t: 'Search every server’s error logs in one place', a: 'not', why: 'That’s centralized logging, not a number tracked over time.', hint: 'Is it really a number you graph?' },
+    { t: 'Every commit runs the test suite automatically', a: 'not', why: 'That’s continuous integration, an automation tool.', hint: 'Is that a measurement, or something that runs on its own?' },
+  ];
+  let order, idx, missed, busy;
+  const card = $('#mCard'), ex = $('#mExplain');
+  function start() {
+    order = shuffle(CARDS); idx = 0; missed = new Set(); busy = false;
+    $$('#bins .chips').forEach(c => c.innerHTML = '');
+    $$('#bins .bin').forEach(b => b.disabled = false);
+    show();
+  }
+  function show() {
+    if (idx >= order.length) {
+      card.textContent = '✓ All ten sorted'; $('#mCount').textContent = 'Done';
+      $$('#bins .bin').forEach(b => b.disabled = true);
+      setTimeout(scenario, 500); return;
+    }
+    card.className = 'mcard'; card.textContent = order[idx].t;
+    $('#mCount').textContent = `Card ${idx + 1} of ${order.length}`;
+  }
+  $$('#bins .bin').forEach(b => b.onclick = async () => {
+    if (busy || idx >= order.length) return;
+    const c = order[idx], ok = b.dataset.b === c.a;
+    if (ok) {
+      busy = true;
+      ex.className = 'explain show good'; ex.innerHTML = `<b>${BINS[c.a]}.</b> ${c.why}`;
+      $('.chips', b).insertAdjacentHTML('beforeend', `<span class="chip">${Q.esc(c.t)}</span>`);
+      b.classList.add('flash'); setTimeout(() => b.classList.remove('flash'), 500);
+      if (!missed.has(idx)) Q.addXP(3, b); else Q.toast('✓', b, 'practice');
+      if (!Q.reduced) { card.classList.add('go'); await sleep(420); }
+      idx++; busy = false; show();
+    } else {
+      ex.className = 'explain show bad'; ex.innerHTML = `<b>Not ${BINS[b.dataset.b].toLowerCase()}.</b> Hint: ${c.hint} Try another bin.`;
+      card.classList.remove('shake'); void card.offsetWidth; card.classList.add('shake');
+      if (!missed.has(idx)) { missed.add(idx); Q.loseHeart(b); }
+    }
+  });
+  let scen = false;
+  function scenario() {
+    if (scen) return; scen = true;
+    Q.quiz($('#s2quiz'), {
+      tag: 'Scenario', xp: 15,
+      q: 'You run 40 web servers. One of them is throwing 500 errors, and nobody knows which. What finds it fastest?',
+      options: ['SSH into each server and read its log', 'Search the centralized error logs once', 'Move the app onto one bigger server'],
+      correct: 1,
+      good: 'With logs shipped to one central service, a single search for "500" shows which host is failing. That’s why the book prefers aggregating logs over checking each server.' + BOOK,
+      bad: 'Checking 40 servers one by one takes ages, and a bigger server throws away the redundancy you built. Ship every server’s logs to one <b>central</b> service, and one search finds the bad host.' + BOOK,
+      onDone: () => { $('#s2design').style.display = 'block'; setTimeout(() => Q.clearStage(2), 900); },
+    });
+  }
+  start();
+});
+
+/* ================= STAGE 3: route and pick a key ================= */
+Q.onStage(3, () => {
+  const goals = new Set();
+  const IDS = [17, 42, 1000, 7, 2023];
+  let ri = 0, missed = new Set(), busy = false;
+  const box = $('#shards3');
+  box.innerHTML = [0, 1, 2, 3].map(s => `<button class="shardbox" data-s="${s}" aria-label="Shard ${s}"><span class="hd" style="color:${SC(s)}">Shard ${s}</span><span class="sch">same schema</span><span class="rows"></span></button>`).join('');
+  function showId() {
+    if (ri >= IDS.length) {
+      $('#uidBig').textContent = '✓ 5 users routed'; $('#uidEq').textContent = 'every shard: same table, different rows';
+      $$('.shardbox', box).forEach(b => b.disabled = true);
+      if (checkGoal('#s3goals', 'route', goals, 0)) maybeQuiz();
+      return;
+    }
+    $('#uidBig').textContent = `user_id ${IDS[ri]}`; $('#uidEq').textContent = `${IDS[ri]} % 4 = ?`;
+  }
+  $$('.shardbox', box).forEach(b => b.onclick = async () => {
+    if (busy || ri >= IDS.length) return;
+    const id = IDS[ri], want = id % 4, s = +b.dataset.s, q = Math.floor(id / 4);
+    if (s === want) {
+      busy = true;
+      $('#uidEq').innerHTML = `${id} = 4 × ${q} + <b style="color:${SC(want)}">${want}</b> → shard ${want}`;
+      $('.rows', b).insertAdjacentHTML('beforeend', `<span class="rowchip" style="background:${SC(want)}">${id}</span>`);
+      b.classList.remove('ping'); void b.offsetWidth; b.classList.add('ping');
+      if (!missed.has(ri)) Q.addXP(4, b); else Q.toast('✓', b, 'practice');
+      ri++; $('#routeN').textContent = `${ri} / 5`;
+      await sleep(Q.reduced ? 200 : 900); busy = false; showId();
+    } else {
+      $('#uidEq').innerHTML = `Not ${s}. Hint: ${id} = 4 × ${q} + ?`;
+      if (!missed.has(ri)) { missed.add(ri); Q.loseHeart(b); }
+    }
+  });
+  showId();
+
+  // --- pick the key: three candidate keys, 1,000 users each
+  const KEYS = [
+    { k: 'country', d: '<code>hash(country) % 4</code>. 45% of users are in the US.', counts: [200, 170, 490, 140], newW: 'New sign-ups: mostly shard 2 (the US)', bad: true,
+      why: 'Users cluster by country, so the US shard holds nearly half of everyone and takes nearly half the traffic. That shard fills up first: <b>shard exhaustion</b> waiting to happen.' },
+    { k: 'user_id', d: '<code>user_id % 4</code>. IDs are handed out in order.', counts: [250, 250, 250, 250], newW: 'New sign-ups: spread over all 4', bad: false,
+      why: 'Every 4th id lands on the same shard, so the 1,000 users split 250 / 250 / 250 / 250, and new users keep spreading out too. The book says to pick a key that spreads data evenly.' },
+    { k: 'signup_month', d: 'Ranges: Jan–Mar → 0, Apr–Jun → 1, Jul–Sep → 2, Oct–Dec → 3. Sign-ups grew all year.', counts: [100, 180, 280, 440], newW: 'New sign-ups: 100% on shard 3', bad: true,
+      why: 'Growth made later months bigger, so shard 3 is already the fullest. Worse, every new sign-up writes to the newest range, so one shard takes all the new writes.' },
+  ];
+  const kc = $('#keycards');
+  kc.innerHTML = KEYS.map((K, i) => `<div class="keycard" data-i="${i}"><h4>${K.k}</h4><div class="kd">${K.d}</div>
+    <div class="mbars">${[0, 1, 2, 3].map(s => `<div class="mbar"><span style="color:${SC(s)}">S${s}</span><span class="tr"><span class="fl" style="display:block;background:${SC(s)}"></span><span class="fair"></span></span><span class="n">0</span></div>`).join('')}</div>
+    <div class="neww muted">&nbsp;</div><button class="btn">Shard by ${K.k}</button></div>`).join('');
+  // live fill: users arrive in 10 batches of 100
+  (async () => {
+    const steps = Q.reduced ? 1 : 10;
+    for (let b = 1; b <= steps; b++) {
+      $$('.keycard', kc).forEach((el, i) => {
+        $$('.mbar', el).forEach((row, s) => {
+          const v = Math.round(KEYS[i].counts[s] * b / steps);
+          $('.fl', row).style.width = Math.min(100, v / 500 * 100) + '%';
+          $('.n', row).textContent = v;
+        });
+      });
+      if (b < steps) await sleep(110);
+    }
+    $$('.keycard', kc).forEach((el, i) => { $('.neww', el).textContent = KEYS[i].newW; });
+  })();
+  let keyDone = false;
+  $$('.keycard', kc).forEach(el => $('.btn', el).onclick = () => {
+    if (keyDone) return;
+    const K = KEYS[+el.dataset.i], e = $('#keyExplain');
+    if (!K.bad) {
+      keyDone = true; el.classList.add('right');
+      $$('.keycard .btn', kc).forEach(b => b.disabled = true);
+      e.className = 'explain show good'; e.innerHTML = `<b>user_id it is.</b> ${K.why}`;
+      Q.addXP(15, el);
+      if (checkGoal('#s3goals', 'key', goals, 0)) maybeQuiz();
+    } else {
+      el.classList.add('wrong'); $('.btn', el).disabled = true;
+      e.className = 'explain show bad'; e.innerHTML = `<b>Not ${K.k}.</b> ${K.why} Pick again.`;
+      Q.loseHeart(el);
+    }
+  });
+
+  let quizShown = false;
+  function maybeQuiz() {
+    if (quizShown || goals.size < 2) return; quizShown = true;
+    quizChain($('#s3quiz'), [
+      { q: 'Why not keep scaling the database up forever? Pick the answer that names two real drawbacks.',
+        options: ['Hardware tops out, and one box is a SPOF', 'Bigger boxes can’t run SQL, and lose data', 'Vertical scaling needs a load balancer first'], correct: 0,
+        good: 'The book lists three: hardware has a ceiling, everything rides on one machine (a single point of failure, or SPOF), and powerful servers cost far more.' + BOOK,
+        bad: 'A big box runs SQL just fine. The book’s three drawbacks: hardware has a ceiling, one machine is a <b>single point of failure</b>, and powerful servers cost far more.' + BOOK },
+      { q: 'You split the users table across 4 shards. What do all the shards share, and what differs?',
+        options: ['Same schema, different rows on each', 'Same rows, a different schema on each', 'Same rows and schema, copied four times'], correct: 0,
+        good: 'Every shard has the same tables and columns, but each holds its own rows, with no overlap. (Same rows copied everywhere would be replication, from Quest 1.2.)',
+        bad: 'Copying the same rows everywhere is <b>replication</b> (Quest 1.2). Sharding gives every shard the <b>same schema</b> but <b>different rows</b>, with no overlap.' },
+    ], () => Q.clearStage(3));
+  }
+});
+
+/* ================= STAGE 4: shard trouble ================= */
+Q.onStage(4, () => {
+  const goals = new Set();
+  function done(g, panel) {
+    if (!checkGoal('#s4goals', g, goals, 0)) return;
+    $(panel).classList.add('done');
+    if (goals.size === 3) { $('#s4design').style.display = 'block'; setTimeout(quiz, 500); }
+  }
+
+  /* ---- Panel A: resharding ---- */
+  const USERS = Array.from({ length: 100 }, (_, i) => i + 1);
+  const V = 64, SALT = 'c';
+  const ringOf = n => { const p = []; for (let s = 0; s < n; s++) for (let j = 0; j < V; j++) p.push({ p: hash32(`${SALT}:shard${s}#${j}`), s }); return p.sort((a, b) => a.p - b.p); };
+  const R4 = ringOf(4), R5 = ringOf(5);
+  const ringOwner = (r, id) => { const h = hash32('user:' + id); return (r.find(x => x.p >= h) || r[0]).s; };
+  const rs = $('#rsgrid');
+  rs.innerHTML = [0, 1, 2, 3, 4].map(s => `<div class="rsbox${s === 4 ? ' ghost' : ''}" data-s="${s}"><div class="hd" style="color:${SC(s)}">S${s} · <span class="c">0</span></div><div class="rsdots"></div></div>`).join('');
+  function drawRS(n, owner, moved) {
+    $$('.rsbox', rs).forEach((bx, s) => {
+      bx.classList.toggle('ghost', s >= n);
+      const mine = USERS.filter(u => owner(u) === s);
+      $('.c', bx).textContent = s < n ? mine.length : '—';
+      $('.rsdots', bx).innerHTML = mine.map(u => `<i class="${moved && moved.has(u) ? 'mv' : ''}" style="background:${SC(s)}"></i>`).join('');
+    });
+  }
+  async function countUp(el, to, label) {
+    const steps = Q.reduced ? 1 : 20;
+    for (let k = 1; k <= steps; k++) { el.innerHTML = `${label}: <b class="bignum ${to > 50 ? 'bad' : 'good'}">${Math.round(to * k / steps)} of 100</b> users moved`; if (k < steps) await sleep(40); }
+  }
+  function resetA() { drawRS(4, u => u % 4); $('#rsNote').textContent = 'shard = user_id % 4'; }
+  let aRuns = 0;
+  function runA() {
+    resetA();
+    $('#rsCHrow').style.display = 'none';
+    predict($('#rsPred'), {
+      xp: aRuns++ ? 0 : 15,
+      step: 'Predict, then watch',
+      title: 'You add shard 4 and switch to <code>user_id % 5</code>. About what share of the 100 users must move to a different shard?',
+      options: ['About 20% of users', 'About 50% of users', 'About 80% of users'],
+      correct: 2,
+      act: async () => {
+        const moved = new Set(USERS.filter(u => u % 4 !== u % 5));
+        drawRS(5, u => u % 5, moved);
+        await countUp($('#rsNote'), moved.size, '% 4 → % 5');
+        await sleep(Q.reduced ? 50 : 500);
+      },
+      explain: 'A user stays only if <code>id % 4</code> equals <code>id % 5</code>, which is true for 1 id in 5. So <b>80 of 100</b> rows get copied across the network while the shards keep serving traffic. That is why plain modulo makes resharding so painful.',
+    }).then(({ row }) => {
+      $('#rsCHrow').style.display = 'flex';
+      const again = document.createElement('button'); again.className = 'btn'; again.textContent = '↻ Predict again'; again.onclick = runA; row.appendChild(again);
+    });
+  }
+  $('#rsCH').onclick = async () => {
+    $('#rsCH').disabled = true;
+    drawRS(4, u => ringOwner(R4, u)); $('#rsNote').textContent = 'consistent hashing ring · 4 shards';
+    await sleep(Q.reduced ? 100 : 900);
+    const moved = new Set(USERS.filter(u => ringOwner(R4, u) !== ringOwner(R5, u)));
+    drawRS(5, u => ringOwner(R5, u), moved);
+    await countUp($('#rsNote'), moved.size, 'ring, 4 → 5');
+    $('#rsNoteCH').style.display = 'block';
+    $('#rsCH').disabled = false;
+    done('reshard', '#pA');
+  };
+  runA();
+
+  /* ---- Panel B: celebrities ---- */
+  const CAP = 8000, MAXQ = 21000, CELEB = [{ n: 'Katy Perry', e: '🎤' }, { n: 'Justin Bieber', e: '🎸' }, { n: 'Lady Gaga', e: '💃' }];
+  const EACH = 19000 / 3;
+  let hotRows = [], famous = new Set(), fixed = false;
+  function baseRows() { return [0, 1, 2, 3].map(s => ({ nm: `Shard ${s}`, c: s, q: 1000 })); }
+  function drawHot() {
+    $('#hot').innerHTML = hotRows.map(r => {
+      const x = r.q / CAP;
+      return `<div class="hotrow${x > 1 ? ' over' : x > .6 ? ' warm' : ''}"><span class="nm" style="color:${SC(r.c)}">${r.nm}</span><span class="tr"><span class="fl" style="width:0"></span><span class="capl" style="left:${CAP / MAXQ * 100}%"></span></span><span class="q">${fmt(Math.round(r.q))}${x > 1 ? ' 🔥' : ''}</span></div>`;
+    }).join('');
+    requestAnimationFrame(() => $$('#hot .hotrow').forEach((el, i) => { $('.fl', el).style.width = Math.min(100, hotRows[i].q / MAXQ * 100) + '%'; }));
+  }
+  function resetB() {
+    hotRows = baseRows(); famous = new Set(); fixed = false;
+    $('#celebs').innerHTML = CELEB.map((c, i) => `<button class="btn" data-i="${i}">${c.e} Make ${c.n} famous</button>`).join('');
+    $('#hotFix').style.display = 'none'; $('#hotFix').innerHTML = '';
+    $$('#celebs .btn').forEach(b => b.onclick = () => {
+      const i = +b.dataset.i; if (famous.has(i) || fixed) return;
+      famous.add(i); b.classList.add('on'); b.disabled = true; b.textContent = `${CELEB[i].e} ${CELEB[i].n}: viral`;
+      hotRows[2].q += EACH; drawHot();
+      if (famous.size === 3) setTimeout(askFix, Q.reduced ? 50 : 700);
+    });
+    drawHot();
+  }
+  function askFix() {
+    const box = $('#hotFix'); box.style.display = 'block';
+    box.innerHTML = `<div class="step">Your call</div><h3>Shard 2 now takes 20× the queries of the others and is far over capacity. What fix does the book suggest?</h3><div class="opts"></div><div class="explain"></div>`;
+    const OPTS = [
+      { t: 'Give each celebrity their own shard', ok: true },
+      { t: 'Move shard 2 to a much bigger server', why: 'That’s scaling up again. It buys a little room, but a single star can outgrow any box, and you’re back to the limits from stage 3.' },
+      { t: 'Add a 5th shard and use user_id % 5', why: 'That moves about 80% of all users (panel A), and the three stars could easily land together again. It doesn’t target the hotspot.' },
+    ];
+    const opts = $('.opts', box), ex = $('.explain', box);
+    shuffle(OPTS).forEach(o => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o.t;
+      b.onclick = async () => {
+        if (fixed) return;
+        if (!o.ok) { b.disabled = true; b.classList.add('wrong'); ex.className = 'explain show bad'; ex.innerHTML = `<b>Not quite.</b> ${o.why} Try another.`; Q.loseHeart(b); return; }
+        fixed = true; $$('.opt', opts).forEach(x => x.disabled = true); b.classList.add('right');
+        Q.addXP(15, b);
+        hotRows[2].q = 1000;
+        CELEB.forEach((c, i) => hotRows.push({ nm: `★ ${c.n.split(' ')[1]}`, c: 5 + i, q: EACH }));
+        drawHot();
+        ex.className = 'explain show good';
+        ex.innerHTML = `<b>That’s the book’s fix.</b> Each star gets a dedicated shard, so shard 2 is back to normal. Look at the new bars, though: each star’s shard still runs near 80% of capacity. A bigger star would need their shard split again, and the book says each one might even need further partitioning.${BOOK}`;
+        const row = document.createElement('div'); row.className = 'row'; row.style.marginTop = '10px';
+        const again = document.createElement('button'); again.className = 'btn'; again.textContent = '↻ Reset the shards'; again.onclick = resetB; row.appendChild(again); box.appendChild(row);
+        done('celeb', '#pB');
+      };
+      opts.appendChild(b);
+    });
+  }
+  resetB();
+
+  /* ---- Panel C: joins ---- */
+  const USERS_T = [[7, 'ana'], [12, 'raj'], [31, 'mei']];
+  const POSTS_T = [[901, 12, 'Sunset pic'], [902, 7, 'New desk'], [903, 31, 'Ramen!']];
+  let denorm = false;
+  function drawTables() {
+    const nameOf = id => (USERS_T.find(u => u[0] === id) || [])[1];
+    $('#tbls').innerHTML = `<div class="tbl"><div class="tc"><span>users</span><span style="color:${SC(1)}">on shard 1</span></div><table><tr><th>user_id</th><th>name</th></tr>${USERS_T.map(u => `<tr><td>${u[0]}</td><td>${u[1]}</td></tr>`).join('')}</table></div>
+      <div class="tbl"><div class="tc"><span>posts</span><span style="color:${SC(3)}">on shard 3</span></div><table><tr><th>post_id</th><th>author_id</th>${denorm ? '<th class="newcol">author_name</th>' : ''}<th>title</th></tr>${POSTS_T.map(p => `<tr><td>${p[0]}</td><td>${p[1]}</td>${denorm ? `<td class="newcol">${nameOf(p[1])}</td>` : ''}<td>${p[2]}</td></tr>`).join('')}</table></div>`;
+  }
+  const JOPTS = [
+    { t: 'Join the two shards inside the app code', why: 'It works, but every feed load now calls two shards, waits for both, and stitches the rows together in code. Across many shards that gets slow and fragile fast.' },
+    { t: 'De-normalize: copy author_name into posts', ok: true },
+    { t: 'Put every table back on one database', why: 'That undoes the sharding, and you’re back to one machine that has run out of room.' },
+  ];
+  let joinDone = false;
+  function resetC() {
+    denorm = false; joinDone = false; drawTables();
+    const opts = $('#joinOpts'); opts.innerHTML = ''; $('#joinExplain').className = 'explain';
+    shuffle(JOPTS).forEach(o => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o.t;
+      b.onclick = () => {
+        if (joinDone) return;
+        const ex = $('#joinExplain');
+        if (!o.ok) { b.disabled = true; b.classList.add('wrong'); ex.className = 'explain show bad'; ex.innerHTML = `<b>Not the book’s answer.</b> ${o.why} Try another.`; Q.loseHeart(b); return; }
+        joinDone = true; $$('.opt', opts).forEach(x => x.disabled = true); b.classList.add('right');
+        Q.addXP(15, b);
+        denorm = true; drawTables();
+        ex.className = 'explain show good';
+        ex.innerHTML = `<b>De-normalized.</b> Each post now carries a copy of its author’s name, so the feed is answered from <b>one table on one shard</b>. The book calls this a common workaround.${BOOK} The price: the name is stored twice, and when raj renames himself you must update every one of his posts too.`;
+        done('join', '#pC');
+      };
+      opts.appendChild(b);
+    });
+  }
+  resetC();
+
+  /* ---- quiz once all three panels are done ---- */
+  let quizShown = false;
+  function quiz() {
+    if (quizShown) return; quizShown = true;
+    quizChain($('#s4quiz'), [
+      { q: 'What does the book mean by <b>shard exhaustion</b>?', xp: 15,
+        options: ['Some shards fill up faster than others', 'Every shard runs out of CPU at once', 'You hit the maximum number of shards'], correct: 0,
+        good: 'Uneven data means certain shards fill up sooner than the rest. That is one of the two reasons to reshard (the other is plain fast growth).' + BOOK,
+        bad: 'It’s about uneven filling: because data isn’t spread evenly, certain shards fill up faster than others. That forces a reshard.' + BOOK },
+      { q: 'Three celebrities all land on one shard and melt it. What does the book suggest?', xp: 15,
+        options: ['Give each celebrity a dedicated shard', 'Rate-limit fans who view celebrities', 'Move all the celebrities to the master'], correct: 0,
+        good: 'One shard per celebrity, and each of those shards may need splitting further.' + BOOK,
+        bad: 'The book’s fix is a <b>dedicated shard per celebrity</b>, and each of those shards may need splitting further.' + BOOK },
+      { q: 'You copy author_name into every post to avoid a cross-shard join. What does that cost you?', xp: 15,
+        options: ['Duplicated data you must keep in sync', 'Every read query needs an extra join', 'Posts can no longer be sharded at all'], correct: 0,
+        good: 'De-normalizing trades storage and update work for fast single-shard reads. Rename a user and every copy has to change.',
+        bad: 'De-normalizing removes the join. The cost is duplication: the name now lives in many rows, and a rename has to update them all.' },
+    ], () => Q.clearStage(4));
+  }
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss'), {
+  name: '🐉 Hydra of Hotspots',
+  xp: 10,
+  choices: [
+    { k: 'queue', label: 'Queue it', sub: 'decouple and buffer' },
+    { k: 'observe', label: 'Watch it', sub: 'logs, metrics, automation' },
+    { k: 'shard', label: 'Shard it', sub: 'split the data by a key' },
+    { k: 'fixshard', label: 'Fix the shards', sub: 'reshard, isolate, de-normalize' },
+  ],
+  scenarios: [
+    { e: '🐢', t: 'Filters that take forever', d: 'Applying photo filters takes up to 6 seconds, and it runs inside the upload request. Uploads keep timing out.', a: 'queue', why: 'Slow work shouldn’t run while the user waits. The web server publishes a job and replies at once; workers apply the filters in the background.' },
+    { e: '🎉', t: 'The holiday spike', d: 'On one holiday, uploads triple for an hour. You don’t want three times the servers all year.', a: 'queue', why: 'The queue soaks up the burst, and you scale workers up on queue depth for that hour, then back down. Producers and consumers scale separately.' },
+    { e: '🔍', t: 'Which of 40 is broken?', d: 'One of 40 servers is throwing 500s. The on-call engineer is SSH-ing into each one.', a: 'observe', why: 'Ship every server’s logs to one central service and a single search finds the failing host.' },
+    { e: '📉', t: 'The CEO’s question', d: '"Did last week’s release hurt retention?" Nobody knows.', a: 'observe', why: 'Retention is a key business metric. Track it next to host and tier metrics, and releases can be checked against it.' },
+    { e: '💾', t: 'Out of road', d: 'The single master database already runs on the biggest instance you can buy, and its disk is 95% full.', a: 'shard', why: 'Scaling up has hit the hardware ceiling. Split the data across shards with the same schema, routed by a key that spreads evenly, such as user_id.' },
+    { e: '⭐', t: 'One very loud shard', d: 'A celebrity just joined, and their shard runs at 20× the queries of every other shard.', a: 'fixshard', why: 'The celebrity (hotspot key) problem. Give the celebrity a dedicated shard, and split it further if needed.' },
+    { e: '🧩', t: 'The feed that can’t join', d: 'The feed query joins users and posts, which now live on different shards.', a: 'fixshard', why: 'Cross-shard joins are hard. De-normalize (copy author_name into posts) so one shard answers the query.' },
+    { e: '🌍', t: 'Lopsided by country', d: 'Shard 2 fills three times faster than the rest, because the sharding key is the sign-up country.', a: 'fixshard', why: 'Shard exhaustion from a skewed key. Reshard onto a key that spreads evenly, and use consistent hashing so future moves stay small.' },
+  ],
+  outro: 'The pattern: slow or bursty work → queue. Can’t see it → logs and metrics. One database too small → shard. Shards unhappy → reshard, isolate the hotspot, or de-normalize.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: interview drill ================= */
+Q.onStage(6, () => {
+  const mount = $('#drill'), msg = $('#drillMsg');
+  function run() {
+    msg.className = 'explain';
+    Q.drill(mount, {
+      prompt: 'The interviewer: <i>"Uploads are timing out because image processing runs inline, and the primary database is running out of room. Talk me through what you’d do."</i>',
+      placeholder: 'First, I’d stop doing the image work inside the request…',
+      model: '"For uploads, I’d make the web servers <b>producers</b>: they put a processing job on a <b>message queue</b> and return right away, and a pool of <b>workers consumes</b> the jobs. That decouples the two sides. If the workers are down, jobs wait in the queue, and I scale the workers on queue depth. I’d add <b>centralized logging</b>, <b>metrics at host, tier and business level</b>, and <b>CI/CD automation</b>, so we can see what’s happening. For the database, scaling up buys time, but it hits a <b>hardware ceiling</b>, stays a <b>single point of failure</b> and gets <b>expensive</b>. So I’d <b>shard</b>: the same schema on every shard, rows routed by a <b>key like user_id</b> that spreads evenly. I’d plan for <b>resharding</b> with consistent hashing, give <b>hot celebrity keys their own shards</b>, and <b>de-normalize</b> to avoid cross-shard joins. Non-relational data can move to a NoSQL store."',
+      checks: [
+        'Queue: producers and consumers, decoupling, scale workers on queue depth',
+        'Observability: central logs, the 3 metric levels, automation',
+        'Why scaling the DB up runs out: ceiling, single point of failure, cost',
+        'Sharding: same schema, a sharding key that spreads evenly',
+        'The three headaches: resharding, hotspots, joins',
+      ],
+      onDone: n => {
+        if (n >= 4) { msg.className = 'explain show good'; msg.innerHTML = `<b>${n} of 5.</b> That’s an answer a senior would give.`; setTimeout(() => Q.clearStage(6), 700); return; }
+        msg.className = 'explain show bad';
+        msg.innerHTML = `<b>${n} of 5.</b> Aim for at least 4. Read the model answer once more, then try again from memory. <button class="btn" id="drillAgain" style="margin-left:6px">↻ Try again</button>`;
+        $('#drillAgain').onclick = run;
+      },
+    });
+  }
+  run();
+});
+
+Q.start();
+})();
+</script>
+</body>
+</html>

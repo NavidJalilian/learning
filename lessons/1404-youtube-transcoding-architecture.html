@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>The Transcoding Factory</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: factory floor (s1), filmstrip + encode lanes (s2), DAG stager (s3), resource manager (s4), storage shelves (s5) */
+:root {
+  --fI: #5a48f0; --fP: #0d9a96; --fB: #cfcadb; --on-fI: #ffffff; --on-fB: #1c1a26;
+  --sky: #bfe3ff; --sun: #f0b400; --hill: #3fa66a; --gl1: #ff2bd6; --gl2: #18e0a0;
+  --w-enc: #5a48f0; --w-thumb: #c27400; --w-wm: #b8409a; --w-merge: #0d9a96;
+  --st1: #2f7fd8; --st2: #0d9a96; --st3: #b8409a;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --fI: #8f82ff; --fP: #31d3c8; --fB: #3a3d5c; --on-fI: #0e0f1d; --on-fB: #ecebf6;
+    --sky: #23405e; --sun: #ffd23f; --hill: #2f8f5a; --gl1: #ff4fe0; --gl2: #3dffc0;
+    --w-enc: #8f82ff; --w-thumb: #ffb547; --w-wm: #f07ad0; --w-merge: #31d3c8;
+    --st1: #5aa9ff; --st2: #31d3c8; --st3: #f07ad0;
+  }
+}
+:root[data-theme="dark"] {
+  --fI: #8f82ff; --fP: #31d3c8; --fB: #3a3d5c; --on-fI: #0e0f1d; --on-fB: #ecebf6;
+  --sky: #23405e; --sun: #ffd23f; --hill: #2f8f5a; --gl1: #ff4fe0; --gl2: #3dffc0;
+  --w-enc: #8f82ff; --w-thumb: #ffb547; --w-wm: #f07ad0; --w-merge: #31d3c8;
+  --st1: #5aa9ff; --st2: #31d3c8; --st3: #f07ad0;
+}
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.lbl { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
+
+/* ---------- stage 1: factory floor ---------- */
+.floor { display: grid; grid-template-columns: repeat(6, 1fr); gap: 22px; padding: 16px; }
+.st { position: relative; min-height: 132px; border: 2px dashed var(--line); border-radius: 14px; background: var(--panel); padding: 10px 8px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 4px; transition: border-color .25s, background .25s, transform .25s, box-shadow .25s; }
+button.st:hover { border-color: var(--accent); }
+.st .ico { font-size: 26px; line-height: 1; }
+.st .nm { font-weight: 700; font-size: 14px; line-height: 1.2; }
+.st .job { font-size: 12px; color: var(--muted); line-height: 1.3; }
+.st.src { border-style: solid; background: var(--bg-2); }
+.st:not(.tmp):not(.last)::after { content: "→"; position: absolute; right: -19px; top: 50%; transform: translateY(-50%); color: var(--muted); font-weight: 700; font-size: 18px; }
+.st.tmp { grid-column: 2 / 6; min-height: 0; flex-direction: row; justify-content: center; flex-wrap: wrap; gap: 4px 10px; }
+.st.tmp .job { flex-basis: 100%; }
+.st.lit { border-style: solid; border-color: var(--good); background: var(--good-soft); }
+.st.lit .job { color: var(--ink); }
+.st.hot { transform: scale(1.04); box-shadow: 0 0 0 4px color-mix(in srgb, var(--xp) 60%, transparent); border-color: var(--xp); }
+.st.nope { animation: shake .4s; border-color: var(--bad); }
+@media (max-width: 720px) {
+  .floor { grid-template-columns: 1fr; gap: 18px; }
+  .st { min-height: 0; flex-direction: row; text-align: left; gap: 10px; padding: 10px 12px; flex-wrap: wrap; }
+  .st .nm { flex: 1; }
+  .st .job { flex-basis: 100%; }
+  .st:not(.tmp):not(.last)::after { content: "↓"; right: auto; left: 50%; top: auto; bottom: -19px; transform: translateX(-50%); }
+  .st.tmp { grid-column: auto; justify-content: flex-start; }
+}
+.jobs { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; margin-top: 12px; }
+.jobc { text-align: left; border: 2px solid var(--line); background: var(--panel); border-radius: 12px; padding: 10px 12px; font-size: 14px; min-height: 44px; transition: border-color .2s, background .2s, opacity .3s; }
+.jobc:hover:not([disabled]) { border-color: var(--accent); }
+.jobc.sel { border-color: var(--accent); background: var(--accent-soft); }
+.jobc[disabled] { opacity: .35; cursor: default; text-decoration: line-through; }
+
+/* ---------- stage 2: filmstrip ---------- */
+.strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 8px 8px; padding: 18px 16px 12px; }
+@media (max-width: 520px) { .strip { gap: 8px 6px; padding: 18px 10px 12px; } }
+.fr { position: relative; height: 44px; border: 0; border-radius: 8px; font: 700 15px var(--mono); padding: 0; }
+.fr.I { background: var(--fI); color: var(--on-fI); }
+.fr.P { background: var(--fP); color: var(--on-fI); }
+.fr.B { background: var(--fB); color: var(--on-fB); }
+.fr:hover { outline: 2px solid var(--ink); outline-offset: 1px; }
+.fr.cut::before { content: ""; position: absolute; left: -6px; top: -6px; bottom: -6px; width: 4px; border-radius: 2px; background: var(--good); }
+.fr.cut::after { content: "✂"; position: absolute; left: -12px; top: -16px; font-size: 13px; color: var(--good); }
+.fr.cut.bad::before { background: var(--bad); }
+.fr.cut.bad::after { color: var(--bad); }
+.chunks { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; padding: 0 16px 14px; }
+.chunk { border: 2px solid var(--good); border-radius: 12px; padding: 8px; background: var(--panel); font-size: 12.5px; animation: rise .3s; }
+.chunk.bad { border-color: var(--bad); }
+.chunk svg { display: block; width: 100%; height: auto; border-radius: 6px; margin-bottom: 6px; }
+.chunk b { display: block; font-size: 13px; }
+.lanes { padding: 12px 16px; display: grid; gap: 7px; }
+.lane { display: grid; grid-template-columns: 150px 1fr 54px; gap: 10px; align-items: center; font-size: 13px; }
+.lane .ll { font-family: var(--mono); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lane .lt { height: 16px; border-radius: 6px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; }
+.lane .lt i { display: block; height: 100%; width: 0; background: var(--accent); }
+.lane .lt i.mg { background: var(--teal); }
+.lane .lt i.pre { background: var(--warn); }
+.lane .lt i.retry { background: var(--good); }
+.lane .lt i.dead { background: var(--bad); }
+.lane .lt i.lost { background: repeating-linear-gradient(45deg, var(--muted) 0 4px, transparent 4px 8px); opacity: .6; }
+.lane .lv { font-family: var(--mono); font-size: 12px; text-align: right; color: var(--muted); }
+.lhdr { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
+@media (max-width: 520px) { .lane { grid-template-columns: 112px 1fr 40px; gap: 6px; } }
+.tsrow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+/* ---------- stage 3: DAG stager ---------- */
+.dagwrap svg { max-width: 420px; margin: 0 auto; }
+.dn rect { fill: var(--panel); stroke: var(--line); stroke-width: 2; transition: fill .3s, stroke .3s; }
+.dn text { fill: var(--ink); font: 600 13px var(--font); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.dn.s1 rect { fill: color-mix(in srgb, var(--st1) 22%, var(--panel)); stroke: var(--st1); }
+.dn.s2 rect { fill: color-mix(in srgb, var(--st2) 22%, var(--panel)); stroke: var(--st2); }
+.dn.s3 rect { fill: color-mix(in srgb, var(--st3) 22%, var(--panel)); stroke: var(--st3); }
+.dn.src rect { fill: var(--bg-2); }
+.dn.run rect { stroke: var(--xp); stroke-width: 4; }
+.de { stroke: var(--muted); stroke-width: 2; fill: none; }
+.de.meta { stroke-dasharray: 5 5; }
+.de.viol { stroke: var(--bad); stroke-width: 4; }
+.elab { fill: var(--muted); font: 600 11px var(--mono); }
+.cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 0 16px 14px; }
+.col { min-height: 120px; border: 2px dashed var(--line); border-radius: 12px; background: var(--panel); padding: 8px; display: flex; flex-direction: column; gap: 6px; align-items: stretch; text-align: center; }
+.col:hover { border-color: var(--accent); }
+.col .ch { font-weight: 700; font-size: 13px; }
+.col.c1 .ch { color: var(--st1); } .col.c2 .ch { color: var(--st2); } .col.c3 .ch { color: var(--st3); }
+.col .pl { font-size: 12.5px; border-radius: 8px; padding: 5px 6px; background: var(--bg-2); font-weight: 600; animation: rise .3s; }
+.tray { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px; }
+.tchip { border: 2px solid var(--line); background: var(--panel); border-radius: 10px; padding: 8px 12px; font-weight: 600; font-size: 14px; min-height: 42px; }
+.tchip:hover { border-color: var(--accent); }
+.tchip.sel { border-color: var(--accent); background: var(--accent-soft); }
+.tchip.bounce { animation: shake .4s; }
+.tq { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; min-height: 44px; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); font-size: 13px; }
+.tqc { font-family: var(--mono); font-size: 12px; padding: 5px 9px; border-radius: 8px; background: var(--accent-soft); border: 1px solid var(--accent); animation: rise .35s; transition: opacity .4s; }
+.tqc.gone { opacity: 0; }
+
+/* ---------- stage 4: resource manager ---------- */
+.loop { margin: 0; padding: 12px 16px 12px 36px; display: grid; gap: 2px; font-size: 14px; color: var(--muted); border-bottom: 1px solid var(--line); background: var(--panel); }
+.loop li { padding: 2px 6px; border-radius: 6px; transition: background .2s, color .2s; }
+.loop li.on { background: var(--accent-soft); color: var(--ink); font-weight: 700; }
+.loop li.flash { background: var(--good-soft); color: var(--ink); font-weight: 700; }
+.rmgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px; }
+@media (max-width: 680px) { .rmgrid { grid-template-columns: 1fr; } }
+.panel { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); padding: 10px; min-width: 0; }
+.panel h4 { margin: 0 0 8px; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.panel h4 small { text-transform: none; letter-spacing: 0; color: var(--muted); font-weight: 500; }
+.panel.run { margin: 0 12px 12px; }
+.tks, .wks { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; }
+@media (max-width: 520px) { .tk, .wk { font-size: 12.5px; padding: 6px 7px; } .tk .vd { font-size: 11px; } .rmgrid { padding: 10px 8px; } .panel.run { margin: 0 8px 10px; } }
+.tk, .wk { position: relative; text-align: left; border: 2px solid var(--line); border-left-width: 6px; background: var(--bg); border-radius: 10px; padding: 7px 9px; font-size: 13px; min-height: 48px; transition: border-color .2s, background .2s, opacity .3s; }
+.tk:hover:not([disabled]), .wk:hover:not([disabled]) { border-color: var(--accent); }
+.tk.t-encode, .wk.t-encode { border-left-color: var(--w-enc); }
+.tk.t-thumb, .wk.t-thumb { border-left-color: var(--w-thumb); }
+.tk.t-wm, .wk.t-wm { border-left-color: var(--w-wm); }
+.tk.t-merge, .wk.t-merge { border-left-color: var(--w-merge); }
+.tk.sel, .wk.sel { background: var(--accent-soft); border-color: var(--accent); }
+.tk .pr { position: absolute; right: 7px; top: 6px; font: 700 12px var(--mono); padding: 1px 6px; border-radius: 6px; background: var(--bg-2); }
+.tk .pr.hi { background: var(--warn-soft); color: var(--warn); }
+.tk .ty, .wk .ty { font-weight: 700; display: block; }
+.tk .ty { padding-right: 32px; }
+.tk .vd { font-family: var(--mono); font-size: 11.5px; color: var(--muted); display: block; padding-right: 30px; }
+.tk.new { box-shadow: 0 0 0 3px color-mix(in srgb, var(--xp) 55%, transparent); }
+.tk .rt { font-size: 11px; color: var(--good); font-weight: 700; }
+.wk .lo { display: flex; align-items: center; gap: 6px; margin-top: 4px; font: 600 11.5px var(--mono); color: var(--muted); }
+.wk .lo span { flex: 1; height: 8px; border-radius: 99px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; }
+.wk .lo span i { display: block; height: 100%; background: var(--teal); transition: width .4s; }
+.wk .lo span i.full { background: var(--warn); }
+.wk.dead { border-color: var(--bad); background: var(--bad-soft); opacity: .75; }
+.wk.dead .ty::after { content: " 💀"; }
+.wk.nope, .tk.nope { animation: shake .4s; }
+.rrow { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; font-size: 13px; padding: 6px 8px; border-radius: 8px; background: var(--bg); margin-top: 4px; animation: rise .3s; }
+.rrow .wid { font: 700 12px var(--mono); }
+.rrow .pips { font-family: var(--mono); letter-spacing: 2px; color: var(--teal); }
+.rrow.lostrow { background: var(--bad-soft); }
+.rempty { font-size: 13px; color: var(--muted); padding: 4px 2px; }
+.sim-bar b { font-family: var(--mono); }
+
+/* ---------- stage 5: storage ---------- */
+.sort-item .meta { font-size: 13px; color: var(--muted); font-family: var(--mono); margin: -6px 0 10px; }
+.shelves { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 14px; }
+@media (max-width: 640px) { .shelves { grid-template-columns: 1fr; } }
+.shelf { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); padding: 10px; }
+.shelf h4 { margin: 0 0 6px; font-size: 13px; }
+.shelf h4 small { display: block; font-weight: 500; color: var(--muted); font-size: 12px; }
+.sitem { display: flex; gap: 8px; align-items: center; justify-content: space-between; font-size: 13px; padding: 6px 8px; border-radius: 8px; background: var(--bg); margin-top: 5px; transition: opacity .4s; }
+.sitem .btn { padding: 6px 10px; font-size: 12.5px; min-height: 40px; }
+.sitem.freed { opacity: .35; text-decoration: line-through; }
+.junk { font-family: var(--mono); font-size: 13px; }
+.junk b { font-size: 16px; }
+.junk.bad b { color: var(--bad); }
+.junk.good b { color: var(--good); }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 14.4 · Design YouTube</div>
+    <h1>The Transcoding Factory</h1>
+    <p class="lede">In <a href="1403-youtube-transcoding-and-dag.html">Quest 14.3</a> you drew the task graph that turns one upload into many files. Now build the factory that runs it. You'll chop the film into safe chunks, plan the work in waves, schedule it onto workers by hand, and keep the line moving when a worker dies halfway through.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can name the six parts of the book's video transcoding architecture, explain GOP splitting, and run the resource manager's three queues step by step, including what happens when a worker dies mid-task.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Factory floor tour</h2><div class="sub">Six stations, six jobs</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>On the high-level diagram in <a href="1402-youtube-upload-and-stream-flows.html">Quest 14.2</a>, "transcoding servers" was a single box. The book opens that box up. Its <b>video transcoding architecture</b> has six parts. Five sit in a line, and one is a side shelf that the line keeps using.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-youtube" target="_blank" rel="noopener">[1]</a></p>
+      <p><b>Tap a job card, then tap the station that does that job.</b> A correct match lights the station up. A wrong one costs a heart.</p>
+      <div class="sim">
+        <div class="floor" id="floor"></div>
+        <div class="simlog" id="s1log" role="log"><div>Six stations, all dark. Match each one to its job.</div></div>
+      </div>
+      <div class="jobs" id="jobs"></div>
+      <div class="row" style="margin-top:12px"><button class="btn primary" id="s1run" style="display:none">▶ Send a video down the line</button></div>
+      <div class="callout tip"><b>Jargon check.</b> <b>DAG</b> means <i>directed acyclic graph</i>: boxes (tasks) joined by one-way arrows ("this must finish before that starts"), with no loops. You built one in <a href="1403-youtube-transcoding-and-dag.html">Quest 14.3</a>. A <b>GOP</b> (group of pictures) is a short run of video frames that can be played on its own. Stage 2 is all about GOPs.</div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Chop by GOP</h2><div class="sub">Cut the film where it's safe</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>A video is a stack of still pictures called <b>frames</b>, usually 24 to 60 a second. Storing every frame as a full picture would be huge, so encoders use three kinds of frame:<a class="cite" href="https://en.wikipedia.org/wiki/Group_of_pictures" target="_blank" rel="noopener">[3]</a></p>
+      <ul>
+        <li><b>I-frame</b> (keyframe): a complete picture. It needs nothing else to be drawn.</li>
+        <li><b>P-frame</b>: stores only what changed since an <i>earlier</i> frame.</li>
+        <li><b>B-frame</b>: stores changes compared with frames both before <i>and</i> after it.</li>
+      </ul>
+      <p>A <b>GOP</b> starts at an I-frame and runs until the next one. The book says the preprocessor splits the video stream into GOP-aligned chunks. Each chunk can be played on its own and is usually a few seconds long. The book adds that some old phones and browsers can't split a video by GOP before uploading, so the preprocessor does it for them on the server.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-youtube" target="_blank" rel="noopener">[1]</a></p>
+      <p><b>Make 3 cuts so the 48-frame film becomes 4 chunks that each play on their own.</b> Tap a frame to cut just <i>before</i> it, and tap it again to undo the cut.</p>
+      <div class="sim">
+        <div class="sim-bar" style="border-top:0;border-bottom:1px solid var(--line)"><div class="legend"><span><i style="background:var(--fI)"></i>I = full picture</span><span><i style="background:var(--fP)"></i>P = changes only</span><span><i style="background:var(--fB)"></i>B = changes only</span></div><span class="small">Cuts: <b id="cutN">0</b> / 3</span></div>
+        <div class="strip" id="strip"></div>
+        <div class="lbl" style="padding:0 16px 8px">Chunk previews</div>
+        <div class="chunks" id="chunks"></div>
+      </div>
+      <div id="encWrap" style="display:none">
+        <p style="margin-top:18px">Four clean chunks. Why bother cutting at all? Because <b>chunks can be encoded in parallel</b>: four workers each take one chunk at the same time, and a <b>merger</b> worker stitches the results back together.</p>
+        <div class="sim">
+          <div class="sim-bar" style="border-top:0;border-bottom:1px solid var(--line)"><span class="tsrow"><span class="small">Temporary storage</span><span class="seg" id="tsSeg"><span data-v="on" class="on">ON</span><span data-v="off">OFF</span></span></span><span class="small">Sim clock: <b class="mono" id="clock">0.0 s</b></span></div>
+          <div class="lanes" id="lanes"></div>
+          <div class="simlog" id="s2log" role="log"><div>One worker takes 8 s to encode the whole film, which is 2 s per GOP.</div></div>
+        </div>
+        <div class="challenge boxed" id="s2box"></div>
+      </div>
+      <div class="callout warn"><b>Honest caveat.</b> Real chunked encoding works (Facebook's SVE system does it at huge scale<a class="cite" href="https://www.cs.princeton.edu/~wlloyd/papers/sve-sosp17.pdf" target="_blank" rel="noopener">[2]</a>), but the cuts need <i>closed</i> GOPs: chunks whose B-frames don't peek at a frame across the cut. Encoders often add extra keyframes on purpose to create clean cut points, and each extra keyframe costs a little size or quality.</div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Stage the DAG</h2><div class="sub">Turn a graph into waves of work</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The preprocessor builds the DAG from <b>configuration files that client programmers write</b>. The book's tiny example has just two tasks: download the input, then transcode it. The <b>DAG scheduler</b> then splits the graph into <b>stages</b> and puts each stage's tasks into the resource manager's <b>task queue</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-youtube" target="_blank" rel="noopener">[1]</a></p>
+      <p>The rule: tasks in the same stage don't depend on each other, so they can run side by side. A stage starts once everything it needs is ready. Here's a simple version of the DAG from <a href="1403-youtube-transcoding-and-dag.html">Quest 14.3</a>.</p>
+      <p><b>Tap a task, then tap the stage it belongs in.</b> Breaking a dependency costs a heart.</p>
+      <div class="sim dagwrap">
+        <svg id="dag" viewBox="0 0 360 380" role="img" aria-label="Task graph: original video, split, then video encoding, thumbnail and audio encoding, then assemble">
+          <defs>
+            <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker>
+            <marker id="ahBad" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--bad)"/></marker>
+          </defs>
+          <path class="de" id="e-orig-split" d="M180 50 V78" marker-end="url(#ah)"/>
+          <path class="de" id="e-split-ve" d="M150 122 L72 186" marker-end="url(#ah)"/>
+          <path class="de" id="e-split-th" d="M180 122 V186" marker-end="url(#ah)"/>
+          <path class="de" id="e-split-ae" d="M210 122 L288 186" marker-end="url(#ah)"/>
+          <path class="de" id="e-ve-asm" d="M72 234 L150 316" marker-end="url(#ah)"/>
+          <path class="de" id="e-th-asm" d="M180 234 V316" marker-end="url(#ah)"/>
+          <path class="de" id="e-ae-asm" d="M288 234 L210 316" marker-end="url(#ah)"/>
+          <path class="de meta" id="e-split-asm" d="M250 100 H350 V338 H252" marker-end="url(#ah)"/>
+          <text class="elab" x="86" y="150">video</text>
+          <text class="elab" x="186" y="160">video</text>
+          <text class="elab" x="250" y="150">audio</text>
+          <text class="elab" x="296" y="94">metadata</text>
+          <g class="dn src" id="n-orig"><rect x="110" y="12" width="140" height="38" rx="10"/><text x="180" y="31">Original video</text></g>
+          <g class="dn" id="n-split"><rect x="110" y="80" width="140" height="42" rx="10"/><text x="180" y="101">Split</text></g>
+          <g class="dn" id="n-ve"><rect x="20" y="188" width="104" height="46" rx="10"/><text x="72" y="203">Video</text><text x="72" y="220">encoding</text></g>
+          <g class="dn" id="n-th"><rect x="128" y="188" width="104" height="46" rx="10"/><text x="180" y="211">Thumbnail</text></g>
+          <g class="dn" id="n-ae"><rect x="236" y="188" width="104" height="46" rx="10"/><text x="288" y="203">Audio</text><text x="288" y="220">encoding</text></g>
+          <g class="dn" id="n-asm"><rect x="110" y="318" width="140" height="42" rx="10"/><text x="180" y="339">Assemble</text></g>
+        </svg>
+        <div class="lbl" style="padding:0 16px">Tasks to place</div>
+        <div class="tray" id="tray"></div>
+        <div class="cols" id="cols">
+          <button class="col c1" data-c="1" aria-label="Stage 1"><span class="ch">Stage 1</span></button>
+          <button class="col c2" data-c="2" aria-label="Stage 2"><span class="ch">Stage 2</span></button>
+          <button class="col c3" data-c="3" aria-label="Stage 3"><span class="ch">Stage 3</span></button>
+        </div>
+        <div class="tq" id="tq"><span class="lbl">Task queue:</span><span class="muted small" id="tqEmpty">empty</span></div>
+        <div class="simlog" id="s3log" role="log"><div>Five tasks, three stages. Where does each one go?</div></div>
+      </div>
+      <div class="row" style="margin-top:12px"><button class="btn primary" id="s3run" style="display:none">▶ Push the stages to the task queue</button></div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Run the resource manager</h2><div class="sub">You are the task scheduler</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The <b>resource manager</b> decides who does what. In the book it is <b>three queues plus a task scheduler</b>:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-youtube" target="_blank" rel="noopener">[1]</a></p>
+      <ul>
+        <li><b>Task queue</b>: a priority queue of tasks waiting to run. A <b>priority queue</b> always hands out the most important item first, not the oldest.</li>
+        <li><b>Worker queue</b>: a priority queue of how busy each worker is (its <i>utilisation</i>).</li>
+        <li><b>Running queue</b>: which tasks are running right now, and which worker runs each one.</li>
+      </ul>
+      <p>Different <b>task workers</b> do different jobs: encoders, thumbnail makers, watermarkers, mergers. You are the scheduler now. Each tick: <b>tap the highest-priority task</b> (on a tie, the older one, so the lower #), <b>tap the least-busy worker of the right type</b>, then press <b>Run it</b>. Six ticks by hand, then the autopilot takes over.</p>
+      <div class="sim">
+        <ol class="loop" id="loop">
+          <li data-s="1">Get the highest-priority task from the task queue</li>
+          <li data-s="2">Get the best worker for it from the worker queue</li>
+          <li data-s="3">Tell that worker to run the task</li>
+          <li data-s="4">Bind task + worker and put them in the running queue</li>
+          <li data-s="5">Remove the pair from the running queue when the task is done</li>
+        </ol>
+        <div class="rmgrid">
+          <div class="panel"><h4>Task queue <small>P5 = most urgent · # = arrival order</small></h4><div class="tks" id="tks"></div></div>
+          <div class="panel"><h4>Worker queue <small>bar = how busy (max 100%)</small></h4><div class="wks" id="wks"></div></div>
+        </div>
+        <div class="panel run"><h4>Running queue <small>● = ticks left</small></h4><div id="runq"></div></div>
+        <div class="sim-bar"><span>Tick <b id="tickN">1</b> · manual <b id="manN">0</b>/6</span><span class="row"><button class="btn primary" id="rmRun" disabled>▶ Run it</button><button class="btn primary" id="rmAuto" style="display:none">🤖 Autopilot the rest</button></span></div>
+        <div class="simlog" id="s4log" role="log"><div>Some workers are already part-busy with other videos. Encode tasks add 40% load, merges 30%, thumbnails and watermarks 20%.</div></div>
+      </div>
+      <div class="challenge boxed" id="rmTwist" style="display:none;margin-top:14px"></div>
+      <div class="row" style="margin-top:12px"><button class="btn" id="rmReset">↻ Reset the floor</button></div>
+      <div class="callout"><b>Where do priorities come from?</b> The book makes the task queue a priority queue but doesn't say who sets the numbers. Popularity, creator tier and video length are sensible inputs, but those are my examples, not the book's rules.</div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Where does it live?</h2><div class="sub">Temporary storage and the final output</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>While a video is being processed, its pieces need a home. The book uses <b>more than one storage system</b> for this. Which one depends on the data's <b>type</b>, <b>size</b>, <b>how often it's read</b> and <b>how long it lives</b>. Its examples: metadata is small and workers read it often, so cache it <b>in memory</b>. Video and audio go in <b>blob storage</b> (cheap storage for big files, like Amazon S3). When processing finishes, the temporary data is <b>freed</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-youtube" target="_blank" rel="noopener">[1]</a></p>
+      <p>The last box in the line is the <b>encoded video</b> itself, such as <code>funny_720p.mp4</code>. It isn't temporary. It goes to transcoded storage and then out to the CDN, as in <a href="1402-youtube-upload-and-stream-flows.html">Quest 14.2</a>.</p>
+      <p><b>File each item.</b></p>
+      <div class="sort" id="s5sort"></div>
+      <div id="s5after" style="display:none">
+        <div class="sim">
+          <div class="shelves" id="shelves"></div>
+          <div class="sim-bar"><span class="junk" id="junk">Everything is filed.</span><button class="btn primary" id="bell">🔔 Video finished processing</button></div>
+          <div class="simlog" id="s5log" role="log"><div>The workers are still busy. Everything stays put for now.</div></div>
+        </div>
+      </div>
+      <div id="s5quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Boss: The Backlog Golem</h2><div class="sub">The factory under pressure</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The Golem throws five bad days at your factory. For each one, pick the fix that uses the architecture you just built. Four right calls bring it down.</p>
+      <div id="boss"></div>
+      <div class="row" id="bossRetry" style="margin-top:12px"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 7 ================= -->
+  <section class="stage" data-stage="7" id="s7">
+    <div class="stage-h"><div class="num">7</div><div><h2>Say it like a senior</h2><div class="sub">Tour the factory out loud</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> The factory works. Now make it faster, safer and cheaper: upload chunks in parallel, use pre-signed upload URLs, protect videos with DRM, serve unpopular videos without a CDN, and work through the book's error-handling playbook. That's <a href="1405-youtube-optimizations-and-errors.html">Quest 14.5, <i>Faster, Safer, Cheaper</i></a>.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-youtube" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 14: Design YouTube</a>, "Video transcoding architecture" in the step 3 deep dive (preprocessor through encoded video). The book says the DAG model comes from Facebook's streaming video engine. The <a href="https://www.cs.princeton.edu/~wlloyd/papers/sve-sosp17.pdf" target="_blank" rel="noopener">SVE paper (SOSP 2017)</a> shows the real version: videos split into segments that are processed in parallel, with each upload's work described as a DAG of tasks.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <ul style="margin:0;padding-left:20px">
+        <li><b>The three-queue resource manager is a teaching design.</b> The book draws on SVE and a Weibo engineering talk for this pipeline. Real systems often use a general-purpose job scheduler or a managed batch or queue service instead of a custom one.</li>
+        <li><b>Retrying is only safe if tasks are idempotent.</b> Idempotent means running the same task twice gives the same result. If a "dead" worker was only slow and finishes later, a retried encode must overwrite its chunk, not add a duplicate.</li>
+        <li><b>Chunk boundaries aren't free.</b> Each chunk starts with a full I-frame, so more chunks means a slightly bigger file. Encoders often force keyframes at regular intervals to make clean, closed-GOP cut points.<a class="cite" href="https://en.wikipedia.org/wiki/Group_of_pictures" target="_blank" rel="noopener">[3]</a></li>
+        <li><b>Priority needs a guard against starvation.</b> If urgent jobs keep arriving, low-priority jobs (like that 3-hour lecture) may never run. Schedulers usually raise a task's priority the longer it waits.</li>
+      </ul>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"how does the resource manager know a worker is dead?"</i> or <i>"why not one big queue per worker type instead of a priority queue?"</i>
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 14 "Design YouTube" (ByteByteGo).</li>
+        <li>Huang et al., "SVE: Distributed Video Processing at Facebook Scale", SOSP 2017.</li>
+        <li>Wikipedia, "Group of pictures".</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '1404',
+  winTitle: 'The factory runs itself',
+  badge: '🏭 Badge: Factory Foreman',
+  cheatsheet: '../reference/ch14-youtube-cheatsheet.html',
+});
+const { sleep, shuffle, esc } = Q;
+const BOOK = '<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-youtube" target="_blank" rel="noopener">[1]</a>';
+
+/* ================= shared helpers ================= */
+const paid = new Set(); // XP is paid once per milestone per page load (resets/replays are practice)
+function award(key, xp, el) {
+  if (paid.has(key)) { Q.toast('✓ practice', el, 'practice'); return; }
+  paid.add(key); Q.addXP(xp, el);
+}
+const T = ms => Q.reduced ? Math.min(60, ms) : ms;
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function anim(dur, f) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 1) { f(1); return res(); }
+    const t0 = performance.now();
+    const fr = now => { const p = Math.min(1, (now - t0) / dur); f(p); p < 1 ? requestAnimationFrame(fr) : res(); };
+    requestAnimationFrame(fr);
+  });
+}
+function nextBtn(row, label, fn, primary = true) {
+  const b = document.createElement('button'); b.className = 'btn' + (primary ? ' primary' : ''); b.textContent = label; b.onclick = fn; row.appendChild(b); return b;
+}
+function shake(el) { el.classList.remove('nope'); void el.offsetWidth; el.classList.add('nope'); }
+// Predict-then-watch round (pattern from 0002). Resolves after the learner picks and the action has played.
+function predict(box, { key, step, title, options, correct, act, explain, xp = 10 }) {
+  box.innerHTML = `${step ? `<div class="step">${step}</div>` : ''}<h3>${title}</h3><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+  const opts = $('.opts', box);
+  let busy = false;
+  return new Promise(resolve => {
+    shuffle(options.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = async () => {
+        if (busy) return; busy = true;
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        b.classList.add('picked');
+        await act();
+        const ok = i === correct;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-i="${correct}"]`, opts).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + explain;
+        ok ? award(key, xp, b) : Q.loseHeart(b);
+        resolve({ ok, row: $('.row', box) });
+      };
+      opts.appendChild(b);
+    });
+  });
+}
+// Several engine quizzes in a row; `done` runs after the last one.
+function quizChain(mount, qs, done) {
+  let i = 0;
+  const next = () => {
+    const q = qs[i++];
+    Q.quiz(mount, { xp: 15, ...q, onDone: () => { if (i < qs.length) setTimeout(next, 450); else setTimeout(done, 900); } });
+  };
+  next();
+}
+
+/* ================= STAGE 1: factory floor ================= */
+Q.onStage(1, () => {
+  const ST = [
+    { k: 'pre', ico: '✂️', name: 'Preprocessor', job: 'Cuts the upload into GOP chunks and turns a config file into a task graph' },
+    { k: 'dag', ico: '🗺️', name: 'DAG scheduler', job: 'Splits the task graph into stages and queues up each stage’s tasks' },
+    { k: 'rm', ico: '🎛️', name: 'Resource manager', job: 'Decides which worker runs which task, and in what order' },
+    { k: 'wk', ico: '👷', name: 'Task workers', job: 'Do the actual work: encode, watermark, make thumbnails, merge' },
+    { k: 'out', ico: '🎞️', name: 'Encoded video', job: 'The finished product that ships, such as funny_720p.mp4' },
+    { k: 'tmp', ico: '📦', name: 'Temporary storage', job: 'Holds GOP chunks and metadata while the job is in flight' },
+  ];
+  const byK = Object.fromEntries(ST.map(s => [s.k, s]));
+  const lit = new Set();
+  let sel = null, quizShown = false, running = false;
+  $('#floor').innerHTML = `<div class="st src" data-k="src"><span class="ico">🎬</span><span class="nm">Original video</span><span class="job">funny.mp4, as uploaded</span></div>` +
+    ST.map(s => `<button class="st${s.k === 'tmp' ? ' tmp' : ''}${s.k === 'out' ? ' last' : ''}" data-k="${s.k}" aria-label="Station: ${s.name}"><span class="ico">${s.ico}</span><span class="nm">${s.name}</span><span class="job">${s.k === 'tmp' ? 'side shelf, used along the way · ' : ''}? tap a job, then here</span></button>`).join('');
+  $('#jobs').innerHTML = shuffle(ST).map(s => `<button class="jobc" data-k="${s.k}">${s.job}</button>`).join('');
+  $$('#jobs .jobc').forEach(b => b.onclick = () => {
+    sel = sel === b.dataset.k ? null : b.dataset.k;
+    $$('#jobs .jobc').forEach(x => x.classList.toggle('sel', x.dataset.k === sel));
+  });
+  $$('#floor button.st').forEach(st => st.onclick = () => {
+    const k = st.dataset.k, s = byK[k];
+    if (lit.has(k)) { Q.toast('already lit ✓', st, 'practice'); return; }
+    if (!sel) { Q.toast('pick a job card first', st, 'practice'); return; }
+    if (sel !== k) {
+      shake(st); Q.loseHeart(st);
+      logTo('s1log', `✗ “${byK[sel].job.slice(0, 48)}…” isn’t the ${s.name}’s job.`, 'e');
+      sel = null; $$('#jobs .jobc').forEach(x => x.classList.remove('sel'));
+      return;
+    }
+    lit.add(k); st.classList.add('lit');
+    $('.job', st).textContent = s.job;
+    const card = $(`#jobs .jobc[data-k="${k}"]`); card.disabled = true; card.classList.remove('sel'); sel = null;
+    award('s1m' + k, 5, st);
+    logTo('s1log', `✓ ${s.name} lit (${lit.size}/6)`, 'g');
+    if (lit.size === ST.length) { $('#s1run').style.display = ''; logTo('s1log', 'All six lit. Send a video down the line.', 'g'); }
+  });
+  const STEPS = [
+    ['src', [], '🎬 funny.mp4 arrives: the original upload.'],
+    ['pre', ['tmp'], '✂️ Preprocessor cuts it into GOP chunks, reads the config, builds the DAG. GOPs and metadata go onto the temporary storage shelf.'],
+    ['dag', [], '🗺️ DAG scheduler: Stage 1 (split) goes to the task queue, then Stage 2 (encode video, thumbnail, encode audio).'],
+    ['rm', [], '🎛️ Resource manager pops the most urgent task and hands it to the least-busy worker of the right type.'],
+    ['wk', ['tmp'], '👷 An encoder reads GOP 1 from temporary storage and encodes it. Other workers take the other chunks at the same time, and a merger joins the results.'],
+    ['out', [], '🎞️ Out comes funny_720p.mp4 (plus the other resolutions). Temporary data gets freed.'],
+  ];
+  $('#s1run').onclick = async () => {
+    if (running) return; running = true; $('#s1run').disabled = true;
+    for (const [k, also, msg] of STEPS) {
+      const el = $(`#floor [data-k="${k}"]`);
+      el.classList.add('hot'); also.forEach(a => $(`#floor [data-k="${a}"]`).classList.add('hot'));
+      logTo('s1log', msg);
+      await sleep(T(1100));
+      el.classList.remove('hot'); also.forEach(a => $(`#floor [data-k="${a}"]`).classList.remove('hot'));
+    }
+    logTo('s1log', '✓ One upload in, encoded files out. That’s the whole factory.', 'g');
+    running = false; $('#s1run').disabled = false; $('#s1run').textContent = '↻ Send another video';
+    if (quizShown) return;
+    quizShown = true;
+    quizChain($('#s1quiz'), [
+      { q: 'Client programmers write config files that describe the processing steps. Which component turns those files into a DAG?',
+        options: ['The preprocessor', 'The DAG scheduler', 'The resource manager'], correct: 0,
+        good: 'In the book, <b>DAG generation</b> is one of the preprocessor’s jobs. The DAG scheduler gets a finished graph and only cuts it into stages.',
+        bad: 'The name is a trap. The <b>preprocessor</b> generates the DAG from config files. The DAG scheduler only cuts an existing graph into stages and queues them.' },
+      { q: 'Which component actually runs the encoding?',
+        options: ['The task workers', 'The resource manager', 'The DAG scheduler'], correct: 0,
+        good: 'Everything before the workers plans and schedules. The <b>task workers</b> (encoders, thumbnail makers, watermarkers, mergers) do the actual work.',
+        bad: 'The resource manager only decides <i>who</i> runs a task. The <b>task workers</b> do the encoding, watermarking, thumbnails and merging.' },
+    ], () => Q.clearStage(1));
+  };
+});
+
+/* ================= STAGE 2: chop by GOP ================= */
+Q.onStage(2, () => {
+  const N = 48, GOP = 12;
+  const ftype = i => i % GOP === 0 ? 'I' : (i % GOP) % 3 === 0 ? 'P' : 'B';
+  const cuts = new Set();
+  let cutDone = false, quizShown = false;
+  $('#strip').innerHTML = Array.from({ length: N }, (_, i) => `<button class="fr ${ftype(i)}" data-i="${i}" aria-label="Frame ${i + 1}, ${ftype(i)}-frame. Tap to cut before it">${ftype(i)}</button>`).join('');
+  const frames = $$('#strip .fr');
+  function thumb(ok) {
+    return `<svg viewBox="0 0 120 64" aria-hidden="true"><rect width="120" height="64" fill="var(--sky)"/><circle cx="94" cy="17" r="9" fill="var(--sun)"/><path d="M0 48 Q30 26 60 44 T120 40 V64 H0Z" fill="var(--hill)"/>` +
+      (ok ? '' : `<rect x="8" y="10" width="34" height="9" fill="var(--gl1)" opacity=".8"/><rect x="50" y="30" width="44" height="7" fill="var(--gl2)" opacity=".85"/><rect x="0" y="22" width="120" height="8" fill="var(--hill)" opacity=".7" transform="skewX(-35)"/><rect x="70" y="46" width="30" height="12" fill="var(--gl1)" opacity=".6"/><rect x="14" y="40" width="18" height="18" fill="var(--sun)" opacity=".55"/>`) + '</svg>';
+  }
+  function render() {
+    frames.forEach((f, i) => {
+      f.classList.toggle('cut', cuts.has(i));
+      f.classList.toggle('bad', cuts.has(i) && ftype(i) !== 'I');
+      f.setAttribute('aria-label', `Frame ${i + 1}, ${ftype(i)}-frame. ${cuts.has(i) ? 'Cut before it. Tap to undo' : 'Tap to cut before it'}`);
+    });
+    $('#cutN').textContent = cuts.size;
+    const b = [0, ...[...cuts].sort((x, y) => x - y), N];
+    $('#chunks').innerHTML = b.slice(0, -1).map((a, k) => {
+      const t = ftype(a), ok = t === 'I';
+      return `<div class="chunk${ok ? '' : ' bad'}">${thumb(ok)}<b>Chunk ${k + 1} · frames ${a + 1}–${b[k + 1]}</b>${ok
+        ? '<span>Starts with an I-frame ✓ plays on its own</span>'
+        : `<span>Starts with a ${t}-frame ✗ it needs a frame that’s now in chunk ${k}, so the picture smears</span>`}</div>`;
+    }).join('');
+  }
+  frames.forEach((f, i) => f.onclick = () => {
+    if (i === 0) { Q.toast('that’s the very start', f, 'practice'); return; }
+    if (cuts.has(i)) cuts.delete(i);
+    else if (cuts.size >= 3) { Q.toast('max 3 cuts · tap a cut to undo', f, 'practice'); return; }
+    else cuts.add(i);
+    render();
+    if (!cutDone && cuts.size === 3 && [...cuts].every(c => ftype(c) === 'I')) {
+      cutDone = true; award('s2cuts', 15, f);
+      $('#encWrap').style.display = 'block';
+      startRace();
+    }
+  });
+  render();
+
+  /* encode lanes */
+  function setTS(on) { $$('#tsSeg span').forEach(s => s.classList.toggle('on', (s.dataset.v === 'on') === on)); }
+  function lanes(rows) {
+    $('#lanes').innerHTML = rows.map(r => r.hdr ? `<div class="lhdr">${r.hdr}</div>` :
+      `<div class="lane"><span class="ll" id="ll-${r.id}">${r.label}</span><div class="lt"><i id="lb-${r.id}"></i></div><span class="lv" id="lv-${r.id}"></span></div>`).join('');
+    $('#clock').textContent = '0.0 s';
+  }
+  // rows: {id, label, segs:[{t0, t1, cls, fail (fraction where it stops), failCls, label}]}; events: [{t, msg, cls}]
+  function play(rows, events, total) {
+    rows = rows.filter(r => !r.hdr);
+    const fired = new Set();
+    return anim(total * 480, p => {
+      const t = total * p;
+      rows.forEach(r => {
+        let seg = null; r.segs.forEach(s => { if (t >= s.t0) seg = s; });
+        const bar = $('#lb-' + r.id), lv = $('#lv-' + r.id);
+        if (!seg) { bar.style.width = '0%'; return; }
+        let f = Math.min(1, (t - seg.t0) / (seg.t1 - seg.t0)), cls = seg.cls || '';
+        if (seg.fail != null && f >= seg.fail) { f = seg.fail; cls = seg.failCls || 'dead'; }
+        bar.style.width = (f * 100).toFixed(1) + '%'; bar.className = cls;
+        if (seg.label) $('#ll-' + r.id).textContent = seg.label;
+        lv.textContent = f >= 1 ? '✓' : cls === 'dead' ? '💀' : cls === 'lost' ? '✗' : Math.round(f * 100) + '%';
+      });
+      $('#clock').textContent = t.toFixed(1) + ' s';
+      events.forEach((e, k) => { if (t >= e.t && !fired.has(k)) { fired.add(k); logTo('s2log', e.msg, e.cls); } });
+    });
+  }
+  const gop = k => ({ id: 'g' + k, label: `W${k} · GOP ${k}` });
+  const RACE = [{ hdr: 'One worker' }, { id: 'a', label: 'W1 · whole film', segs: [{ t0: 0, t1: 8 }] }, { hdr: 'Four workers + a merger' },
+    ...[1, 2, 3, 4].map(k => ({ ...gop(k), segs: [{ t0: 0, t1: 2 }] })), { id: 'm', label: 'Merger', segs: [{ t0: 2, t1: 2.4, cls: 'mg' }] }];
+  const CRASH_ON = [...[1, 2].map(k => ({ ...gop(k), segs: [{ t0: 0, t1: 2 }] })),
+    { ...gop(3), segs: [{ t0: 0, t1: 2, fail: .6 }, { t0: 1.4, t1: 3.4, cls: 'retry', label: 'W5 · GOP 3 (retry)' }] },
+    { ...gop(4), segs: [{ t0: 0, t1: 2 }] }, { id: 'm', label: 'Merger', segs: [{ t0: 3.4, t1: 3.8, cls: 'mg' }] }];
+  const CRASH_OFF = [{ id: 'p', label: 'Preprocessor', segs: [{ t0: 1.4, t1: 1.9, cls: 'pre', label: 'Re-split upload' }] },
+    ...[1, 2, 3, 4].map(k => ({ ...gop(k), segs: [{ t0: 0, t1: 2, fail: .6, failCls: k === 3 ? 'dead' : 'lost' }, { t0: 1.9, t1: 3.9, label: k === 3 ? 'W5 · GOP 3 (again)' : `W${k} · GOP ${k} (again)` }] })),
+    { id: 'm', label: 'Merger', segs: [{ t0: 3.9, t1: 4.3, cls: 'mg' }] }];
+  function startRace() {
+    setTS(true); lanes(RACE);
+    predict($('#s2box'), {
+      key: 's2race', step: 'Predict, then watch',
+      title: 'One worker needs 8 s for the whole film. With four workers, one GOP each, when is the video done?',
+      options: ['After about 2 s, plus a quick merge', 'After about 4 s, plus a quick merge', 'After about 8 s, the same as one worker'],
+      correct: 0,
+      act: async () => { await play(RACE, [{ t: 2, msg: 'All four GOPs encoded at 2.0 s. The merger stitches them…' }, { t: 2.4, msg: '✓ Four workers: done at 2.4 s.', cls: 'g' }, { t: 8, msg: 'One worker: done at 8.0 s.', cls: 'w' }], 8); },
+      explain: 'Each GOP decodes on its own, so four workers can encode four chunks at once. The total is one chunk’s time plus a short merge. The more chunks, the more workers you can use.',
+    }).then(({ row }) => nextBtn(row, 'Next: a worker crashes →', crashOn));
+  }
+  function crashOn() {
+    setTS(true); lanes(CRASH_ON); $('#s2log').innerHTML = '<div>Temporary storage is ON: the preprocessor saved every GOP and the metadata.</div>';
+    predict($('#s2box'), {
+      key: 's2on', step: 'Crash 1 of 2 · temporary storage ON',
+      title: 'Worker 3 dies 60% of the way through GOP 3. What has to be encoded again?',
+      options: ['Only GOP 3, on a new worker', 'GOPs 3 and 4, on new workers', 'The whole job, from the original upload'],
+      correct: 0,
+      act: async () => { await play(CRASH_ON, [{ t: 1.2, msg: '💀 W3 died at 60% of GOP 3.', cls: 'e' }, { t: 1.4, msg: 'GOP 3 is re-queued. W5 reads it from temporary storage.', cls: 'w' }, { t: 2, msg: 'GOPs 1, 2 and 4 finished. They aren’t affected.' }, { t: 3.8, msg: '✓ Merged at 3.8 s. Work thrown away: 1.2 s, on one chunk.', cls: 'g' }], 3.8); },
+      explain: 'This is why the book has the preprocessor <b>persist GOPs and metadata in temporary storage</b>: if an encode fails, the retry starts from the saved piece. Only the broken chunk is redone.' + BOOK,
+    }).then(({ row }) => nextBtn(row, 'Next: switch storage OFF →', crashOff));
+  }
+  function crashOff() {
+    setTS(false); lanes(CRASH_OFF); $('#s2log').innerHTML = '<div>Temporary storage is OFF: GOPs go straight from the preprocessor’s memory to the workers, and nothing is saved.</div>';
+    predict($('#s2box'), {
+      key: 's2off', step: 'Crash 2 of 2 · temporary storage OFF',
+      title: 'Same crash. Worker 3 dies 60% of the way through GOP 3. What has to be encoded again?',
+      options: ['Only GOP 3, on a new worker', 'GOPs 3 and 4, on new workers', 'The whole job, from the original upload'],
+      correct: 2,
+      act: async () => { await play(CRASH_OFF, [{ t: 1.2, msg: '💀 W3 died at 60% of GOP 3. There’s no saved copy of GOP 3 to hand to anyone.', cls: 'e' }, { t: 1.4, msg: 'The job fails. The original upload is fetched and split again, and all four chunks start over.', cls: 'w' }, { t: 4.3, msg: '✗ Done at 4.3 s. Work thrown away: 4 × 1.2 s = 4.8 s, plus a second split.', cls: 'e' }], 4.3); },
+      explain: 'With nothing saved mid-job, a single failure throws away everyone’s work. Four chunks hides the pain. The boss round has a 400-chunk video: with storage ON you redo 1 chunk, and with it OFF you redo all 400.',
+    }).then(({ row }) => nextBtn(row, 'Finish the lab →', () => {
+      $('#s2box').innerHTML = '<div class="row"><button class="btn" id="s2again">↻ Replay the race and both crashes</button></div>';
+      $('#s2again').onclick = () => { $('#s2log').innerHTML = '<div>One worker takes 8 s to encode the whole film, which is 2 s per GOP.</div>'; startRace(); };
+      if (quizShown) return;
+      quizShown = true;
+      quizChain($('#s2quiz'), [
+        { q: 'Why does the preprocessor cut the video at GOP boundaries?',
+          options: ['Each GOP opens with a keyframe, so it decodes on its own', 'GOPs are always exactly one second long, so the maths is easy', 'Cutting in the middle of a GOP knocks the audio out of sync'], correct: 0,
+          good: 'A GOP starts with a full I-frame, and every frame in it refers only to frames inside the GOP. So each chunk can be encoded by a different worker, and played on its own.',
+          bad: 'It’s about the frames. A GOP starts with a full I-frame, so the chunk doesn’t need anything outside itself. That makes parallel encoding possible. GOP length varies, and audio is a separate stream.' },
+        { q: 'Why does the preprocessor save GOPs and metadata in temporary storage?',
+          options: ['So a failed encode can retry just that piece from saved data', 'So viewers can stream the GOPs before encoding is finished', 'So the DAG scheduler can read its config file back from disk'], correct: 0,
+          good: 'The book calls the preprocessor a cache for the split-up video. Persisting the pieces makes retries cheap: redo one chunk, not the whole video.',
+          bad: 'It’s for reliability. If an encode fails, the system retries from the persisted GOP instead of starting over. Viewers only ever see the finished encodes.' },
+      ], () => Q.clearStage(2));
+    }));
+  }
+});
+
+/* ================= STAGE 3: stage the DAG ================= */
+Q.onStage(3, () => {
+  const TK = {
+    split: { name: 'Split', depth: 1, parents: [] },
+    ve: { name: 'Video encoding', depth: 2, parents: ['split'] },
+    th: { name: 'Thumbnail', depth: 2, parents: ['split'] },
+    ae: { name: 'Audio encoding', depth: 2, parents: ['split'] },
+    asm: { name: 'Assemble', depth: 3, parents: ['ve', 'th', 'ae', 'split'] },
+  };
+  const NEEDS = { ve: 'the video stream', th: 'the video stream', ae: 'the audio stream' };
+  const placed = {};
+  let sel = null, quizShown = false, running = false;
+  $('#tray').innerHTML = shuffle(Object.keys(TK)).map(k => `<button class="tchip" data-k="${k}">${TK[k].name}</button>`).join('');
+  function dropSel() { sel = null; $$('#tray .tchip').forEach(x => x.classList.remove('sel')); }
+  function clearViol() { $$('#dag .de').forEach(e => { e.classList.remove('viol'); e.setAttribute('marker-end', 'url(#ah)'); }); }
+  $$('#tray .tchip').forEach(b => b.onclick = () => {
+    sel = sel === b.dataset.k ? null : b.dataset.k;
+    $$('#tray .tchip').forEach(x => x.classList.toggle('sel', x.dataset.k === sel));
+  });
+  $$('#cols .col').forEach(col => col.onclick = () => {
+    if (!sel) { Q.toast('pick a task first', col, 'practice'); return; }
+    const k = sel, t = TK[k], s = +col.dataset.c, chip = $(`#tray .tchip[data-k="${k}"]`);
+    clearViol();
+    if (s < t.depth) {
+      const bad = t.parents.filter(p => TK[p].depth >= s);
+      bad.forEach(p => { const e = $(`#e-${p}-${k}`); if (e) { e.classList.add('viol'); e.setAttribute('marker-end', 'url(#ahBad)'); } });
+      const why = k === 'asm'
+        ? (s === 1 ? 'Assemble needs Split’s output, and the encoded video, thumbnail and audio come later still.' : 'Assemble needs the encoded video, the thumbnail and the encoded audio, and those aren’t ready until the end of Stage 2.')
+        : `${t.name} needs ${NEEDS[k]}, and Split only produces it at the end of Stage 1.`;
+      logTo('s3log', `✗ ${why} Tasks in one stage run side by side, so none can wait on another.`, 'e');
+      chip.classList.remove('bounce'); void chip.offsetWidth; chip.classList.add('bounce'); dropSel();
+      Q.loseHeart(col);
+      return;
+    }
+    if (s > t.depth) {
+      logTo('s3log', k === 'split'
+        ? '⚠ Legal, but slow. Split only needs the original upload, which is there from the start. Nothing can begin until it runs, so put it first.'
+        : `⚠ Legal, but slow. Everything ${t.name} needs is ready after Stage ${t.depth - 1}, so making it wait for Stage ${s} leaves a worker idle. Try an earlier stage.`, 'w');
+      chip.classList.remove('bounce'); void chip.offsetWidth; chip.classList.add('bounce'); dropSel();
+      Q.toast('legal but slow', col, 'practice');
+      return;
+    }
+    placed[k] = s; sel = null; chip.remove();
+    col.insertAdjacentHTML('beforeend', `<span class="pl">${t.name}</span>`);
+    $('#n-' + k).classList.add('s' + s);
+    award('s3p' + k, 4, col);
+    logTo('s3log', `✓ ${t.name} → Stage ${s}`, 'g');
+    if (Object.keys(placed).length === 5) {
+      logTo('s3log', 'All placed. Stage 1: Split. Stage 2: three tasks side by side. Stage 3: Assemble. (The book’s own example shows the first two stages.)', 'g');
+      $('#s3run').style.display = '';
+    }
+  });
+  const tq = $('#tq');
+  function tqSet(names) {
+    $$('.tqc', tq).forEach(c => c.remove());
+    $('#tqEmpty').style.display = names.length ? 'none' : '';
+    names.forEach(n => tq.insertAdjacentHTML('beforeend', `<span class="tqc">${n}</span>`));
+  }
+  const runNodes = (ks, on) => ks.forEach(k => $('#n-' + k).classList.toggle('run', on));
+  $('#s3run').onclick = async () => {
+    if (running) return; running = true; $('#s3run').disabled = true; clearViol();
+    const waves = [[['split'], 'Stage 1 needs nothing but the upload'], [['ve', 'th', 'ae'], 'Split is done, so Stage 2’s inputs are ready'], [['asm'], 'Stage 2 is done, so Stage 3 can go']];
+    for (const [ks, why] of waves) {
+      logTo('s3log', `🗺️ DAG scheduler: ${why}. Pushing ${ks.map(k => TK[k].name).join(', ')} to the task queue.`);
+      tqSet(ks.map(k => TK[k].name)); await sleep(T(1100));
+      runNodes(ks, true);
+      logTo('s3log', ks.length > 1 ? `👷 ${ks.length} workers run them at the same time.` : `👷 A worker runs ${TK[ks[0]].name}.`);
+      $$('.tqc', tq).forEach(c => c.classList.add('gone')); await sleep(T(1000));
+      runNodes(ks, false); tqSet([]);
+    }
+    logTo('s3log', '✓ funny_720p.mp4 assembled. Three waves, and no task ever waited on a task in its own wave.', 'g');
+    running = false; $('#s3run').disabled = false; $('#s3run').textContent = '↻ Push them again';
+    if (quizShown) return;
+    quizShown = true;
+    quizChain($('#s3quiz'), [
+      { q: 'Two tasks are in the same stage. Can one of them need the other’s output?',
+        options: ['No. If it did, they would belong in different stages', 'Yes. The scheduler simply runs them one after the other', 'Yes, as long as both tasks run on the same worker type'], correct: 0,
+        good: 'A stage is a set of tasks that can all run at once. A dependency forces the second task into a later stage.',
+        bad: 'A stage only works because its tasks are independent and can run side by side. If one needs the other, they belong in different stages.' },
+      { q: 'Where does the DAG scheduler put the tasks of a stage that’s ready to go?',
+        options: ['Into the resource manager’s task queue', 'Straight onto a worker that it picks itself', 'Into temporary storage, next to the GOPs'], correct: 0,
+        good: 'The DAG scheduler only plans. It pushes ready tasks into the <b>task queue</b>, and the resource manager decides which worker runs each one.',
+        bad: 'Choosing a worker is the resource manager’s job. The DAG scheduler pushes ready tasks into the resource manager’s <b>task queue</b>.' },
+    ], () => Q.clearStage(3));
+  };
+});
+
+/* ================= STAGE 4: run the resource manager ================= */
+Q.onStage(4, () => {
+  const TY = {
+    encode: { lab: 'encode', w: 'encoder', short: 'encoder', cost: 40, dur: 3 },
+    thumb: { lab: 'thumbnail', w: 'thumbnail maker', short: 'thumbnail', cost: 20, dur: 2 },
+    wm: { lab: 'watermark', w: 'watermarker', short: 'watermark', cost: 20, dur: 2 },
+    merge: { lab: 'merge', w: 'merger', short: 'merger', cost: 30, dur: 2 },
+  };
+  const W0 = [['E1', 'encode', 60], ['E2', 'encode', 20], ['E3', 'encode', 45], ['T1', 'thumb', 30], ['T2', 'thumb', 10], ['W1', 'wm', 50], ['M1', 'merge', 0], ['M2', 'merge', 40]];
+  const T0 = [[1, 'encode', 3, 'cat_video · GOP 1'], [2, 'thumb', 2, 'cat_video'], [3, 'encode', 5, 'news_live · GOP 1'], [4, 'wm', 1, 'cat_video'], [5, 'merge', 4, 'cooking_101'], [6, 'thumb', 4, 'news_live']];
+  const ARRIVE = { 2: [[7, 'encode', 5, 'news_live · GOP 2']], 4: [[8, 'encode', 2, 'lecture_3h · GOP 9']], 6: [[9, 'encode', 4, 'news_live · GOP 3'], [10, 'merge', 3, 'cat_video']] };
+  const MANUAL = 6;
+  let S, quizShown = false;
+  const mkTask = ([n, t, p, v]) => ({ n, t, p, v, retry: false, isNew: false });
+  function reset() {
+    S = { tasks: T0.map(mkTask), workers: W0.map(([id, t, base]) => ({ id, t, base, dead: false })), running: [], tick: 1, manual: 0, selT: null, selW: null, busy: false, twistDone: false, auto: false, finished: false };
+    $('#s4log').innerHTML = '<div>Some workers are already part-busy with other videos. Encode tasks add 40% load, merges 30%, thumbnails and watermarks 20%.</div>';
+    $('#rmTwist').style.display = 'none'; $('#rmTwist').innerHTML = '';
+    $('#rmAuto').style.display = 'none'; $('#rmRun').style.display = '';
+    render();
+  }
+  const load = w => w.base + S.running.filter(r => r.w === w.id).reduce((s, r) => s + TY[r.task.t].cost, 0);
+  const top = () => S.tasks.slice().sort((a, b) => b.p - a.p || a.n - b.n)[0];
+  const best = t => S.workers.filter(w => !w.dead && w.t === t.t && load(w) + TY[t.t].cost <= 100).sort((a, b) => load(a) - load(b))[0];
+  const tLabel = t => `#${t.n} ${TY[t.t].lab}`;
+  function stepOn(n) { $$('#loop li').forEach(li => li.classList.toggle('on', +li.dataset.s === n)); }
+  async function flash(n) { const li = $(`#loop li[data-s="${n}"]`); li.classList.add('flash'); await sleep(T(450)); li.classList.remove('flash'); }
+  function render() {
+    $('#tks').innerHTML = S.tasks.length ? S.tasks.map(t => `<button class="tk t-${t.t}${S.selT === t.n ? ' sel' : ''}${t.isNew ? ' new' : ''}" data-n="${t.n}" aria-label="Task ${t.n}: ${TY[t.t].lab} ${esc(t.v)}, priority ${t.p}"><span class="pr${t.p >= 4 ? ' hi' : ''}">P${t.p}</span><span class="ty">#${t.n} ${TY[t.t].lab}${t.retry ? ' <span class="rt">↻ retry</span>' : ''}</span><span class="vd">${esc(t.v)}</span></button>`).join('') : '<div class="rempty">Empty. Every task has been handed out.</div>';
+    $('#wks').innerHTML = S.workers.map(w => { const l = load(w); return `<button class="wk t-${w.t}${S.selW === w.id ? ' sel' : ''}${w.dead ? ' dead' : ''}" data-id="${w.id}" aria-label="Worker ${w.id}, ${TY[w.t].w}, ${w.dead ? 'dead' : l + '% busy'}"><span class="ty">${w.id} · ${TY[w.t].short}</span><span class="lo"><span><i class="${l >= 80 ? 'full' : ''}" style="width:${w.dead ? 0 : l}%"></i></span>${w.dead ? 'down' : l + '%'}</span></button>`; }).join('');
+    $('#runq').innerHTML = S.running.length ? S.running.map(r => `<div class="rrow${r.lost ? ' lostrow' : ''}"><span>${tLabel(r.task)} · <span class="muted">${esc(r.task.v)}</span></span><span class="wid">${r.w}</span><span class="pips" aria-label="${r.rem} ticks left">${'●'.repeat(r.rem)}</span></div>`).join('') : '<div class="rempty">Nothing running.</div>';
+    $('#tickN').textContent = S.tick; $('#manN').textContent = Math.min(S.manual, MANUAL);
+    $('#rmRun').disabled = !(S.selT && S.selW) || S.busy || S.auto || S.manual >= MANUAL;
+    stepOn(S.manual >= MANUAL || S.auto ? 0 : !S.selT ? 1 : !S.selW ? 2 : 3);
+    $$('#tks .tk').forEach(b => b.onclick = () => pickTask(+b.dataset.n, b));
+    $$('#wks .wk').forEach(b => b.onclick = () => pickWorker(b.dataset.id, b));
+  }
+  function manualOpen(el) {
+    if (S.busy || S.auto) return false;
+    if (S.manual >= MANUAL) { Q.toast(S.finished ? 'all done ✓' : 'autopilot’s turn', el, 'practice'); return false; }
+    return true;
+  }
+  function pickTask(n, el) {
+    if (!manualOpen(el)) return;
+    const t = S.tasks.find(x => x.n === n), tp = top();
+    if (t !== tp) {
+      shake(el); Q.toast('not the top task', el, 'minus');
+      logTo('s4log', t.p === tp.p ? `✗ #${t.n} ties on P${t.p}, but #${tp.n} arrived first. On a tie, the older task goes first.` : `✗ #${t.n} is P${t.p}, but P${tp.p} is waiting. The task queue hands out the most urgent task first, not the oldest.`, 'w');
+      return;
+    }
+    S.selT = n; S.selW = null; render();
+  }
+  function pickWorker(id, el) {
+    if (!manualOpen(el)) return;
+    if (!S.selT) { Q.toast('step 1 first: pick a task', el, 'practice'); return; }
+    const w = S.workers.find(x => x.id === id), t = S.tasks.find(x => x.n === S.selT), b = best(t), l = load(w);
+    if (w.dead) { Q.toast('that worker is down', el, 'practice'); return; }
+    if (w.t !== t.t) {
+      shake(el); Q.loseHeart(el);
+      logTo('s4log', `✗ ${w.id} is a ${TY[w.t].w}. It can’t run an ${TY[t.t].lab} task. Each task needs a worker of the matching type.`, 'e');
+      return;
+    }
+    if (l + TY[t.t].cost > 100) { shake(el); Q.toast('no room', el, 'minus'); logTo('s4log', `✗ ${w.id} is at ${l}%. Adding ${TY[t.t].cost}% would overload it.`, 'w'); return; }
+    if (w !== b) { shake(el); Q.toast('not optimal', el, 'minus'); logTo('s4log', `✗ ${w.id} can do it, but it’s at ${l}% and another ${TY[t.t].w} is less busy. The worker queue hands out the least-loaded worker first.`, 'w'); return; }
+    S.selW = id; render();
+  }
+  // steps 3 + 4 for one pair, then advance the clock (step 5 for finished tasks)
+  async function bindAndTick(t, w) {
+    S.tasks.forEach(x => x.isNew = false);
+    S.tasks = S.tasks.filter(x => x !== t);
+    logTo('s4log', `③ ${w.id}, run ${tLabel(t)} (${esc(t.v)}).`);
+    await flash(3);
+    S.running.push({ task: t, w: w.id, rem: TY[t.t].dur });
+    logTo('s4log', `④ Running queue ← ${tLabel(t)} on ${w.id}`);
+    S.selT = null; S.selW = null; render(); await flash(4);
+    await advance();
+  }
+  async function advance() {
+    S.running.forEach(r => r.rem--);
+    const done = S.running.filter(r => r.rem <= 0);
+    S.running = S.running.filter(r => r.rem > 0);
+    for (const r of done) logTo('s4log', `⑤ ${tLabel(r.task)} done on ${r.w}. Removed from the running queue, and ${r.w} is free again.`, 'g');
+    S.tick++;
+    (ARRIVE[S.tick - 1] || []).forEach(a => {
+      const t = mkTask(a); t.isNew = true; S.tasks.push(t);
+      const ahead = S.tasks.filter(x => x !== t && x.p < t.p).length;
+      logTo('s4log', `📥 New task ${tLabel(t)} (P${t.p}, ${esc(t.v)}) arrives${ahead ? ` and jumps ahead of ${ahead} older task${ahead > 1 ? 's' : ''}` : ''}.`, 'w');
+    });
+    render();
+    if (done.length) await flash(5);
+  }
+  $('#rmRun').onclick = async () => {
+    if (!(S.selT && S.selW) || S.busy) return;
+    S.busy = true;
+    const t = S.tasks.find(x => x.n === S.selT), w = S.workers.find(x => x.id === S.selW);
+    logTo('s4log', `① Top task: ${tLabel(t)} (P${t.p}). ② Best ${TY[t.t].w}: ${w.id} at ${load(w)}%.`);
+    const k = ++S.manual;
+    award('s4tick' + k, 4, $('#rmRun'));
+    await bindAndTick(t, w);
+    S.busy = false;
+    if (S.manual >= MANUAL) {
+      logTo('s4log', 'Six ticks by hand. You’ve got the loop. Let the autopilot run it.', 'g');
+      $('#rmRun').style.display = 'none'; $('#rmAuto').style.display = '';
+    }
+    render();
+  };
+  $('#rmAuto').onclick = () => autopilot();
+  async function autopilot() {
+    if (S.auto) return;
+    S.auto = true; $('#rmAuto').disabled = true; render();
+    while (S.tasks.length || S.running.length) {
+      const t = S.tasks.length ? top() : null, w = t && best(t);
+      if (t && w) {
+        S.selT = t.n; S.selW = w.id; render();
+        logTo('s4log', `🤖 ① ${tLabel(t)} (P${t.p}) ② ${w.id} at ${load(w)}%`);
+        await sleep(T(350));
+        await bindAndTick(t, w);
+      } else {
+        if (t) logTo('s4log', `🤖 No ${TY[t.t].w} has room for ${tLabel(t)}. Wait a tick.`);
+        await advance();
+      }
+      await sleep(T(350));
+      if (!S.twistDone) {
+        const victim = S.running.find(r => r.task.t === 'encode' && r.task.v.includes('GOP 3'));
+        if (victim) { S.twistDone = true; await twist(victim); }
+      }
+    }
+    S.auto = false; S.finished = true; $('#rmAuto').disabled = false; $('#rmAuto').style.display = 'none';
+    logTo('s4log', '✓ Every queue is empty. All tasks ran, including the one that survived a dead worker.', 'g');
+    render();
+    if (quizShown) return;
+    quizShown = true;
+    quizChain($('#s4quiz'), [
+      { q: 'A worker dies in the middle of a task. Which queue tells you what that worker was doing?',
+        options: ['The running queue, which pairs each task with its worker', 'The worker queue, which ranks the workers by how busy they are', 'The task queue, which still lists every task that ever started'], correct: 0,
+        good: 'Step 4 bound the task to its worker in the <b>running queue</b>. That record is how you find the orphaned task and put it back.',
+        bad: 'A task leaves the task queue once it’s handed out, and the worker queue only tracks load. The <b>running queue</b> pairs each task with its worker, so it’s how you find the orphaned task.' },
+      { q: 'Why keep the workers in a priority queue ordered by how busy they are?',
+        options: ['To get the least-busy worker fast, without scanning them all', 'So the oldest worker always gets the next task in the line', 'So every worker ends up running exactly the same tasks'], correct: 0,
+        good: 'A priority queue hands back the minimum straight away. Picking the least-loaded worker spreads the work and keeps any one worker from overloading.',
+        bad: 'The point is speed and balance. A priority queue hands back the least-busy worker straight away, which spreads load without checking every worker each time.' },
+    ], () => Q.clearStage(4));
+  }
+  function twist(victim) {
+    return new Promise(resolve => {
+      const w = S.workers.find(x => x.id === victim.w);
+      w.dead = true; victim.lost = true; render();
+      logTo('s4log', `💀 ${w.id} stopped answering halfway through ${tLabel(victim.task)} (${esc(victim.task.v)}).`, 'e');
+      const box = $('#rmTwist'); box.style.display = 'block';
+      box.innerHTML = `<div class="step">Twist · the autopilot pauses</div><h3>${w.id} died while running ${tLabel(victim.task)}, a P${victim.task.p} chunk of a popular live video. What should the resource manager do?</h3><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+      const OPTS = ['Drop it and ship the video without that chunk', 'Put it back in the task queue for another encoder', `Leave it bound to ${w.id} and wait for ${w.id} to return`];
+      shuffle(OPTS.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+        const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+        b.onclick = () => {
+          $$('.opt', box).forEach(x => x.disabled = true);
+          const ok = i === 1;
+          b.classList.add(ok ? 'right' : 'wrong'); if (!ok) $('.opt[data-i="1"]', box).classList.add('right');
+          const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+          ex.innerHTML = (ok ? '<b>Right.</b> ' : '<b>Not quite.</b> ') + `The running queue shows that ${w.id} held ${tLabel(victim.task)}. Put it back in the task queue with the same priority, and the next pass gives it to a healthy encoder. Dropping it ships a broken video. Waiting could take forever, because a dead worker may never come back. The book’s rule for a dead task worker is to retry the task on a new worker.${BOOK} This is only safe if the task is <i>idempotent</i>: running it twice gives the same result.`;
+          ok ? award('s4twist', 15, b) : Q.loseHeart(b);
+          S.running = S.running.filter(r => r !== victim);
+          const t = victim.task; t.retry = true; t.isNew = true; S.tasks.push(t);
+          logTo('s4log', `↻ ${tLabel(t)} goes back in the task queue (still P${t.p}). ${w.id} is out of the worker queue.`, 'w');
+          render();
+          nextBtn($('.row', box), 'Continue autopilot →', () => { $('.row', box).innerHTML = ''; resolve(); });
+        };
+        $('.opts', box).appendChild(b);
+      });
+      box.scrollIntoView({ behavior: Q.reduced ? 'auto' : 'smooth', block: 'center' });
+    });
+  }
+  $('#rmReset').onclick = () => { if (S.busy || S.auto) { Q.toast('wait for this tick', $('#rmReset'), 'practice'); return; } reset(); };
+  reset();
+});
+
+/* ================= STAGE 5: where does it live? ================= */
+Q.onStage(5, () => {
+  const BINS = { mem: 'Memory cache', blob: 'Blob storage (temp)', perm: 'Transcoded storage' };
+  const ITEMS = [
+    { k: 'meta', ico: '🏷️', t: 'Task metadata', d: '2 KB · workers read it ~100 times a minute', mb: 0.002, a: 'mem', why: 'Tiny and read all the time, so keep it in memory. This is the book’s own example.' },
+    { k: 'gop', ico: '🎞️', t: 'GOP chunk 12', d: '40 MB · read once to encode, again only on a retry', mb: 40, a: 'blob', why: 'Big video data that’s rarely read goes in blob storage. Holding chunks this size in memory would be expensive.' },
+    { k: 'aud', ico: '🔊', t: 'Audio track', d: '20 MB · read once by the audio encoder', mb: 20, a: 'blob', why: 'Audio is bulky media too, so it goes in blob storage, like video.' },
+    { k: 'cfg', ico: '🗺️', t: 'DAG for this job', d: '1 KB · read on every scheduling pass', mb: 0.001, a: 'mem', why: 'Small and read on every pass, so it belongs in memory.' },
+    { k: 'thumb', ico: '🖼️', t: 'Thumbnail draft', d: '200 KB image · read once by the merger', mb: 0.2, a: 'blob', why: 'An image file that’s read once. Blob storage is fine, and memory would be wasted on it.' },
+    { k: 'final', ico: '✅', t: 'funny_720p.mp4', d: 'the finished encode', mb: 0, a: 'perm', why: 'The output isn’t temporary at all. It goes to transcoded storage and then out to the CDN.' },
+  ];
+  let sorted = 0, quizShown = false, timer = null, day = 0, rang = false;
+  const freed = new Set();
+  $('#s5sort').innerHTML = ITEMS.map(it => `<div class="sort-item" data-k="${it.k}"><p><b>${it.ico} ${it.t}</b></p><div class="meta">${it.d}</div><div class="row">${Object.keys(BINS).map(b => `<button class="opt" data-b="${b}">${BINS[b]}</button>`).join('')}</div><div class="explain"></div></div>`).join('');
+  $$('#s5sort .sort-item').forEach(item => {
+    const it = ITEMS.find(x => x.k === item.dataset.k);
+    $$('.opt', item).forEach(b => b.onclick = () => {
+      $$('.opt', item).forEach(x => x.disabled = true);
+      const ok = b.dataset.b === it.a;
+      b.classList.add(ok ? 'right' : 'wrong'); if (!ok) $(`.opt[data-b="${it.a}"]`, item).classList.add('right');
+      const ex = $('.explain', item); ex.className = 'explain show ' + (ok ? 'good' : 'bad'); ex.textContent = it.why;
+      ok ? award('s5s' + it.k, 3, b) : Q.loseHeart(b);
+      if (++sorted === ITEMS.length) setTimeout(showShelves, 500);
+    });
+  });
+  const junkMB = () => ITEMS.filter(i => i.a !== 'perm' && !freed.has(i.k)).reduce((s, i) => s + i.mb, 0);
+  function shelves() {
+    $('#shelves').innerHTML = Object.keys(BINS).map(b => `<div class="shelf"><h4>${b === 'mem' ? '⚡' : b === 'blob' ? '🪣' : '🏛️'} ${BINS[b]}<small>${b === 'perm' ? 'permanent · then CDN' : 'temporary'}</small></h4>${ITEMS.filter(i => i.a === b).map(i => `<div class="sitem${freed.has(i.k) ? ' freed' : ''}" data-k="${i.k}"><span>${i.ico} ${i.t}</span>${rang && !freed.has(i.k) ? `<button class="btn" data-free="${i.k}" aria-label="Free ${i.t}">🗑 Free</button>` : ''}</div>`).join('')}</div>`).join('');
+    $$('#shelves [data-free]').forEach(b => b.onclick = () => free(b.dataset.free, b));
+  }
+  function showShelves() { $('#s5after').style.display = 'block'; shelves(); }
+  function junkText() {
+    const mb = junkMB(), tbDay = mb * 500000 / 1e6;
+    const el = $('#junk');
+    if (!rang) { el.className = 'junk'; el.textContent = 'Everything is filed.'; return; }
+    if (mb < 0.0001) { el.className = 'junk good'; el.innerHTML = `Leftovers: <b>0 MB</b>. Temporary storage is clean.`; return; }
+    el.className = 'junk bad';
+    el.innerHTML = `Leftovers: <b>${mb.toFixed(1)} MB</b> per video × ~500,000 uploads a day ≈ <b>${tbDay.toFixed(1)} TB</b> of junk a day. Day ${day}: <b>${(tbDay * day).toFixed(0)} TB</b> piled up.`;
+  }
+  function stop() { if (timer) { clearInterval(timer); timer = null; } }
+  $('#bell').onclick = () => {
+    if (rang && junkMB() < 0.0001) { freed.clear(); rang = false; day = 0; $('#s5log').innerHTML = '<div>Back to the moment before the video finished.</div>'; }
+    if (rang) return;
+    rang = true; day = 1; $('#bell').disabled = true;
+    logTo('s5log', '🔔 funny.mp4 is done. Everything it left in temporary storage is now junk. Free it.', 'w');
+    shelves(); junkText();
+    timer = setInterval(() => { day++; junkText(); }, Q.reduced ? 1500 : 700);
+  };
+  function free(k, el) {
+    const it = ITEMS.find(i => i.k === k);
+    if (it.a === 'perm') {
+      shake(el); Q.loseHeart(el);
+      logTo('s5log', '✗ That’s the product! funny_720p.mp4 lives in transcoded storage for good, and the CDN serves it. Only the temporary pieces get freed.', 'e');
+      return;
+    }
+    freed.add(k); logTo('s5log', `🗑 ${it.t} freed.`, 'g');
+    shelves(); junkText();
+    if (junkMB() < 0.0001) {
+      stop();
+      award('s5free', 12, $('#junk'));
+      logTo('s5log', `✓ Temporary storage is empty after ${day} day${day > 1 ? 's' : ''}. The book says exactly this: free temporary data once that video’s processing is complete.`, 'g');
+      const bell = $('#bell'); bell.disabled = false; bell.textContent = '↻ Run the clean-up again';
+      if (!quizShown) {
+        quizShown = true;
+        setTimeout(() => Q.quiz($('#s5quiz'), {
+          q: 'According to the book, which four things decide where a piece of temporary data lives?',
+          options: ['Data type, size, how often it’s read, how long it lives', 'Upload time, file name, codec and the viewer’s country', 'Worker type, task priority, stage number and DAG depth'], correct: 0,
+          good: '<b>Type, size, access frequency, life span.</b> Small and hot goes in memory. Big media goes in blob storage. Anything short-lived gets freed when the job ends.',
+          bad: 'The book’s four are <b>data type, data size, access frequency and data life span</b>. That’s why small, hot metadata sits in memory and big video sits in blob storage.',
+          xp: 20,
+          onDone: () => setTimeout(() => Q.clearStage(5), 900),
+        }), 500);
+      }
+    }
+  }
+});
+
+/* ================= STAGE 6: boss ================= */
+Q.onStage(6, () => {
+  const cfg = {
+    name: '🗿 Backlog Golem',
+    scenarios: [
+      { e: '🎤', t: 'Fans are waiting', d: 'A famous creator uploads a 2-minute clip and 10,000 fans keep hitting refresh. The task queue is full of 3-hour lecture uploads that arrived earlier.', a: 'b',
+        choices: [{ k: 'a', label: 'First come, first served', sub: 'the clip waits its turn' }, { k: 'b', label: 'Raise its priority', sub: 'task queue is a priority queue' }, { k: 'c', label: 'Add a DAG scheduler', sub: 'a second planner' }],
+        why: 'The task queue is a <b>priority queue</b>, so a high-priority task jumps the line. The book doesn’t say who sets priorities. Popularity and length are sensible inputs. Watch that the lectures still get a turn eventually.' },
+      { e: '💥', t: 'Chunk 37 of 400 fails', d: 'One encoder crashes on chunk 37 of a long upload. The other 399 chunks are fine.', a: 'a',
+        choices: [{ k: 'a', label: 'Retry chunk 37', sub: 'from its saved GOP' }, { k: 'b', label: 'Restart the video', sub: 'all 400 chunks again' }, { k: 'c', label: 'Skip the chunk', sub: 'nobody will notice' }],
+        why: 'The preprocessor saved every GOP in temporary storage for exactly this. The running queue shows which task died. Re-queue it, and a new worker re-encodes one chunk, not four hundred.' },
+      { e: '📱', t: 'An old phone uploads', d: 'An old Android app can’t split by GOP. It uploads one huge, unsplit file.', a: 'c',
+        choices: [{ k: 'a', label: 'Reject the upload', sub: 'ask for a new app' }, { k: 'b', label: 'One giant task', sub: 'a single worker encodes it' }, { k: 'c', label: 'Split on the server', sub: 'the preprocessor does it' }],
+        why: 'The book says this directly: some old phones and browsers can’t split by GOP, so the <b>preprocessor</b> splits the video on the server. After that, the pipeline is the same as for everyone else.' },
+      { e: '🧩', t: 'A new feature', d: 'Product wants auto-generated captions on every upload, starting next sprint.', a: 'a',
+        choices: [{ k: 'a', label: 'Edit the DAG config', sub: 'add a captions task' }, { k: 'b', label: 'Rewrite the scheduler', sub: 'teach it about captions' }, { k: 'c', label: 'Build a new pipeline', sub: 'just for captions' }],
+        why: 'The preprocessor builds the DAG from <b>config files that client programmers write</b>. Add a captions task to the config, plus a worker type that can run it. The DAG scheduler and resource manager stay the same. That flexibility is why the DAG model exists.' },
+      { e: '📈', t: 'The storage bill keeps climbing', d: 'Temporary storage grows every day and never shrinks. The bill doubles each month.', a: 'b',
+        choices: [{ k: 'a', label: 'Buy more storage', sub: 'it’s cheap, right?' }, { k: 'b', label: 'Free it when done', sub: 'clean up after each video' }, { k: 'c', label: 'Use worker memory', sub: 'skip temp storage' }],
+        why: 'Temporary data is meant to be <b>freed once that video’s processing is complete</b>. Buying more storage only delays the problem. Skipping temporary storage brings back the expensive full restarts you saw in stage 2.' },
+    ],
+    outro: 'Priority in the task queue, retries from saved GOPs, splitting on the server, change the config and not the code, and clean up after every video.',
+    onDone: wins => {
+      const r = $('#bossRetry'); r.innerHTML = '';
+      if (wins >= 4) { Q.clearStage(6); nextBtn(r, '↻ Fight the Golem again (practice)', fight, false); }
+      else { r.innerHTML = `<p class="small" style="margin:0;flex-basis:100%">${wins} of 5 isn’t enough. The Golem shrugs it off. You need 4. Rematches pay less XP.</p>`; nextBtn(r, '⚔️ Rematch', fight); }
+    },
+  };
+  let round = 0;
+  function fight() {
+    round++;
+    $('#bossRetry').innerHTML = '';
+    Q.boss($('#boss'), { ...cfg, xp: round === 1 ? 15 : 5, name: round === 1 ? cfg.name : `${cfg.name} · rematch ${round - 1}` });
+  }
+  fight();
+});
+
+/* ================= STAGE 7: interview drill ================= */
+Q.onStage(7, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"You drew a box called ‘transcoding’. Open it up. Walk me through what happens inside, from the raw upload to the finished files."</i>',
+  placeholder: 'First the preprocessor splits the video by GOP…',
+  model: '"Inside there are six parts. A <b>preprocessor</b> splits the upload into GOP-aligned chunks. It does this on the server for old clients that can’t split. It also builds a DAG from config files that engineers write, and it saves the GOPs and metadata in temporary storage so a failed encode can be retried from the saved piece. A <b>DAG scheduler</b> cuts the DAG into stages of independent tasks and pushes each ready stage into the task queue. The <b>resource manager</b> has three queues: a task queue ordered by priority, a worker queue ordered by load, and a running queue of which task is on which worker. Its scheduler loop takes the top task, picks the best worker, tells it to run, records the pair in the running queue, and removes it when it’s done. If a worker dies, the running queue shows what it held, and we re-queue that task for another worker. <b>Task workers</b> come in types: encoders, thumbnail makers, watermarkers, mergers. <b>Temporary storage</b> is chosen by data type, size, access frequency and life span. Metadata goes in memory, video and audio go in blob storage, and it’s all freed when the job ends. The output is the <b>encoded video</b>, for example funny_720p.mp4, which goes to transcoded storage and then the CDN."',
+  checks: [
+    'Preprocessor: GOP splitting (also for old clients), DAG from config, and GOPs + metadata saved for retries',
+    'DAG scheduler: stages of independent tasks, pushed into the task queue',
+    'Resource manager: task, worker and running queues, plus the loop (top task → best worker → run → bind → remove)',
+    'Worker types (encoder, thumbnail, watermark, merger), and a dead worker’s task gets re-queued',
+    'Temporary storage chosen by type, size, access frequency and life span, freed afterwards. Output: e.g. funny_720p.mp4',
+  ],
+  minWords: 25,
+  onDone: () => Q.clearStage(7),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

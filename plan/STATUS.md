@@ -1,21 +1,21 @@
 # Plan checklist — System Design Quest
 
-Every chapter of *System Design Interview* Vol. 1 as a world of quests. Ticked = done.
+Every chapter of *System Design Interview* Vol. 1 as a world of quests. Ticked = done. Regenerate: `python3 plan/tools/status.py`.
 
-**52 of 83 quests built** · 40 live on the map · 12 built, awaiting world review · 31 not started.
+**83 of 83 quests built** · 83 live on the map · 0 built, awaiting world review · 0 being built (draft on disk, not verified) · 0 not started.
 
 Legend: `[x]` done · `[ ]` not done. A world is **done** when every quest is built, the world review has run, its cheat sheet
 exists, and its quests are `ready: true` on the map.
 
-## ⬜ World 1 · Scale From Zero to Millions of Users — *The Launchpad*
+## ✅ World 1 · Scale From Zero to Millions of Users — *The Launchpad*
 
-- [ ] `0101` 1.1 · [One Box Wonder](../lessons/0101-scale-one-box-to-load-balancer.html) — not started
-- [ ] `0102` 1.2 · [Copy the Ledger](../lessons/0102-scale-database-replication.html) — not started
-- [ ] `0103` 1.3 · [Hot Memory, Near Edge](../lessons/0103-scale-cache-and-cdn.html) — not started
-- [ ] `0104` 1.4 · [Forget Me, Find Me Anywhere](../lessons/0104-scale-stateless-and-data-centers.html) — not started
-- [ ] `0105` 1.5 · [Queues, Gauges & Shards](../lessons/0105-scale-queues-observability-sharding.html) — not started
-- [ ] `0106` BOSS · [Zero to Millions, Live](../lessons/0106-scale-boss-millions-live.html) — not started
-- [ ] World review + cheat sheet
+- [x] `0101` 1.1 · [One Box Wonder](../lessons/0101-scale-one-box-to-load-balancer.html) — live
+- [x] `0102` 1.2 · [Copy the Ledger](../lessons/0102-scale-database-replication.html) — live
+- [x] `0103` 1.3 · [Hot Memory, Near Edge](../lessons/0103-scale-cache-and-cdn.html) — live
+- [x] `0104` 1.4 · [Forget Me, Find Me Anywhere](../lessons/0104-scale-stateless-and-data-centers.html) — live
+- [x] `0105` 1.5 · [Queues, Gauges & Shards](../lessons/0105-scale-queues-observability-sharding.html) — live
+- [x] `0106` BOSS · [Zero to Millions, Live](../lessons/0106-scale-boss-millions-live.html) — live
+- [x] World review + cheat sheet — [ch01-scaling-cheatsheet.html](../reference/ch01-scaling-cheatsheet.html)
 
 ## ✅ World 2 · Back-of-the-Envelope Estimation — *The Napkin Forge*
 
@@ -45,12 +45,12 @@ exists, and its quests are `ready: true` on the map.
 - [x] `0406` BOSS · [Throttle It Live](../lessons/0406-boss-throttle-it-live.html) — live
 - [x] World review + cheat sheet — [ch04-rate-limiter-cheatsheet.html](../reference/ch04-rate-limiter-cheatsheet.html)
 
-## ⬜ World 5 · Design Consistent Hashing — *The Ring Road*
+## ✅ World 5 · Design Consistent Hashing — *The Ring Road*
 
-- [ ] `0501` 5.1 · [Ring Math](../lessons/0501-consistent-hashing-ring-math.html) — not started
-- [ ] `0502` 5.2 · [Cracks in the Ring](../lessons/0502-consistent-hashing-cracks-and-riders.html) — not started
-- [ ] `0503` BOSS · [Hash It Live](../lessons/0503-consistent-hashing-boss-hash-it-live.html) — not started
-- [ ] World review + cheat sheet
+- [x] `0501` 5.1 · [Ring Math](../lessons/0501-consistent-hashing-ring-math.html) — live
+- [x] `0502` 5.2 · [Cracks in the Ring](../lessons/0502-consistent-hashing-cracks-and-riders.html) — live
+- [x] `0503` BOSS · [Hash It Live](../lessons/0503-consistent-hashing-boss-hash-it-live.html) — live
+- [x] World review + cheat sheet — [ch05-consistent-hashing-cheatsheet.html](../reference/ch05-consistent-hashing-cheatsheet.html)
 
 ## ✅ World 6 · Design a Key-Value Store — *The Key-Value Vault*
 
@@ -82,63 +82,63 @@ exists, and its quests are `ready: true` on the map.
 - [x] `0805` BOSS · [Shrink the Internet, Live](../lessons/0805-url-shortener-boss-design-it-live.html) — live
 - [x] World review + cheat sheet — [ch08-url-shortener-cheatsheet.html](../reference/ch08-url-shortener-cheatsheet.html)
 
-## ⬜ World 9 · Design a Web Crawler — *Spider Web Wilds*
+## ✅ World 9 · Design a Web Crawler — *Spider Web Wilds*
 
-- [ ] `0901` 9.1 · [Release the Spider](../lessons/0901-web-crawler-scope-and-estimates.html) — not started
-- [ ] `0902` 9.2 · [Assemble the Spider](../lessons/0902-web-crawler-components-and-workflow.html) — not started
-- [ ] `0903` 9.3 · [Taming the Frontier](../lessons/0903-web-crawler-url-frontier.html) — not started
-- [ ] `0904` 9.4 · [Fast Fangs, Thick Skin](../lessons/0904-web-crawler-downloader-and-robustness.html) — not started
-- [ ] `0905` 9.5 · [Beware the Spider Traps](../lessons/0905-web-crawler-traps-and-extensibility.html) — not started
-- [ ] `0906` BOSS · [Crawl the Web, Live](../lessons/0906-web-crawler-boss-design-it-live.html) — not started
-- [ ] World review + cheat sheet
+- [x] `0901` 9.1 · [Release the Spider](../lessons/0901-web-crawler-scope-and-estimates.html) — live
+- [x] `0902` 9.2 · [Assemble the Spider](../lessons/0902-web-crawler-components-and-workflow.html) — live
+- [x] `0903` 9.3 · [Taming the Frontier](../lessons/0903-web-crawler-url-frontier.html) — live
+- [x] `0904` 9.4 · [Fast Fangs, Thick Skin](../lessons/0904-web-crawler-downloader-and-robustness.html) — live
+- [x] `0905` 9.5 · [Beware the Spider Traps](../lessons/0905-web-crawler-traps-and-extensibility.html) — live
+- [x] `0906` BOSS · [Crawl the Web, Live](../lessons/0906-web-crawler-boss-design-it-live.html) — live
+- [x] World review + cheat sheet — [ch09-web-crawler-cheatsheet.html](../reference/ch09-web-crawler-cheatsheet.html)
 
-## ⬜ World 10 · Design a Notification System — *Ping Station*
+## ✅ World 10 · Design a Notification System — *Ping Station*
 
-- [x] `1001` 10.1 · [Three Roads to the Lock Screen](../lessons/1001-notification-channels.html) — built · needs world review
-- [x] `1002` 10.2 · [Shatter the Single Server](../lessons/1002-notification-high-level-design.html) — built · needs world review
-- [x] `1003` 10.3 · [Never Lose a Ping](../lessons/1003-notification-reliability.html) — built · needs world review
-- [x] `1004` 10.4 · [Respect the Inbox](../lessons/1004-notification-guardrails.html) — built · needs world review
-- [x] `1005` BOSS · [Ping the Planet — Live](../lessons/1005-notification-boss-design-it-live.html) — built · needs world review
-- [ ] World review + cheat sheet
+- [x] `1001` 10.1 · [Three Roads to the Lock Screen](../lessons/1001-notification-channels.html) — live
+- [x] `1002` 10.2 · [Shatter the Single Server](../lessons/1002-notification-high-level-design.html) — live
+- [x] `1003` 10.3 · [Never Lose a Ping](../lessons/1003-notification-reliability.html) — live
+- [x] `1004` 10.4 · [Respect the Inbox](../lessons/1004-notification-guardrails.html) — live
+- [x] `1005` BOSS · [Ping the Planet — Live](../lessons/1005-notification-boss-design-it-live.html) — live
+- [x] World review + cheat sheet — [ch10-notification-cheatsheet.html](../reference/ch10-notification-cheatsheet.html)
 
-## ⬜ World 11 · Design a News Feed System — *Feedstream Falls*
+## ✅ World 11 · Design a News Feed System — *Feedstream Falls*
 
-- [ ] `1101` 11.1 · [Two Rivers](../lessons/1101-news-feed-scope-and-flows.html) — not started
-- [ ] `1102` 11.2 · [Push, Pull, or Both](../lessons/1102-news-feed-fanout-push-vs-pull.html) — not started
-- [ ] `1103` 11.3 · [The Fanout Factory](../lessons/1103-news-feed-publishing-pipeline.html) — not started
-- [ ] `1104` 11.4 · [Hydrate the Feed](../lessons/1104-news-feed-retrieval-and-caches.html) — not started
-- [ ] `1105` BOSS · [Design It Live: News Feed](../lessons/1105-news-feed-boss-design-it-live.html) — not started
-- [ ] World review + cheat sheet
+- [x] `1101` 11.1 · [Two Rivers](../lessons/1101-news-feed-scope-and-flows.html) — live
+- [x] `1102` 11.2 · [Push, Pull, or Both](../lessons/1102-news-feed-fanout-push-vs-pull.html) — live
+- [x] `1103` 11.3 · [The Fanout Factory](../lessons/1103-news-feed-publishing-pipeline.html) — live
+- [x] `1104` 11.4 · [Hydrate the Feed](../lessons/1104-news-feed-retrieval-and-caches.html) — live
+- [x] `1105` BOSS · [Design It Live: News Feed](../lessons/1105-news-feed-boss-design-it-live.html) — live
+- [x] World review + cheat sheet — [ch11-news-feed-cheatsheet.html](../reference/ch11-news-feed-cheatsheet.html)
 
-## ⬜ World 12 · Design a Chat System — *Chatterbox Citadel*
+## ✅ World 12 · Design a Chat System — *Chatterbox Citadel*
 
-- [x] `1201` 12.1 · [Open the Pipe](../lessons/1201-chat-connections.html) — built · needs world review
-- [x] `1202` 12.2 · [The Switchboard](../lessons/1202-chat-high-level-design.html) — built · needs world review
-- [x] `1203` 12.3 · [The Message Vault](../lessons/1203-chat-storage-and-ids.html) — built · needs world review
-- [x] `1204` 12.4 · [Special Delivery](../lessons/1204-chat-message-flows.html) — built · needs world review
-- [x] `1205` 12.5 · [The Green Dot](../lessons/1205-chat-online-presence.html) — built · needs world review
-- [x] `1206` BOSS · [Design It Live: Chat](../lessons/1206-chat-boss-design-it-live.html) — built · needs world review
-- [ ] World review + cheat sheet
+- [x] `1201` 12.1 · [Open the Pipe](../lessons/1201-chat-connections.html) — live
+- [x] `1202` 12.2 · [The Switchboard](../lessons/1202-chat-high-level-design.html) — live
+- [x] `1203` 12.3 · [The Message Vault](../lessons/1203-chat-storage-and-ids.html) — live
+- [x] `1204` 12.4 · [Special Delivery](../lessons/1204-chat-message-flows.html) — live
+- [x] `1205` 12.5 · [The Green Dot](../lessons/1205-chat-online-presence.html) — live
+- [x] `1206` BOSS · [Design It Live: Chat](../lessons/1206-chat-boss-design-it-live.html) — live
+- [x] World review + cheat sheet — [ch12-chat-cheatsheet.html](../reference/ch12-chat-cheatsheet.html)
 
-## ⬜ World 13 · Design a Search Autocomplete System — *Typeahead Tower*
+## ✅ World 13 · Design a Search Autocomplete System — *Typeahead Tower*
 
-- [x] `1301` 13.1 · [Every Keystroke Counts](../lessons/1301-autocomplete-scope-and-estimation.html) — built · needs world review
-- [ ] `1302` 13.2 · [Grow the Trie](../lessons/1302-trie-top-k.html) — not started (partial draft discarded)
-- [ ] `1303` 13.3 · [The Weekly Harvest](../lessons/1303-data-gathering-service.html) — not started (partial draft discarded)
-- [ ] `1304` 13.4 · [Faster Than a Keystroke](../lessons/1304-query-service.html) — not started (partial draft discarded)
-- [ ] `1305` 13.5 · [Split the Alphabet](../lessons/1305-scaling-autocomplete.html) — not started (partial draft discarded)
-- [ ] `1306` BOSS · [Autocomplete Live](../lessons/1306-boss-autocomplete-live.html) — not started (partial draft discarded)
-- [ ] World review + cheat sheet
+- [x] `1301` 13.1 · [Every Keystroke Counts](../lessons/1301-autocomplete-scope-and-estimation.html) — live
+- [x] `1302` 13.2 · [Grow the Trie](../lessons/1302-trie-top-k.html) — live
+- [x] `1303` 13.3 · [The Weekly Harvest](../lessons/1303-data-gathering-service.html) — live
+- [x] `1304` 13.4 · [Faster Than a Keystroke](../lessons/1304-query-service.html) — live
+- [x] `1305` 13.5 · [Split the Alphabet](../lessons/1305-scaling-autocomplete.html) — live
+- [x] `1306` BOSS · [Autocomplete Live](../lessons/1306-boss-autocomplete-live.html) — live
+- [x] World review + cheat sheet — [ch13-autocomplete-cheatsheet.html](../reference/ch13-autocomplete-cheatsheet.html)
 
-## ⬜ World 14 · Design YouTube — *The Stream Machine*
+## ✅ World 14 · Design YouTube — *The Stream Machine*
 
-- [ ] `1401` 14.1 · [Size Up the Tube](../lessons/1401-youtube-scope-and-estimate.html) — not started (partial draft discarded)
-- [ ] `1402` 14.2 · [Upload Lane, Watch Lane](../lessons/1402-youtube-upload-and-stream-flows.html) — not started
-- [ ] `1403` 14.3 · [The Format Forge](../lessons/1403-youtube-transcoding-and-dag.html) — not started
-- [ ] `1404` 14.4 · [The Transcoding Factory](../lessons/1404-youtube-transcoding-architecture.html) — not started
-- [ ] `1405` 14.5 · [Faster, Safer, Cheaper](../lessons/1405-youtube-optimizations-and-errors.html) — not started
-- [ ] `1406` BOSS · [Design YouTube Live](../lessons/1406-youtube-boss-design-it-live.html) — not started
-- [ ] World review + cheat sheet
+- [x] `1401` 14.1 · [Size Up the Tube](../lessons/1401-youtube-scope-and-estimate.html) — live
+- [x] `1402` 14.2 · [Upload Lane, Watch Lane](../lessons/1402-youtube-upload-and-stream-flows.html) — live
+- [x] `1403` 14.3 · [The Format Forge](../lessons/1403-youtube-transcoding-and-dag.html) — live
+- [x] `1404` 14.4 · [The Transcoding Factory](../lessons/1404-youtube-transcoding-architecture.html) — live
+- [x] `1405` 14.5 · [Faster, Safer, Cheaper](../lessons/1405-youtube-optimizations-and-errors.html) — live
+- [x] `1406` BOSS · [Design YouTube Live](../lessons/1406-youtube-boss-design-it-live.html) — live
+- [x] World review + cheat sheet — [ch14-youtube-cheatsheet.html](../reference/ch14-youtube-cheatsheet.html)
 
 ## ✅ World 15 · Design Google Drive — *The Cloud Locker*
 
@@ -150,9 +150,8 @@ exists, and its quests are `ready: true` on the map.
 - [x] `1506` BOSS · [Design Drive Live](../lessons/1506-drive-boss-design-it-live.html) — live
 - [x] World review + cheat sheet — [ch15-google-drive-cheatsheet.html](../reference/ch15-google-drive-cheatsheet.html)
 
-## Next steps (in order)
+## Next steps
 
-1. [ ] Build 13.2–13.5, 13 boss and 14.1 (their partial drafts were discarded) from `plan/quests/quest-<id>.json` with `plan/BRIEF.md`.
-2. [ ] Build the not-started quests: Worlds 1, 5, 9, 11 and 14.2–14.6.
-3. [ ] Run the world finisher (`plan/WORLD-BRIEF.md`) for Worlds 10, 12, 13, then 1, 5, 9, 11, 14; release each with `plan/tools/release.py <N>`.
-4. [ ] Final pass: quest map + every cheat sheet link, `NOTES.md` update.
+1. Build every unticked quest from `plan/quests/quest-<id>.json` with `plan/BRIEF.md` (order: `plan/queue.txt`).
+2. When a world's quests are all built, run the world finisher (`plan/WORLD-BRIEF.md`), then `plan/tools/release.py <N>`.
+3. Final pass: quest map + every cheat-sheet link, `NOTES.md` update.

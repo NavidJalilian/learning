@@ -1,0 +1,1258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>The Fanout Factory</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: door conveyor (1), pipeline figure (2), friend picker (3), queue sim (4), feed cache lab (5) */
+:root { --mail: #c27400; --on-mail: #ffffff; --spam: #b8409a; --belt-a: #ece8df; --belt-b: #f5f3ee; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --mail: #ffb547; --on-mail: #0e0f1d; --spam: #f07ad0; --belt-a: #15172b; --belt-b: #0e0f1d; }
+}
+:root[data-theme="dark"] { --mail: #ffb547; --on-mail: #0e0f1d; --spam: #f07ad0; --belt-a: #15172b; --belt-b: #0e0f1d; }
+
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.bignum { font-family: var(--mono); font-weight: 700; }
+.bignum.good { color: var(--good); }
+.bignum.bad { color: var(--bad); }
+
+/* ---------- stage 1: the door ---------- */
+.rules { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 14px; font-size: 14px; background: var(--panel); }
+.rules span { background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 4px 10px; font-weight: 600; }
+.belt { position: relative; height: 200px; overflow: hidden; border-top: 1px solid var(--line); background: repeating-linear-gradient(90deg, var(--belt-a) 0 22px, var(--belt-b) 22px 44px); background-size: 44px 100%; }
+.belt.run { animation: beltmove 1.2s linear infinite; }
+@keyframes beltmove { to { background-position: -44px 0; } }
+.belt .idle { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 16px; }
+.waiting { position: absolute; right: 10px; top: 8px; font: 600 12px var(--mono); color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 99px; padding: 2px 9px; }
+.req { position: absolute; left: 50%; top: 52%; width: min(300px, 86%); transform: translate(120%, -50%); opacity: 0; transition: transform .45s cubic-bezier(.2,.8,.2,1), opacity .45s; background: var(--panel); border: 2px solid var(--line); border-radius: 16px; padding: 12px 14px; box-shadow: var(--shadow); }
+.req.in { transform: translate(-50%, -50%); opacity: 1; }
+.req.out-admit { transform: translate(-230%, -50%); opacity: 0; border-color: var(--good); }
+.req.out-reject { transform: translate(-50%, 90%) rotate(9deg); opacity: 0; border-color: var(--bad); }
+.rq-top { display: flex; align-items: center; gap: 8px; }
+.av { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; color: #fff; background: var(--teal); flex: none; }
+.av.spam { background: var(--spam); }
+.rq-top .ep { margin-left: auto; font: 600 11px var(--mono); color: var(--muted); }
+.rq-txt { margin: 8px 0; font-size: 15px; }
+.rq-meta { display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px; font-weight: 600; }
+.rq-meta span { border-radius: 8px; padding: 2px 8px; background: var(--bg-2); }
+.rq-meta .tk-ok { color: var(--good); }
+.rq-meta .tk-bad { color: var(--bad); }
+.gatebtns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px 14px; background: var(--panel); border-top: 1px solid var(--line); }
+.gatebtns .btn { min-height: 48px; font-size: 16px; }
+.btn.admit:not([disabled]) { border-color: var(--good); }
+.btn.reject:not([disabled]) { border-color: var(--bad); }
+.saved { margin-top: 14px; border-radius: 14px; padding: 14px 16px; background: var(--good-soft); font-size: 15px; animation: rise .35s; }
+.saved .bignum { font-size: 22px; color: var(--good); }
+
+/* ---------- stage 2: pipeline figure ---------- */
+.flow svg { max-width: 520px; margin: 0 auto; padding: 8px 6px 0; }
+.flow .nd rect { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; }
+.flow .nd.star rect { stroke: var(--accent); stroke-width: 2.5; }
+.flow .nd.dim { opacity: .45; }
+.flow .nd.db rect { stroke-dasharray: 5 4; }
+.flow .nd text { fill: var(--ink); font: 700 12.5px var(--font); text-anchor: middle; dominant-baseline: central; }
+.flow .nd text.ns { fill: var(--muted); font: 600 10.5px var(--mono); }
+.flow .nd.pulse rect { animation: ndpulse .7s; }
+@keyframes ndpulse { 40% { stroke: var(--accent); stroke-width: 4; } }
+.flow .ed { fill: none; stroke: var(--muted); stroke-width: 1.6; }
+.flow .ed.faint { stroke-dasharray: 3 4; opacity: .7; }
+.flow .ed.live { stroke: var(--accent); stroke-width: 2.6; }
+.flow .bdg circle { fill: var(--accent); }
+.flow .bdg text { fill: #fff; font: 700 11px var(--font); text-anchor: middle; dominant-baseline: central; }
+.flow .ah { fill: var(--muted); }
+.flow .ah.live { fill: var(--accent); }
+.flow .tok rect { fill: var(--mail); }
+.flow .tok text { fill: var(--on-mail); font: 700 10.5px var(--mono); text-anchor: middle; dominant-baseline: central; }
+.steps { display: grid; gap: 8px; margin-top: 12px; }
+.steps .opt { display: flex; gap: 10px; align-items: center; min-height: 44px; }
+.steps .opt .sn { width: 26px; height: 26px; flex: none; border-radius: 8px; display: grid; place-items: center; font-weight: 700; font-size: 13px; background: var(--bg-2); color: var(--muted); }
+.steps .opt.right .sn { background: var(--good); color: #fff; }
+.steps .opt.wrong { animation: shake .4s; }
+
+/* ---------- stage 3: who gets it ---------- */
+.fanbox { position: relative; padding: 14px; }
+.anapost { max-width: 420px; margin: 0 auto 14px; border: 2px solid var(--accent); border-radius: 16px; padding: 12px 14px; background: var(--panel); }
+.anapost .rq-txt { margin: 6px 0; }
+.aud { font-size: 13px; font-weight: 700; color: var(--accent); }
+.friends { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+@media (max-width: 560px) { .friends { grid-template-columns: 1fr 1fr; } }
+.fr { text-align: left; border: 2px solid var(--line); background: var(--panel); border-radius: 14px; padding: 10px 12px; min-height: 96px; display: flex; flex-direction: column; gap: 4px; transition: border-color .2s, background .2s; }
+.fr:hover:not([disabled]) { border-color: var(--accent); }
+.fr .nm { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+.fr .nm .av { width: 26px; height: 26px; font-size: 13px; }
+.fr .id { font: 600 11px var(--mono); color: var(--muted); margin-left: auto; }
+.fr .tg { font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.fr .tg.warn { color: var(--warn); }
+.fr.sel { border-color: var(--accent); background: var(--accent-soft); }
+.fr .res { font-size: 12.5px; display: none; }
+.fr.done .res { display: block; }
+.fr.done.got { border-color: var(--good); background: var(--good-soft); }
+.fr.done.no { border-style: dashed; }
+.fr.done.miss { box-shadow: 0 0 0 3px var(--bad) inset; }
+.fr[disabled] { cursor: default; }
+.fr .fl { font: 600 11.5px var(--mono); color: var(--good); }
+.fr .fl.stale { color: var(--bad); }
+.env { position: absolute; z-index: 3; font-size: 22px; line-height: 1; pointer-events: none; transition: transform .75s cubic-bezier(.3,.7,.2,1), opacity .3s; }
+
+/* ---------- stage 4: queue sim ---------- */
+.qgrid { display: grid; grid-template-columns: 1fr 1fr 1.25fr; gap: 10px; padding: 12px 14px; }
+@media (max-width: 680px) { .qgrid { grid-template-columns: 1fr; } }
+.qcol { border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; background: var(--panel); transition: opacity .3s; min-width: 0; }
+.qcol h4 { margin: 0 0 6px; font-size: 13px; letter-spacing: .04em; }
+.qcol.dim { opacity: .4; }
+.pst { font-weight: 700; font-size: 15px; min-height: 24px; }
+.pst.ok { color: var(--good); }
+.pst.bad { color: var(--bad); }
+.pst .spin { display: inline-block; width: 13px; height: 13px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -1px; margin-right: 4px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.meter { height: 12px; border-radius: 99px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; margin: 6px 0 4px; }
+.meter div { height: 100%; width: 0; background: var(--accent); border-radius: 99px; }
+.meter.q div { background: var(--mail); }
+.qdepth b { font: 700 22px var(--mono); }
+.jobs { display: flex; flex-wrap: wrap; gap: 4px; min-height: 22px; margin-top: 4px; }
+.jb { font: 600 10.5px var(--mono); padding: 2px 5px; border-radius: 6px; background: var(--mail); color: var(--on-mail); }
+.jb.rt { background: var(--bad); color: #fff; }
+.jb.more { background: var(--bg-2); color: var(--muted); }
+.wks { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
+.wk { height: 30px; border-radius: 7px; display: grid; place-items: center; font: 700 11px var(--mono); border: 1px solid var(--line); background: var(--bg-2); color: var(--muted); }
+.wk.busy { color: var(--ink); border-color: var(--teal); background: linear-gradient(to top, color-mix(in srgb, var(--teal) 55%, transparent) var(--p, 0%), var(--bg-2) var(--p, 0%)); }
+.wk.off { opacity: .25; }
+.wk.dead { background: var(--bad); color: #fff; border-color: var(--bad); }
+.slider { padding: 4px 14px 10px; display: grid; gap: 4px; }
+.slider label { display: flex; justify-content: space-between; font-weight: 600; font-size: 14px; gap: 8px; flex-wrap: wrap; }
+.slider input { width: 100%; accent-color: var(--accent); height: 30px; }
+.reqs { display: grid; grid-template-columns: repeat(15, 1fr); gap: 4px; padding: 0 14px 12px; }
+.reqs[hidden] { display: none; }
+.rd { aspect-ratio: 1; border-radius: 50%; background: var(--line); }
+.rd.wait { background: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.rd.ok { background: var(--good); }
+.rd.to { background: var(--bad); }
+.sim-bar .row .btn { padding: 8px 12px; font-size: 14px; min-height: 40px; }
+
+/* ---------- stage 5: feed cache lab ---------- */
+.lab2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 14px; }
+@media (max-width: 680px) { .lab2 { grid-template-columns: 1fr; } }
+.flist { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.flist li { font: 600 13px var(--mono); padding: 5px 10px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); display: flex; justify-content: space-between; transition: opacity .4s, transform .4s; }
+.flist li.new { border-color: var(--mail); animation: rise .4s; }
+.flist li.gone { opacity: 0; transform: translateX(30px); text-decoration: line-through; color: var(--bad); }
+.flist li small { color: var(--muted); font-weight: 400; }
+.redis { font: 12px var(--mono); background: var(--code-bg); color: var(--code-ink); border-radius: 10px; padding: 8px 10px; margin-top: 8px; min-height: 52px; white-space: pre-wrap; word-break: break-word; }
+.calc { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--bg); margin-top: 10px; }
+.calc p { margin: 0 0 8px; font-size: 15px; }
+.calc input { width: 110px; font: 600 16px var(--mono); padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); min-height: 42px; }
+.calc .row { gap: 8px; }
+.cmsg { font-size: 14px; margin-top: 8px; min-height: 0; }
+.cmsg.good { color: var(--good); font-weight: 600; }
+.cmsg.bad { color: var(--bad); }
+.chart svg { max-width: 560px; margin: 0 auto; }
+.chart .ax { stroke: var(--line); stroke-width: 1; }
+.chart .lbl { fill: var(--muted); font: 600 10.5px var(--mono); }
+.chart .crv { fill: none; stroke: var(--teal); stroke-width: 2.5; }
+.chart .area { fill: var(--bad); opacity: .28; }
+.chart .capl { stroke: var(--accent); stroke-width: 2.5; }
+.chart .capt { fill: var(--accent); font: 700 11px var(--font); }
+.reads { display: grid; gap: 10px; padding: 4px 14px 12px; }
+.rb { display: grid; grid-template-columns: 112px 1fr 92px; gap: 8px; align-items: center; font-size: 13.5px; }
+.rb .track { position: relative; height: 18px; border-radius: 6px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; }
+.rb .fill { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--teal); transition: width .4s; }
+.rb .fill.over { background: var(--bad); }
+.rb .tgt { position: absolute; top: -2px; bottom: -2px; width: 3px; background: var(--ink); }
+.rb .v { font-family: var(--mono); font-weight: 700; text-align: right; }
+.capmsg { padding: 0 14px 12px; font-size: 14px; font-weight: 600; min-height: 22px; }
+.capmsg.good { color: var(--good); }
+.capmsg.bad { color: var(--warn); }
+.lat { display: grid; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+.lat[hidden] { display: none; }
+.lat .rb { grid-template-columns: 130px 1fr 70px; }
+@media (max-width: 420px) { .rb { grid-template-columns: 92px 1fr 78px; font-size: 12.5px; } .lat .rb { grid-template-columns: 100px 1fr 62px; } }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 11.3 · Design a News Feed System</div>
+    <h1>The Fanout Factory</h1>
+    <p class="lede">Ana taps Post. Between that tap and her friends' feeds sits a small factory: a door with guards, a friend lookup, a filter, a queue and a crew of workers. Run every station yourself.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can walk through publishing step by step: web servers check the token and rate-limit, the fanout service reads friends from a graph DB, filters them using user settings, queues the job, and workers write <code>&lt;post_id, user_id&gt;</code> entries into a capped feed cache; and you can say why IDs only and why a cap.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>The bouncers</h2><div class="sub">Web servers: auth and rate limiting</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book's publishing deep dive (figure 11-4) follows one request. Ana's app sends <code>POST /v1/me/feed</code>. A load balancer hands it to a <b>web server</b>. The web servers then pass the post to three services: the <b>post service</b> (saves it), the <b>fanout service</b> (gets it into friends' feeds) and the <b>notification service</b> (pings friends).<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-news-feed-system" target="_blank" rel="noopener">[1]</a></p>
+      <p>Web servers don't only talk to clients. They also run two checks before a post gets any further:</p>
+      <ul>
+        <li><b>Authentication:</b> only a signed-in user with a valid <code>auth_token</code> (the login pass the app sends with every request) may publish.</li>
+        <li><b>Rate limiting:</b> each user may only post so many times in a time window. That stops spam and abuse. You built a whole rate limiter in <a href="0401-rate-limiter-why-and-where.html">World 4</a>. Here it's just one box.</li>
+      </ul>
+      <p>You're the door. Requests roll in on the belt. Admit or reject each one.</p>
+
+      <div class="sim">
+        <div class="rules"><span>🔑 needs a valid auth_token</span><span>⏱ limit: 5 posts per user per minute</span></div>
+        <div class="belt" id="belt"><div class="idle"><div><p class="small muted" style="margin:0 0 10px">12 requests waiting. Each card says who's posting, their token, and how many posts they've made this minute.</p><button class="btn primary" id="gateStart">▶ Open the doors</button></div></div></div>
+        <div class="gatebtns"><button class="btn admit" id="admitBtn" disabled>✅ Admit</button><button class="btn reject" id="rejectBtn" disabled>⛔ Reject</button></div>
+        <div class="sim-bar"><span id="gScore" class="mono small">0 / 0 correct</span><span class="small muted">Pass: 10 of 12</span></div>
+        <div class="simlog" id="g1log"><div>The belt is stopped.</div></div>
+      </div>
+      <div id="g1res"></div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Five steps to every feed</h2><div class="sub">The fanout workflow, in order</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Ana's post got through the door. The web servers hand it to the <b>fanout service</b>, whose job is to get the new post's ID into every friend's feed. The book splits its work into five steps (figure 11-5). Two pieces of jargon first:</p>
+      <ul>
+        <li><b>Graph database:</b> a store where data is <i>nodes</i> (users) joined by <i>edges</i> (friendships). "Who are Ana's friends?" is one cheap hop along her edges. The book picks it because it's good at friend relationships and friend recommendations.<a class="cite" href="https://neo4j.com/docs/getting-started/graph-database/" target="_blank" rel="noopener">[5]</a></li>
+        <li><b>Message queue:</b> a buffer between two parts of a system. One side drops jobs in. Workers on the other side pick them up when they can.<a class="cite" href="https://kafka.apache.org/intro" target="_blank" rel="noopener">[4]</a></li>
+      </ul>
+      <p>The arrows below are missing. Tap the five steps <b>in order</b>. Each right tap draws its arrow and runs it. Ana is user <code>u7</code> and her new post is <code>p981</code>.</p>
+      <div class="sim flow">
+        <svg id="flow2" viewBox="0 0 400 356" role="img" aria-label="Feed publishing figure: web servers call the post, fanout and notification services; the fanout service talks to the graph DB, the user cache, the message queue, fanout workers and the news feed cache"></svg>
+        <div class="simlog" id="f2log"><div>Waiting for step 1…</div></div>
+      </div>
+      <div class="steps" id="steps2"></div>
+      <div class="row" style="margin-top:10px"><button class="btn" id="f2reset" style="display:none">↻ Wire it again (practice)</button></div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Not everyone gets it</h2><div class="sub">Filtering by user settings</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Step 2 isn't just a lookup. The fanout service <b>filters</b> the friend list using settings:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-news-feed-system" target="_blank" rel="noopener">[1]</a></p>
+      <ul>
+        <li><b>Mute:</b> if you mute a friend, their posts stay out of your feed, even though you're still friends.</li>
+        <li><b>Audience:</b> a post can be shared with only some friends, or hidden from certain people.</li>
+      </ul>
+      <p>Filtering at fanout time means the feed cache never holds a post that its owner shouldn't see, so reading a feed stays simple. <b>Predict:</b> tap every friend whose feed will get Ana's post, then press Fan out.</p>
+      <div class="sim">
+        <div class="fanbox" id="fanbox">
+          <div class="anapost" id="anapost">
+            <div class="rq-top"><span class="av">A</span><b>Ana</b><span class="ep">u7 · p981</span></div>
+            <p class="rq-txt">“Beach day! 🏖️”</p>
+            <div class="aud">👥 Audience: Friends except Work</div>
+          </div>
+          <div class="friends" id="friends"></div>
+        </div>
+        <div class="sim-bar"><span class="small" id="pickCount">0 selected</span><button class="btn primary" id="fanBtn">✉ Fan out</button></div>
+        <div class="simlog" id="f3log"><div>Tap friends to select them.</div></div>
+      </div>
+      <div class="challenge" id="twist" style="display:none"></div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Why a queue in the middle?</h2><div class="sub">Decouple the poster from the fanout</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Steps 3 and 4 put a <b>message queue</b> and a pool of <b>fanout workers</b> between the fanout service and the feed cache. Ana gets "Posted!" as soon as her post is stored and the job is queued. Workers do the feed writes in the background. That split is called <b>decoupling</b>: the poster no longer waits for the slow part.</p>
+      <div class="challenge boxed" id="s4pred"></div>
+      <p>Now run it. Ana has <b>2,000 friends</b>. Each worker writes 750 feed entries a second, and each post becomes 8 jobs of 250 writes. These are toy rates, chosen so you can watch it.</p>
+      <div class="sim" id="qsim">
+        <div class="sim-bar">
+          <span class="seg" id="modeSeg" role="group" aria-label="Fanout mode"><button data-m="inline">Inline fanout</button><button data-m="queue" class="on">Queue + workers</button></span>
+          <span class="small mono" id="clock">sim clock 0.0 s · 2× speed</span>
+        </div>
+        <div class="qgrid">
+          <div class="qcol" id="phoneCol"><h4>📱 Ana's app</h4><div class="pst" id="pst">Ready to post</div><div class="meter"><div id="pbar"></div></div><div class="small muted" id="psub">2,000 friends</div></div>
+          <div class="qcol" id="queueCol"><h4>📬 Message queue</h4><div class="qdepth"><b id="qd">0</b> <span class="small muted">writes waiting</span></div><div class="meter q"><div id="qbar"></div></div><div class="jobs" id="jobs"></div></div>
+          <div class="qcol" id="wkCol"><h4>⚙️ Fanout workers</h4><div class="wks" id="wks"></div><div class="small muted" id="wkrate" style="margin-top:6px"></div></div>
+        </div>
+        <div class="slider"><label for="wSlider"><span>Workers: <b class="mono" id="wVal">4</b></span><span class="muted small">drain time ≈ writes ÷ (workers × 750/s)</span></label><input type="range" id="wSlider" min="1" max="16" step="1" value="4" aria-label="Number of fanout workers"></div>
+        <div class="reqs" id="reqs" hidden></div>
+        <div class="sim-bar"><div class="row"><button class="btn" id="postBtn" disabled>📝 Post</button><button class="btn" id="rushBtn" disabled>🚦 Rush hour: 30 posts</button><button class="btn" id="killBtn" disabled>💥 Kill worker 3</button><button class="btn" id="qReset" disabled>↻ Reset</button></div></div>
+        <div class="simlog" id="q4log"><div>Make your prediction above to start the sim.</div></div>
+      </div>
+      <ul class="checklist" id="s4goals">
+        <li data-g="inline"><span class="box">✓</span><span>Post once with <b>inline fanout</b>. How long does Ana wait?</span></li>
+        <li data-g="queue"><span class="box">✓</span><span>Post once with the <b>queue</b>. How long now?</span></li>
+        <li data-g="rushIn"><span class="box">✓</span><span>Fire <b>rush hour</b> in inline mode</span></li>
+        <li data-g="rushQ"><span class="box">✓</span><span>Drain a rush-hour spike through the queue in <b>10 s or less</b> (sim clock)</span></li>
+        <li data-g="kill"><span class="box">✓</span><span><b>Kill worker 3</b> mid-job and watch its job get retried</span></li>
+      </ul>
+      <div class="callout warn" style="margin-top:16px"><b>The price: eventual consistency.</b> With the queue, Ana's friends see her post a little later: seconds normally, longer when a backlog builds. The feed is <i>eventually consistent</i>: every friend's feed gets there, just not at the same instant. For a social feed that's a fine trade.</div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Store IDs, not posts</h2><div class="sub">The feed cache diet</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Step 5 writes into the <b>news feed cache</b>. The book describes it as a <code>&lt;post_id, user_id&gt;</code> mapping table that gets a new entry every time a post is fanned out (figure 11-6). In practice that means one list per viewer, saying which posts belong in their feed and who wrote them.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-news-feed-system" target="_blank" rel="noopener">[1]</a> Two rules keep it small:</p>
+      <ul>
+        <li><b>IDs only.</b> Copying full post and user objects into every friend's list would blow up memory: one post, copied hundreds of times.</li>
+        <li><b>A cap.</b> Each list holds at most a configurable number of entries. Few people scroll through thousands of posts, and most want the newest ones, so cache misses stay rare.</li>
+      </ul>
+      <div class="sim">
+        <div class="lab2">
+          <div>
+            <b class="small">Bo's feed list (u2) · cap = 6</b>
+            <ul class="flist" id="flist" style="margin-top:8px"></ul>
+            <div class="redis" id="redis">// a Redis list does this with two commands</div>
+            <div class="row" style="margin-top:8px"><button class="btn" id="pushBtn">✉ Fan out a new post to Bo</button></div>
+          </div>
+          <div>
+            <b class="small">Calculate and check</b> <span class="small muted">(our assumptions: 8-byte IDs, 10 million users)</span>
+            <div class="calc"><p>One entry is two 8-byte IDs = <b>16 bytes</b>. Cap each list at <b>500 entries</b>. With <b>10 million users</b>, how much memory?</p>
+              <div class="row"><input id="c1" inputmode="decimal" aria-label="Total memory in GB"><span>GB</span><button class="btn" id="c1b">Check</button></div><div class="cmsg" id="c1m"></div></div>
+            <div class="calc"><p>Same, but each entry stores a <b>1 KB post object</b> instead of IDs. Total?</p>
+              <div class="row"><input id="c2" inputmode="decimal" aria-label="Total memory in TB"><span>TB</span><button class="btn" id="c2b">Check</button></div><div class="cmsg" id="c2m"></div></div>
+          </div>
+        </div>
+      </div>
+      <p style="margin-top:18px">Now pick the cap. The curve shows how far people scroll: the share of sessions that go past each depth. It's an illustrative shape, not measured data. A bigger cap costs memory. A smaller cap means more people scroll past the end of their cached list. <b>Set a cap with memory under 100 GB and misses under 1%</b>, then lock it in.</p>
+      <div class="sim chart">
+        <svg id="chart5" viewBox="0 0 400 206" role="img" aria-label="Scroll-depth curve with the cache cap marked"></svg>
+        <div class="slider"><label for="capSlider"><span>Max entries per feed: <b class="mono" id="capVal">2,000</b></span><span class="muted small">10M users × 16 B each</span></label><input type="range" id="capSlider" min="0" max="14" step="1" value="12" aria-label="Maximum entries per feed list"></div>
+        <div class="reads">
+          <div class="rb"><span>Cache memory</span><div class="track"><div class="fill" id="memFill"></div><div class="tgt" style="left:50%"></div></div><span class="v" id="memVal">—</span></div>
+          <div class="rb"><span>Sessions that miss</span><div class="track"><div class="fill" id="missFill"></div><div class="tgt" style="left:33.3%"></div></div><span class="v" id="missVal">—</span></div>
+        </div>
+        <div class="capmsg" id="capMsg"></div>
+        <div class="sim-bar"><div class="row"><button class="btn primary" id="capLock">🔒 Lock in this cap</button><button class="btn" id="pastBtn">📜 Scroll past the cap</button></div><span class="small muted">thin lines = targets</span></div>
+        <div class="lat" id="latBox" hidden></div>
+        <div class="simlog" id="c5log"><div>Memory grows in a straight line with the cap. Misses fall fast, then flatten.</div></div>
+      </div>
+      <ul class="checklist" id="s5goals">
+        <li data-g="trim"><span class="box">✓</span><span>Fan out a post to Bo and watch the cap trim his oldest entry</span></li>
+        <li data-g="c1"><span class="box">✓</span><span>Work out the memory for an ID-only cache</span></li>
+        <li data-g="c2"><span class="box">✓</span><span>Work out the memory for a full-object cache</span></li>
+        <li data-g="cap"><span class="box">✓</span><span>Lock in a cap that meets both targets</span></li>
+        <li data-g="past"><span class="box">✓</span><span>See what happens when someone scrolls past the cap</span></li>
+      </ul>
+      <div id="s5quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Boss: The Assembly-Line Saboteur</h2><div class="sub">Find the broken station</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Someone has been sabotaging the factory. Seven bug reports. For each one, name the station that's broken (or the one that should have stopped it).</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 7 ================= -->
+  <section class="stage" data-stage="7" id="s7">
+    <div class="stage-h"><div class="num">7</div><div><h2>Say it like a senior</h2><div class="sub">Narrate the factory</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> Bo opens his app and gets back… a list of bare IDs like <code>&lt;p981, u7&gt;</code>. Turning that into names, photos and text (and re-checking that Ana still wants Bo to see it) is the read side. That's Quest 11.4, <a href="1104-news-feed-retrieval-and-caches.html"><i>Hydrate the Feed</i></a>.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-news-feed-system" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 11: "Design a News Feed System"</a>, Step 3, "Feed publishing deep dive": figures 11-4 to 11-6, the web servers, and the fanout service workflow. The push vs pull part of that section is Quest 11.2, <a href="1102-news-feed-fanout-push-vs-pull.html"><i>Push, Pull, or Both</i></a>. For the real thing, read §1–3 of Facebook's <a href="https://www.usenix.org/conference/atc13/technical-sessions/presentation/bronson" target="_blank" rel="noopener">TAO paper</a>, which shows how a social graph is stored at scale.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <ul style="margin:0;padding-left:20px">
+        <li><b>Whose user_id?</b> The list is already keyed by the viewer, so the <code>user_id</code> in each entry is best read as the post's <b>author</b>. That's what you need to hydrate the feed later. Real systems often keep a capped Redis list (<code>LPUSH</code> + <code>LTRIM</code>) or a sorted set scored by time.<a class="cite" href="https://redis.io/docs/latest/develop/data-types/lists/" target="_blank" rel="noopener">[3]</a></li>
+        <li><b>"Graph DB" is a role, not a product.</b> Facebook's social graph doesn't live in a classic graph database. It's TAO: a graph-shaped caching layer on top of sharded MySQL.<a class="cite" href="https://www.usenix.org/conference/atc13/technical-sessions/presentation/bronson" target="_blank" rel="noopener">[2]</a> In the book, "graph DB" means "a store that's good at friend edges".</li>
+        <li><b>Fanout-time filters go stale.</b> Unfriending, audience changes and deletions after fanout aren't reflected in entries already written. So reads re-check (<a href="1104-news-feed-retrieval-and-caches.html">Quest 11.4</a>'s hydration step).</li>
+        <li><b>At-least-once means duplicates.</b> A queue normally re-delivers a job that wasn't acknowledged, so a retried job can write the same entry twice. Make feed writes <i>idempotent</i> (safe to repeat), for example a set keyed by post_id.<a class="cite" href="https://kafka.apache.org/intro" target="_blank" rel="noopener">[4]</a></li>
+        <li><b>Our numbers are illustrative.</b> The 300 friends, worker rates, 16-byte entries and the scroll-depth curve are our assumptions, not the book's.</li>
+      </ul>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"why not just let the post service write the feeds itself?"</i> or <i>"what if a worker writes half a job and then the queue re-delivers it?"</i>
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 11 "Design a News Feed System" (ByteByteGo online version).</li>
+        <li>Bronson et al., "TAO: Facebook's Distributed Data Store for the Social Graph", USENIX ATC 2013.</li>
+        <li>Redis docs: Lists (capped lists with LPUSH + LTRIM).</li>
+        <li>Apache Kafka documentation: Introduction (producers, consumers, offsets).</li>
+        <li>Neo4j docs: What is a graph database?</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '1103',
+  winTitle: 'The factory runs itself',
+  badge: '🏭 Badge: Factory Foreman',
+  cheatsheet: '../reference/ch11-news-feed-cheatsheet.html',
+});
+const { sleep, shuffle } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function anim(dur, f) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 1) { f(1); return res(); }
+    const t0 = performance.now();
+    const fr = now => { const p = Math.min(1, (now - t0) / dur); f(p); p < 1 ? requestAnimationFrame(fr) : res(); };
+    requestAnimationFrame(fr);
+  });
+}
+const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+const fmt = n => Math.round(n).toLocaleString('en-US');
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); Q.addXP(xp || 10, li);
+  return true;
+}
+// run a list of quizzes one after another in the same mount, then call done
+function quizChain(mount, list, done) {
+  const go = i => {
+    if (i >= list.length) { done && done(); return; }
+    Q.quiz(mount, Object.assign({}, list[i], { onDone: () => setTimeout(() => go(i + 1), 450) }));
+  };
+  go(0);
+}
+
+/* ================= STAGE 1: the door ================= */
+Q.onStage(1, () => {
+  const REQ = [
+    { u: 'Bo', tok: 'valid', n: 1, t: 'Finished my first 10K run!' },
+    { u: 'deals_4u', tok: 'valid', n: 4, t: '🔥 Cheap watches!! Click here', spam: true },
+    { u: 'Cy', tok: 'missing', n: 1, t: 'Anyone up for tacos?' },
+    { u: 'Eli', tok: 'valid', n: 2, t: 'New puppy. Meet Biscuit.' },
+    { u: 'deals_4u', tok: 'valid', n: 5, t: '🔥 Cheap watches!! Last chance', spam: true },
+    { u: 'Dee', tok: 'valid', n: 3, t: 'Slides from my talk are up' },
+    { u: 'Fay', tok: 'expired', n: 1, t: 'Back from holiday 🌴' },
+    { u: 'deals_4u', tok: 'valid', n: 6, t: '🔥 Cheap watches!! Act now', spam: true },
+    { u: 'Gus', tok: 'valid', n: 1, t: 'Who else is watching the match?' },
+    { u: 'deals_4u', tok: 'valid', n: 7, t: '🔥 Cheap watches!! Free ship', spam: true },
+    { u: 'Ana', tok: 'valid', n: 2, t: 'Beach day! 🏖️' },
+    { u: 'Hal', tok: 'valid', n: 1, t: 'Bread attempt #3 worked' },
+  ];
+  const FRIENDS = 300;
+  const allowed = r => r.tok === 'valid' && r.n <= 5;
+  const why = r => r.tok === 'missing' ? 'no auth_token, so not signed in'
+    : r.tok === 'expired' ? 'token expired, so she must sign in again'
+    : r.n > 5 ? `post #${r.n} this minute, over the limit of 5`
+    : r.n === 5 ? 'post #5: exactly at the limit, still allowed'
+    : `valid token, post #${r.n} this minute`;
+  const belt = $('#belt'), adm = $('#admitBtn'), rej = $('#rejectBtn');
+  let i = 0, right = 0, lost = 0, blocked = 0, busy = true, cur = null, quizShown = false;
+  const setBtns = on => { adm.disabled = rej.disabled = !on; };
+
+  function cardHTML(r) {
+    const tk = r.tok === 'valid' ? '<span class="tk-ok">🔑 token: valid</span>' : r.tok === 'expired' ? '<span class="tk-bad">🔑 token: expired</span>' : '<span class="tk-bad">🔑 token: missing</span>';
+    return `<div class="rq-top"><span class="av${r.spam ? ' spam' : ''}">${r.u[0].toUpperCase()}</span><b>${r.u}</b><span class="ep">POST /v1/me/feed</span></div>
+      <p class="rq-txt">“${r.t}”</p>
+      <div class="rq-meta">${tk}<span>⏱ post #${r.n} this minute</span></div>`;
+  }
+  function start() {
+    i = 0; right = 0; lost = 0; blocked = 0;
+    $('#g1log').innerHTML = ''; $('#g1res').innerHTML = '';
+    belt.innerHTML = '<span class="waiting" id="waiting"></span>';
+    belt.classList.add('run');
+    logTo('g1log', 'Doors open. Admit a request if its token is valid and it is within 5 posts this minute.');
+    show();
+  }
+  async function show() {
+    $('#gScore').textContent = `${right} / ${i} correct`;
+    if (i >= REQ.length) return finish();
+    $('#waiting').textContent = `${REQ.length - i - 1} waiting`;
+    const r = REQ[i];
+    cur = document.createElement('div');
+    cur.className = 'req'; cur.dataset.tok = r.tok; cur.dataset.n = r.n; cur.dataset.u = r.u;
+    cur.innerHTML = cardHTML(r);
+    belt.appendChild(cur);
+    void cur.offsetWidth;
+    cur.classList.add('in');
+    await sleep(Q.reduced ? 0 : 420);
+    busy = false; setBtns(true);
+  }
+  async function decide(admit, btn) {
+    if (busy || !cur) return;
+    busy = true; setBtns(false);
+    const r = REQ[i], ok = admit === allowed(r), c = cur;
+    if (ok) {
+      right++;
+      if (!admit) blocked++;
+      logTo('g1log', `✓ ${admit ? 'Admitted' : 'Rejected'} ${r.u}: ${why(r)}.`, 'g');
+    } else {
+      logTo('g1log', `✗ You ${admit ? 'admitted' : 'rejected'} ${r.u}, but: ${why(r)}.${admit ? '' : ' The limiter counts posts, it doesn\'t read them.'}`, 'e');
+      if (lost < 3) { lost++; Q.loseHeart(btn); }
+    }
+    c.classList.add(admit ? 'out-admit' : 'out-reject');
+    setTimeout(() => c.remove(), 600);
+    i++;
+    await sleep(Q.reduced ? 30 : 480);
+    show();
+  }
+  function finish() {
+    belt.classList.remove('run');
+    belt.innerHTML = `<div class="idle"><div><p style="margin:0 0 10px"><b>${right} of ${REQ.length}</b> correct.</p><button class="btn" id="gateAgain">↻ Run the door again</button></div></div>`;
+    $('#gateAgain').onclick = start;
+    const res = $('#g1res');
+    if (right >= 10) {
+      res.innerHTML = `<div class="saved">🛡️ You stopped <b>${blocked}</b> bad request${blocked === 1 ? '' : 's'}. With about ${FRIENDS} friends each (our assumption), that's <span class="bignum">${fmt(blocked * FRIENDS)}</span> feed writes the fanout never had to do.<br><span class="small">Scale it up: a bot posting 400 times a minute gets 5 through and 395 blocked. That's ${fmt(395 * FRIENDS)} writes avoided every minute, for one bot. Checks at the door are cheap. Fanout is not.</span></div>`;
+      if (!quizShown) {
+        quizShown = true;
+        Q.addXP(20, res.firstChild);
+        quizChain($('#s1quiz'), [
+          {
+            tag: 'Check 1 of 2', xp: 15,
+            q: 'Which two checks do the web servers run before a post goes any further?',
+            options: ['Authentication and rate limiting', 'Spell-checking and image resizing', 'Feed ranking and post hydration', 'Encryption and data compression'],
+            correct: 0,
+            good: 'Authentication (only signed-in users with a valid auth_token may post) and rate limiting (a cap on posts per user per time window, against spam and abuse).',
+            bad: 'The web servers check <b>authentication</b> (valid auth_token) and apply <b>rate limiting</b> (posts per user per time window). The rest happens elsewhere, or not at all.',
+          },
+          {
+            tag: 'Check 2 of 2', xp: 15,
+            q: 'Why run those checks at the web servers, before the fanout service?',
+            options: ['A blocked post never triggers hundreds of feed writes', 'The fanout service cannot read tokens or user IDs', 'Web servers are the only machines with a cache', 'Rate limits only work on HTTP connections anyway'],
+            correct: 0,
+            good: 'Every admitted post costs one write per friend. Rejecting bad traffic at the edge means it never reaches the most expensive part of the system.',
+            bad: 'It\'s about cost. One admitted post turns into one write per friend. Stop bad traffic at the edge and that work never happens.',
+          },
+        ], () => setTimeout(() => Q.clearStage(1), 700));
+      }
+    } else {
+      res.innerHTML = `<div class="callout warn"><b>Not yet: ${right} of 12.</b> You need 10. Remember: reject a missing or expired token, and admit a user's 5th post but not their 6th. Run the door again.</div>`;
+    }
+  }
+  $('#gateStart').onclick = start;
+  adm.onclick = () => decide(true, adm);
+  rej.onclick = () => decide(false, rej);
+});
+
+/* ================= STAGE 2: the five steps ================= */
+Q.onStage(2, () => {
+  const svg = $('#flow2');
+  const NODES = {
+    web: [130, 6, 140, 34, 'Web servers'],
+    post: [4, 70, 112, 34, 'Post service', 'dim'],
+    fan: [136, 70, 128, 34, 'Fanout service', 'star'],
+    notif: [284, 70, 112, 34, 'Notification svc', 'dim'],
+    graph: [4, 160, 112, 42, 'Graph DB', 'db', 'friend edges'],
+    ucache: [144, 160, 112, 42, 'User cache', '', 'profiles · settings'],
+    udb: [144, 238, 112, 32, 'User DB', 'db'],
+    mq: [284, 160, 112, 42, 'Message queue', '', '0 jobs'],
+    wk: [284, 236, 112, 42, 'Fanout workers', '', 'idle'],
+    feed: [248, 310, 148, 42, 'News feed cache', '', 'IDs only'],
+  };
+  const EDGES = {
+    1: ['M170 104 L78 160', [124, 132]],
+    2: ['M200 104 L200 160', [200, 132]],
+    3: ['M230 104 L322 160', [276, 132]],
+    4: ['M340 202 L340 236', [326, 219]],
+    5: ['M340 278 L340 310', [326, 294]],
+  };
+  const STEPS = [
+    { k: 1, t: 'Get the poster\'s friend IDs from the graph DB' },
+    { k: 2, t: 'Load friends\' info from the user cache and filter by settings' },
+    { k: 3, t: 'Put the post ID and filtered friend list on the message queue' },
+    { k: 4, t: 'Fanout workers pull jobs off the queue' },
+    { k: 5, t: 'Workers write <post_id, user_id> into each friend\'s feed cache' },
+  ];
+  let nodeEl = {}, subEl = {}, edgeG, tokG, next = 1, busy = false, wired = false;
+  const ctr = k => { const n = NODES[k]; return [n[0] + n[2] / 2, n[1] + n[3] / 2]; };
+
+  function build() {
+    svg.innerHTML = '';
+    const defs = S('defs', {}, svg);
+    [['ah2', 'ah'], ['ah2l', 'ah live']].forEach(([id, cls]) => {
+      const m = S('marker', { id, viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' }, defs);
+      S('path', { d: 'M0 0 L10 5 L0 10 z', class: cls }, m);
+    });
+    edgeG = S('g', {}, svg);
+    // the given wiring: web servers call the three services; user cache falls back to the user DB
+    [['M165 40 L72 70', ''], ['M200 40 L200 70', ''], ['M235 40 L330 70', ''], ['M200 202 L200 238', ' faint']].forEach(([d, c]) => S('path', { d, class: 'ed' + c, 'marker-end': 'url(#ah2)' }, edgeG));
+    const nG = S('g', {}, svg);
+    nodeEl = {}; subEl = {};
+    Object.entries(NODES).forEach(([k, [x, y, w, h, label, cls, sub]]) => {
+      const g = S('g', { class: 'nd' + (cls ? ' ' + cls : '') }, nG);
+      S('rect', { x, y, width: w, height: h, rx: 9 }, g);
+      S('text', { x: x + w / 2, y: y + (sub ? 15 : h / 2) }, g).textContent = label;
+      if (sub) { const s = S('text', { x: x + w / 2, y: y + 31, class: 'ns' }, g); s.textContent = sub; subEl[k] = s; }
+      nodeEl[k] = g;
+    });
+    tokG = S('g', {}, svg);
+  }
+  function pulse(k) { const g = nodeEl[k]; g.classList.remove('pulse'); void g.getBBox(); g.classList.add('pulse'); }
+  async function drawEdge(k) {
+    const [d, [bx, by]] = EDGES[k];
+    const p = S('path', { d, class: 'ed live', 'marker-end': 'url(#ah2l)' }, edgeG);
+    const L = p.getTotalLength();
+    p.style.strokeDasharray = L; p.style.strokeDashoffset = L;
+    await anim(380, t => { p.style.strokeDashoffset = L * (1 - ease(t)); });
+    p.style.strokeDasharray = ''; p.style.strokeDashoffset = '';
+    const b = S('g', { class: 'bdg' }, edgeG);
+    S('circle', { cx: bx, cy: by, r: 9 }, b);
+    S('text', { x: bx, y: by }, b).textContent = k;
+  }
+  async function fly(text, from, to, dur = 650, keep = false) {
+    const w = text.length * 6.4 + 12;
+    const clamp = ([x, y]) => [Math.max(w / 2 + 2, Math.min(398 - w / 2, x)), y];
+    const a = clamp(from), b = clamp(to);
+    const g = S('g', { class: 'tok' }, tokG);
+    S('rect', { x: -w / 2, y: -10, width: w, height: 20, rx: 6 }, g);
+    S('text', { x: 0, y: 0 }, g).textContent = text;
+    await anim(dur, t => { const e = ease(t); g.setAttribute('transform', `translate(${a[0] + (b[0] - a[0]) * e} ${a[1] + (b[1] - a[1]) * e})`); });
+    if (!keep) { await sleep(Q.reduced ? 0 : 180); g.remove(); }
+    return g;
+  }
+  const RUN = {
+    1: async () => {
+      logTo('f2log', '1 · Fanout service → graph DB: "friends of u7?"');
+      await fly('friends of u7?', ctr('fan'), ctr('graph'), 520);
+      pulse('graph');
+      await fly('u2 u4 u5 u9 u11 u12', ctr('graph'), ctr('fan'), 650);
+      pulse('fan');
+      logTo('f2log', '  ← 6 friend IDs: u2, u4, u5, u9, u11, u12', 'g');
+    },
+    2: async () => {
+      logTo('f2log', '2 · Fanout service → user cache: settings for those 6 friends');
+      await fly('6 users?', ctr('fan'), ctr('ucache'), 480);
+      pulse('ucache');
+      await fly('info + settings', ctr('ucache'), ctr('fan'), 600);
+      pulse('fan');
+      logTo('f2log', '  filter: drop u4 (muted Ana), drop u5 (not in the post\'s audience) → 4 left', 'w');
+    },
+    3: async () => {
+      logTo('f2log', '3 · Fanout service → message queue: one job');
+      await fly('✉ p981 → [u2,u9,u11,u12]', ctr('fan'), ctr('mq'), 700);
+      pulse('mq'); subEl.mq.textContent = '1 job';
+      logTo('f2log', '  queued. The fanout service is done, and Ana already sees "Posted!"', 'g');
+    },
+    4: async () => {
+      logTo('f2log', '4 · A fanout worker pulls the job off the queue');
+      subEl.mq.textContent = '0 jobs';
+      await fly('✉ p981', ctr('mq'), ctr('wk'), 520);
+      pulse('wk'); subEl.wk.textContent = 'working on p981';
+    },
+    5: async () => {
+      logTo('f2log', '5 · Worker writes one entry into each of 4 friends\' lists');
+      const fc = ctr('feed');
+      await Promise.all([0, 1, 2, 3].map(j => sleep(Q.reduced ? 0 : j * 110).then(() => fly('•', ctr('wk'), [fc[0] - 45 + j * 30, fc[1]], 480))));
+      pulse('feed'); subEl.feed.textContent = '+4 × <p981, u7>'; subEl.wk.textContent = 'idle';
+      logTo('f2log', '  u2, u9, u11, u12 each got &lt;p981, u7&gt; at the top of their feed', 'g');
+    },
+  };
+  function renderSteps() {
+    const box = $('#steps2');
+    box.innerHTML = '';
+    shuffle(STEPS).forEach(s => {
+      const b = document.createElement('button');
+      b.className = 'opt'; b.dataset.k = s.k;
+      b.innerHTML = `<span class="sn">?</span><span></span>`;
+      b.lastChild.textContent = s.t;
+      b.onclick = () => tap(s, b);
+      box.appendChild(b);
+    });
+  }
+  async function tap(s, b) {
+    if (busy || b.disabled) return;
+    if (s.k !== next) {
+      b.classList.remove('wrong'); void b.offsetWidth; b.classList.add('wrong');
+      logTo('f2log', `✗ Not step ${next} yet. ${next === 1 ? 'Nothing can happen until you know who the friends are.' : next === 2 ? 'You have IDs. Before sending anything, find out who should actually get it.' : next === 3 ? 'The friend list is filtered. Hand it off so the poster doesn\'t wait.' : next === 4 ? 'The job is sitting in the queue. Someone has to pick it up.' : 'A worker holds the job. What does it actually write?'}`, 'e');
+      if (!wired) Q.loseHeart(b);
+      setTimeout(() => b.classList.remove('wrong'), 450);
+      return;
+    }
+    busy = true;
+    b.disabled = true; b.classList.add('right'); b.querySelector('.sn').textContent = s.k;
+    if (!wired) Q.addXP(4, b);
+    await drawEdge(s.k);
+    await RUN[s.k]();
+    next++; busy = false;
+    if (next > 5) done();
+  }
+  let quizShown = false;
+  function done() {
+    logTo('f2log', 'Pipeline wired: graph DB → user cache + filter → queue → workers → feed cache.', 'g');
+    $('#f2reset').style.display = '';
+    if (quizShown) return;
+    quizShown = true; wired = true;
+    quizChain($('#s2quiz'), [
+      {
+        tag: 'What breaks? 1 of 3', xp: 10,
+        q: 'The graph DB is having a slow day: every friend lookup takes 2 seconds. What happens to new posts?',
+        options: ['Step 1 stalls, so every fanout starts late', 'Posts skip the lookup and go to everyone', 'Friends\' feeds are emptied until it recovers'],
+        correct: 0,
+        good: 'Nothing downstream can start until the friend list comes back. Posts are still saved (the post service is separate), but they reach feeds late.',
+        bad: 'Step 1 is the start of the chain. A slow graph DB delays every fanout. Posts are still saved, and existing feeds are untouched.',
+      },
+      {
+        tag: 'What breaks? 2 of 3', xp: 10,
+        q: 'The user cache was just restarted and is empty ("cold"). What happens in step 2?',
+        options: ['It falls back to the user DB: slower, still correct', 'Filtering is skipped, so muted friends get posts', 'The step fails and the post goes to nobody at all'],
+        correct: 0,
+        good: 'A cache miss isn\'t an error. The data is read from the user DB behind it (the dashed arrow) and the cache warms up again.',
+        bad: 'A cache miss falls back to the user DB behind it (the dashed arrow). Slower for a while, but the filter still works.',
+      },
+      {
+        tag: 'What breaks? 3 of 3', xp: 10,
+        q: 'A fanout worker crashes halfway through a job. What happens to that job?',
+        options: ['It stays on the queue and another worker retries it', 'It is lost, so Ana has to post the same thing again', 'The queue throws away every job it is still holding'],
+        correct: 0,
+        good: 'A worker only acknowledges ("acks") a job after its writes are done. No ack, so the queue hands the job to another worker. Some writes may happen twice, so they must be safe to repeat.',
+        bad: 'Workers ack a job only after writing. A crash means no ack, so the queue re-delivers it to another worker. That\'s one of the big reasons the queue is there.',
+      },
+      {
+        tag: 'Final check', xp: 15,
+        q: 'Where does the fanout service get the poster\'s friend list?',
+        options: ['From the graph database', 'From the news feed cache', 'From the post cache', 'From the message queue'],
+        correct: 0,
+        good: 'Step 1: friend IDs come from the graph database, which is built for relationships like friendships.',
+        bad: 'Step 1 reads friend IDs from the <b>graph database</b>. The queue and the feed cache come later, and the post cache holds posts, not friendships.',
+      },
+    ], () => setTimeout(() => Q.clearStage(2), 700));
+  }
+  function reset() {
+    if (busy) return;
+    build(); renderSteps(); next = 1;
+    $('#f2log').innerHTML = '<div>Waiting for step 1…</div>';
+  }
+  $('#f2reset').onclick = reset;
+  build(); renderSteps();
+});
+
+/* ================= STAGE 3: filtering ================= */
+Q.onStage(3, () => {
+  const FR = [
+    { k: 'bo', n: 'Bo', id: 'u2', tag: 'Friend', get: true, why: 'Normal friend, inside the audience.' },
+    { k: 'cy', n: 'Cy', id: 'u4', tag: '🔇 Has muted Ana', warn: true, get: false, why: 'Muted Ana. Still friends, but the filter drops Cy.' },
+    { k: 'dee', n: 'Dee', id: 'u5', tag: '💼 In Ana\'s "Work" list', warn: true, get: false, why: 'The audience is "Friends except Work", so Dee is left out.' },
+    { k: 'eli', n: 'Eli', id: 'u9', tag: 'Friend', get: true, why: 'Normal friend, inside the audience.' },
+    { k: 'fay', n: 'Fay', id: 'u11', tag: '😴 Inactive 60 days', warn: true, get: true, why: 'Inactive isn\'t a privacy setting. Pure push still writes it: wasted work (<a href="1102-news-feed-fanout-push-vs-pull.html">Quest 11.2</a>).' },
+    { k: 'gus', n: 'Gus', id: 'u12', tag: 'Friend', get: true, why: 'Normal friend, inside the audience.' },
+  ];
+  const box = $('#friends'), btn = $('#fanBtn');
+  const picked = new Set();
+  let fanned = false, twistDone = false;
+  box.innerHTML = FR.map(f => `<button class="fr" data-k="${f.k}" aria-pressed="false"><span class="nm"><span class="av">${f.n[0]}</span>${f.n}<span class="id">${f.id}</span></span><span class="tg${f.warn ? ' warn' : ''}">${f.tag}</span><span class="res"></span></button>`).join('');
+  $$('.fr', box).forEach(b => b.onclick = () => {
+    if (fanned) return;
+    const k = b.dataset.k;
+    picked.has(k) ? picked.delete(k) : picked.add(k);
+    b.classList.toggle('sel', picked.has(k)); b.setAttribute('aria-pressed', picked.has(k));
+    $('#pickCount').textContent = `${picked.size} selected`;
+  });
+  async function flyEnvelopes(targets) {
+    if (Q.reduced) return;
+    const host = $('#fanbox'), hr = host.getBoundingClientRect(), src = $('#anapost').getBoundingClientRect();
+    const sx = src.left - hr.left + src.width / 2 - 11, sy = src.top - hr.top + src.height - 20;
+    await Promise.all(targets.map((el, j) => new Promise(res => {
+      const r = el.getBoundingClientRect();
+      const e = document.createElement('div'); e.className = 'env'; e.textContent = '✉️';
+      e.style.left = sx + 'px'; e.style.top = sy + 'px';
+      host.appendChild(e);
+      setTimeout(() => { e.style.transform = `translate(${r.left - hr.left + r.width / 2 - 11 - sx}px, ${r.top - hr.top + 18 - sy}px)`; }, 40 + j * 120);
+      setTimeout(() => { e.style.opacity = 0; }, 900 + j * 120);
+      setTimeout(() => { e.remove(); res(); }, 1200 + j * 120);
+    })));
+  }
+  btn.onclick = async () => {
+    if (fanned) return;
+    fanned = true; btn.disabled = true;
+    $$('.fr', box).forEach(b => b.disabled = true);
+    logTo('f3log', 'Fanout: friend IDs from the graph DB, settings from the user cache, filter, write…');
+    const getters = FR.filter(f => f.get).map(f => $(`.fr[data-k="${f.k}"]`, box));
+    await flyEnvelopes(getters);
+    let wrong = 0;
+    FR.forEach(f => {
+      const b = $(`.fr[data-k="${f.k}"]`, box), sel = picked.has(f.k);
+      b.classList.add('done', f.get ? 'got' : 'no');
+      if (sel !== f.get) { b.classList.add('miss'); wrong++; }
+      $('.res', b).innerHTML = (f.get ? '<span class="fl">✉ &lt;p981, u7&gt; written</span><br>' : '<b>— filtered out</b><br>') + f.why;
+    });
+    if (wrong === 0) {
+      logTo('f3log', '✓ Exactly right: Bo, Eli, Fay and Gus get the entry. Cy and Dee are filtered out.', 'g');
+      Q.addXP(20, btn);
+    } else {
+      logTo('f3log', `✗ ${wrong} card${wrong === 1 ? '' : 's'} wrong (red outline). Bo, Eli, Fay and Gus get it. Cy muted Ana. Dee is outside the audience.`, 'e');
+      Q.loseHeart(btn); if (wrong > 1) Q.loseHeart(btn);
+    }
+    showTwist();
+  };
+  function showTwist() {
+    const tw = $('#twist');
+    tw.style.display = '';
+    tw.innerHTML = `<div class="step">Plot twist</div><h3>The next day, Ana removes Gus as a friend.</h3><div class="row"><button class="btn primary" id="twistBtn">☀️ Fast-forward to tomorrow</button></div>`;
+    $('#twistBtn').onclick = () => {
+      if (twistDone) return; twistDone = true;
+      $('#twistBtn').disabled = true;
+      const g = $('.fr[data-k="gus"]', box);
+      $('.tg', g).textContent = '💔 No longer Ana\'s friend';
+      $('.tg', g).classList.add('warn');
+      $('.res', g).innerHTML = '<span class="fl stale">✉ &lt;p981, u7&gt; still in his list</span><br>Written yesterday, before the unfriend.';
+      logTo('f3log', 'Day 2: Ana unfriends Gus. The graph DB edge u7–u12 is deleted.', 'w');
+      quizChain($('#s3quiz'), [
+        {
+          tag: 'Twist 1 of 2', xp: 10,
+          q: 'Is the entry &lt;p981, u7&gt; still in Gus\'s feed list in the cache?',
+          options: ['Yes, it was written yesterday', 'No, unfriending deletes it at once', 'No, the cache expires it overnight'],
+          correct: 0,
+          good: 'The filter ran at fanout time. Changing a setting later doesn\'t reach back into entries already written.',
+          bad: 'It\'s still there. The filter ran when the post was fanned out. Nothing in the publishing pipeline goes back and removes old entries.',
+        },
+        {
+          tag: 'Twist 2 of 2', xp: 10,
+          q: 'Where is the simplest place to make sure Gus never sees it?',
+          options: ['Re-check permissions when his feed is read', 'Run the fanout again for every older post', 'Rebuild every user\'s feed cache each night'],
+          correct: 0,
+          good: 'When Gus\'s feed is read, the news feed service turns IDs into full posts and can drop anything he\'s no longer allowed to see. That\'s the hydration step in <a href="1104-news-feed-retrieval-and-caches.html">Quest 11.4</a>.',
+          bad: 'Re-check at read time. The news feed service hydrates IDs into posts anyway, so it can drop what Gus may no longer see. Re-running or rebuilding is far more work.',
+        },
+        {
+          tag: 'Final check', xp: 15,
+          q: 'You muted Tom. Are you still friends, and do his new posts reach your feed?',
+          options: ['Still friends; his posts are filtered out', 'No longer friends; his posts still arrive', 'Still friends; his posts arrive as normal', 'No longer friends; his posts are filtered'],
+          correct: 0,
+          good: 'Muting is a setting, not an unfriend. The friendship stays in the graph DB, and the fanout filter keeps Tom\'s posts out of your feed.',
+          bad: 'Muting keeps the friendship (the graph DB edge stays). The fanout filter in step 2 drops you from Tom\'s recipients, so his posts don\'t reach your feed.',
+        },
+      ], () => setTimeout(() => Q.clearStage(3), 700));
+    };
+  }
+});
+
+/* ================= STAGE 4: the queue sim ================= */
+Q.onStage(4, () => {
+  const RATE_W = 750, RATE_IN = 500, FRIENDS = 2000, JOB = 250, SPEED = 2, TIMEOUT = 5, THREADS = 4, RUSH = 30;
+  const goals = new Set();
+  let mode = 'queue', W = 4, t = 0, last = null, raf = null, ready = false;
+  let queue = [], workers = [], jobSeq = 0, postSeq = 980;
+  let inline = null, rush = null, poster = null, pendingKill = false, posts = {}, phoneMsg = null;
+  const btns = ['#postBtn', '#rushBtn', '#killBtn', '#qReset'].map(s => $(s));
+
+  function freshWorkers() { workers = Array.from({ length: 16 }, (_, i) => ({ id: i + 1, job: null, dead: false, revive: 0 })); }
+  freshWorkers();
+  $('#wks').innerHTML = workers.map(w => `<div class="wk" data-w="${w.id}">${w.id}</div>`).join('');
+  $('#reqs').innerHTML = Array.from({ length: RUSH }, () => '<span class="rd"></span>').join('');
+
+  const busyWorkers = () => workers.some(w => w.job);
+  const active = () => !!(queue.length || busyWorkers() || inline || (poster && !poster.done) || pendingKill || workers.some(w => w.dead));
+  function kick() { if (!raf) { last = null; raf = requestAnimationFrame(tick); } }
+
+  function enqueuePost() {
+    const p = ++postSeq;
+    posts[p] = { left: FRIENDS / JOB, start: t };
+    for (let j = 0; j < FRIENDS / JOB; j++) queue.push({ id: ++jobSeq, post: p, writes: JOB, done: 0 });
+    return p;
+  }
+  function doPost() {
+    if (!ready || active()) return;
+    phoneMsg = null; poster = null;
+    if (mode === 'inline') {
+      inline = { kind: 'one', start: t };
+      log('Inline: the web server writes all 2,000 feed entries before it answers Ana.');
+    } else {
+      const p = enqueuePost();
+      poster = { start: t, at: t + 0.05, done: false, n: 1 };
+      log(`Queue: post p${p} saved, 8 jobs (2,000 writes) queued.`);
+    }
+    $('#reqs').hidden = true;
+    kick(); render();
+  }
+  function doRush() {
+    if (!ready || active()) return;
+    phoneMsg = null; poster = null;
+    if (mode === 'inline') {
+      inline = { kind: 'rush', start: t, reqs: Array.from({ length: RUSH }, (_, i) => ({ fin: (Math.floor(i / THREADS) + 1) * (FRIENDS / RATE_IN), st: 'wait' })) };
+      $('#reqs').hidden = false;
+      log(`Rush hour, inline: 30 posts arrive at once. ${THREADS} web-server threads, each doing 2,000 writes before replying. Timeout: ${TIMEOUT} s.`, 'w');
+    } else {
+      for (let j = 0; j < RUSH; j++) enqueuePost();
+      rush = { start: t };
+      poster = { start: t, at: t + 0.05, done: false, n: RUSH };
+      $('#reqs').hidden = true;
+      log(`Rush hour, queue: 30 posts → 240 jobs → ${fmt(RUSH * FRIENDS)} writes queued. Target: drained within 10 s.`, 'w');
+    }
+    kick(); render();
+  }
+  function doKill() {
+    if (!ready || mode !== 'queue') return;
+    if (W < 3) { log('Worker 3 is switched off. Slide to 3 or more workers first.', 'w'); return; }
+    if (workers[2].dead) return;
+    if (!workers[2].job) {
+      if (!queue.length) { const p = enqueuePost(); poster = { start: t, at: t + 0.05, done: false, n: 1 }; log(`Worker 3 is idle. Posting p${p} to give it some work…`); }
+    }
+    pendingKill = true;
+    kick();
+  }
+  function crash() {
+    const w = workers[2], j = w.job;
+    pendingKill = false;
+    w.dead = true; w.revive = t + 3; w.job = null;
+    j.retry = true; j.done = 0;
+    queue.unshift(j);
+    log(`💥 Worker 3 crashed after ${fmt(j.doneAt)} of 250 writes for job #${j.id}. It never sent an ack, so the queue makes the job visible again.`, 'e');
+  }
+  function reset() {
+    if (raf) cancelAnimationFrame(raf);
+    raf = null; t = 0; queue = []; inline = null; rush = null; poster = null; pendingKill = false; posts = {}; phoneMsg = null;
+    freshWorkers(); $('#reqs').hidden = true;
+    $$('#reqs .rd').forEach(d => d.className = 'rd');
+    $('#q4log').innerHTML = `<div>Reset. Mode: ${mode === 'inline' ? 'inline fanout' : 'queue + workers'}.</div>`;
+    render();
+  }
+  function log(h, c) { logTo('q4log', h, c); }
+
+  function tick(now) {
+    const dt = last == null ? 0 : Math.min(0.1, (now - last) / 1000) * SPEED;
+    last = now; t += dt;
+    // poster reply in queue mode
+    if (poster && !poster.done && t >= poster.at) {
+      poster.done = true;
+      if (poster.n === 1) { log('📱 Ana sees "Posted!" after 50 ms. The fanout carries on in the background.', 'g'); checkGoal('#s4goals', 'queue', goals, 6); }
+      else log(`📱 All ${poster.n} posters see "Posted!" after 50 ms each.`, 'g');
+    }
+    if (pendingKill && W < 3 && !workers[2].job) { pendingKill = false; log('Kill cancelled: worker 3 is switched off.', 'w'); }
+    // workers
+    workers.forEach((w, i) => {
+      if (w.dead) { if (t >= w.revive) { w.dead = false; log('Worker 3 restarted and is taking jobs again.'); } return; }
+      if (!w.job && i < W && queue.length) { w.job = queue.shift(); w.job.done = 0; if (w.job.retry) w.job.by = w.id; }
+      if (!w.job) return;
+      w.job.done += RATE_W * dt;
+      if (pendingKill && i === 2 && w.job.done > 60) { w.job.doneAt = Math.floor(w.job.done); crash(); return; }
+      if (w.job.done >= w.job.writes) {
+        const j = w.job; w.job = null;
+        if (j.retry) {
+          log(`↺ Worker ${j.by} picked up job #${j.id} and finished all 250 writes. Rewriting the ${fmt(j.doneAt)} entries that worker 3 already wrote is harmless when writes are idempotent (safe to repeat).`, 'g');
+          checkGoal('#s4goals', 'kill', goals, 6);
+        }
+        const p = posts[j.post];
+        if (p && --p.left === 0 && !rush) log(`✓ p${j.post}: all 2,000 friends' feeds updated ${(t - p.start).toFixed(1)} s after posting.`, 'g');
+      }
+    });
+    // inline mode
+    if (inline) {
+      const el = t - inline.start;
+      if (inline.kind === 'one' && el >= FRIENDS / RATE_IN) {
+        inline = null;
+        phoneMsg = { cls: 'bad', txt: `Posted! after ${(FRIENDS / RATE_IN).toFixed(1)} s`, sub: 'she watched a spinner the whole time' };
+        log(`📱 Ana finally sees "Posted!" after ${(FRIENDS / RATE_IN).toFixed(1)} s. Her app spun the whole time.`, 'e');
+        checkGoal('#s4goals', 'inline', goals, 6);
+      } else if (inline.kind === 'rush') {
+        inline.reqs.forEach(r => { if (r.st === 'wait') { if (r.fin <= TIMEOUT && el >= r.fin) r.st = 'ok'; else if (r.fin > TIMEOUT && el >= TIMEOUT) r.st = 'to'; } });
+        if (el >= TIMEOUT) {
+          const ok = inline.reqs.filter(r => r.st === 'ok').length;
+          inline = null;
+          phoneMsg = { cls: 'bad', txt: `${ok} posted · ${RUSH - ok} timed out`, sub: `${THREADS} threads × 4 s each, ${TIMEOUT} s timeout` };
+          log(`Rush hour inline: ${ok} of ${RUSH} posted. ${RUSH - ok} timed out after ${TIMEOUT} s, some with their fanout half done.`, 'e');
+          checkGoal('#s4goals', 'rushIn', goals, 6);
+        }
+      }
+    }
+    // rush through the queue
+    if (rush && !queue.length && !busyWorkers()) {
+      const el = t - rush.start;
+      rush = null;
+      if (el <= 10.05) { log(`✓ Spike drained in ${el.toFixed(1)} s. The last friend saw the last post ${el.toFixed(1)} s after it was posted.`, 'g'); checkGoal('#s4goals', 'rushQ', goals, 6); }
+      else log(`Spike drained in ${el.toFixed(1)} s, over the 10 s target. Nothing was lost, it was just slow. Try more workers.`, 'w');
+    }
+    render();
+    if (goals.size === 5) allGoals();
+    if (active() || rush) raf = requestAnimationFrame(tick); else { raf = null; last = null; render(); }
+  }
+
+  function render() {
+    $('#clock').textContent = `sim clock ${t.toFixed(1)} s · 2× speed` + (rush ? ` · rush ${(t - rush.start).toFixed(1)} s` : '');
+    const inl = mode === 'inline';
+    $('#queueCol').classList.toggle('dim', inl); $('#wkCol').classList.toggle('dim', inl);
+    // phone
+    const pst = $('#pst'), pbar = $('#pbar'), psub = $('#psub');
+    if (inline && inline.kind === 'one') {
+      const done = Math.min(FRIENDS, (t - inline.start) * RATE_IN);
+      pst.className = 'pst'; pst.innerHTML = '<span class="spin"></span>Posting…';
+      pbar.style.width = (done / FRIENDS * 100) + '%'; psub.textContent = `${fmt(done)} / 2,000 feed writes`;
+    } else if (inline && inline.kind === 'rush') {
+      pst.className = 'pst'; pst.innerHTML = '<span class="spin"></span>30 people posting…';
+      pbar.style.width = Math.min(100, (t - inline.start) / TIMEOUT * 100) + '%'; psub.textContent = `timeout at ${TIMEOUT} s`;
+      $$('#reqs .rd').forEach((d, i) => { d.className = 'rd ' + inline.reqs[i].st; });
+    } else if (poster) {
+      if (poster.done) { pst.className = 'pst ok'; pst.textContent = poster.n === 1 ? 'Posted! ✓ (50 ms)' : `${poster.n} × Posted! ✓ (50 ms)`; pbar.style.width = '100%'; }
+      else { pst.className = 'pst'; pst.innerHTML = '<span class="spin"></span>Posting…'; pbar.style.width = '50%'; }
+      const left = queue.reduce((s, j) => s + j.writes, 0) + workers.reduce((s, w) => s + (w.job ? w.job.writes - w.job.done : 0), 0);
+      psub.textContent = left > 0 ? `fanout running: ${fmt(left)} writes to go` : 'fanout finished';
+    } else if (phoneMsg) {
+      pst.className = 'pst ' + phoneMsg.cls; pst.textContent = phoneMsg.txt; pbar.style.width = '100%'; psub.textContent = phoneMsg.sub;
+    } else {
+      pst.className = 'pst'; pst.textContent = 'Ready to post'; pbar.style.width = '0%'; psub.textContent = '2,000 friends';
+    }
+    // queue
+    const depth = queue.reduce((s, j) => s + j.writes, 0);
+    $('#qd').textContent = fmt(depth);
+    $('#qbar').style.width = Math.min(100, depth / (RUSH * FRIENDS) * 100) + '%';
+    const chips = queue.slice(0, 10).map(j => `<span class="jb${j.retry ? ' rt' : ''}">${j.retry ? '↺' : ''}#${j.id}</span>`).join('');
+    $('#jobs').innerHTML = chips + (queue.length > 10 ? `<span class="jb more">+${queue.length - 10}</span>` : '');
+    // workers
+    workers.forEach((w, i) => {
+      const el = $(`.wk[data-w="${w.id}"]`);
+      el.className = 'wk' + (w.dead ? ' dead' : i >= W && !w.job ? ' off' : w.job ? ' busy' : '');
+      el.textContent = w.dead ? '✗' : w.id;
+      el.style.setProperty('--p', w.job ? Math.min(100, w.job.done / w.job.writes * 100) + '%' : '0%');
+    });
+    $('#wkrate').textContent = `${W} × 750 = ${fmt(W * RATE_W)} writes/s`;
+    // buttons
+    const busy = active();
+    $('#postBtn').disabled = !ready || busy;
+    $('#rushBtn').disabled = !ready || busy;
+    $('#killBtn').disabled = !ready || inl || (busy && !queue.length && !workers[2].job) || workers[2].dead || pendingKill;
+    $('#qReset').disabled = !ready;
+    $$('#modeSeg button').forEach(b => b.disabled = !ready || busy);
+  }
+
+  let quizShown = false;
+  function allGoals() {
+    if (quizShown) return;
+    quizShown = true;
+    setTimeout(() => quizChain($('#s4quiz'), [
+      {
+        tag: 'Check 1 of 2', xp: 15,
+        q: 'Which of these is a real benefit of the queue between the fanout service and the workers?',
+        options: ['Spikes wait in the queue instead of overloading the cache', 'Friends see every new post instantly, with no delay at all', 'Each post needs fewer feed-cache writes than it did before', 'The graph DB no longer needs to be asked for friend lists'],
+        correct: 0,
+        good: 'The queue absorbs bursts. Other benefits you saw: a fast reply for the poster, workers you can scale on their own, and retries when a worker dies.',
+        bad: 'The queue absorbs bursts (you drained a 60,000-write spike). It doesn\'t cut the number of writes, and friends see posts a little <i>later</i>, not sooner.',
+      },
+      {
+        tag: 'Check 2 of 2', xp: 15,
+        q: 'What do you pay for the queue?',
+        options: ['Friends see the post after a short delay', 'The poster waits longer to see "Posted!"', 'Posts can no longer be rate-limited at all', 'Each post is stored twice in the post DB'],
+        correct: 0,
+        good: 'The feed becomes eventually consistent: seconds of delay normally, more during a backlog. The poster actually waits <i>less</i>.',
+        bad: 'The cost is a delay before friends see the post (eventual consistency). The poster waits less, not more, and rate limiting still happens at the web servers.',
+      },
+    ], () => setTimeout(() => Q.clearStage(4), 700)), 500);
+  }
+
+  Q.quiz($('#s4pred'), {
+    tag: 'Predict first', xp: 10,
+    q: 'Ana has 2,000 friends. With a queue in the middle, when does her app show "Posted!"?',
+    options: ['As soon as the post is saved and queued', 'After all 2,000 feed writes have finished', 'After the first friend opens their feed'],
+    correct: 0,
+    good: 'The poster doesn\'t wait for fanout. Now go and see it, and compare it with inline fanout.',
+    bad: 'With the queue, Ana only waits for the save and the enqueue. The fanout happens after she gets her answer. Run the sim and compare.',
+    onDone: () => { ready = true; $('#q4log').innerHTML = '<div>Sim ready. Mode: queue + workers.</div>'; render(); },
+  });
+  $$('#modeSeg button').forEach(b => b.onclick = () => {
+    if (!ready || active()) return;
+    mode = b.dataset.m;
+    $$('#modeSeg button').forEach(x => x.classList.toggle('on', x === b));
+    reset();
+  });
+  $('#wSlider').oninput = e => { W = +e.target.value; $('#wVal').textContent = W; render(); };
+  $('#postBtn').onclick = doPost;
+  $('#rushBtn').onclick = doRush;
+  $('#killBtn').onclick = doKill;
+  $('#qReset').onclick = reset;
+  render();
+});
+
+/* ================= STAGE 5: the feed cache diet ================= */
+Q.onStage(5, () => {
+  const goals = new Set();
+  // --- capped list demo (figure 11-6 style) ---
+  let list = [['p977', 'u9'], ['p960', 'u2'], ['p955', 'u12'], ['p941', 'u7'], ['p930', 'u9'], ['p918', 'u11']];
+  const NEWS = [['p981', 'u7'], ['p984', 'u12'], ['p990', 'u9'], ['p993', 'u7'], ['p998', 'u11']];
+  let ni = 0, pushing = false;
+  const fl = $('#flist');
+  const liHTML = ([p, u]) => `<span>&lt;${p}, ${u}&gt;</span><small>post, author</small>`;
+  fl.innerHTML = list.map(e => `<li>${liHTML(e)}</li>`).join('');
+  $('#pushBtn').onclick = async () => {
+    if (pushing) return; pushing = true;
+    const e = NEWS[ni++ % NEWS.length];
+    const li = document.createElement('li'); li.className = 'new'; li.innerHTML = liHTML(e);
+    fl.prepend(li);
+    $('#redis').textContent = `LPUSH feed:u2 "${e[0]}:${e[1]}"   // add at the top\nLTRIM feed:u2 0 5          // keep only the newest 6`;
+    await sleep(Q.reduced ? 0 : 500);
+    const lis = $$('li', fl), old = lis[lis.length - 1];
+    old.classList.add('gone');
+    await sleep(Q.reduced ? 0 : 450);
+    old.remove();
+    if (checkGoal('#s5goals', 'trim', goals, 5)) logTo('c5log', `Bo's list got ${e[0]} at the top. The oldest entry fell off the end: that's the cap. Redis lists do this with LPUSH + LTRIM.`, 'g');
+    pushing = false; maybeDone();
+  };
+  // --- calculations ---
+  const calcs = {
+    c1: { lo: 75, hi: 85, ok: '80 GB. 16 B × 500 = 8 KB per user. 8 KB × 10 million = 80 GB. That fits on a small cache cluster.', hint: 'Per user: 16 bytes × 500 entries = 8,000 bytes (8 KB). Then × 10,000,000 users. 1 GB = 1,000,000,000 bytes.' },
+    c2: { lo: 4.5, hi: 5.5, ok: 'About 5 TB. 1 KB × 500 = 500 KB per user, × 10 million = 5,000 GB. Over 60 times more, and the same post is copied into hundreds of lists.', hint: 'Per user: 1,000 bytes × 500 = 500,000 bytes (500 KB). × 10,000,000 users = 5 × 10¹² bytes. 1 TB = 10¹² bytes.' },
+  };
+  const missed = new Set();
+  Object.entries(calcs).forEach(([k, c]) => {
+    const inp = $('#' + k), b = $('#' + k + 'b'), m = $('#' + k + 'm');
+    const check = () => {
+      if (goals.has(k)) return;
+      const v = parseFloat(inp.value.replace(/,/g, ''));
+      if (isNaN(v)) { m.className = 'cmsg bad'; m.textContent = 'Type a number first.'; return; }
+      if (v >= c.lo && v <= c.hi) {
+        m.className = 'cmsg good'; m.textContent = '✓ ' + c.ok;
+        inp.disabled = true; b.disabled = true;
+        checkGoal('#s5goals', k, goals, 10); maybeDone();
+      } else {
+        m.className = 'cmsg bad'; m.textContent = '✗ Not quite. ' + c.hint;
+        if (!missed.has(k)) { missed.add(k); Q.loseHeart(b); }
+      }
+    };
+    b.onclick = check;
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') check(); });
+  });
+  // --- cap slider + scroll-depth curve ---
+  const STEPS = [50, 100, 150, 200, 250, 350, 400, 500, 600, 750, 1000, 1500, 2000, 3000, 5000];
+  const D0 = 23, K = 1.79;
+  const P = d => 1 / (1 + Math.pow(d / D0, K)); // share of sessions that scroll past depth d (illustrative)
+  const L0 = Math.log10(10), L1 = Math.log10(5000);
+  const X = d => 44 + (Math.log10(d) - L0) / (L1 - L0) * 342;
+  const Y = p => 170 - p * 150;
+  const memGB = c => 16 * c * 1e7 / 1e9;
+  const svg = $('#chart5');
+  svg.innerHTML = '';
+  [0, .5, 1].forEach(p => { S('line', { x1: 44, x2: 386, y1: Y(p), y2: Y(p), class: 'ax' }, svg); S('text', { x: 38, y: Y(p) + 4, class: 'lbl', 'text-anchor': 'end' }, svg).textContent = (p * 100) + '%'; });
+  [10, 50, 100, 500, 1000, 5000].forEach(d => { S('line', { x1: X(d), x2: X(d), y1: 170, y2: 174, class: 'ax' }, svg); S('text', { x: X(d), y: 187, class: 'lbl', 'text-anchor': 'middle' }, svg).textContent = d >= 1000 ? (d / 1000) + 'k' : d; });
+  S('text', { x: 215, y: 202, class: 'lbl', 'text-anchor': 'middle' }, svg).textContent = 'posts scrolled (log scale)';
+  S('text', { x: 50, y: 14, class: 'lbl' }, svg).textContent = 'sessions that scroll past N posts';
+  const area = S('path', { class: 'area' }, svg);
+  const pts = []; for (let j = 0; j <= 90; j++) { const d = Math.pow(10, L0 + (L1 - L0) * j / 90); pts.push([X(d), Y(P(d))]); }
+  S('path', { class: 'crv', d: 'M' + pts.map(p => p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' L') }, svg);
+  const capL = S('line', { y1: 22, y2: 170, class: 'capl' }, svg);
+  const capT = S('text', { y: 32, class: 'capt' }, svg);
+  let cap = STEPS[12], capFailed = false;
+  function drawCap() {
+    const x = X(cap);
+    capL.setAttribute('x1', x); capL.setAttribute('x2', x);
+    capT.setAttribute('x', x > 300 ? x - 6 : x + 6); capT.setAttribute('text-anchor', x > 300 ? 'end' : 'start');
+    capT.textContent = 'cap ' + fmt(cap);
+    const ap = pts.filter(p => p[0] >= x);
+    area.setAttribute('d', `M${x.toFixed(1)} 170 L${x.toFixed(1)} ${Y(P(cap)).toFixed(1)} ` + ap.map(p => 'L' + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ') + ' L386 170 Z');
+    const gb = memGB(cap), miss = P(cap) * 100;
+    $('#capVal').textContent = fmt(cap);
+    $('#memVal').textContent = gb >= 1000 ? (gb / 1000).toFixed(1) + ' TB' : fmt(gb) + ' GB';
+    $('#missVal').textContent = miss < 0.1 ? miss.toFixed(3) + '%' : miss.toFixed(2) + '%';
+    const mf = $('#memFill'), sf = $('#missFill');
+    mf.style.width = Math.min(100, gb / 200 * 100) + '%'; mf.classList.toggle('over', gb >= 100);
+    sf.style.width = Math.min(100, miss / 3 * 100) + '%'; sf.classList.toggle('over', miss >= 1);
+    const m = $('#capMsg');
+    if (gb < 100 && miss < 1) { m.className = 'capmsg good'; m.textContent = '✓ Both targets met. Lock it in.'; }
+    else if (gb >= 100) { m.className = 'capmsg bad'; m.textContent = `Memory ${gb >= 1000 ? (gb / 1000).toFixed(1) + ' TB' : fmt(gb) + ' GB'} is over budget. Few readers ever get that deep.`; }
+    else { m.className = 'capmsg bad'; m.textContent = `${miss.toFixed(1)}% of sessions scroll past the cap. Too many misses.`; }
+  }
+  $('#capSlider').oninput = e => { cap = STEPS[+e.target.value]; drawCap(); };
+  $('#capLock').onclick = e => {
+    if (goals.has('cap')) { Q.toast('✓ already locked', e.currentTarget, 'practice'); return; }
+    const gb = memGB(cap), miss = P(cap) * 100;
+    if (gb < 100 && miss < 1) {
+      logTo('c5log', `✓ Cap ${fmt(cap)}: ${fmt(gb)} GB, ${miss.toFixed(2)}% of sessions miss. The sweet spot is a few hundred entries.`, 'g');
+      checkGoal('#s5goals', 'cap', goals, 15); maybeDone();
+    } else {
+      logTo('c5log', `✗ Cap ${fmt(cap)} misses a target (${gb >= 100 ? 'memory' : 'miss rate'}). Move the slider until both bars are under their target lines.`, 'e');
+      if (!capFailed) { capFailed = true; Q.loseHeart(e.currentTarget); }
+    }
+  };
+  // --- scroll past the cap ---
+  let pastBusy = false;
+  $('#pastBtn').onclick = async () => {
+    if (pastBusy) return; pastBusy = true;
+    const host = $('#c5log');
+    logTo('c5log', `Bo scrolls to post ${fmt(cap + 1)}, past the end of his cached list…`);
+    const box = $('#latBox');
+    box.hidden = false;
+    box.innerHTML = `<div class="rb"><span>Posts 1–${fmt(cap)}</span><div class="track"><div class="fill"></div></div><span class="v">5 ms</span></div><div class="rb"><span>Post ${fmt(cap + 1)}+</span><div class="track"><div class="fill over"></div></div><span class="v">150 ms</span></div>`;
+    const fills = $$('.fill', box);
+    await sleep(Q.reduced ? 0 : 80);
+    fills[0].style.width = '3%';
+    await sleep(Q.reduced ? 0 : 450);
+    fills[1].style.width = '100%';
+    await sleep(Q.reduced ? 0 : 450);
+    logTo('c5log', 'Cache miss: the news feed service falls back to the database (or rebuilds the older part of the feed by pulling posts) for this page. Slower, but it works, and it only happens to the rare deep scroller. Latencies are illustrative.', 'w');
+    host.scrollTop = host.scrollHeight;
+    checkGoal('#s5goals', 'past', goals, 5); maybeDone();
+    pastBusy = false;
+  };
+  drawCap();
+  let quizShown = false;
+  function maybeDone() {
+    if (goals.size < 5 || quizShown) return;
+    quizShown = true;
+    setTimeout(() => quizChain($('#s5quiz'), [
+      {
+        tag: 'Check 1 of 2', xp: 15,
+        q: 'Why does the news feed cache hold only IDs, not full posts?',
+        options: ['Copying full posts into every feed wastes memory', 'IDs are encrypted, so they are safer to store', 'Full posts are too complex to keep in a cache', 'IDs make the feed come back in ranked order'],
+        correct: 0,
+        good: 'One post would be copied into hundreds of friends\' lists. IDs are tiny, and the full post is stored once and fetched when the feed is read.',
+        bad: 'It\'s memory. A full post copied into every friend\'s list multiplies storage (80 GB vs 5 TB in your sum). The post is stored once, and lists point to it by ID.',
+      },
+      {
+        tag: 'Check 2 of 2', xp: 15,
+        q: 'Why is capping each feed list at a few hundred entries safe?',
+        options: ['Few people scroll that far, and misses fall back to the DB', 'Older posts are deleted from the post database anyway', 'The cap also stops any one user from posting too often', 'Posts beyond the cap are hidden from the user for good'],
+        correct: 0,
+        good: 'Most sessions stop early, so the cache serves almost every request. The rare deep scroller gets a slower page from the database, not an error.',
+        bad: 'The cap only trims the cache. Older posts still exist in the post DB, and the rare reader who scrolls past the cap is served from there, just more slowly.',
+      },
+    ], () => setTimeout(() => Q.clearStage(5), 700)), 500);
+  }
+});
+
+/* ================= STAGE 6: boss ================= */
+Q.onStage(6, () => Q.boss($('#boss'), {
+  name: '🔧 Assembly-Line Saboteur',
+  xp: 10,
+  choices: [
+    { k: 'web', label: 'Web servers', sub: 'auth · rate limit' },
+    { k: 'graph', label: 'Graph DB + filter', sub: 'friends · settings' },
+    { k: 'mq', label: 'Queue + workers', sub: 'async fanout' },
+    { k: 'cache', label: 'Feed cache', sub: 'IDs · cap' },
+  ],
+  scenarios: [
+    { e: '🤖', t: 'The 400-post bot', d: 'A bot posts 400 times a minute, and every post fans out to 300 friends.', a: 'web', why: 'Rate limiting at the web servers should cap it at a few posts per minute. The other 395 never reach the fanout, which saves over 100,000 feed writes a minute.' },
+    { e: '🔇', t: 'Mute doesn\'t work', d: 'People who muted Raj still see his new posts in their feeds.', a: 'graph', why: 'Step 2 is supposed to load each friend\'s settings from the user cache and drop anyone who muted the poster. That filter isn\'t being applied.' },
+    { e: '🐢', t: '25 minutes late', d: 'After a viral event, new posts show up in friends\' feeds 25 minutes after they were made.', a: 'mq', why: 'A backlog in the queue. Nothing is lost, it\'s just slow. Add fanout workers (they scale on their own) and watch queue depth as an alert.' },
+    { e: '💾', t: 'Out of memory', d: 'The feed cache cluster runs out of memory right after a change that stores full post objects in every list.', a: 'cache', why: 'Store IDs only (<post_id, user_id>) and cap each list. Full objects get copied into hundreds of lists. Your sum: ~80 GB vs ~5 TB.' },
+    { e: '🔓', t: 'Replay attack', d: 'Logged-out users can still publish by resending an old request they captured.', a: 'web', why: 'Authentication belongs at the web servers: every publish needs a valid, unexpired auth_token. An old or revoked token must be rejected.' },
+    { e: '💥', t: 'Half the friends missed it', d: 'A worker crashed in the middle of a fanout job, and half of the friends never got the post.', a: 'mq', why: 'Workers should ack a job only after all its writes are done. Then a crash means the queue re-delivers the job to another worker. Make the writes idempotent so the repeats are harmless.' },
+    { e: '📜', t: 'The empty page', d: 'Users who scroll back 2,000 posts see an empty page.', a: 'cache', why: 'They went past the cap. A miss there must fall back to the database (or pull older posts), not return nothing.' },
+  ],
+  outro: 'Door problems are auth or rate limits. Wrong recipients are the filter. Late or missing deliveries are the queue and workers. Memory and deep scrolls are the feed cache.',
+  onDone: () => Q.clearStage(6),
+}));
+
+/* ================= STAGE 7: interview drill ================= */
+Q.onStage(7, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"Walk me through what happens after Ana hits Post."</i>',
+  placeholder: 'The request reaches the web servers, which…',
+  model: '"The load balancer sends the request to a web server, which checks Ana\'s auth token and applies a rate limit, so spam never reaches the expensive part. The web servers then hand the post to three services side by side: the post service saves it in the post DB and cache, the notification service pings friends, and the fanout service gets Ana\'s friend IDs from the graph DB, loads their info from the user cache, and drops anyone who muted her or isn\'t in the post\'s audience. It puts the post ID and the filtered friend list on a message queue, so Ana gets a fast reply. Fanout workers take jobs off the queue and add a &lt;post_id, author_id&gt; entry to each friend\'s list in the news feed cache. Workers ack only after writing, so a crash means a retry. We store IDs only and cap each list at a few hundred entries, because almost nobody scrolls further, and fall back to the DB if they do. Very popular accounts skip this fanout, and their posts are pulled at read time."',
+  checks: ['Auth and rate limiting at the web servers', 'Graph DB for the friend list', 'Filtering by settings (mute, audience)', 'Message queue + workers, and why', 'Only IDs in the feed cache', 'A cap per list, with a DB fallback on a miss'],
+  onDone: () => Q.clearStage(7),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

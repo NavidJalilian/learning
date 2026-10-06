@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Hydrate the Feed</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: retrieval diagram (s1), hydration sim (s2), CDN sort + race (s3), cache trays (s4) */
+:root { --media: #c2378a; --media-soft: #fbe3f1; --miss: #c96f00; --dry: #a7a3b3; --wet: #2f7fd8; --wet-soft: #e2ecfc;
+  --l-nf: #5a48f0; --l-ct: #0d9a96; --l-sg: #2f7fd8; --l-ac: #d4423f; --l-co: #c27400; --on-c: #ffffff; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --media: #f07ad0; --media-soft: #3a1631; --miss: #ffb547; --dry: #5b5874; --wet: #6ea8ff; --wet-soft: #172846;
+    --l-nf: #8f82ff; --l-ct: #31d3c8; --l-sg: #6ea8ff; --l-ac: #ff6d6a; --l-co: #ffb547; --on-c: #0e0f1d; }
+}
+:root[data-theme="dark"] { --media: #f07ad0; --media-soft: #3a1631; --miss: #ffb547; --dry: #5b5874; --wet: #6ea8ff; --wet-soft: #172846;
+  --l-nf: #8f82ff; --l-ct: #31d3c8; --l-sg: #6ea8ff; --l-ac: #ff6d6a; --l-co: #ffb547; --on-c: #0e0f1d; }
+
+.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.bignum { font-family: var(--mono); font-weight: 700; }
+.hint { min-height: 22px; font-size: 14px; margin-top: 10px; color: var(--muted); }
+.hint.bad { color: var(--bad); }
+.hint.good { color: var(--good); }
+.shake { animation: shake .4s; }
+.sbtn { padding: 7px 12px; font-size: 14px; min-height: 40px; }
+
+/* ---------- stage 1: retrieval diagram ---------- */
+.dia svg { max-width: 460px; margin: 0 auto; }
+.dia .bx rect { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; transition: stroke .3s, fill .3s; }
+.dia .bx text { fill: var(--ink); font: 600 12px var(--font); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.dia .bx.cache rect { fill: var(--teal-soft); }
+.dia .bx.store rect { fill: var(--bg-2); }
+.dia .bx.svc rect { fill: var(--accent-soft); stroke: var(--accent); }
+.dia .bx.media rect { fill: var(--media-soft); stroke: var(--media); }
+.dia .bx.ping rect { stroke: var(--accent); stroke-width: 3; }
+.dia .edge { fill: none; stroke: var(--dry); stroke-width: 1.6; stroke-dasharray: 3 5; transition: stroke .3s; }
+.dia .edge.on { stroke: var(--accent); stroke-dasharray: none; stroke-width: 2.4; }
+.dia .edge.on.miss { stroke: var(--miss); stroke-dasharray: 5 4; }
+.dia .edge.on.med { stroke: var(--media); stroke-width: 3; }
+.dia .ahp { fill: var(--dry); }
+.dia .ahp.on { fill: var(--accent); }
+.dia .ahp.miss { fill: var(--miss); }
+.dia .ahp.med { fill: var(--media); }
+.dia .badge circle { fill: var(--accent); }
+.dia .badge text { fill: #fff; font: 700 11px var(--font); text-anchor: middle; dominant-baseline: central; }
+.dia .badge { pointer-events: none; animation: popin .4s cubic-bezier(.3,1.6,.5,1); transform-box: fill-box; transform-origin: center; }
+@keyframes popin { from { transform: scale(0); } }
+.dia .cap { fill: var(--muted); font: 600 10px var(--font); text-anchor: middle; }
+.dia .pk { fill: var(--accent); stroke: var(--bg); stroke-width: 2; }
+.dia .pk.miss { fill: var(--miss); }
+.dia .pk.med { fill: var(--media); }
+.dia .pk.json { fill: var(--good); }
+.dia .ehit path { fill: none; stroke: transparent; stroke-width: 22; }
+.dia .ehit { pointer-events: none; }
+.dia.armed .ehit { pointer-events: stroke; cursor: pointer; }
+.dia.armed .ehit:hover path, .dia.armed .ehit:focus path { stroke: color-mix(in srgb, var(--accent) 22%, transparent); }
+.dia .ehit:focus { outline: none; }
+.dia .ehit.nope path { stroke: color-mix(in srgb, var(--bad) 30%, transparent); }
+.steps { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 12px; }
+@media (max-width: 560px) { .steps { grid-template-columns: 1fr; } }
+.steps .opt { min-height: 48px; font-size: 14.5px; display: flex; gap: 10px; align-items: center; }
+.steps .opt .n { flex: none; width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; font: 700 13px var(--mono); background: var(--bg-2); color: var(--muted); }
+.steps .opt.done { border-color: var(--good); background: var(--good-soft); cursor: default; }
+.steps .opt.done .n { background: var(--good); color: #fff; }
+
+/* ---------- stage 2: hydration sim ---------- */
+.hgrid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 14px; padding: 14px; }
+@media (max-width: 620px) { .hgrid { grid-template-columns: 1fr; } }
+.hcol h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.feed { display: grid; gap: 7px; }
+.fcard { display: grid; grid-template-columns: 38px 1fr; gap: 2px 10px; align-items: center; border: 2px dashed var(--dry); border-radius: 12px; padding: 8px 10px; background: var(--bg-2); transition: border-color .4s, background .4s, opacity .6s, transform .6s, filter .6s; min-height: 56px; overflow: hidden; }
+.fcard .av { grid-row: span 2; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-size: 20px; background: var(--line); color: var(--muted); font-weight: 700; }
+.fcard .who { font-weight: 700; font-size: 14px; }
+.fcard .who small { font: 600 11px var(--mono); color: var(--muted); font-weight: 600; }
+.fcard .tx { font-size: 13.5px; color: var(--muted); min-width: 0; }
+.fcard .id { font: 600 12.5px var(--mono); color: var(--muted); }
+.fcard .th { grid-column: 2; height: 46px; border-radius: 8px; margin-top: 4px; background: linear-gradient(135deg, var(--media-soft), var(--wet-soft)); border: 1px solid var(--line); display: grid; place-items: center; font: 600 11px var(--mono); color: var(--muted); }
+.fcard.u { border-style: solid; border-color: color-mix(in srgb, var(--wet) 55%, var(--line)); }
+.fcard.u .av { background: var(--wet-soft); }
+.fcard.p { border-color: var(--good); background: var(--panel); }
+.fcard.p .tx { color: var(--ink); }
+.fcard.dying { opacity: 0; transform: scale(.92) translateX(16px); filter: blur(3px); }
+.fcard.gone { display: none; }
+.cbox { border: 1px solid var(--line); border-radius: 12px; padding: 9px 10px; background: var(--teal-soft); }
+.cbox b { font-size: 13.5px; }
+.cbox .chips { margin-top: 6px; }
+.cchip { font: 600 12px var(--mono); padding: 4px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); transition: background .3s, border-color .3s, box-shadow .3s; }
+.cchip.miss { border: 1.5px dashed var(--miss); color: var(--miss); background: transparent; }
+.cchip.del { text-decoration: line-through; color: var(--bad); }
+.cchip.req { box-shadow: 0 0 0 2px var(--accent); }
+.cchip.hit { background: var(--good-soft); border-color: var(--good); }
+.cchip.missed { background: var(--warn-soft); border-color: var(--miss); border-style: solid; }
+.cchip.wrote { animation: wrote .7s; }
+@keyframes wrote { 40% { transform: scale(1.25); } }
+.dbx { margin: 6px 0 12px 18px; display: inline-flex; gap: 6px; align-items: center; font: 600 12.5px var(--font); color: var(--muted); padding: 5px 10px; border-radius: 9px; border: 1px solid var(--line); background: var(--bg-2); transition: background .3s, border-color .3s, color .3s; }
+.dbx::before { content: "↳"; font-weight: 700; }
+.dbx.busy { background: var(--warn-soft); border-color: var(--miss); color: var(--ink); }
+.trips { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13.5px; }
+.trips b { font-family: var(--mono); font-size: 15px; }
+.json { margin: 0; padding: 12px 14px; border-top: 1px solid var(--line); background: var(--code-bg); color: var(--code-ink); font: 12px/1.5 var(--mono); white-space: pre-wrap; word-break: break-all; max-height: 230px; overflow-y: auto; }
+.json .k { color: #9fa8ff; }
+.json .s { color: #6ee7a8; }
+.json .c { color: #8a8fb3; }
+.cmp { display: none; padding: 10px 14px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+.cmp.on { display: block; animation: rise .35s; }
+.meter { margin: 8px 0; }
+.meter .lab { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 4px; }
+.meter .lab b { color: var(--ink); font-family: var(--mono); }
+.track { position: relative; height: 16px; border-radius: 8px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; }
+.track .fill { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 7px; background: var(--good); transition: width .6s cubic-bezier(.2,.8,.2,1); }
+.track .fill.bad { background: var(--bad); }
+.track .fill.med { background: var(--media); }
+.track .fill.far { background: var(--dry); }
+
+/* ---------- stage 3: CDN sort + race ---------- */
+.pool { display: flex; flex-wrap: wrap; gap: 8px; min-height: 48px; padding: 12px; border: 2px dashed var(--line); border-radius: 14px; }
+.pool:empty::after { content: "All cards placed."; color: var(--muted); font-size: 14px; }
+.tcard { text-align: left; border: 2px solid var(--line); background: var(--panel); border-radius: 12px; padding: 9px 12px; font-size: 14px; font-weight: 500; min-height: 44px; max-width: 100%; transition: border-color .2s, transform .1s, background .2s; touch-action: manipulation; }
+.tcard:hover { border-color: var(--accent); }
+.tcard.sel { border-color: var(--accent); background: var(--accent-soft); transform: translateY(-2px); }
+.tcard.bounce { border-color: var(--bad); background: var(--bad-soft); animation: shake .4s; }
+.placed { display: block; font-size: 13px; padding: 6px 9px; border-radius: 9px; border: 1px solid var(--line); background: var(--panel); animation: rise .3s; }
+.placed .hot { font-size: 11px; font-weight: 700; color: var(--bad); margin-left: 4px; }
+.bins { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.bin { min-height: 130px; border: 2px dashed var(--line); border-radius: 14px; padding: 10px; display: flex; flex-direction: column; gap: 6px; background: var(--bg); cursor: pointer; transition: border-color .2s, background .2s; }
+.bin .bh { font-weight: 700; font-size: 14px; }
+.bin .bh small { display: block; font-weight: 500; color: var(--muted); font-size: 12px; }
+.bin.cdn .bh { color: var(--media); }
+.bin.ready { border-color: var(--accent); background: var(--accent-soft); }
+.bin.over { border-style: solid; border-color: var(--accent); }
+.bin:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 480px) { .bins { gap: 6px; } .bin { padding: 7px; } .placed { font-size: 12px; } }
+.race { display: none; margin-top: 18px; }
+.race.on { display: block; animation: rise .35s; }
+.lanes { padding: 12px 14px; display: grid; gap: 14px; }
+.lane .lh { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 14px; margin-bottom: 6px; }
+.lane .lh span { font: 600 12.5px var(--mono); color: var(--muted); }
+.lane .ph { display: flex; gap: 6px; margin-top: 6px; align-items: center; }
+.lane .ph i { width: 40px; height: 30px; border-radius: 6px; border: 1.5px dashed var(--dry); display: grid; place-items: center; font-style: normal; font-size: 15px; opacity: .45; transition: all .3s; }
+.lane .ph i.got { border-style: solid; border-color: var(--media); background: var(--media-soft); opacity: 1; animation: wrote .5s; }
+.lane .ph .tm { margin-left: auto; font: 700 15px var(--mono); }
+
+/* ---------- stage 4: cache trays ---------- */
+.layers { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 15px; }
+.layers li { display: grid; grid-template-columns: 26px 1fr; gap: 8px; align-items: start; }
+.trays { display: grid; gap: 8px; margin-top: 12px; }
+.tray { display: grid; grid-template-columns: 138px 1fr; gap: 10px; align-items: start; border: 2px dashed var(--line); border-radius: 14px; padding: 8px 10px; background: var(--bg); min-height: 52px; cursor: pointer; transition: border-color .2s, background .2s, box-shadow .3s; }
+.tray .th { font-weight: 700; font-size: 14.5px; display: flex; gap: 6px; align-items: center; padding-top: 4px; border-left: 4px solid var(--lc); padding-left: 8px; }
+.tray .got { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.tray.ready { border-color: var(--accent); background: var(--accent-soft); }
+.tray.over { border-style: solid; border-color: var(--accent); }
+.tray.lit { border-style: solid; border-color: var(--lc); box-shadow: 0 0 0 3px color-mix(in srgb, var(--lc) 30%, transparent); }
+.tray:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 560px) { .tray { grid-template-columns: 1fr; gap: 6px; } }
+.builder { display: none; margin-top: 16px; border: 1px solid var(--line); border-radius: 16px; padding: 14px; background: var(--bg); }
+.builder.on { display: block; animation: rise .35s; }
+.demo { max-width: 380px; margin: 10px auto 0; border: 2px solid var(--line); border-radius: 16px; background: var(--panel); padding: 12px; display: grid; gap: 8px; }
+.demo .hd { display: flex; gap: 10px; align-items: center; }
+.demo .hd .av { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-size: 20px; background: var(--wet-soft); }
+.demo .hd b { font-size: 15px; }
+.demo .fol { font-size: 12px; font-weight: 700; color: var(--l-sg); opacity: 0; transition: opacity .4s; }
+.demo .tx { font-size: 15px; min-height: 22px; }
+.demo .img { height: 74px; border-radius: 10px; background: linear-gradient(135deg, var(--media-soft), var(--wet-soft)); border: 1px solid var(--line); display: grid; place-items: center; font: 600 11px var(--mono); color: var(--muted); opacity: 0; transition: opacity .4s; }
+.demo .ft { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
+.demo .lk { font-size: 20px; color: var(--muted); transition: color .3s, transform .3s; }
+.demo .lk.on { color: var(--l-ac); transform: scale(1.15); }
+.demo .cnt { font-family: var(--mono); color: var(--muted); opacity: 0; transition: opacity .4s; }
+.demo .show { opacity: 1; }
+.demo .skel { color: var(--muted); font-family: var(--mono); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 11.4 · Design a News Feed System</div>
+    <h1>Hydrate the Feed</h1>
+    <p class="lede">The news feed cache only gives you a list of IDs, which isn't something a person can read. Follow the request from the phone to the caches and back, turn the IDs into real posts, send the photos the fast way, and sort the cache into its five layers.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can walk the six steps from <code>GET /v1/me/feed</code> to a rendered feed, explain <b>hydration</b> (turning IDs into full user and post objects), say why media goes through a <b>CDN</b>, and name the <b>five cache layers</b> and what each one holds.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Six steps to your screen</h2><div class="sub">The retrieval path</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>In <a href="1101-news-feed-scope-and-flows.html">Quest 11.1</a> you drew the read flow in four boxes. The book's deep dive zooms in and splits it into <b>six numbered steps</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-news-feed-system" target="_blank" rel="noopener">[1]</a> The arrows below are still hidden. Tap the step cards <b>in the order they happen</b>, and each one draws its arrow and sends a request along it.</p>
+      <div class="sim dia" id="flowDia">
+        <svg id="flowSvg" viewBox="0 0 360 416" role="img" aria-label="Retrieval diagram: client, CDN, load balancer, web servers, news feed service, news feed cache, user cache and DB, post cache and DB"></svg>
+        <div class="sim-bar"><span class="small">Steps placed: <span class="bignum" id="stepCount">0 / 6</span></span><button class="btn sbtn" id="flowReset">↻ Replay the steps</button></div>
+        <div class="simlog" id="flowLog"><div>Bo opens the app. Nothing has moved yet.</div></div>
+      </div>
+      <div class="steps" id="steps"></div>
+      <div class="hint" id="stepHint"></div>
+      <div class="challenge boxed" id="cdnBox" style="display:none"></div>
+      <div class="callout tip"><b>What is the news feed cache, physically?</b> A fast in-memory store keyed by user. One common way to hold it is a Redis <i>sorted set</i> per user: each member is a post ID and its score is the post's time, so "newest 20" is one cheap range read.<a class="cite" href="https://redis.io/docs/latest/develop/data-types/sorted-sets/" target="_blank" rel="noopener">[5]</a> The book only says it's a cache of IDs; Redis is our example.</div>
+      <div class="callout"><b>Where the hybrid shows up.</b> In <a href="1102-news-feed-fanout-push-vs-pull.html">Quest 11.2</a> you chose <b>hybrid</b> fanout: push for most accounts, pull for the few with huge followings. So at step 4 the news feed service does one extra thing. Besides reading Bo's precomputed list, it fetches the newest posts of the big accounts he follows and merges them in, newest first, before hydrating. The book's retrieval figure doesn't draw this merge, but the hybrid needs it.</div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Just add water</h2><div class="sub">Hydration, live</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Step 4 gave the service Bo's feed as bare pairs of <code>(post ID, author ID)</code>. A feed needs more than that: the author's name and profile picture, the post's text, its photos. Filling in those full objects is called <b>hydrating</b> the feed (like adding water to a dried-out sponge). The book's step 5 fetches them from the <b>user cache</b> and the <b>post cache</b>.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-news-feed-system" target="_blank" rel="noopener">[1]</a></p>
+      <p>Look at the caches. <code>u12</code> and <code>p955</code> aren't in them (a <b>cache miss</b>: the data isn't there, so we have to go to the database). And <code>p977</code> has been deleted. You run the fetches.</p>
+      <div class="challenge boxed" id="tripBox"></div>
+      <div class="sim" id="hydSim">
+        <div class="hgrid">
+          <div class="hcol"><h4>Bo's feed, from the news feed cache</h4><div class="feed" id="feed"></div></div>
+          <div class="hcol">
+            <h4>Caches (and their databases)</h4>
+            <div class="cbox"><b>User cache</b><div class="chips" id="ucache"></div></div>
+            <div class="dbx" id="udb">User DB</div>
+            <div class="cbox"><b>Post cache</b><div class="chips" id="pcache"></div></div>
+            <div class="dbx" id="pdb">Post DB</div>
+          </div>
+        </div>
+        <div class="sim-bar">
+          <span class="row" style="gap:8px"><button class="btn primary sbtn" id="fetchU" disabled>Fetch users</button><button class="btn sbtn" id="replayNB" disabled>↻ Replay with no batching</button><button class="btn sbtn" id="hydReset">↻ Reset</button></span>
+          <span class="trips"><span>Cache trips <b id="tc">0</b></span><span>DB trips <b id="td">0</b></span></span>
+        </div>
+        <div class="cmp" id="cmp"></div>
+        <div class="simlog" id="hydLog"><div>The news feed cache returned 5 pairs for Bo. Every card is still "dry".</div></div>
+        <pre class="json" id="json"><span class="c">// the JSON sent back to Bo's phone appears here</span></pre>
+      </div>
+      <div class="challenge boxed" id="countBox" style="display:none"></div>
+      <ul class="checklist" id="s2goals">
+        <li data-g="users"><span class="box">✓</span><span>Fetch the users in <b>one</b> multi-get</span></li>
+        <li data-g="posts"><span class="box">✓</span><span>Predict, then fetch the posts</span></li>
+        <li data-g="nb"><span class="box">✓</span><span>Replay it with no batching and compare the trips</span></li>
+      </ul>
+      <div class="callout" id="hydNote" style="display:none"><b>Why IDs pay off here.</b> Each post is stored <b>once</b>, and feeds only point at it. If Ana edits a post, every feed shows the new text on the next load. If she deletes it, the ID simply fails to hydrate and the service drops it. Nobody has to go back through thousands of feeds. Hydration is also the natural moment to <b>re-check visibility</b>: if someone blocked Bo after the post was fanned out, drop it here.</div>
+      <div class="callout warn"><b>Real systems page.</b> The book's GET returns "the feed". Real apps ask for one page at a time (say 20 posts) with a <i>cursor</i>, a marker that says "continue after this post", and hydrate only that page. Hydrating 500 posts nobody scrolls to would waste every lookup.</div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Media by express</h2><div class="sub">Why images and videos go to a CDN</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Photos and videos are huge next to a post's text, and they are read far more often than they are written. The book stores media in a <b>CDN</b> (content delivery network: servers spread around the world that keep copies of static files close to users) "for fast retrieval".<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-news-feed-system" target="_blank" rel="noopener">[1]</a> The feed's JSON carries only a <b>URL</b> for each image. The phone then downloads the bytes from the nearest CDN <i>edge</i> (one of those nearby servers), not from our web servers.<a class="cite" href="https://www.cloudflare.com/learning/cdn/what-is-a-cdn/" target="_blank" rel="noopener">[2]</a></p>
+      <p><b>Sort the data.</b> Tap a card, then tap where it's served from. You can drag on a desktop too.</p>
+      <div class="pool" id="pool3"></div>
+      <div class="bins" id="bins3">
+        <div class="bin cdn" data-bin="cdn" role="button" tabindex="0" aria-label="Put the selected card in: CDN"><div class="bh">🌐 CDN<small>files the phone downloads by URL</small></div></div>
+        <div class="bin" data-bin="api" role="button" tabindex="0" aria-label="Put the selected card in: caches and databases behind the API"><div class="bh">🗄️ Caches / DB behind the API<small>data the feed service puts in the JSON</small></div></div>
+      </div>
+      <div class="hint" id="sortMsg3"></div>
+      <div class="race" id="race">
+        <p><b>Now race it.</b> Bo is in <b>Sydney</b>. His feed has 3 photos. In lane A the photos come from our origin servers in <b>Virginia</b>. In lane B they come from a CDN edge in Sydney. The round-trip times are illustrative but realistic.</p>
+        <div class="sim">
+          <div class="lanes">
+            <div class="lane" id="laneA"><div class="lh"><b>A · Origin in Virginia</b><span>~200 ms per round trip</span></div><div class="track"><div class="fill far"></div></div><div class="ph"><i>🖼</i><i>🖼</i><i>🖼</i><span class="tm">0 ms</span></div></div>
+            <div class="lane" id="laneB"><div class="lh"><b>B · CDN edge in Sydney</b><span>~15 ms per round trip</span></div><div class="track"><div class="fill med"></div></div><div class="ph"><i>🖼</i><i>🖼</i><i>🖼</i><span class="tm">0 ms</span></div></div>
+          </div>
+        </div>
+        <div class="challenge boxed" id="raceBox"></div>
+      </div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Five layers of cache</h2><div class="sub">The cache architecture</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>"The cache" is really several caches. The book splits it into <b>five layers</b>:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-news-feed-system" target="_blank" rel="noopener">[1]</a></p>
+      <ul class="layers">
+        <li><span>📰</span><span><b>News Feed</b>: the IDs in each user's feed.</span></li>
+        <li><span>📝</span><span><b>Content</b>: the data of every post. Popular posts sit in a <b>hot cache</b>.</span></li>
+        <li><span>🕸️</span><span><b>Social Graph</b>: who follows whom (follower and following lists).</span></li>
+        <li><span>❤️</span><span><b>Action</b>: whether a user liked, replied to or otherwise acted on a post.</span></li>
+        <li><span>🔢</span><span><b>Counters</b>: counts of likes, replies, followers, following and so on.</span></li>
+      </ul>
+      <p>Why split? Each layer has a different <b>shape</b> (lists, objects, sets, plain numbers), a different size and a different rhythm. Counters change all day long, while a post's text hardly ever does. Separate layers can each be sized, scaled and evicted (cleared out when memory runs low) on their own. <b>Sort the 12 cards into their layers.</b></p>
+      <div class="pool" id="pool4"></div>
+      <div class="trays" id="trays"></div>
+      <div class="hint" id="sortMsg4"></div>
+      <div class="builder" id="builder">
+        <b>Watch one feed card get built.</b> <span class="muted small">Each layer lights up as the card takes something from it.</span>
+        <div class="demo" id="demo"></div>
+        <div class="row" style="margin-top:12px;justify-content:center"><button class="btn primary" id="buildBtn">▶ Build Cleo's post card</button></div>
+      </div>
+      <div class="callout tip"><b>In real life.</b> Facebook's TAO is a whole system for one of these layers: it caches the social graph (people, posts and the links between them, like "follows" or "liked") in front of MySQL, across many data centers.<a class="cite" href="https://www.usenix.org/conference/atc13/technical-sessions/presentation/bronson" target="_blank" rel="noopener">[4]</a> The author's name and avatar come from the <b>user cache</b> you used in stage 2; the book draws it in the retrieval figure rather than as one of the five layers.</div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Slow-Feed Sleuth</h2><div class="sub">Symptom → the part to fix</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Six bug reports from the feed team. For each one, pick the fix that goes to the <b>root cause</b>. Every option is something real teams try, so read closely.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">From GET to glass</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next up: the world boss.</b> You now have every piece of the news feed: scope and APIs (<a href="1101-news-feed-scope-and-flows.html">11.1</a>), push vs pull (<a href="1102-news-feed-fanout-push-vs-pull.html">11.2</a>), the fanout pipeline (<a href="1103-news-feed-publishing-pipeline.html">11.3</a>) and the read path (this quest). <a href="1105-news-feed-boss-design-it-live.html">Design It Live: News Feed</a> puts them together in a full mock interview.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-news-feed-system" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 11: Design a News Feed System</a>, Step 3: the "Newsfeed retrieval deep dive" (figure 11-7) and "Cache architecture" (figure 11-8). About two pages. Then read Cloudflare's short <a href="https://www.cloudflare.com/learning/cdn/what-is-a-cdn/" target="_blank" rel="noopener">What is a CDN?</a> for how edges cache files.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <p style="margin-top:0"><b>Hydration is a fan-out of its own.</b> One feed page can touch the user cache, the post cache, the action layer and the counters. Real systems batch each one (multi-get) and run them <b>in parallel</b>, because a page is only as fast as its slowest lookup (its <i>tail latency</i>).</p>
+      <p><b>Facebook doesn't build feeds the book's way.</b> Its Multifeed system doesn't keep a ready-made list per user. At read time it gathers recent actions from the people you follow out of sharded in-memory "leaf" servers, then ranks them.<a class="cite" href="https://engineering.fb.com/2015/03/10/production-engineering/serving-facebook-multifeed-efficiency-performance-gains-through-redesign/" target="_blank" rel="noopener">[3]</a> The book's precomputed per-user list is closer to Twitter's timeline cache.</p>
+      <p style="margin-bottom:0"><b>Counters at huge scale are often approximate.</b> Millions of increments on one post's like counter hit one key, which is the same hot-key problem as celebrity fanout. Teams spread the increments across several keys and add them up, or update the count asynchronously, and accept that "1.2K" may lag a little.</p>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"if the post cache and the post DB disagree, which wins?"</i> or <i>"how does the CDN know a profile picture changed?"</i>
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 11 "Design a News Feed System", newsfeed retrieval deep dive and cache architecture (ByteByteGo).</li>
+        <li>Cloudflare Learning Center, "What is a CDN?".</li>
+        <li>Engineering at Meta, "Serving Facebook Multifeed: Efficiency, performance gains through redesign", 2015.</li>
+        <li>Bronson et al., "TAO: Facebook's Distributed Data Store for the Social Graph", USENIX ATC 2013.</li>
+        <li>Redis documentation, "Sorted sets".</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '1104',
+  winTitle: 'The feed is fully hydrated',
+  badge: '💧 Badge: Hydration Master',
+  cheatsheet: '../reference/ch11-news-feed-cheatsheet.html',
+});
+const { sleep, shuffle, esc } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+const D = ms => Q.reduced ? 30 : ms;
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function anim(dur, f) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 1) { f(1); return res(); }
+    const t0 = performance.now();
+    const fr = now => { const p = Math.min(1, (now - t0) / dur); f(p); p < 1 ? requestAnimationFrame(fr) : res(); };
+    requestAnimationFrame(fr);
+  });
+}
+const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); Q.addXP(xp || 5, li);
+  return true;
+}
+function keyActivate(el, fn) { el.addEventListener('keydown', e => { if (e.target === el && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); fn(); } }); }
+// Predict-then-watch round. Resolves after the learner picks and the action has played.
+function predict(box, { step, title, options, correct, act, explain, xp = 10 }) {
+  box.innerHTML = `${step ? `<div class="step">${step}</div>` : ''}<h3>${title}</h3><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+  const opts = $('.opts', box);
+  let busy = false;
+  return new Promise(resolve => {
+    shuffle(options.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = async () => {
+        if (busy) return; busy = true;
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        b.classList.add('picked');
+        if (act) await act();
+        const ok = i === correct;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-i="${correct}"]`, opts).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + explain;
+        ok ? Q.addXP(xp, b) : Q.loseHeart(b);
+        resolve({ ok, row: $('.row', box) });
+      };
+      opts.appendChild(b);
+    });
+  });
+}
+// Tap-a-card-then-tap-a-bin sorter (with desktop drag). Used by stages 3 and 4.
+function sorter({ pool, bins, cards, binOf, onRight, onWrong, onDone }) {
+  let sel = null, placed = 0;
+  pool.innerHTML = '';
+  bins.forEach(b => $$('.placed', b).forEach(x => x.remove()));
+  shuffle(cards.map((c, i) => ({ c, i }))).forEach(({ c, i }) => {
+    const b = document.createElement('button'); b.className = 'tcard'; b.textContent = c.t; b.dataset.i = i; b.draggable = true;
+    b.onclick = () => select(b);
+    b.addEventListener('dragstart', ev => { select(b, true); ev.dataTransfer.setData('text/plain', String(i)); ev.dataTransfer.effectAllowed = 'move'; });
+    pool.appendChild(b);
+  });
+  function select(b, force) {
+    if (sel === b && !force) { b.classList.remove('sel'); sel = null; }
+    else { $$('.tcard.sel', pool).forEach(x => x.classList.remove('sel')); b.classList.add('sel'); sel = b; }
+    bins.forEach(c => c.classList.toggle('ready', !!sel));
+  }
+  function drop(bin, card) {
+    if (!card) { Q.toast('pick a card first', bin, 'practice'); return; }
+    const c = cards[+card.dataset.i], ok = c.a === bin.dataset.bin;
+    card.classList.remove('sel'); sel = null;
+    bins.forEach(x => x.classList.remove('ready'));
+    if (!ok) {
+      card.classList.remove('bounce'); void card.offsetWidth; card.classList.add('bounce');
+      setTimeout(() => card.classList.remove('bounce'), 700);
+      Q.loseHeart(bin); onWrong(c, bin); return;
+    }
+    const sp = document.createElement('span'); sp.className = 'placed'; sp.innerHTML = esc(c.t) + (c.hot ? '<span class="hot">🔥 hot</span>' : '');
+    sp.title = c.why || '';
+    (bin.querySelector('.got') || bin).appendChild(sp);
+    card.remove();
+    Q.addXP(3, bin); placed++;
+    onRight(c, placed);
+    if (placed === cards.length) onDone();
+  }
+  bins.forEach(bin => {
+    bin.onclick = () => drop(bin, sel);
+    keyActivate(bin, () => drop(bin, sel));
+    bin.ondragover = ev => { ev.preventDefault(); bin.classList.add('over'); };
+    bin.ondragleave = () => bin.classList.remove('over');
+    bin.ondrop = ev => { ev.preventDefault(); bin.classList.remove('over'); const i = ev.dataTransfer.getData('text/plain'); const card = $(`.tcard[data-i="${i}"]`, pool); if (card) drop(bin, card); };
+  });
+}
+
+/* ================= STAGE 1: six steps ================= */
+Q.onStage(1, () => {
+  const svg = $('#flowSvg'), dia = $('#flowDia');
+  svg.innerHTML = '';
+  const defs = S('defs', {}, svg);
+  ['', 'on', 'miss', 'med'].forEach(k => {
+    const m = S('marker', { id: 'ah1' + k, viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 6.5, markerHeight: 6.5, orient: 'auto-start-reverse' }, defs);
+    S('path', { d: 'M0 0L10 5L0 10z', class: 'ahp ' + k }, m);
+  });
+  const edgeG = S('g', {}, svg), boxG = S('g', {}, svg), hitG = S('g', {}, svg), badgeG = S('g', {}, svg), fxG = S('g', {}, svg);
+  const BOX = [
+    ['client', 130, 10, 100, 34, '📱 Bo’s phone'],
+    ['cdn', 268, 10, 86, 34, '🌐 CDN', 'media'],
+    ['lb', 130, 80, 100, 34, 'Load balancer'],
+    ['web', 130, 150, 100, 34, 'Web servers'],
+    ['svc', 112, 220, 136, 34, 'News feed service', 'svc'],
+    ['nfc', 6, 300, 112, 34, 'News feed cache', 'cache'],
+    ['uc', 130, 300, 100, 34, 'User cache', 'cache'],
+    ['pc', 248, 300, 106, 34, 'Post cache', 'cache'],
+    ['udb', 130, 370, 100, 34, 'User DB', 'store'],
+    ['pdb', 248, 370, 106, 34, 'Post DB', 'store'],
+  ];
+  const boxEl = {};
+  BOX.forEach(([k, x, y, w, h, t, cls]) => {
+    const g = S('g', { class: 'bx ' + (cls || '') }, boxG);
+    S('rect', { x, y, width: w, height: h, rx: 9 }, g);
+    S('text', { x: x + w / 2, y: y + h / 2 }, g).textContent = t;
+    boxEl[k] = g;
+  });
+  S('text', { x: 249, y: 58, class: 'cap' }, svg).textContent = 'media';
+  // edges per step: [d, kind]; kind 'miss' = DB fallback, 'rev' = packet travels the other way for the reply
+  const EDGES = {
+    1: [['M180 44 L180 78']],
+    2: [['M180 114 L180 148']],
+    3: [['M180 184 L180 218']],
+    4: [['M150 254 L72 298']],
+    5: [['M180 254 L180 298'], ['M216 254 L296 298'], ['M180 334 L180 368', 'miss'], ['M300 334 L300 368', 'miss']],
+    6: [['M112 237 C 30 237, 30 27, 127 27']],
+    7: [['M230 27 L266 27', 'med']],
+  };
+  const BADGE = { 1: [194, 61], 2: [194, 131], 3: [194, 201], 4: [98, 266], 5: [264, 270], 6: [36, 132] };
+  const TARGET = { 1: 'lb', 2: 'web', 3: 'svc', 4: 'nfc', 5: 'uc', 6: 'client', 7: 'cdn' };
+  const ARIA = { 1: 'Arrow: phone to load balancer', 2: 'Arrow: load balancer to web servers', 3: 'Arrow: web servers to news feed service', 4: 'Arrow: service to news feed cache', 5: 'Arrows: service to user and post caches', 6: 'Arrow: service back to phone', 7: 'Arrow: phone to CDN' };
+  const paths = {}, hits = {};
+  Object.entries(EDGES).forEach(([k, list]) => {
+    paths[k] = list.map(([d, kind]) => { const p = S('path', { d, class: 'edge', 'marker-end': 'url(#ah1)' }, edgeG); p.dataset.kind = kind || ''; return p; });
+    const hg = S('g', { class: 'ehit', role: 'button', tabindex: -1, 'aria-label': ARIA[k] }, hitG);
+    list.forEach(([d]) => S('path', { d }, hg));
+    hg.addEventListener('click', () => tapEdge(+k, hg));
+    keyActivate(hg, () => tapEdge(+k, hg));
+    hits[k] = hg;
+  });
+  function lightEdge(k, on) {
+    paths[k].forEach(p => {
+      const kind = p.dataset.kind;
+      p.setAttribute('class', 'edge' + (on ? ' on' + (kind ? ' ' + kind : '') : ''));
+      p.setAttribute('marker-end', `url(#ah1${on ? (kind || 'on') : ''})`);
+    });
+  }
+  function ping(k) { const g = boxEl[k]; if (!g) return; g.classList.add('ping'); setTimeout(() => g.classList.remove('ping'), 700); }
+  async function travel(path, cls, rev, dur = 650) {
+    const len = path.getTotalLength();
+    const c = S('circle', { r: 5.5, class: 'pk ' + (cls || '') }, fxG);
+    await anim(dur, p => { const q = ease(rev ? 1 - p : p); const pt = path.getPointAtLength(len * q); c.setAttribute('cx', pt.x.toFixed(1)); c.setAttribute('cy', pt.y.toFixed(1)); });
+    c.remove();
+  }
+  function badge(k) {
+    const [x, y] = BADGE[k]; const g = S('g', { class: 'badge' }, badgeG);
+    S('circle', { cx: x, cy: y, r: 9 }, g); S('text', { x, y }, g).textContent = k;
+  }
+  const STEPS = [
+    'Phone sends GET /v1/me/feed',
+    'Load balancer picks a web server',
+    'Web server calls the news feed service',
+    'Service reads post IDs from the news feed cache',
+    'Service fetches users and posts (DB on a miss)',
+    'Hydrated feed goes back to the phone as JSON',
+  ];
+  const LOG = [
+    '① GET /v1/me/feed leaves Bo’s phone, with his auth token.',
+    '② The load balancer spreads requests across the web servers.',
+    '③ The web server hands the job to the news feed service.',
+    '④ The news feed cache returns Bo’s list of (post ID, author ID) pairs. Just IDs.',
+    '⑤ Hydrate: user objects from the user cache, post objects from the post cache. Misses fall back to the DBs.',
+    '⑥ The fully hydrated feed returns as JSON, and the phone renders it.',
+  ];
+  let next = 1, busy = false, cdnDone = false, quizShown = false;
+  async function play(k) {
+    lightEdge(k, true); if (BADGE[k]) badge(k);
+    if (LOG[k - 1]) logTo('flowLog', LOG[k - 1], k === 6 ? 'g' : '');
+    if (k === 5) {
+      await Promise.all([travel(paths[5][0]), travel(paths[5][1])]);
+      ping('uc'); ping('pc');
+      await Promise.all([travel(paths[5][2], 'miss', false, 450), travel(paths[5][3], 'miss', false, 450)]);
+      ping('udb'); ping('pdb');
+    } else if (k === 6) { await travel(paths[6][0], 'json', false, 900); ping('client'); }
+    else if (k === 7) { await travel(paths[7][0], 'med', false, 400); ping('cdn'); await travel(paths[7][0], 'med', true, 400); ping('client'); }
+    else { await travel(paths[k][0]); ping(TARGET[k]); }
+  }
+  function deal() {
+    next = 1; cdnDone = false;
+    Object.keys(EDGES).forEach(k => lightEdge(k, false));
+    badgeG.innerHTML = ''; fxG.innerHTML = '';
+    $('#stepCount').textContent = '0 / 6';
+    $('#stepHint').textContent = ''; $('#stepHint').className = 'hint';
+    $('#cdnBox').style.display = 'none'; $('#cdnBox').innerHTML = '';
+    dia.classList.remove('armed'); Object.values(hits).forEach(h => h.setAttribute('tabindex', -1));
+    const wrap = $('#steps'); wrap.innerHTML = '';
+    shuffle(STEPS.map((t, i) => ({ t, i }))).forEach(({ t, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.dataset.i = i + 1;
+      b.innerHTML = `<span class="n">?</span><span>${esc(t)}</span>`;
+      b.onclick = () => tapStep(b, i + 1);
+      wrap.appendChild(b);
+    });
+  }
+  async function tapStep(b, k) {
+    if (busy || b.classList.contains('done')) return;
+    if (k !== next) {
+      b.classList.remove('wrong'); void b.offsetWidth; b.classList.add('wrong');
+      setTimeout(() => b.classList.remove('wrong'), 600);
+      const h = $('#stepHint'); h.className = 'hint bad';
+      h.innerHTML = `Not yet. Step ${next} comes first: ${next === 1 ? 'something has to leave the phone.' : 'follow the last arrow you drew. Where does the request go from there?'}`;
+      Q.loseHeart(b); return;
+    }
+    busy = true;
+    b.classList.add('done'); b.disabled = true; $('.n', b).textContent = k;
+    $('#stepCount').textContent = `${k} / 6`;
+    $('#stepHint').textContent = ''; Q.addXP(5, b);
+    await play(k);
+    next++; busy = false;
+    if (next === 7) startCdn();
+  }
+  function startCdn() {
+    const box = $('#cdnBox'); box.style.display = 'block';
+    box.innerHTML = `<div class="step">One more arrow</div><h3>The JSON from step 6 has 3 photo <b>URLs</b> in it, not the photos. Tap the arrow the photo bytes actually travel on.</h3><div class="hint" id="cdnHint">Tap an arrow in the diagram.</div>`;
+    dia.classList.add('armed'); Object.values(hits).forEach(h => h.setAttribute('tabindex', 0));
+    logTo('flowLog', '❓ Which arrow do the photo bytes travel on? Tap it.', 'w');
+    setTimeout(() => $('#flowSvg').scrollIntoView({ behavior: Q.reduced ? 'auto' : 'smooth', block: 'center' }), 300);
+  }
+  const WHY = { 1: 'That’s step 1: the feed request itself, a few hundred bytes.', 2: 'That’s step 2, inside our data center. No photos travel here.', 3: 'That’s step 3: a call between our own services.', 4: 'That’s step 4: it carries only post IDs.', 5: 'Those are step 5: user and post objects, text and URLs, not image bytes.', 6: 'That’s step 6: the JSON itself. It holds URLs, not pictures.' };
+  async function tapEdge(k, hg) {
+    if (!dia.classList.contains('armed') || busy) return;
+    const h = $('#cdnHint');
+    if (k !== 7) {
+      hg.classList.add('nope'); setTimeout(() => hg.classList.remove('nope'), 600);
+      h.className = 'hint bad'; h.textContent = WHY[k] + ' Try another arrow.';
+      Q.loseHeart(hg); return;
+    }
+    busy = true; dia.classList.remove('armed'); Object.values(hits).forEach(x => x.setAttribute('tabindex', -1));
+    h.className = 'hint good'; h.innerHTML = 'Right. The phone downloads media <b>straight from the CDN</b>, using the URLs in the JSON. It isn’t one of the six steps, because it doesn’t touch our web servers at all.';
+    logTo('flowLog', '🖼 The phone fetches the 3 photos from the nearest CDN edge.', 'g');
+    Q.addXP(10, hg);
+    await play(7);
+    busy = false; cdnDone = true;
+    maybeQuiz();
+  }
+  function maybeQuiz() {
+    if (quizShown || !cdnDone) return;
+    quizShown = true;
+    setTimeout(() => Q.quiz($('#s1quiz'), {
+      q: 'Which step turns the feed’s bare IDs into something the phone can render?',
+      options: ['Step 5: fetching user and post objects', 'Step 4: reading the news feed cache', 'Step 6: returning the feed as JSON'],
+      correct: 0,
+      good: 'Step 5 is <b>hydration</b>: the service swaps each ID for the full user and post objects (name, avatar, text, media URLs). Step 4 only gives it the list of IDs.',
+      bad: 'Step 4 hands over only IDs, and step 6 just ships what’s already built. The filling-in happens in step 5, <b>hydration</b>: full user and post objects from their caches.',
+      onDone: () => setTimeout(() => Q.clearStage(1), 900),
+    }), 400);
+  }
+  $('#flowReset').onclick = () => { if (busy) return; $('#flowLog').innerHTML = '<div>Bo opens the app again.</div>'; deal(); };
+  deal();
+});
+
+/* ================= STAGE 2: hydration sim ================= */
+Q.onStage(2, () => {
+  const USERS = { u3: { name: 'Ana', av: '🦊' }, u7: { name: 'Cleo', av: '🐙' }, u12: { name: 'Dev', av: '🐢' } };
+  const POSTS = {
+    p981: { text: 'Sunrise from the ferry this morning', photo: true, at: '08:12' },
+    p977: { deleted: true },
+    p960: { text: 'New blog post: why I quit caffeine', at: '07:40' },
+    p955: { text: 'First marathon done! 42 km', photo: true, at: '07:05' },
+    p950: { text: 'Who wants tacos tonight?', at: '06:58' },
+  };
+  const FEED = [['p981', 'u7'], ['p977', 'u3'], ['p960', 'u7'], ['p955', 'u12'], ['p950', 'u3']];
+  const goals = new Set();
+  let st, busy = false, quizShown = false, firstRun = null;
+  function initState() {
+    st = { uc: { u3: 1, u7: 1, u12: 0 }, pc: { p981: 1, p977: 1, p960: 1, p955: 0, p950: 1 }, users: false, posts: false, tc: 0, td: 0 };
+  }
+  function renderCaches() {
+    $('#ucache').innerHTML = Object.keys(st.uc).map(k => `<span class="cchip ${st.uc[k] ? '' : 'miss'}" data-k="${k}">${k}${st.uc[k] ? '' : ' ✗'}</span>`).join('');
+    $('#pcache').innerHTML = Object.keys(st.pc).map(k => `<span class="cchip ${st.pc[k] ? '' : 'miss'} ${POSTS[k].deleted ? 'del' : ''}" data-k="${k}">${k}${st.pc[k] ? '' : ' ✗'}${POSTS[k].deleted ? ' 🗑' : ''}</span>`).join('');
+  }
+  function renderFeed() {
+    $('#feed').innerHTML = FEED.map(([p, u]) => {
+      const U = USERS[u], P = POSTS[p];
+      const uOk = st.users, pOk = st.posts;
+      const cls = 'fcard' + (uOk ? ' u' : '') + (pOk && !P.deleted ? ' p' : '') + (pOk && P.deleted ? ' gone' : '');
+      return `<div class="${cls}" data-p="${p}">
+        <div class="av">${uOk ? U.av : '?'}</div>
+        <div class="who">${uOk ? esc(U.name) + ` <small>${u}</small>` : `<span class="id">${u}</span>`}</div>
+        <div class="tx">${pOk && !P.deleted ? esc(P.text) + ` <small class="muted">· ${P.at}</small>` : `<span class="id">${p}</span>`}</div>
+        ${pOk && P.photo ? `<div class="th">🖼 cdn…/${p}.jpg</div>` : ''}
+      </div>`;
+    }).join('');
+  }
+  function renderTrips() { $('#tc').textContent = st.tc; $('#td').textContent = st.td; }
+  function renderJSON() {
+    const j = $('#json');
+    if (!st.posts) { j.innerHTML = '<span class="c">// the JSON sent back to Bo\'s phone appears here</span>'; return; }
+    const K = s => `<span class="k">"${s}"</span>`, V = s => `<span class="s">"${esc(s)}"</span>`;
+    const items = FEED.filter(([p]) => !POSTS[p].deleted).map(([p, u]) => {
+      const P = POSTS[p], U = USERS[u];
+      return `  { ${K('id')}: ${V(p)},\n    ${K('author')}: { ${K('name')}: ${V(U.name)}, ${K('avatar_url')}: ${V('https://cdn.example.com/a/' + u + '.jpg')} },\n    ${K('text')}: ${V(P.text)},\n    ${K('media_urls')}: [${P.photo ? V('https://cdn.example.com/m/' + p + '.jpg') : ''}],\n    ${K('created_at')}: ${V('2026-10-05T' + P.at + ':00Z')} }`;
+    });
+    j.innerHTML = `<span class="c">// GET /v1/me/feed → 200 OK (4 posts; p977 was deleted, so it was dropped)</span>\n[\n${items.join(',\n')}\n]`;
+  }
+  function renderAll() { renderCaches(); renderFeed(); renderTrips(); renderJSON(); }
+  const chip = (box, k) => $(`#${box} .cchip[data-k="${k}"]`);
+  async function lookup(box, ids) {
+    st.tc++; renderTrips();
+    ids.forEach(k => chip(box, k).classList.add('req'));
+    await sleep(D(500));
+    const misses = [];
+    ids.forEach(k => { const c = chip(box, k); c.classList.remove('req'); const hit = box === 'ucache' ? st.uc[k] : st.pc[k]; c.classList.add(hit ? 'hit' : 'missed'); if (!hit) misses.push(k); });
+    await sleep(D(450));
+    return misses;
+  }
+  async function dbFill(box, misses) {
+    if (!misses.length) return;
+    const db = box === 'ucache' ? $('#udb') : $('#pdb');
+    st.td++; renderTrips();
+    db.classList.add('busy');
+    logTo('hydLog', `↳ ${misses.join(', ')} missed → 1 query to the ${box === 'ucache' ? 'user' : 'post'} DB, then written back into the cache.`, 'w');
+    await sleep(D(700));
+    db.classList.remove('busy');
+    misses.forEach(k => { if (box === 'ucache') st.uc[k] = 1; else st.pc[k] = 1; });
+    renderCaches();
+    misses.forEach(k => { const c = chip(box, k); c.classList.add('hit', 'wrote'); });
+    await sleep(D(400));
+  }
+  function clearMarks() { $$('.cchip').forEach(c => c.classList.remove('hit', 'missed', 'req', 'wrote')); }
+  async function fetchUsers() {
+    const ids = [...new Set(FEED.map(f => f[1]))];
+    logTo('hydLog', `→ user cache: multi-get [${ids.join(', ')}] (3 distinct authors, 1 trip)`);
+    const miss = await lookup('ucache', ids);
+    await dbFill('ucache', miss);
+    st.users = true; renderFeed(); clearMarks();
+    logTo('hydLog', 'Names and avatars filled in.', 'g');
+  }
+  async function fetchPosts() {
+    const ids = FEED.map(f => f[0]);
+    logTo('hydLog', `→ post cache: multi-get [${ids.join(', ')}] (1 trip)`);
+    const miss = await lookup('pcache', ids);
+    await dbFill('pcache', miss);
+    logTo('hydLog', 'p977 came back marked deleted → dropped from the feed.', 'e');
+    st.posts = true;
+    renderFeed();
+    // play the dissolve on the deleted card
+    const dead = $('.fcard[data-p="p977"]');
+    if (dead) { dead.classList.remove('gone'); void dead.offsetWidth; dead.classList.add('dying'); await sleep(D(650)); dead.classList.add('gone'); }
+    clearMarks(); renderJSON();
+    logTo('hydLog', '4 hydrated posts → JSON → Bo’s phone.', 'g');
+  }
+  function tripPredict() {
+    predict($('#tripBox'), {
+      step: 'Predict first',
+      title: 'The service needs 3 authors and 5 posts. If it <b>batches</b> (one multi-get per cache, asking for many keys at once), how many trips to the caches does it make?',
+      options: ['2 trips, one per cache', '5 trips, one per post', '10 trips, one per lookup'],
+      correct: 0,
+      explain: 'One <b>multi-get</b> to the user cache asks for all three authors at once, and one to the post cache asks for all five posts. That’s 2 cache trips, plus one DB trip per cache that had misses. Press <b>Fetch users</b>.',
+    }).then(() => { $('#fetchU').disabled = false; });
+  }
+  $('#fetchU').onclick = async () => {
+    if (busy || st.users) return;
+    busy = true; $('#fetchU').disabled = true;
+    await fetchUsers();
+    busy = false;
+    checkGoal('#s2goals', 'users', goals);
+    countPredict();
+  };
+  function countPredict() {
+    const box = $('#countBox'); box.style.display = 'block';
+    predict(box, {
+      step: 'Predict, then fetch the posts',
+      title: 'p955 isn’t in the post cache, and p977 is marked deleted. After hydration, how many posts reach Bo’s screen?',
+      options: ['3 posts', '4 posts', '5 posts'],
+      correct: 1,
+      act: async () => { busy = true; await fetchPosts(); busy = false; },
+      explain: 'A miss isn’t a loss: p955 came from the post DB and was written back to the cache. Only the <b>deleted</b> p977 fails to hydrate, so 4 of 5 posts go out.',
+    }).then(() => {
+      $('#hydNote').style.display = 'block';
+      checkGoal('#s2goals', 'posts', goals);
+      firstRun = { tc: st.tc, td: st.td };
+      $('#replayNB').disabled = false;
+      maybeQuiz();
+    });
+  }
+  $('#replayNB').onclick = async () => {
+    if (busy) return;
+    busy = true; $('#replayNB').disabled = true; $('#fetchU').disabled = true;
+    const warm = { uc: { ...st.uc }, pc: { ...st.pc } };
+    initState(); st.uc = warm.uc; st.pc = warm.pc; renderAll();
+    logTo('hydLog', '↻ Replay with <b>no batching</b>: one call per item. (The cache is warm now: u12 and p955 were written back.)');
+    for (const [, u] of FEED) { await lookup('ucache', [u]); clearMarks(); }
+    st.users = true; renderFeed();
+    for (const [p] of FEED) { await lookup('pcache', [p]); clearMarks(); }
+    st.posts = true; renderFeed(); renderJSON();
+    logTo('hydLog', `No batching: ${st.tc} cache trips for 5 posts. With 20 posts per page it would be 40.`, 'w');
+    const base = firstRun || { tc: 2, td: 2 };
+    const cmp = $('#cmp');
+    cmp.innerHTML = `<div class="meter"><div class="lab"><span>Batched (your first run)</span><b>${base.tc} cache + ${base.td} DB trips</b></div><div class="track"><div class="fill"></div></div></div>
+      <div class="meter"><div class="lab"><span>One call per item (replay)</span><b>${st.tc} cache + ${st.td} DB trips</b></div><div class="track"><div class="fill bad"></div></div></div>
+      <div class="small muted">Every trip pays a network round trip. Batching keeps the count flat as the page grows. The replay needed no DB trips because the first run wrote the misses back into the cache.</div>`;
+    cmp.classList.add('on');
+    const mx = Math.max(base.tc + base.td, st.tc + st.td);
+    requestAnimationFrame(() => { const f = $$('.fill', cmp); f[0].style.width = ((base.tc + base.td) / mx * 100) + '%'; f[1].style.width = ((st.tc + st.td) / mx * 100) + '%'; });
+    busy = false; $('#replayNB').disabled = false;
+    checkGoal('#s2goals', 'nb', goals);
+    maybeQuiz();
+  };
+  $('#hydReset').onclick = () => {
+    if (busy) return;
+    initState(); renderAll();
+    $('#cmp').classList.remove('on');
+    $('#replayNB').disabled = true; $('#fetchU').disabled = true;
+    $('#countBox').style.display = 'none'; $('#countBox').innerHTML = '';
+    $('#hydLog').innerHTML = '<div>Reset: u12 and p955 are missing from the caches again.</div>';
+    tripPredict();
+  };
+  function maybeQuiz() {
+    if (quizShown || goals.size < 3) return;
+    quizShown = true;
+    const mount = $('#s2quiz');
+    setTimeout(() => Q.quiz(mount, {
+      q: 'In one sentence, what does it mean to <b>hydrate</b> a news feed?',
+      options: ['Fill bare post IDs with full user and post objects', 'Copy the whole feed into every follower’s cache', 'Compress the feed JSON before it goes to the phone'],
+      correct: 0, xp: 15,
+      good: 'The feed cache stores only IDs. Hydration looks up the full objects (author name and avatar, text, media URLs) so the phone has something to draw.',
+      bad: 'Copying into followers’ caches is fanout (<a href="1103-news-feed-publishing-pipeline.html">Quest 11.3</a>), and compression is a transport detail. Hydration means turning IDs into full user and post objects.',
+      onDone: () => setTimeout(() => Q.quiz(mount, {
+        tag: 'Check 2',
+        q: 'Why does keeping only IDs in feeds make deleting a post easy?',
+        options: ['The post lives in one place, so its ID just fails to hydrate', 'The cache removes the post from every follower’s feed list', 'The phone asks the server about each post before showing it'],
+        correct: 0, xp: 15,
+        good: 'Feeds only <i>point</i> at the post. Delete it once in the post store, and every feed that points at it drops it at hydration time. No need to touch thousands of feed lists.',
+        bad: 'Nothing has to walk through followers’ feeds, and the phone doesn’t ask. The post is stored once; once it’s marked deleted, its ID fails to hydrate and is dropped.',
+        onDone: () => setTimeout(() => Q.clearStage(2), 900),
+      }), 500),
+    }), 500);
+  }
+  initState(); renderAll(); tripPredict();
+});
+
+/* ================= STAGE 3: CDN sort + race ================= */
+Q.onStage(3, () => {
+  const CARDS = [
+    { t: 'Post text', a: 'api', why: 'Small text, goes inside the JSON.' },
+    { t: 'Author display name', a: 'api', why: 'Part of the user object in the JSON.' },
+    { t: 'Profile picture image', a: 'cdn', why: 'An image file: the JSON holds its URL.' },
+    { t: '30-second video', a: 'cdn', why: 'The heaviest thing in the feed. CDN all the way.' },
+    { t: 'Like count', a: 'api', why: 'A number from the counters cache.' },
+    { t: 'Photo in a post', a: 'cdn', why: 'Media bytes come from the nearest edge.' },
+    { t: 'List of post IDs', a: 'api', why: 'Lives in the news feed cache.' },
+    { t: 'Thumbnail image', a: 'cdn', why: 'Still an image file, so still the CDN.' },
+  ];
+  const bins = $$('#bins3 .bin');
+  let raceShown = false, quizShown = false;
+  function deal() {
+    sorter({
+      pool: $('#pool3'), bins, cards: CARDS,
+      onWrong: (c, bin) => { $('#sortMsg3').innerHTML = `<span style="color:var(--bad)">Not there.</span> Ask: is it a <b>file</b> the phone downloads (image, video), or <b>data</b> that goes inside the JSON?`; },
+      onRight: (c, n) => { $('#sortMsg3').innerHTML = `${n} of 8 placed. <span class="muted">${esc(c.why)}</span>`; },
+      onDone: () => { $('#sortMsg3').innerHTML = '<span style="color:var(--good)">All 8 sorted.</span> The rule: if it’s a media file, the JSON carries a URL and the bytes come from the CDN.'; startRace(); },
+    });
+    $('#sortMsg3').textContent = '0 of 8 placed.';
+  }
+  function resetLanes() {
+    ['laneA', 'laneB'].forEach(id => { const l = $('#' + id); $('.fill', l).style.transition = 'none'; $('.fill', l).style.width = '0'; $$('.ph i', l).forEach(i => i.classList.remove('got')); $('.tm', l).textContent = '0 ms'; });
+  }
+  async function runRace() {
+    resetLanes();
+    const RT = { laneA: 200, laneB: 15 }, END = 600, SCALE = 4; // 600 ms simulated → 2.4 s on screen
+    const done = { laneA: 0, laneB: 0 };
+    await anim(END * SCALE, p => {
+      const t = p * END;
+      for (const id of ['laneA', 'laneB']) {
+        const l = $('#' + id), total = RT[id] * 3, tt = Math.min(t, total);
+        $('.fill', l).style.width = (tt / END * 100) + '%';
+        $('.tm', l).textContent = Math.round(tt) + ' ms' + (tt >= total ? ' ✓' : '');
+        const got = Math.min(3, Math.floor(tt / RT[id] + 1e-6));
+        if (got > done[id]) { $$('.ph i', l).slice(0, got).forEach(i => i.classList.add('got')); done[id] = got; }
+      }
+    });
+    await sleep(D(300));
+  }
+  function startRace() {
+    if (raceShown) return; raceShown = true;
+    $('#race').classList.add('on');
+    resetLanes();
+    predict($('#raceBox'), {
+      step: 'Predict, then race',
+      title: 'Both lanes download the 3 photos one after another. Which lane finishes first, and by roughly how much?',
+      options: ['Lane B, about 2× faster', 'Lane B, about 5× faster', 'Lane B, 10× faster or more'],
+      correct: 2, xp: 15,
+      act: runRace,
+      explain: 'Lane A: 3 × 200 ms = 600 ms. Lane B: 3 × 15 ms = 45 ms. That’s about <b>13×</b>. Real browsers fetch photos in parallel, which shrinks both lanes but keeps the gap. And a new connection costs extra round trips before the first byte arrives, which hurts the far lane even more. Distance is latency, and a CDN removes the distance.',
+    }).then(({ row }) => {
+      const again = document.createElement('button'); again.className = 'btn'; again.textContent = '↻ Race again'; again.onclick = runRace; row.appendChild(again);
+      maybeQuiz();
+    });
+  }
+  function maybeQuiz() {
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => Q.quiz($('#s3quiz'), {
+      q: 'Cleo’s post has a photo. What does the feed JSON contain for that photo?',
+      options: ['Its CDN URL, a short link to fetch', 'The full image bytes, sent inline', 'A shrunken copy of the image file'],
+      correct: 0, xp: 15,
+      good: 'Just a URL. That keeps the feed response small and fast, and the heavy bytes come from a CDN edge near Bo, never from our web servers.',
+      bad: 'Putting image bytes (even small ones) in the JSON makes every feed load heavy and drags all that bandwidth through our web servers. The JSON carries a CDN URL; the phone fetches the bytes from the edge.',
+      onDone: () => setTimeout(() => Q.clearStage(3), 900),
+    }), 500);
+  }
+  deal();
+});
+
+/* ================= STAGE 4: five cache layers ================= */
+Q.onStage(4, () => {
+  const LAYERS = [
+    { k: 'nf', n: 'News Feed', ic: '📰' },
+    { k: 'ct', n: 'Content', ic: '📝' },
+    { k: 'sg', n: 'Social Graph', ic: '🕸️' },
+    { k: 'ac', n: 'Action', ic: '❤️' },
+    { k: 'co', n: 'Counters', ic: '🔢' },
+  ];
+  const CARDS = [
+    { t: 'u7’s list of post IDs', a: 'nf', why: 'A feed is a list of IDs: News Feed layer.' },
+    { t: 'Text and media URLs of post p981', a: 'ct', why: 'A post’s own data: Content layer.' },
+    { t: 'A viral post read 1M times an hour', a: 'ct', hot: true, why: 'Popular posts go in the Content layer’s hot cache.' },
+    { t: 'The accounts Bo follows', a: 'sg', why: 'Following list: Social Graph.' },
+    { t: 'The accounts that follow Bo', a: 'sg', why: 'Follower list: Social Graph.' },
+    { t: 'Did Bo like p981?', a: 'ac', why: 'A per-user yes/no about a post: Action layer.' },
+    { t: 'Did Bo reply to p955?', a: 'ac', why: 'Replies are actions too: Action layer.' },
+    { t: 'Number of likes on p981', a: 'co', why: 'A count: Counters layer.' },
+    { t: 'Number of replies on p955', a: 'co', why: 'A count: Counters layer.' },
+    { t: 'Bo’s follower count', a: 'co', why: 'A count, not the list itself: Counters.' },
+    { t: 'Cleo’s 2-minute-old post, going viral', a: 'ct', hot: true, why: 'Suddenly popular content: promote it to the hot cache.' },
+    { t: 'The last 500 post IDs for Ana', a: 'nf', why: 'Feed IDs again: News Feed layer.' },
+  ];
+  const trays = $('#trays');
+  trays.innerHTML = LAYERS.map(L => `<div class="tray" data-bin="${L.k}" role="button" tabindex="0" aria-label="Put the selected card in the ${L.n} layer" style="--lc:var(--l-${L.k})"><div class="th"><span>${L.ic}</span><span>${L.n}</span></div><div class="got"></div></div>`).join('');
+  const bins = $$('.tray', trays);
+  let built = false, quizShown = false, busy = false;
+  function deal() {
+    sorter({
+      pool: $('#pool4'), bins, cards: CARDS,
+      onWrong: (c) => { $('#sortMsg4').innerHTML = `<span style="color:var(--bad)">Not that layer.</span> Ask what <b>shape</b> it is: a list of IDs, a post, a who-follows-whom list, a yes/no per user, or a number?`; },
+      onRight: (c, n) => { $('#sortMsg4').innerHTML = `${n} of 12 placed. <span class="muted">${esc(c.why)}</span>`; },
+      onDone: () => { $('#sortMsg4').innerHTML = '<span style="color:var(--good)">All 12 placed.</span> Now watch them work together.'; $('#builder').classList.add('on'); },
+    });
+    $('#sortMsg4').textContent = '0 of 12 placed.';
+  }
+  function resetDemo() {
+    $('#demo').innerHTML = `<div class="hd"><div class="av">🐙</div><div><b>Cleo</b> <span class="fol" id="dFol">· Following ✓</span><div class="skel" id="dId">p981 · waiting…</div></div></div>
+      <div class="tx" id="dTx"><span class="skel">text?</span></div>
+      <div class="img" id="dImg">🖼 cdn.example.com/m/p981.jpg</div>
+      <div class="ft"><span class="lk" id="dHeart">♡</span><span class="cnt" id="dCnt">1.2K likes · 87 replies</span></div>`;
+    bins.forEach(b => b.classList.remove('lit'));
+  }
+  const STEPS = [
+    { k: 'nf', go: () => { $('#dId').textContent = 'p981 · top of Bo’s feed'; }, log: 'News Feed: p981 is in Bo’s list of IDs.' },
+    { k: 'ct', go: () => { $('#dTx').textContent = 'Sunrise from the ferry this morning'; $('#dImg').classList.add('show'); }, log: 'Content: text and media URL. It’s going viral, so it’s served from the hot cache.' },
+    { k: 'sg', go: () => { $('#dFol').classList.add('show'); }, log: 'Social Graph: Bo still follows Cleo, so the post stays visible.' },
+    { k: 'ac', go: () => { const h = $('#dHeart'); h.textContent = '♥'; h.classList.add('on'); }, log: 'Action: Bo liked p981, so the heart is filled.' },
+    { k: 'co', go: () => { $('#dCnt').classList.add('show'); }, log: 'Counters: 1.2K likes and 87 replies.' },
+  ];
+  $('#buildBtn').onclick = async () => {
+    if (busy) return; busy = true; $('#buildBtn').disabled = true;
+    resetDemo();
+    for (const s of STEPS) {
+      bins.forEach(b => b.classList.toggle('lit', b.dataset.bin === s.k));
+      s.go();
+      $('#sortMsg4').innerHTML = `<span class="muted">${esc(s.log)}</span>`;
+      await sleep(D(900));
+    }
+    bins.forEach(b => b.classList.remove('lit'));
+    $('#sortMsg4').innerHTML = 'One card, <b>five layers</b>. Each one answered a different question, and each can be scaled on its own.';
+    busy = false; $('#buildBtn').disabled = false; $('#buildBtn').textContent = '↻ Build it again';
+    if (!built) { built = true; Q.addXP(10, $('#buildBtn')); maybeQuiz(); }
+  };
+  function maybeQuiz() {
+    if (quizShown) return; quizShown = true;
+    const mount = $('#s4quiz');
+    setTimeout(() => Q.quiz(mount, {
+      q: 'Which layer answers "should this post show a <b>filled heart</b> for Bo?"',
+      options: ['Action', 'Counters', 'Social Graph'],
+      correct: 0, xp: 15,
+      good: 'Whether <i>this</i> user liked <i>this</i> post is an action. Counters only know how many people liked it in total.',
+      bad: 'Counters know how many people liked it, and the social graph knows who follows whom. Whether Bo himself liked it lives in the <b>Action</b> layer.',
+      onDone: () => setTimeout(() => Q.quiz(mount, {
+        tag: 'Check 2',
+        q: 'Why give counters a layer of their own instead of storing them inside each post?',
+        options: ['They change constantly; update them without rewriting posts', 'They are too large to fit inside the post content cache', 'They have to reach phones through the CDN edge servers'],
+        correct: 0, xp: 15,
+        good: 'A viral post can collect thousands of likes a minute while its text never changes. Keeping counts apart means each like is a tiny increment, and the post object stays cached and untouched.',
+        bad: 'Counters are tiny, and they aren’t files, so the CDN doesn’t serve them. The point is the rhythm: counts change constantly, post content almost never, so updating one shouldn’t rewrite the other.',
+        onDone: () => setTimeout(() => Q.clearStage(4), 900),
+      }), 500),
+    }), 500);
+  }
+  resetDemo(); deal();
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss'), {
+  name: '🕵️ Slow-Feed Sleuth',
+  xp: 15,
+  scenarios: [
+    { e: '🦘', t: 'Slow feeds in Australia', d: 'Feeds in Sydney take 3 seconds to finish. Profiling says most of that time is spent waiting for images.', a: 'cdn',
+      choices: [{ k: 'cdn', label: 'Serve media from a CDN', sub: 'edge servers near users' }, { k: 'web', label: 'Add more web servers', sub: 'scale out the API tier' }, { k: 'nfc', label: 'Grow the news feed cache', sub: 'more memory for IDs' }],
+      why: 'The time goes into downloading images from far away. More web servers or a bigger ID cache don’t shorten the trip. A CDN edge in Australia does.' },
+    { e: '🔥', t: 'A viral post melts a node', d: 'One post is being read a million times a minute. The single cache node holding it is pinned at 100% CPU.', a: 'hot',
+      choices: [{ k: 'hot', label: 'Hot cache, copied wide', sub: 'replicate the popular post' }, { k: 'ctr', label: 'Shard the counters', sub: 'split like counts over keys' }, { k: 'fan', label: 'Fan the post out again', sub: 'push it to feeds once more' }],
+      why: 'One key, one node, too many reads. The Content layer’s hot cache keeps popular posts, and copying the hot item to many nodes spreads the reads. Sharding counters helps writes to the like count, not reads of the post.' },
+    { e: '🐌', t: '50 calls per feed load', d: 'Tracing shows each feed load makes 50 separate calls to the user cache, one for each post on the page.', a: 'batch',
+      choices: [{ k: 'batch', label: 'Batch with a multi-get', sub: 'one call for all the IDs' }, { k: 'embed', label: 'Put full users in feeds', sub: 'copy profiles into each list' }, { k: 'cdn', label: 'Put a CDN in front', sub: 'cache API calls at the edge' }],
+      why: 'Ask for all the distinct authors in one multi-get (and run it in parallel with the post lookup). Copying full profiles into every feed list would make the feed cache huge and stale the moment someone changes their name.' },
+    { e: '👻', t: 'A deleted post won’t die', d: 'Ana deleted a post an hour ago. Her friends still see it in their feeds.', a: 'drop',
+      choices: [{ k: 'drop', label: 'Drop it during hydration', sub: 'skip posts marked deleted' }, { k: 'refan', label: 'Rebuild every feed', sub: 'remove it from each list' }, { k: 'cdn', label: 'Purge the CDN', sub: 'clear the edge caches' }],
+      why: 'Feeds only hold the ID. Mark the post deleted (and update or evict it in the post cache), and hydration drops it everywhere at once. Walking every follower’s feed is slow and unnecessary, and the CDN only holds its photos.' },
+    { e: '⚡', t: 'Like storms slow reads', d: 'A celebrity post gets 50,000 likes a minute. Each like rewrites the whole post object, and reading the post text has slowed down.', a: 'ctr',
+      choices: [{ k: 'ctr', label: 'A separate Counters layer', sub: 'update the counts on their own' }, { k: 'inpost', label: 'Keep likes in the post', sub: 'one object, one write' }, { k: 'cdn', label: 'Move counts to the CDN', sub: 'serve numbers from the edge' }],
+      why: 'Counts change constantly; post content almost never does. Move them into their own layer so each like is a tiny increment and the post object stays cached and untouched.' },
+    { e: '💔', t: 'The wrong hearts', d: 'Bo sees filled hearts on posts he never liked, and empty ones on posts he did. The like totals are right.', a: 'act',
+      choices: [{ k: 'act', label: 'Action layer', sub: 'did this user act on it?' }, { k: 'sg', label: 'Social Graph layer', sub: 'who follows whom' }, { k: 'co', label: 'Counters layer', sub: 'how many in total' }],
+      why: 'The totals (Counters) are fine. The bug is in whether <i>Bo</i> liked <i>this</i> post, and that per-user state lives in the Action layer.' },
+  ],
+  outro: 'The pattern: slow media → CDN. Hot post → hot cache. Too many calls → batch. Stale content → fix it at hydration. Busy numbers → their own layer.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: interview drill ================= */
+Q.onStage(6, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"Walk me through what happens when Bo opens the app and his feed loads."</i>',
+  placeholder: 'The phone calls GET /v1/me/feed…',
+  minWords: 25,
+  model: '"The phone calls <code>GET /v1/me/feed</code>. The load balancer sends it to a web server, which calls the news feed service. That service reads Bo\'s precomputed list of post IDs and author IDs from the news feed cache, and, because fanout is hybrid, merges in the latest posts of the few huge accounts he follows. Then it hydrates them: one multi-get for the authors from the user cache and one for the posts from the post cache, falling back to the databases on a miss, and dropping anything deleted or no longer visible to Bo. It adds per-user details, like whether Bo liked each post, and the like counts, then returns JSON. Images and videos aren\'t in the JSON. It carries CDN URLs, and the phone downloads the media from the nearest edge. Behind all this the cache is split into five layers (news feed, content with a hot tier, social graph, actions and counters) so each one can scale on its own."',
+  checks: [
+    'I said the service reads post IDs from the news feed cache',
+    'I explained hydration: user and post caches, with DB fallback',
+    'I mentioned batching, or dropping deleted / hidden posts',
+    'I said media comes from a CDN, with only URLs in the JSON',
+    'I named the five cache layers',
+  ],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

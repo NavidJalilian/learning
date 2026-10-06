@@ -22,29 +22,29 @@
   // `w` is the world (= book chapter). `ready: true` once the lesson file exists and has been checked.
   // WORLDS lists every chapter; `cheatsheet` is relative to reference/.
   const WORLDS = [
-    { w: 1, t: 'Scale From Zero to Millions of Users', name: 'The Launchpad', slug: 'scale-from-zero-to-millions-of-users' },
+    { w: 1, t: 'Scale From Zero to Millions of Users', name: 'The Launchpad', slug: 'scale-from-zero-to-millions-of-users', cheatsheet: 'ch01-scaling-cheatsheet.html' },
     { w: 2, t: 'Back-of-the-Envelope Estimation', name: 'The Napkin Forge', slug: 'back-of-the-envelope-estimation', cheatsheet: 'ch02-estimation-cheatsheet.html' },
     { w: 3, t: 'A Framework for System Design Interviews', name: 'The Interview Arena', slug: 'a-framework-for-system-design-interviews', cheatsheet: 'ch03-framework-cheatsheet.html' },
     { w: 4, t: 'Design a Rate Limiter', name: 'The Throttle Gate', slug: 'design-a-rate-limiter', cheatsheet: 'ch04-rate-limiter-cheatsheet.html' },
-    { w: 5, t: 'Design Consistent Hashing', name: 'The Ring Road', slug: 'design-consistent-hashing' },
+    { w: 5, t: 'Design Consistent Hashing', name: 'The Ring Road', slug: 'design-consistent-hashing', cheatsheet: 'ch05-consistent-hashing-cheatsheet.html' },
     { w: 6, t: 'Design a Key-Value Store', name: 'The Key-Value Vault', slug: 'design-a-key-value-store', cheatsheet: 'kv-store-cap-cheatsheet.html' },
     { w: 7, t: 'Design a Unique ID Generator', name: 'The ID Mint', slug: 'design-a-unique-id-generator-in-distributed-systems', cheatsheet: 'ch07-unique-id-cheatsheet.html' },
     { w: 8, t: 'Design a URL Shortener', name: 'Shrink Ray Bay', slug: 'design-a-url-shortener', cheatsheet: 'ch08-url-shortener-cheatsheet.html' },
-    { w: 9, t: 'Design a Web Crawler', name: 'Spider Web Wilds', slug: 'design-a-web-crawler' },
-    { w: 10, t: 'Design a Notification System', name: 'Ping Station', slug: 'design-a-notification-system' },
-    { w: 11, t: 'Design a News Feed System', name: 'Feedstream Falls', slug: 'design-a-news-feed-system' },
-    { w: 12, t: 'Design a Chat System', name: 'Chatterbox Citadel', slug: 'design-a-chat-system' },
-    { w: 13, t: 'Design a Search Autocomplete System', name: 'Typeahead Tower', slug: 'design-a-search-autocomplete-system' },
-    { w: 14, t: 'Design YouTube', name: 'The Stream Machine', slug: 'design-youtube' },
+    { w: 9, t: 'Design a Web Crawler', name: 'Spider Web Wilds', slug: 'design-a-web-crawler', cheatsheet: 'ch09-web-crawler-cheatsheet.html' },
+    { w: 10, t: 'Design a Notification System', name: 'Ping Station', slug: 'design-a-notification-system', cheatsheet: 'ch10-notification-cheatsheet.html' },
+    { w: 11, t: 'Design a News Feed System', name: 'Feedstream Falls', slug: 'design-a-news-feed-system', cheatsheet: 'ch11-news-feed-cheatsheet.html' },
+    { w: 12, t: 'Design a Chat System', name: 'Chatterbox Citadel', slug: 'design-a-chat-system', cheatsheet: 'ch12-chat-cheatsheet.html' },
+    { w: 13, t: 'Design a Search Autocomplete System', name: 'Typeahead Tower', slug: 'design-a-search-autocomplete-system', cheatsheet: 'ch13-autocomplete-cheatsheet.html' },
+    { w: 14, t: 'Design YouTube', name: 'The Stream Machine', slug: 'design-youtube', cheatsheet: 'ch14-youtube-cheatsheet.html' },
     { w: 15, t: 'Design Google Drive', name: 'The Cloud Locker', slug: 'design-google-drive', cheatsheet: 'ch15-google-drive-cheatsheet.html' },
   ];
   const CATALOG = [
-    { id: '0101', w: 1, n: '1.1', t: 'One Box Wonder', d: 'A single server, splitting off the database, SQL vs NoSQL, scaling up vs out, and the load balancer', file: '0101-scale-one-box-to-load-balancer.html', ready: false },
-    { id: '0102', w: 1, n: '1.2', t: 'Copy the Ledger', d: 'Master/slave database replication: who takes writes, who takes reads, and what happens when one dies', file: '0102-scale-database-replication.html', ready: false },
-    { id: '0103', w: 1, n: '1.3', t: 'Hot Memory, Near Edge', d: 'A cache tier for hot data and a CDN for static files: how they work and what can go wrong', file: '0103-scale-cache-and-cdn.html', ready: false },
-    { id: '0104', w: 1, n: '1.4', t: 'Forget Me, Find Me Anywhere', d: 'Make the web tier stateless, autoscale it, then spread the system across data centers with GeoDNS', file: '0104-scale-stateless-and-data-centers.html', ready: false },
-    { id: '0105', w: 1, n: '1.5', t: 'Queues, Gauges & Shards', d: 'Message queues to decouple work, logging/metrics/automation, and sharding the database', file: '0105-scale-queues-observability-sharding.html', ready: false },
-    { id: '0106', w: 1, n: 'BOSS', t: 'Zero to Millions, Live', d: 'Mock interview: scale a startup\'s app from one server to millions of users as the traffic climbs', file: '0106-scale-boss-millions-live.html', boss: true, ready: false },
+    { id: '0101', w: 1, n: '1.1', t: 'One Box Wonder', d: 'A single server, splitting off the database, SQL vs NoSQL, scaling up vs out, and the load balancer', file: '0101-scale-one-box-to-load-balancer.html', ready: true },
+    { id: '0102', w: 1, n: '1.2', t: 'Copy the Ledger', d: 'Master/slave database replication: who takes writes, who takes reads, and what happens when one dies', file: '0102-scale-database-replication.html', ready: true },
+    { id: '0103', w: 1, n: '1.3', t: 'Hot Memory, Near Edge', d: 'A cache tier for hot data and a CDN for static files: how they work and what can go wrong', file: '0103-scale-cache-and-cdn.html', ready: true },
+    { id: '0104', w: 1, n: '1.4', t: 'Forget Me, Find Me Anywhere', d: 'Make the web tier stateless, autoscale it, then spread the system across data centers with GeoDNS', file: '0104-scale-stateless-and-data-centers.html', ready: true },
+    { id: '0105', w: 1, n: '1.5', t: 'Queues, Gauges & Shards', d: 'Message queues to decouple work, logging/metrics/automation, and sharding the database', file: '0105-scale-queues-observability-sharding.html', ready: true },
+    { id: '0106', w: 1, n: 'BOSS', t: 'Zero to Millions, Live', d: 'Mock interview: scale a startup\'s app from one server to millions of users as the traffic climbs', file: '0106-scale-boss-millions-live.html', boss: true, ready: true },
     { id: '0201', w: 2, n: '2.1', t: 'The Byte Ladder', d: 'Powers of two, data units, and doing big multiplications in your head', file: '0201-powers-of-two.html', ready: true },
     { id: '0202', w: 2, n: '2.2', t: 'Nanoseconds to Netherlands', d: 'Latency numbers every programmer should know, and the five lessons in them', file: '0202-latency-numbers.html', ready: true },
     { id: '0203', w: 2, n: '2.3', t: 'Count the Nines', d: 'Availability percentages, SLAs, and how much downtime each nine allows', file: '0203-availability-nines.html', ready: true },
@@ -61,9 +61,9 @@
     { id: '0404', w: 4, n: '4.4', t: 'The Counter Room', d: 'Redis counters, rule files, 429 headers, and the detailed design', file: '0404-counters-rules-and-429s.html', ready: true },
     { id: '0405', w: 4, n: '4.5', t: 'Many Doors, One Count', d: 'Race conditions, syncing many limiters, multi-data-center speed, and monitoring', file: '0405-distributed-rate-limiting.html', ready: true },
     { id: '0406', w: 4, n: 'BOSS', t: 'Throttle It Live', d: 'Full mock interview: design a rate limiter', file: '0406-boss-throttle-it-live.html', boss: true, ready: true },
-    { id: '0501', w: 5, n: '5.1', t: 'Ring Math', d: 'Count how many keys hash % N really moves, size up the hash space, look a key up in code, and find exactly which keys move when a server joins or leaves', file: '0501-consistent-hashing-ring-math.html', ready: false },
-    { id: '0502', w: 5, n: '5.2', t: 'Cracks in the Ring', d: 'The two problems with the basic ring in numbers, why virtual nodes fix one of them, and who runs consistent hashing in production (Dynamo, Cassandra, Discord, Akamai, Maglev)', file: '0502-consistent-hashing-cracks-and-riders.html', ready: false },
-    { id: '0503', w: 5, n: 'BOSS', t: 'Hash It Live', d: 'Full mock interview: design how a growing cache fleet decides which server holds each key', file: '0503-consistent-hashing-boss-hash-it-live.html', boss: true, ready: false },
+    { id: '0501', w: 5, n: '5.1', t: 'Ring Math', d: 'Count how many keys hash % N really moves, size up the hash space, look a key up in code, and find exactly which keys move when a server joins or leaves', file: '0501-consistent-hashing-ring-math.html', ready: true },
+    { id: '0502', w: 5, n: '5.2', t: 'Cracks in the Ring', d: 'The two problems with the basic ring in numbers, why virtual nodes fix one of them, and who runs consistent hashing in production (Dynamo, Cassandra, Discord, Akamai, Maglev)', file: '0502-consistent-hashing-cracks-and-riders.html', ready: true },
+    { id: '0503', w: 5, n: 'BOSS', t: 'Hash It Live', d: 'Full mock interview: design how a growing cache fleet decides which server holds each key', file: '0503-consistent-hashing-boss-hash-it-live.html', boss: true, ready: true },
     { id: '0001', w: 6, n: '6.1', t: 'The Key-Value Vault', d: 'put/get, single-server limits, CAP, CP vs AP', file: '0001-key-value-store-and-cap.html', ready: true },
     { id: '0002', w: 6, n: '6.2', t: 'Slice the Keyspace', d: 'Data partition with consistent hashing', file: '0002-consistent-hashing.html', ready: true },
     { id: '0003', w: 6, n: '6.3', t: 'Copies Everywhere', d: 'Data replication across nodes', file: '0003-replication.html', ready: true },
@@ -82,40 +82,40 @@
     { id: '0803', w: 8, n: '8.3', t: 'Count in Base 62', d: 'Turn a unique ID into a short code with base 62, and weigh it against hashing', file: '0803-url-shortener-base62.html', ready: true },
     { id: '0804', w: 8, n: '8.4', t: 'Shorten & Bounce', d: 'Walk the shortening and redirecting flows, add a cache, and scale it out', file: '0804-url-shortener-flows-and-scale.html', ready: true },
     { id: '0805', w: 8, n: 'BOSS', t: 'Shrink the Internet, Live', d: 'Full mock interview: design a URL shortener in 45 minutes', file: '0805-url-shortener-boss-design-it-live.html', boss: true, ready: true },
-    { id: '0901', w: 9, n: '9.1', t: 'Release the Spider', d: 'What a crawler is for, the three-step loop, scoping questions, the four traits of a good crawler, and the napkin math', file: '0901-web-crawler-scope-and-estimates.html', ready: false },
-    { id: '0902', w: 9, n: '9.2', t: 'Assemble the Spider', d: 'The eleven boxes of the high-level design, the two \'seen?\' checks, and the step-by-step crawl workflow', file: '0902-web-crawler-components-and-workflow.html', ready: false },
-    { id: '0903', w: 9, n: '9.3', t: 'Taming the Frontier', d: 'Why BFS beats DFS but still isn\'t enough, and how front queues (priority) and back queues (politeness) fix it, plus freshness and storage', file: '0903-web-crawler-url-frontier.html', ready: false },
-    { id: '0904', w: 9, n: '9.4', t: 'Fast Fangs, Thick Skin', d: 'robots.txt, four speed-ups for the downloader (distribute, cache DNS, go local, time out), and four ways to survive failures', file: '0904-web-crawler-downloader-and-robustness.html', ready: false },
-    { id: '0905', w: 9, n: '9.5', t: 'Beware the Spider Traps', d: 'Plug-in modules for new content, dodging duplicates, spider traps and noise, and the wrap-up extras like rendering JavaScript', file: '0905-web-crawler-traps-and-extensibility.html', ready: false },
-    { id: '0906', w: 9, n: 'BOSS', t: 'Crawl the Web, Live', d: 'Full mock interview: design a web crawler in 45 minutes', file: '0906-web-crawler-boss-design-it-live.html', boss: true, ready: false },
-    { id: '1001', w: 10, n: '10.1', t: 'Three Roads to the Lock Screen', d: 'Push (APNs/FCM), SMS and email: who delivers what, and the contact info you need', file: '1001-notification-channels.html', ready: false },
-    { id: '1002', w: 10, n: '10.2', t: 'Shatter the Single Server', d: 'From one notification box to servers, per-channel queues and workers', file: '1002-notification-high-level-design.html', ready: false },
-    { id: '1003', w: 10, n: '10.3', t: 'Never Lose a Ping', d: 'Notification log, at-least-once, dedupe, retries and watching the queue', file: '1003-notification-reliability.html', ready: false },
-    { id: '1004', w: 10, n: '10.4', t: 'Respect the Inbox', d: 'Templates, opt-in settings, rate limits, auth, event tracking and the final design', file: '1004-notification-guardrails.html', ready: false },
-    { id: '1005', w: 10, n: 'BOSS', t: 'Ping the Planet — Live', d: 'Full mock interview: design a notification system', file: '1005-notification-boss-design-it-live.html', boss: true, ready: false },
-    { id: '1101', w: 11, n: '11.1', t: 'Two Rivers', d: 'Scope a news feed, design its two APIs, and sketch the publish and read flows', file: '1101-news-feed-scope-and-flows.html', ready: false },
-    { id: '1102', w: 11, n: '11.2', t: 'Push, Pull, or Both', d: 'Fanout on write vs fanout on read, the celebrity problem, and the hybrid fix', file: '1102-news-feed-fanout-push-vs-pull.html', ready: false },
-    { id: '1103', w: 11, n: '11.3', t: 'The Fanout Factory', d: 'Inside publishing: auth and rate limits, the five-step fanout workflow, and an ID-only feed cache', file: '1103-news-feed-publishing-pipeline.html', ready: false },
-    { id: '1104', w: 11, n: '11.4', t: 'Hydrate the Feed', d: 'Inside reading: turn post IDs into a full feed, serve media from a CDN, and the five cache layers', file: '1104-news-feed-retrieval-and-caches.html', ready: false },
-    { id: '1105', w: 11, n: 'BOSS', t: 'Design It Live: News Feed', d: 'Full mock interview: design a news feed for 10 million daily users', file: '1105-news-feed-boss-design-it-live.html', boss: true, ready: false },
-    { id: '1201', w: 12, n: '12.1', t: 'Open the Pipe', d: 'What a chat service does, and polling vs long polling vs WebSocket', file: '1201-chat-connections.html', ready: false },
-    { id: '1202', w: 12, n: '12.2', t: 'The Switchboard', d: 'Stateless vs stateful services, the scaled design, and service discovery', file: '1202-chat-high-level-design.html', ready: false },
-    { id: '1203', w: 12, n: '12.3', t: 'The Message Vault', d: 'Where chat history lives, the message tables, and how to mint message IDs', file: '1203-chat-storage-and-ids.html', ready: false },
-    { id: '1204', w: 12, n: '12.4', t: 'Special Delivery', d: 'The 1-on-1 message flow, syncing many devices, and small-group fan-out', file: '1204-chat-message-flows.html', ready: false },
-    { id: '1205', w: 12, n: '12.5', t: 'The Green Dot', d: 'Online presence: login/logout, heartbeats, and fanning out status changes', file: '1205-chat-online-presence.html', ready: false },
-    { id: '1206', w: 12, n: 'BOSS', t: 'Design It Live: Chat', d: 'Full mock interview: design a chat system for 50 million daily users', file: '1206-chat-boss-design-it-live.html', boss: true, ready: false },
-    { id: '1301', w: 13, n: '13.1', t: 'Every Keystroke Counts', d: 'Scope autocomplete, do the envelope math, and see why one SQL table can\'t keep up', file: '1301-autocomplete-scope-and-estimation.html', ready: false },
-    { id: '1302', w: 13, n: '13.2', t: 'Grow the Trie', d: 'The trie data structure, top-k search, and two tricks that make it O(1)', file: '1302-trie-top-k.html', ready: false },
-    { id: '1303', w: 13, n: '13.3', t: 'The Weekly Harvest', d: 'Logs, aggregators, workers: how the trie gets built, stored and updated', file: '1303-data-gathering-service.html', ready: false },
-    { id: '1304', w: 13, n: '13.4', t: 'Faster Than a Keystroke', d: 'The query path, browser caching, data sampling, and the filter layer', file: '1304-query-service.html', ready: false },
-    { id: '1305', w: 13, n: '13.5', t: 'Split the Alphabet', d: 'Shard the trie, balance hot letters, and handle languages, countries and trends', file: '1305-scaling-autocomplete.html', ready: false },
-    { id: '1306', w: 13, n: 'BOSS', t: 'Autocomplete Live', d: 'Full mock interview: design search autocomplete', file: '1306-boss-autocomplete-live.html', boss: true, ready: false },
-    { id: '1401', w: 14, n: '14.1', t: 'Size Up the Tube', d: 'Scope a YouTube clone and do the napkin maths for storage and CDN cost', file: '1401-youtube-scope-and-estimate.html', ready: false },
-    { id: '1402', w: 14, n: '14.2', t: 'Upload Lane, Watch Lane', d: 'The high-level design: CDN, API servers, the video upload flow and the streaming flow', file: '1402-youtube-upload-and-stream-flows.html', ready: false },
-    { id: '1403', w: 14, n: '14.3', t: 'The Format Forge', d: 'Why videos are transcoded, containers vs codecs, adaptive bitrate, and the DAG model', file: '1403-youtube-transcoding-and-dag.html', ready: false },
-    { id: '1404', w: 14, n: '14.4', t: 'The Transcoding Factory', d: 'Preprocessor, DAG scheduler, resource manager, task workers, temporary storage', file: '1404-youtube-transcoding-architecture.html', ready: false },
-    { id: '1405', w: 14, n: '14.5', t: 'Faster, Safer, Cheaper', d: 'Speed, safety and cost optimisations, plus the book\'s error-handling playbook', file: '1405-youtube-optimizations-and-errors.html', ready: false },
-    { id: '1406', w: 14, n: 'BOSS', t: 'Design YouTube Live', d: 'Full mock interview: design a video upload and streaming service', file: '1406-youtube-boss-design-it-live.html', boss: true, ready: false },
+    { id: '0901', w: 9, n: '9.1', t: 'Release the Spider', d: 'What a crawler is for, the three-step loop, scoping questions, the four traits of a good crawler, and the napkin math', file: '0901-web-crawler-scope-and-estimates.html', ready: true },
+    { id: '0902', w: 9, n: '9.2', t: 'Assemble the Spider', d: 'The eleven boxes of the high-level design, the two \'seen?\' checks, and the step-by-step crawl workflow', file: '0902-web-crawler-components-and-workflow.html', ready: true },
+    { id: '0903', w: 9, n: '9.3', t: 'Taming the Frontier', d: 'Why BFS beats DFS but still isn\'t enough, and how front queues (priority) and back queues (politeness) fix it, plus freshness and storage', file: '0903-web-crawler-url-frontier.html', ready: true },
+    { id: '0904', w: 9, n: '9.4', t: 'Fast Fangs, Thick Skin', d: 'robots.txt, four speed-ups for the downloader (distribute, cache DNS, go local, time out), and four ways to survive failures', file: '0904-web-crawler-downloader-and-robustness.html', ready: true },
+    { id: '0905', w: 9, n: '9.5', t: 'Beware the Spider Traps', d: 'Plug-in modules for new content, dodging duplicates, spider traps and noise, and the wrap-up extras like rendering JavaScript', file: '0905-web-crawler-traps-and-extensibility.html', ready: true },
+    { id: '0906', w: 9, n: 'BOSS', t: 'Crawl the Web, Live', d: 'Full mock interview: design a web crawler in 45 minutes', file: '0906-web-crawler-boss-design-it-live.html', boss: true, ready: true },
+    { id: '1001', w: 10, n: '10.1', t: 'Three Roads to the Lock Screen', d: 'Push (APNs/FCM), SMS and email: who delivers what, and the contact info you need', file: '1001-notification-channels.html', ready: true },
+    { id: '1002', w: 10, n: '10.2', t: 'Shatter the Single Server', d: 'From one notification box to servers, per-channel queues and workers', file: '1002-notification-high-level-design.html', ready: true },
+    { id: '1003', w: 10, n: '10.3', t: 'Never Lose a Ping', d: 'Notification log, at-least-once, dedupe, retries and watching the queue', file: '1003-notification-reliability.html', ready: true },
+    { id: '1004', w: 10, n: '10.4', t: 'Respect the Inbox', d: 'Templates, opt-in settings, rate limits, auth, event tracking and the final design', file: '1004-notification-guardrails.html', ready: true },
+    { id: '1005', w: 10, n: 'BOSS', t: 'Ping the Planet — Live', d: 'Full mock interview: design a notification system', file: '1005-notification-boss-design-it-live.html', boss: true, ready: true },
+    { id: '1101', w: 11, n: '11.1', t: 'Two Rivers', d: 'Scope a news feed, design its two APIs, and sketch the publish and read flows', file: '1101-news-feed-scope-and-flows.html', ready: true },
+    { id: '1102', w: 11, n: '11.2', t: 'Push, Pull, or Both', d: 'Fanout on write vs fanout on read, the celebrity problem, and the hybrid fix', file: '1102-news-feed-fanout-push-vs-pull.html', ready: true },
+    { id: '1103', w: 11, n: '11.3', t: 'The Fanout Factory', d: 'Inside publishing: auth and rate limits, the five-step fanout workflow, and an ID-only feed cache', file: '1103-news-feed-publishing-pipeline.html', ready: true },
+    { id: '1104', w: 11, n: '11.4', t: 'Hydrate the Feed', d: 'Inside reading: turn post IDs into a full feed, serve media from a CDN, and the five cache layers', file: '1104-news-feed-retrieval-and-caches.html', ready: true },
+    { id: '1105', w: 11, n: 'BOSS', t: 'Design It Live: News Feed', d: 'Full mock interview: design a news feed for 10 million daily users', file: '1105-news-feed-boss-design-it-live.html', boss: true, ready: true },
+    { id: '1201', w: 12, n: '12.1', t: 'Open the Pipe', d: 'What a chat service does, and polling vs long polling vs WebSocket', file: '1201-chat-connections.html', ready: true },
+    { id: '1202', w: 12, n: '12.2', t: 'The Switchboard', d: 'Stateless vs stateful services, the scaled design, and service discovery', file: '1202-chat-high-level-design.html', ready: true },
+    { id: '1203', w: 12, n: '12.3', t: 'The Message Vault', d: 'Where chat history lives, the message tables, and how to mint message IDs', file: '1203-chat-storage-and-ids.html', ready: true },
+    { id: '1204', w: 12, n: '12.4', t: 'Special Delivery', d: 'The 1-on-1 message flow, syncing many devices, and small-group fan-out', file: '1204-chat-message-flows.html', ready: true },
+    { id: '1205', w: 12, n: '12.5', t: 'The Green Dot', d: 'Online presence: login/logout, heartbeats, and fanning out status changes', file: '1205-chat-online-presence.html', ready: true },
+    { id: '1206', w: 12, n: 'BOSS', t: 'Design It Live: Chat', d: 'Full mock interview: design a chat system for 50 million daily users', file: '1206-chat-boss-design-it-live.html', boss: true, ready: true },
+    { id: '1301', w: 13, n: '13.1', t: 'Every Keystroke Counts', d: 'Scope autocomplete, do the envelope math, and see why one SQL table can\'t keep up', file: '1301-autocomplete-scope-and-estimation.html', ready: true },
+    { id: '1302', w: 13, n: '13.2', t: 'Grow the Trie', d: 'The trie data structure, top-k search, and two tricks that make it O(1)', file: '1302-trie-top-k.html', ready: true },
+    { id: '1303', w: 13, n: '13.3', t: 'The Weekly Harvest', d: 'Logs, aggregators, workers: how the trie gets built, stored and updated', file: '1303-data-gathering-service.html', ready: true },
+    { id: '1304', w: 13, n: '13.4', t: 'Faster Than a Keystroke', d: 'The query path, browser caching, data sampling, and the filter layer', file: '1304-query-service.html', ready: true },
+    { id: '1305', w: 13, n: '13.5', t: 'Split the Alphabet', d: 'Shard the trie, balance hot letters, and handle languages, countries and trends', file: '1305-scaling-autocomplete.html', ready: true },
+    { id: '1306', w: 13, n: 'BOSS', t: 'Autocomplete Live', d: 'Full mock interview: design search autocomplete', file: '1306-boss-autocomplete-live.html', boss: true, ready: true },
+    { id: '1401', w: 14, n: '14.1', t: 'Size Up the Tube', d: 'Scope a YouTube clone and do the napkin maths for storage and CDN cost', file: '1401-youtube-scope-and-estimate.html', ready: true },
+    { id: '1402', w: 14, n: '14.2', t: 'Upload Lane, Watch Lane', d: 'The high-level design: CDN, API servers, the video upload flow and the streaming flow', file: '1402-youtube-upload-and-stream-flows.html', ready: true },
+    { id: '1403', w: 14, n: '14.3', t: 'The Format Forge', d: 'Why videos are transcoded, containers vs codecs, adaptive bitrate, and the DAG model', file: '1403-youtube-transcoding-and-dag.html', ready: true },
+    { id: '1404', w: 14, n: '14.4', t: 'The Transcoding Factory', d: 'Preprocessor, DAG scheduler, resource manager, task workers, temporary storage', file: '1404-youtube-transcoding-architecture.html', ready: true },
+    { id: '1405', w: 14, n: '14.5', t: 'Faster, Safer, Cheaper', d: 'Speed, safety and cost optimisations, plus the book\'s error-handling playbook', file: '1405-youtube-optimizations-and-errors.html', ready: true },
+    { id: '1406', w: 14, n: 'BOSS', t: 'Design YouTube Live', d: 'Full mock interview: design a video upload and streaming service', file: '1406-youtube-boss-design-it-live.html', boss: true, ready: true },
     { id: '1501', w: 15, n: '15.1', t: 'Claim Your Locker', d: 'Scope Google Drive, run the numbers, design the upload/download/revision APIs, outgrow one server', file: '1501-drive-scope-and-apis.html', ready: true },
     { id: '1502', w: 15, n: '15.2', t: 'Chop It Into Blocks', d: 'The high-level design, block servers, 4 MB blocks, delta sync, compress-then-encrypt', file: '1502-drive-blocks-and-delta-sync.html', ready: true },
     { id: '1503', w: 15, n: '15.3', t: 'The Metadata Ledger', d: 'Strong consistency, cache invalidation, the metadata schema, and sync conflicts', file: '1503-drive-metadata-and-conflicts.html', ready: true },
@@ -388,7 +388,9 @@
           const ex = $('.explain', arena); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
           const lab = (cs.find(c => c.k === s.a) || {}).label || s.a;
           ex.innerHTML = `<b>${lab}.</b> ${s.why}`;
-          if (ok) { addXP(xp, b); wins++; } else loseHeart(b);
+          // a rematch on the same mount only pays for scenarios it hadn't already paid for
+          const paid = (mount.dataset.bossPaid || '').split(',');
+          if (ok) { wins++; if (!paid.includes(String(bi))) { addXP(xp, b); mount.dataset.bossPaid = paid.concat(bi).filter(Boolean).join(','); } else toast('✓ already paid', b, 'practice'); } else loseHeart(b);
           hp.style.width = (100 - ((bi + 1) / scenarios.length) * 100) + '%';
           const nx = document.createElement('button'); nx.className = 'btn primary';
           nx.textContent = bi < scenarios.length - 1 ? 'Next →' : '⚔️ Final blow';
@@ -415,10 +417,12 @@
           <div class="row" style="margin-top:8px"><button class="btn primary q-finish">Lock it in</button></div></div>`;
       const ta = $('textarea', mount), rv = $('.q-reveal', mount);
       ta.addEventListener('input', () => { rv.disabled = ta.value.trim().split(/\s+/).length < minWords; });
-      rv.onclick = () => { rv.disabled = true; ta.readOnly = true; $('.model', mount).classList.add('show'); $('.selfgrade', mount).classList.add('show'); addXP(10, rv); };
+      rv.onclick = () => { rv.disabled = true; ta.readOnly = true; $('.model', mount).classList.add('show'); $('.selfgrade', mount).classList.add('show'); if (!mount.dataset.revealPaid) { mount.dataset.revealPaid = '1'; addXP(10, rv); } };
       $('.q-finish', mount).onclick = e => {
         const boxes = $$('.selfgrade input', mount), n = boxes.filter(x => x.checked).length;
-        if (n) addXP(n * 10, e.currentTarget);
+        // a retried drill (same mount) only pays for checks it hadn't paid for before
+        const paid = +(mount.dataset.checksPaid || 0);
+        if (n > paid) { addXP((n - paid) * 10, e.currentTarget); mount.dataset.checksPaid = n; }
         e.currentTarget.disabled = true; boxes.forEach(x => x.disabled = true);
         onDone && onDone(n);
       };

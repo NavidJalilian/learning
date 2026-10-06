@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Size Up the Tube</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: guess-the-giant cards, interviewer board, napkin calc rows, storage blocks, CDN bill gauge */
+:root { --napkin: #fffdf6; --napkin-line: #d9e6f5; --tube: #e5372f; --tube-soft: #fde4e2; --g1: #1d9a52; --g2: #0d9a96; --g3: #d98200; --g4: #d4423f; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --napkin: #1b1d35; --napkin-line: #2a3358; --tube: #ff6a5e; --tube-soft: #3a1b1d; --g1: #43d98a; --g2: #31d3c8; --g3: #ffb547; --g4: #ff6d6a; }
+}
+:root[data-theme="dark"] { --napkin: #1b1d35; --napkin-line: #2a3358; --tube: #ff6a5e; --tube-soft: #3a1b1d; --g1: #43d98a; --g2: #31d3c8; --g3: #ffb547; --g4: #ff6d6a; }
+
+.bignum { font-family: var(--mono); font-weight: 700; }
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.lbl { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-top: 16px; }
+
+/* stage 1: guess the giant */
+.giant { margin-top: 14px; border: 1px solid var(--line); border-radius: 18px; background: var(--bg); padding: 16px; text-align: center; }
+.giant.shake { animation: shake .4s; }
+.gtop { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.gdots { display: flex; gap: 4px; }
+.gdots i { width: 9px; height: 9px; border-radius: 50%; background: var(--line); display: block; }
+.gdots i.hit { background: var(--good); }
+.gdots i.miss { background: var(--warn); }
+.gdots i.cur { background: var(--accent); }
+.gemoji { font-size: 42px; line-height: 1; margin-top: 8px; }
+.giant h3 { margin: 8px 0 2px; font-size: 20px; }
+.giant .gq { margin: 0 auto; max-width: 440px; }
+.gval { font: 700 clamp(26px, 7vw, 34px) var(--mono); margin: 12px 0 4px; color: var(--accent); overflow-wrap: anywhere; }
+.giant input[type=range] { width: 100%; max-width: 480px; accent-color: var(--accent); height: 40px; }
+.gscale { display: flex; justify-content: space-between; max-width: 480px; margin: 0 auto; font: 12px var(--mono); color: var(--muted); }
+.gaxis { position: relative; max-width: 480px; height: 74px; margin: 14px 18px 0; display: none; }
+@media (min-width: 560px) { .gaxis { margin: 14px auto 0; } }
+.gaxis.on { display: block; animation: rise .35s; }
+.gaxis .tr { position: absolute; left: 0; right: 0; top: 34px; height: 6px; border-radius: 99px; background: var(--line); }
+.gaxis .band { position: absolute; top: 30px; height: 14px; border-radius: 99px; background: var(--good-soft); border: 1px solid color-mix(in srgb, var(--good) 45%, transparent); }
+.gaxis .mk { position: absolute; top: 0; transform: translateX(-50%); font: 700 11px var(--mono); white-space: nowrap; transition: left .7s cubic-bezier(.2,.8,.2,1); }
+.gaxis .mk::after { content: ""; display: block; width: 4px; height: 20px; border-radius: 2px; margin: 2px auto 0; background: currentColor; }
+.gaxis .mk.you { color: var(--accent); }
+.gaxis .mk.book { color: var(--tube); top: 32px; display: flex; flex-direction: column-reverse; align-items: center; }
+.gaxis .mk.book::after { margin: 0 auto 2px; }
+.gmsg { min-height: 24px; margin-top: 10px; font-size: 15px; }
+.gmsg.good { color: var(--good); }
+.gmsg.bad { color: var(--warn); }
+.giant .row { justify-content: center; margin-top: 10px; }
+.scope { display: none; margin-top: 16px; border-radius: 16px; padding: 16px; background: linear-gradient(160deg, var(--tube-soft), var(--accent-soft)); }
+.scope.on { display: block; animation: rise .4s; }
+.scope p { margin: 0; font-size: 16px; }
+.blank { display: inline-block; min-width: 92px; text-align: center; border-bottom: 3px solid var(--muted); font-weight: 700; padding: 0 6px; margin: 2px 2px; }
+.blank.got { border-color: var(--good); color: var(--good); animation: rise .3s; }
+.fchip { min-height: 42px; padding: 8px 14px; border-radius: 99px; border: 2px solid var(--line); background: var(--panel); font-weight: 600; font-size: 15px; }
+.fchip:hover:not([disabled]) { border-color: var(--accent); }
+.fchip.right { border-color: var(--good); background: var(--good-soft); }
+.fchip.wrong { border-color: var(--bad); background: var(--bad-soft); animation: shake .4s; }
+.fchip[disabled] { cursor: default; }
+
+/* stage 2: interrogate the interviewer */
+.ivtop { display: flex; gap: 12px; align-items: flex-start; margin-top: 14px; }
+.ivav { width: 46px; height: 46px; flex: none; border-radius: 50%; background: var(--accent-soft); display: grid; place-items: center; font-size: 26px; transition: transform .2s; }
+.ivav.frown { background: var(--warn-soft); animation: shake .4s; }
+.ivsay { flex: 1; min-width: 0; }
+.ivsay .me { font-size: 14px; color: var(--muted); margin-bottom: 4px; min-height: 0; }
+.ivsay .me:empty { display: none; }
+.ivsay .bub { background: var(--bg-2); border-radius: 4px 16px 16px 16px; padding: 10px 14px; font-size: 15px; line-height: 1.45; animation: rise .3s; }
+.ivsay .who { display: block; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin-bottom: 2px; }
+.clock { display: flex; align-items: center; gap: 10px; margin-top: 14px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.clock .trk { flex: 1; height: 8px; border-radius: 99px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; }
+.clock .fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--teal), var(--accent)); border-radius: 99px; transition: width .5s; }
+.clock.over .fill { background: linear-gradient(90deg, var(--warn), var(--bad)); }
+.clock b { font-family: var(--mono); color: var(--ink); white-space: nowrap; }
+.reqs { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; margin: 8px 0 4px; }
+.req { border: 1.5px dashed var(--line); border-radius: 10px; padding: 7px 10px; font-size: 13px; color: var(--muted); min-height: 40px; display: flex; align-items: center; transition: background .3s, border-color .3s; }
+.req.got { border-style: solid; border-color: var(--good); background: var(--good-soft); color: var(--ink); font-weight: 600; animation: rise .35s; }
+.qdeck { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+@media (max-width: 560px) { .qdeck { grid-template-columns: 1fr; } }
+.qdeck .opt { font-size: 14.5px; padding: 10px 12px; min-height: 44px; }
+.qdeck .opt.waste { border-color: var(--bad); background: var(--bad-soft); opacity: .7; }
+.nfr { display: none; margin-top: 14px; border-radius: 16px; padding: 14px 16px; background: var(--teal-soft); }
+.nfr.on { display: block; animation: rise .4s; }
+.nfr h3 { margin: 0 0 8px; font-size: 16px; }
+.nfr ol { margin: 0; padding-left: 22px; font-size: 15px; }
+.nfr li { opacity: 0; transform: translateY(6px); transition: opacity .35s, transform .35s; }
+.nfr li.in { opacity: 1; transform: none; }
+
+/* stages 3 + 4: napkin calc rows */
+.napkin { margin-top: 14px; border-radius: 16px; padding: 14px 16px; background: var(--napkin); border: 1px solid var(--line);
+  background-image: repeating-linear-gradient(0deg, transparent 0 27px, var(--napkin-line) 27px 28px); }
+.napkin .chips { margin-top: 0; }
+.napkin .chip { background: var(--panel); }
+.sheet { display: grid; gap: 10px; margin-top: 12px; }
+.crow { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--bg); transition: border-color .3s; }
+.crow.ok { border-color: color-mix(in srgb, var(--good) 55%, var(--line)); }
+.crow .lab { font-weight: 700; font-size: 15px; }
+.crow .lab small { display: block; font-weight: 500; color: var(--muted); font-size: 13.5px; }
+.crow .in { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.crow input[type=text] { width: 150px; min-height: 44px; border-radius: 10px; border: 2px solid var(--line); background: var(--panel); color: var(--ink); font: 600 16px var(--mono); padding: 6px 10px; }
+.crow select { min-height: 44px; border-radius: 10px; border: 2px solid var(--line); background: var(--panel); color: var(--ink); font: 600 15px var(--mono); padding: 6px 8px; }
+.crow input.wrongi { border-color: var(--bad); animation: shake .4s; }
+.crow.ok input[type=text] { border-color: var(--good); }
+.crow .unit { font-weight: 600; color: var(--muted); font-size: 14px; }
+.crow .btn { min-height: 44px; padding: 8px 14px; font-size: 14px; }
+.crow .fb { font-size: 14px; margin-top: 8px; }
+.crow .fb:empty { display: none; }
+.crow .fb.good { color: var(--good); }
+.crow .fb.bad { color: var(--bad); }
+.crow .hint { display: none; margin-top: 8px; font: 13.5px/1.6 var(--mono); padding: 8px 12px; border-left: 4px solid var(--teal); background: var(--teal-soft); border-radius: 0 10px 10px 0; overflow-wrap: anywhere; white-space: pre-line; }
+.crow .hint.on { display: block; animation: rise .3s; }
+
+/* stage 3: make it real */
+.real { display: none; margin-top: 16px; }
+.real.on { display: block; animation: rise .4s; }
+.slider { padding: 10px 14px 0; display: grid; gap: 2px; }
+.slider label { display: flex; justify-content: space-between; font-weight: 600; font-size: 14px; gap: 8px; flex-wrap: wrap; }
+.slider input { width: 100%; accent-color: var(--accent); height: 32px; }
+.slider input:disabled { opacity: .45; }
+.store { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center; padding: 14px; }
+@media (max-width: 560px) { .store { grid-template-columns: 1fr; } }
+.blocks { display: grid; gap: 4px; justify-content: start; }
+.blk { width: 34px; height: 34px; border-radius: 7px; background: var(--accent); color: #fff; font: 700 9px/1.05 var(--mono); display: grid; place-items: center; text-align: center; animation: popb .35s cubic-bezier(.3,1.6,.5,1); }
+.blk.rep { background: var(--teal); }
+.blk.orig { background: var(--tube); }
+@keyframes popb { from { transform: scale(0); } }
+.blegend { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+.blegend i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+.counter { display: grid; gap: 6px; }
+.counter div { font-size: 14px; color: var(--muted); }
+.counter b { display: block; font: 700 clamp(22px, 6vw, 30px) var(--mono); color: var(--ink); line-height: 1.15; overflow-wrap: anywhere; }
+.counter .mult { font: 700 14px var(--mono); color: var(--accent); }
+
+/* stage 4: CDN bill gauge */
+.meter { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px 18px; align-items: center; padding: 10px 14px 4px; }
+@media (max-width: 640px) { .meter { grid-template-columns: 1fr; } }
+.gauge svg { display: block; width: 100%; max-width: 340px; margin: 0 auto; height: auto; }
+.gauge .arcb { fill: none; stroke-width: 18; }
+.gauge .tk { fill: var(--muted); font: 600 11px var(--mono); text-anchor: middle; }
+.gauge .needle { stroke: var(--ink); stroke-width: 4; stroke-linecap: round; transform-box: view-box; transform-origin: 160px 170px; transition: transform .6s cubic-bezier(.2,.8,.2,1); }
+.gauge .hub { fill: var(--ink); }
+.gauge .bookmk { fill: var(--tube); }
+.gauge .booktx { fill: var(--tube); font: 700 10.5px var(--mono); text-anchor: middle; }
+.bill { text-align: center; }
+.bill .day { font: 700 clamp(28px, 8vw, 38px) var(--mono); line-height: 1.1; overflow-wrap: anywhere; }
+.bill .yr { font: 600 15px var(--mono); color: var(--muted); }
+.bill .vs { font-size: 13.5px; color: var(--muted); margin-top: 6px; }
+.bill .formula { font: 12.5px/1.5 var(--mono); color: var(--muted); margin-top: 8px; overflow-wrap: anywhere; }
+.checklist.tight { margin-top: 10px; }
+.cdnflow svg { display: block; width: 100%; max-width: 560px; margin: 4px auto 0; height: auto; }
+.cdnflow .bx { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; }
+.cdnflow .bx.edge { stroke: var(--teal); }
+.cdnflow .bx.orig { stroke: var(--accent); }
+.cdnflow text { fill: var(--ink); font: 600 13px var(--font); text-anchor: middle; }
+.cdnflow .sm { fill: var(--muted); font: 500 11px var(--font); }
+.cdnflow .ln { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 5 5; fill: none; }
+.cdnflow .eg { stroke: var(--tube); stroke-width: 3; fill: none; }
+.cdnflow .egt { fill: var(--tube); font: 700 11.5px var(--mono); }
+.cdnflow .dot { fill: var(--tube); }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 14.1 · Design YouTube</div>
+    <h1>Size Up the Tube</h1>
+    <p class="lede">"Design YouTube" is the vaguest prompt in the book. Shrink it to something you can draw in 45 minutes, then put two numbers on the napkin that steer the whole design.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can turn 'design YouTube' into a scoped problem (upload + watch, 5M DAU, videos up to 1 GB, encryption, cloud allowed) and say out loud why storage is ~150 TB/day and the CDN bill ~$150,000/day.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Guess the giant</h2><div class="sub">How big is YouTube, really?</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book opens the chapter with YouTube's scale, using figures from around 2019–2020.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-youtube" target="_blank" rel="noopener">[1]</a> Before you see them, guess. Drag the slider, then lock your guess. Within <b>2×</b> of the real figure (or within <b>10 points</b> for a percentage) earns XP. A wild miss costs nothing.</p>
+      <div class="giant" id="giant" aria-live="polite"></div>
+      <div class="scope" id="scope1">
+        <p><b>Too big to design whole.</b> Nobody designs all of that in 45 minutes. The book keeps just two features: <span class="blank" data-b="0">?</span> and <span class="blank" data-b="1">?</span>. Tap the two.</p>
+        <div class="chips" id="fchips"></div>
+        <div class="explain" id="fexp"></div>
+      </div>
+      <div class="callout warn" id="s1cav" style="display:none"><b>Honest caveat.</b> These figures are from around 2019–2020 and come from third-party roundups of YouTube statistics. Treat them as "how big, roughly", not as today's facts. The design never uses them directly; they're there to make one point: the real product is far too big to design in one sitting.</div>
+      <div id="s1q1"></div><div id="s1q2"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Interrogate the interviewer</h2><div class="sub">Step 1: ask the questions that change the design</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Step 1 of the book's interview framework is <b>understand the problem and establish design scope</b>: ask questions until you know what you're building. There are 14 questions below. <b>Nine</b> of them change the design; each one pins a requirement to the board. The other five are time-wasters: each burns a game-minute and costs a heart. Aim to finish inside the 10-minute Step 1 budget.</p>
+      <div class="ivtop">
+        <div class="ivav" id="ivav" aria-hidden="true">🧑🏽‍💼</div>
+        <div class="ivsay"><div class="me" id="ivme"></div><div class="bub" id="ivbub"><span class="who">Interviewer</span>Design YouTube. Where would you like to start?</div></div>
+      </div>
+      <div class="clock" id="clock2"><span>Step 1 clock</span><div class="trk"><div class="fill"></div></div><b id="clock2t">0.0 / 10 min</b></div>
+      <div class="lbl">Requirements board</div>
+      <div class="reqs" id="reqs2"></div>
+      <div class="lbl">Your questions</div>
+      <div class="qdeck" id="qdeck2"></div>
+      <div class="nfr" id="nfr2">
+        <h3>📋 So the design must deliver…</h3>
+        <ol>
+          <li>Fast uploads</li>
+          <li>Smooth video streaming</li>
+          <li>The ability to change video quality</li>
+          <li>Low infrastructure cost</li>
+          <li>High availability, scalability and reliability</li>
+          <li>Support for mobile apps, web browsers and smart TVs</li>
+        </ol>
+        <p class="small muted" style="margin:8px 0 0">The book's list of what to focus on, built from those nine answers.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-youtube" target="_blank" rel="noopener">[1]</a></p>
+      </div>
+      <div id="s2q1"></div><div id="s2q2"></div>
+      <div class="row" id="s2replay" style="display:none;margin-top:14px"><button class="btn">↻ Ask again from a blank board</button></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Napkin maths: storage</h2><div class="sub">Calculate, then check</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p><b>Back-of-the-envelope estimation</b> means rough maths to find the <i>order of magnitude</i> (is it gigabytes or petabytes?) and the cost that dominates. It is not an exact figure. The book's assumptions:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-youtube" target="_blank" rel="noopener">[1]</a></p>
+      <div class="napkin">
+        <div class="chips"><span class="chip">5 million DAU</span><span class="chip">each watches 5 videos/day</span><span class="chip">10% upload 1 video/day</span><span class="chip">average video = 300 MB</span></div>
+      </div>
+      <p class="small muted">DAU = daily active users, the number of different people who use the product on a given day.</p>
+      <div class="sheet" id="sheet3"></div>
+      <div class="real" id="real3">
+        <div class="callout tip"><b>✓ 150 TB a day, the book's number.</b> That's about <b>55 PB a year</b> (150 TB × 365), and it counts only the <i>original</i> uploads. Real systems store more. Two things the book leaves out: <b>transcoded versions</b> (the same video re-encoded at 360p, 720p, 1080p and so on, so every device can play it) and <b>replicas</b> (extra copies on other machines, so a dead disk loses nothing).</div>
+        <div class="challenge boxed" id="pred3"></div>
+        <div class="sim">
+          <div class="slider"><label for="r3v"><span>Stored versions of each video: <span class="bignum" id="r3vv">1</span></span><span class="muted small">book = 1</span></label><input type="range" id="r3v" min="1" max="6" step="1" value="1" disabled aria-label="Stored versions of each video"></div>
+          <div class="slider"><label for="r3c"><span>Copies of each version (replication): <span class="bignum" id="r3cv">1</span></span><span class="muted small">book = 1</span></label><input type="range" id="r3c" min="1" max="3" step="1" value="1" disabled aria-label="Copies of each version"></div>
+          <div class="slider"><label for="r3y"><span>Years kept: <span class="bignum" id="r3yv">1</span></span><span class="muted small">nothing is ever deleted</span></label><input type="range" id="r3y" min="1" max="5" step="1" value="1" disabled aria-label="Years kept"></div>
+          <div class="store">
+            <div><div class="blocks" id="blocks3"></div><div class="blegend"><span><i style="background:var(--tube)"></i>book's 150 TB</span><span><i style="background:var(--accent)"></i>extra version</span><span><i style="background:var(--teal)"></i>replica</span></div></div>
+            <div class="counter">
+              <div>New storage per day<b id="c3day">150 TB</b><span class="mult" id="c3mult">× 1 of the book's number</span></div>
+              <div>Total after <span id="c3yrs">1 year</span><b id="c3tot">55 PB</b></div>
+            </div>
+          </div>
+        </div>
+        <p class="small muted">This sim treats each extra version as the same size as the original. Real lower-resolution versions are smaller, so it overshoots a little, but the lesson holds: the factors <b>multiply</b>.</p>
+        <div id="s3quiz"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Napkin maths: the CDN bill</h2><div class="sub">Find the cost that dominates</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>A <b>CDN</b> (content delivery network) is a fleet of servers spread around the world. Each one caches popular files and serves them from close to the viewer, so a video doesn't cross an ocean every time someone presses play. Cloud CDNs charge for <b>egress</b>: every gigabyte they send out to viewers.</p>
+      <div class="cdnflow">
+        <svg viewBox="0 0 560 150" role="img" aria-label="Diagram: video storage feeds CDN edge servers, which stream to viewers; the CDN charges per gigabyte sent to viewers">
+          <rect class="bx orig" x="8" y="45" width="126" height="56" rx="12"/><text x="71" y="70">🗄️ Video storage</text><text class="sm" x="71" y="89">the originals</text>
+          <path class="ln" d="M134 73 H 174"/>
+          <rect class="bx edge" x="214" y="12" width="128" height="50" rx="12"/><text x="278" y="35">🌐 CDN edge</text><text class="sm" x="278" y="52">Frankfurt</text>
+          <rect class="bx edge" x="214" y="86" width="128" height="50" rx="12"/><text x="278" y="109">🌐 CDN edge</text><text class="sm" x="278" y="126">Virginia</text>
+          <path class="ln" d="M174 73 V 37 H 214 M174 73 V 111 H 214"/>
+          <path class="eg" d="M342 37 H 430"/><path class="eg" d="M342 111 H 430"/>
+          <text class="egt" x="386" y="28">$ per GB</text><text class="egt" x="386" y="102">$ per GB</text>
+          <circle class="dot" cx="430" cy="37" r="4"/><circle class="dot" cx="430" cy="111" r="4"/>
+          <text x="492" y="42">📱 viewers</text><text x="492" y="116">📺 viewers</text>
+        </svg>
+      </div>
+      <p>The book prices it with Amazon CloudFront at <b>$0.02 per GB</b>, assumes all traffic is served in the US, and counts only video streaming.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-youtube" target="_blank" rel="noopener">[1]</a><a class="cite" href="https://aws.amazon.com/cloudfront/pricing/" target="_blank" rel="noopener">[2]</a> Same assumptions as before: 5 million DAU, 5 videos each a day, 300 MB a video.</p>
+      <div class="sheet" id="sheet4"></div>
+      <div class="real" id="real4">
+        <div class="challenge boxed" id="pred4"></div>
+        <div class="sim">
+          <div class="meter">
+            <div class="gauge"><svg id="gauge4" viewBox="0 0 320 190" role="img" aria-label="Daily CDN bill gauge, log scale from 1 thousand to 10 million dollars"></svg></div>
+            <div class="bill" aria-live="polite">
+              <div class="day" id="b4day">$150,000</div>
+              <div class="yr">per day · <span id="b4yr">$54.8M</span> per year</div>
+              <div class="vs" id="b4vs">= the book's estimate</div>
+              <div class="formula" id="b4f"></div>
+            </div>
+          </div>
+          <div class="slider"><label for="k4price"><span>CDN price per GB: <span class="bignum" id="k4pricev">$0.020</span></span><span class="muted small">book $0.020 · first tier $0.085</span></label><input type="range" id="k4price" min="20" max="85" step="5" value="20" disabled aria-label="CDN price per GB"></div>
+          <div class="slider"><label for="k4vid"><span>Videos watched per user per day: <span class="bignum" id="k4vidv">5</span></span><span class="muted small">book = 5</span></label><input type="range" id="k4vid" min="1" max="10" step="1" value="5" disabled aria-label="Videos watched per user per day"></div>
+          <div class="slider"><label for="k4share"><span>Share of each video actually watched: <span class="bignum" id="k4sharev">100%</span></span><span class="muted small">book = 100%</span></label><input type="range" id="k4share" min="20" max="100" step="5" value="100" disabled aria-label="Share of each video actually watched"></div>
+          <div class="slider" style="padding-bottom:12px"><label for="k4dau"><span>Daily active users: <span class="bignum" id="k4dauv">5M</span></span><span class="muted small">book = 5M</span></label><input type="range" id="k4dau" min="1" max="50" step="1" value="5" disabled aria-label="Daily active users in millions"></div>
+          <div class="sim-bar"><span class="small muted">Bill = DAU × videos × 0.3 GB × share watched × price</span><button class="btn" id="k4reset" style="padding:6px 12px;font-size:14px" disabled>↻ Book values</button></div>
+        </div>
+        <ul class="checklist tight" id="s4goals">
+          <li data-g="real"><span class="box">✓</span><span>Keep DAU at 5M and price at $0.02, but get the bill <b>under $75,000 a day</b>. Which assumption would you question?</span></li>
+        </ul>
+        <div class="callout" id="s4note" style="display:none"><b>That's the book's whole point.</b> Even at the cheapest published price, serving bytes is the bill that dominates: about $55 million a year. That's why the deep dive (<a href="1405-youtube-optimizations-and-errors.html">Quest 14.5</a>) spends a whole section on cost: serve only popular videos from the CDN, serve the long tail from your own servers, and more.</div>
+        <div id="s4q1"></div><div id="s4q2"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Scope Creep</h2><div class="sub">Keep the interview on the rails</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The Scope Creep wants you to draw before you think, multiply the wrong numbers and build everything yourself. Five moves. Beat at least <b>4 of 5</b> to defeat it.</p>
+      <div id="boss5"></div>
+      <div class="row" id="boss5again" style="display:none;margin-top:12px"><button class="btn primary">⚔️ Rematch</button></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">The 60-second scope</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill6"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> With the scope locked, Step 2 is the high-level design: an upload lane (where those 150 TB a day land) and a watch lane (where that $150,000 a day goes). That's <a href="1402-youtube-upload-and-stream-flows.html">Quest 14.2, <i>Upload Lane, Watch Lane</i></a>.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-youtube" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 14: "Design YouTube"</a>, the opening and "Step 1: Understand the problem and establish design scope", including the back-of-the-envelope estimation. Then glance at the <a href="https://aws.amazon.com/cloudfront/pricing/" target="_blank" rel="noopener">CloudFront pricing page</a> and find the tier the book's $0.02 comes from.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <ul style="margin:0;padding-left:20px">
+        <li><b>5 million DAU is tiny</b> next to real YouTube (2 billion people a month). It's an interview simplification so the maths fits on a napkin. The method is what matters.</li>
+        <li><b>150 TB a day is originals only.</b> Multiply by the number of transcoded versions (often 5 or more) and by replication (often 3 copies), and the real figure is many times larger.</li>
+        <li><b>$0.02 per GB</b> is CloudFront's cheapest published US tier, which only kicks in above several petabytes a month. This design sends about 7.5 PB a <i>day</i>, so nearly all of it would be in that tier. A small site pays the first-tier price, about $0.085, and very large customers negotiate private rates.<a class="cite" href="https://aws.amazon.com/cloudfront/pricing/" target="_blank" rel="noopener">[2]</a></li>
+        <li><b>Storage isn't free either.</b> A year of originals (~55 PB) at a typical cloud object-storage list price of roughly $0.02 per GB-month comes to around a million dollars a month. That's real money, but still several times less than the CDN's ~$4.5 million a month.</li>
+        <li><b>The CDN estimate is pessimistic</b> in one way (it assumes every view streams the whole 300 MB file) and optimistic in another (US prices are among the cheapest, and the users are largely international).</li>
+      </ul>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"why does the book count views for the CDN but uploads for storage?"</i> or <i>"what is a blob store, exactly?"</i> (Short answer: a <b>blob</b>, binary large object, is a big chunk of bytes like a video file, stored and fetched whole.<a class="cite" href="https://en.wikipedia.org/wiki/Binary_large_object" target="_blank" rel="noopener">[3]</a>)
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 14 "Design YouTube" (ByteByteGo): intro figures, Step 1 questions, back-of-the-envelope estimation.</li>
+        <li>Amazon CloudFront pricing (the book's $0.02/GB figure; tiered US prices).</li>
+        <li>Wikipedia, "Binary large object".</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '1401',
+  badge: '📏 Badge: Napkin Mathematician',
+  winTitle: 'Scope locked, numbers on the napkin',
+  cheatsheet: '../reference/ch14-youtube-cheatsheet.html',
+});
+const { sleep, shuffle, esc } = Q;
+const BOOK = 'https://bytebytego.com/courses/system-design-interview/design-youtube';
+const CITE = (n, url) => `<a class="cite" href="${url}" target="_blank" rel="noopener">[${n}]</a>`;
+
+/* ================= shared helpers ================= */
+function tween(dur, fn) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 0) { fn(1); return res(); }
+    const t0 = performance.now();
+    const f = now => { const p = Math.min(1, (now - t0) / dur); fn(p); p < 1 ? requestAnimationFrame(f) : res(); };
+    requestAnimationFrame(f);
+  });
+}
+const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); Q.addXP(xp || 10, li);
+  return true;
+}
+// Predict-then-watch round. Resolves after the learner picks and the action has played.
+function predict(box, { step, title, options, correct, act, explain, xp = 15 }) {
+  box.innerHTML = `${step ? `<div class="step">${step}</div>` : ''}<h3>${title}</h3><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+  const opts = $('.opts', box);
+  let busy = false;
+  return new Promise(resolve => {
+    shuffle(options.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = async () => {
+        if (busy) return; busy = true;
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        b.classList.add('picked');
+        await act();
+        const ok = i === correct;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-i="${correct}"]`, opts).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> ') + explain;
+        ok ? Q.addXP(xp, b) : Q.loseHeart(b);
+        resolve({ ok, row: $('.row', box) });
+      };
+      opts.appendChild(b);
+    });
+  });
+}
+// Two quizzes in a row, then a callback.
+function quizPair(m1, c1, m2, c2, then) {
+  Q.quiz(m1, { ...c1, onDone: () => setTimeout(() => Q.quiz(m2, { ...c2, onDone: () => setTimeout(then, 900) }), 500) });
+}
+// Number parsing: "500,000", "500k", "0.5M", "$150,000", "150k"
+function parseQty(s) {
+  s = String(s).toLowerCase().replace(/[,\s$_]/g, '').replace(/\/day$|perday$|aday$/, '');
+  const m = s.match(/^(\d*\.?\d+)(k|thousand|m|mn|million|b|bn|billion)?$/);
+  if (!m) return NaN;
+  return parseFloat(m[1]) * ({ k: 1e3, thousand: 1e3, m: 1e6, mn: 1e6, million: 1e6, b: 1e9, bn: 1e9, billion: 1e9 }[m[2]] || 1);
+}
+// Storage: number + optional unit typed, else the dropdown's unit. Returns TB.
+function parseTB(s, unit) {
+  s = String(s).toLowerCase().replace(/[,\s_]/g, '').replace(/\/day$|perday$|aday$/, '');
+  const m = s.match(/^(\d*\.?\d+)(mb|gb|tb|pb)?$/);
+  if (!m) return NaN;
+  return parseFloat(m[1]) * { mb: 1e-6, gb: 1e-3, tb: 1, pb: 1e3 }[m[2] || unit];
+}
+const near = (v, t, tol = .07) => Math.abs(v - t) <= Math.abs(t) * tol;
+const words = n => {
+  for (const [v, w] of [[1e12, 'trillion'], [1e9, 'billion'], [1e6, 'million'], [1e3, 'thousand']]) if (n >= v) return sig(n / v) + ' ' + w;
+  return sig(n);
+};
+const sig = x => x >= 10 ? String(Math.round(x)) : String(Math.round(x * 10) / 10);
+const usd = n => '$' + Math.round(n).toLocaleString('en-US');
+const usdShort = n => n >= 1e9 ? '$' + (n / 1e9).toFixed(2) + 'B' : n >= 1e6 ? '$' + (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? '$' + Math.round(n / 1e3) + 'k' : '$' + Math.round(n);
+function fmtTB(tb) {
+  if (tb >= 1e6) return (tb / 1e6).toLocaleString('en-US', { maximumFractionDigits: 2 }) + ' EB';
+  if (tb >= 1e3) return (tb / 1e3).toLocaleString('en-US', { maximumFractionDigits: tb >= 1e5 ? 0 : tb >= 1e4 ? 1 : 2 }) + ' PB';
+  return Math.round(tb).toLocaleString('en-US') + ' TB';
+}
+// A row of "calculate and check" inputs. rows: [{k, lab, sub, unit|units, parse, ok, good, diag, hints[]}]
+function calcSheet(mount, rows, { xp = 15, onRow, onAll } = {}) {
+  const done = new Set(), missed = new Set();
+  mount.innerHTML = rows.map(r => `<div class="crow" data-k="${r.k}">
+      <div class="lab">${r.lab}<small>${r.sub}</small></div>
+      <div class="in"><input type="text" inputmode="decimal" autocomplete="off" aria-label="${esc(r.aria)}">${r.units ? `<select aria-label="Unit">${r.units.map(u => `<option value="${u.toLowerCase()}"${u === r.unitDefault ? ' selected' : ''}>${u}</option>`).join('')}</select>` : `<span class="unit">${r.unit}</span>`}
+        <button class="btn primary">Check</button><button class="btn hb">Hint</button></div>
+      <div class="hint"></div><div class="fb"></div></div>`).join('');
+  rows.forEach(r => {
+    const row = $(`.crow[data-k="${r.k}"]`, mount), inp = $('input', row), chk = $('.btn.primary', row), fb = $('.fb', row), hint = $('.hint', row), hb = $('.hb', row), sel = $('select', row);
+    let hi = 0;
+    const moreHint = () => {
+      if (hi >= r.hints.length) return;
+      hi++; hint.textContent = r.hints.slice(0, hi).join('\n'); hint.classList.add('on');
+      if (hi >= r.hints.length) { hb.disabled = true; hb.textContent = 'No more hints'; }
+    };
+    hb.onclick = moreHint;
+    const check = () => {
+      if (done.has(r.k)) return;
+      const v = r.parse(inp.value, sel ? sel.value : null);
+      if (!isFinite(v)) { fb.className = 'fb bad'; fb.innerHTML = r.typeHelp; return; }
+      if (r.ok(v)) {
+        done.add(r.k);
+        row.classList.add('ok'); inp.readOnly = true; chk.disabled = true; hb.disabled = true; if (sel) sel.disabled = true;
+        fb.className = 'fb good'; fb.innerHTML = '✓ ' + r.good;
+        Q.addXP(r.xp || xp, chk);
+        onRow && onRow(r.k);
+        if (done.size === rows.length) onAll && onAll();
+      } else {
+        inp.classList.remove('wrongi'); void inp.offsetWidth; inp.classList.add('wrongi');
+        fb.className = 'fb bad'; fb.innerHTML = (r.diag(v) || 'Not quite.') + ' <span class="muted">Here\'s the next hint.</span>';
+        moreHint();
+        if (!missed.has(r.k)) { missed.add(r.k); Q.loseHeart(chk); }
+      }
+    };
+    chk.onclick = check;
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') check(); });
+  });
+}
+
+/* ================= STAGE 1: guess the giant ================= */
+const GIANTS = [
+  { e: '👥', t: 'Monthly active users', q: 'How many different people use YouTube in a month?', v: 2e9, min: 1e6, max: 1e10, note: 'About <b>2 billion</b> people a month, roughly one in four people on Earth.' },
+  { e: '▶️', t: 'Videos watched per day', q: 'How many video views happen every single day?', v: 5e9, min: 1e7, max: 1e11, note: '<b>5 billion</b> views a day. That\'s about 58,000 every second.' },
+  { e: '🇺🇸', t: 'US adults who use it', q: 'What share of adults in the United States use YouTube?', v: 73, pct: true, note: '<b>73%</b>, so roughly three in four American adults.' },
+  { e: '🎥', t: 'Creators', q: 'How many people publish videos on YouTube as creators?', v: 5e7, min: 1e5, max: 1e9, note: '<b>50 million</b> creators. Every one of them is an upload flow you have to handle.' },
+  { e: '💰', t: 'Ad revenue in 2019', q: 'How much did YouTube earn from ads in 2019 (US dollars)?', v: 15.1e9, min: 1e7, max: 1e12, money: true, note: '<b>$15.1 billion</b>, up 36% on 2018.' },
+  { e: '📱', t: 'Share of mobile traffic', q: 'What share of all mobile internet traffic is YouTube?', v: 37, pct: true, note: '<b>37%</b> of all mobile internet traffic. Video bytes are heavy, which is a hint about stage 4.' },
+  { e: '🌍', t: 'Languages', q: 'In how many languages is YouTube available?', v: 80, min: 1, max: 1000, note: '<b>80</b> languages. The audience is global, and so is the design.' },
+];
+Q.onStage(1, () => {
+  let gi = 0, locked = false, guess = 0, quizShown = false;
+  const res = [];
+  const box = $('#giant');
+  const fmtG = (g, x) => g.pct ? Math.round(x) + '%' : g.money ? '$' + words(x) : words(x);
+  const fromT = (g, t) => g.pct ? Math.round(t / 10) : Number((g.min * Math.pow(g.max / g.min, t / 1000)).toPrecision(2));
+  const frac = (g, x) => g.pct ? x / 100 : Math.log(x / g.min) / Math.log(g.max / g.min);
+  function show() {
+    const g = GIANTS[gi]; locked = false;
+    box.classList.remove('shake');
+    box.innerHTML = `<div class="gtop"><span>Card ${gi + 1} / ${GIANTS.length}</span><span class="gdots">${GIANTS.map((_, k) => `<i class="${k < gi ? (res[k] ? 'hit' : 'miss') : k === gi ? 'cur' : ''}"></i>`).join('')}</span></div>
+      <div class="gemoji" aria-hidden="true">${g.e}</div><h3>${g.t}</h3><p class="gq small muted">${g.q}</p>
+      <div class="gval" id="gval"></div>
+      <input type="range" id="gslide" min="0" max="1000" step="1" value="${g.pct ? 400 : 500}" aria-label="Your guess for ${esc(g.t)}">
+      <div class="gscale"><span>${fmtG(g, g.pct ? 0 : g.min)}</span><span>${g.pct ? '' : 'log scale'}</span><span>${fmtG(g, g.pct ? 100 : g.max)}</span></div>
+      <div class="gaxis" id="gaxis"><div class="tr"></div><div class="band"></div><div class="mk you">you</div><div class="mk book">book</div></div>
+      <div class="gmsg" id="gmsg"></div>
+      <div class="row"><button class="btn primary" id="glock">🔒 Lock my guess</button></div>`;
+    const sl = $('#gslide', box);
+    const upd = () => { guess = fromT(g, +sl.value); $('#gval', box).textContent = fmtG(g, guess); };
+    sl.addEventListener('input', upd); upd();
+    $('#glock', box).onclick = lock;
+  }
+  function lock() {
+    if (locked) return; locked = true;
+    const g = GIANTS[gi], sl = $('#gslide', box), btn = $('#glock', box);
+    sl.disabled = true;
+    const close = g.pct ? Math.abs(guess - g.v) <= 10 : Math.max(guess / g.v, g.v / guess) <= 2;
+    res[gi] = close;
+    const ax = $('#gaxis', box); ax.classList.add('on');
+    const band = $('.band', ax), you = $('.mk.you', ax), book = $('.mk.book', ax);
+    const lo = g.pct ? Math.max(0, g.v - 10) : g.v / 2, hi = g.pct ? Math.min(100, g.v + 10) : g.v * 2;
+    band.style.left = (frac(g, lo) * 100) + '%'; band.style.width = ((frac(g, hi) - frac(g, lo)) * 100) + '%';
+    you.style.left = (Math.min(1, Math.max(0, frac(g, guess))) * 100) + '%';
+    book.style.left = (frac(g, guess) * 100) + '%';
+    book.textContent = 'book: ' + fmtG(g, g.v);
+    requestAnimationFrame(() => requestAnimationFrame(() => { book.style.left = (frac(g, g.v) * 100) + '%'; }));
+    let off;
+    if (g.pct) off = Math.abs(guess - g.v) < 1 ? 'spot on' : `${Math.abs(Math.round(guess - g.v))} points too ${guess < g.v ? 'low' : 'high'}`;
+    else { const r = Math.max(guess / g.v, g.v / guess); off = r < 1.05 ? 'spot on' : `${r < 10 ? r.toFixed(1) : Math.round(r)}× too ${guess < g.v ? 'low' : 'high'}`; }
+    const m = $('#gmsg', box);
+    m.className = 'gmsg ' + (close ? 'good' : 'bad');
+    m.innerHTML = (close ? `✓ Close enough (${off}). ` : `Way off (${off}). No penalty. `) + g.note;
+    if (close) Q.addXP(5, btn);
+    else { box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake'); }
+    btn.textContent = gi < GIANTS.length - 1 ? 'Next card →' : 'See the verdict →';
+    btn.onclick = () => { gi++; gi < GIANTS.length ? show() : verdict(); };
+  }
+  function verdict() {
+    const n = res.filter(Boolean).length;
+    box.innerHTML = `<div class="gemoji" aria-hidden="true">🐘</div><h3>You were close on ${n} of ${GIANTS.length}</h3>
+      <p class="gq small muted">2 billion users, 5 billion views a day, 37% of mobile traffic. Whatever your score, the takeaway is the same.</p>
+      <div class="row"><button class="btn" id="gagain">↻ Guess again</button></div>`;
+    $('#gagain', box).onclick = () => { gi = 0; res.length = 0; show(); };
+    $('#s1cav').style.display = 'block';
+    scope();
+  }
+  function scope() {
+    const sc = $('#scope1'); if (sc.classList.contains('on')) return;
+    sc.classList.add('on');
+    const FEAT = [
+      { k: 'upload', t: '⬆️ upload', good: true }, { k: 'watch', t: '▶️ watch', good: true },
+      { k: 'comments', t: '💬 comments' }, { k: 'search', t: '🔎 search' }, { k: 'recs', t: '✨ recommendations' }, { k: 'chat', t: '🔴 live chat' },
+    ];
+    let got = 0;
+    const ch = $('#fchips'), ex = $('#fexp');
+    ch.innerHTML = shuffle(FEAT).map(f => `<button class="fchip" data-k="${f.k}">${f.t}</button>`).join('');
+    $$('.fchip', ch).forEach(b => b.onclick = () => {
+      const f = FEAT.find(x => x.k === b.dataset.k); b.disabled = true;
+      if (f.good) {
+        b.classList.add('right');
+        const bl = $(`.blank[data-b="${got}"]`, sc); bl.textContent = f.k; bl.classList.add('got'); got++;
+        Q.addXP(5, b);
+        if (got === 2) {
+          $$('.fchip', ch).forEach(x => x.disabled = true);
+          ex.className = 'explain show good';
+          ex.innerHTML = '<b>Upload a video, and watch a video.</b> The book designs just those two flows. Comments, likes, search, recommendations and the rest are out of scope unless the interviewer pulls them in.' + CITE(1, BOOK);
+          quiz();
+        }
+      } else {
+        b.classList.add('wrong'); Q.loseHeart(b);
+        ex.className = 'explain show bad';
+        ex.innerHTML = `<b>${esc(f.t.slice(f.t.indexOf(' ') + 1))}</b> is a real YouTube feature, but it isn't in the book's scope. It's out unless the interviewer brings it in.`;
+      }
+    });
+  }
+  function quiz() {
+    if (quizShown) return; quizShown = true;
+    quizPair($('#s1q1'), {
+      q: 'Twenty minutes in, you remember YouTube suggests what to watch next. Under the scope you agreed, what is that feature?',
+      options: ['Out of scope: note it and move on', 'Core: it belongs in the upload flow', 'Core: it belongs in the watch flow'],
+      correct: 0,
+      good: 'Recommendations are a whole system of their own. You agreed on upload + watch, so park it ("happy to discuss later") and keep going.',
+      bad: 'You agreed on two flows: upload and watch. Recommendations are a separate system. Park it out loud ("happy to discuss later") and keep going.',
+    }, $('#s1q2'), {
+      q: 'Why narrow "design YouTube" down to two features at all?',
+      options: ['45 minutes only fits a couple of flows done well', 'Interviewers forbid more than two features', 'The other features need no backend servers'],
+      correct: 0,
+      good: 'A short interview only has room to design one or two core flows properly. Agreeing the scope with the interviewer first is what a senior candidate does before drawing a single box.',
+      bad: 'Nobody forbids it, and every feature needs a backend. The real reason is time: 45 minutes only fits a couple of core flows done properly, so agree the scope first.',
+    }, () => Q.clearStage(1));
+  }
+  show();
+});
+
+/* ================= STAGE 2: interrogate the interviewer ================= */
+const ASK = [
+  { q: 'Which features matter most?', good: true, a: 'Two: uploading a video and watching a video.', r: '🎯 Upload + watch' },
+  { q: 'Which clients do we support?', good: true, a: 'Mobile apps, web browsers and smart TVs.', r: '📱 Mobile · web · TV' },
+  { q: 'How many daily active users?', good: true, a: '5 million.', r: '👥 5M DAU' },
+  { q: 'How long does a user spend a day?', good: true, a: 'About 30 minutes on average.', r: '⏱️ 30 min / user / day' },
+  { q: 'Do we have international users?', good: true, a: 'Yes, and a large share of them.', r: '🌍 Global audience' },
+  { q: 'Which video resolutions and formats?', good: true, a: 'Most of them. Accept what people upload.', r: '🎞️ Most resolutions + formats' },
+  { q: 'Is encryption required?', good: true, a: 'Yes.', r: '🔐 Encryption: yes' },
+  { q: 'Is there a maximum file size?', good: true, a: 'We focus on small and medium videos. The cap is 1 GB.', r: '📦 Max 1 GB / video' },
+  { q: 'Can we use existing cloud services?', good: true, a: 'Yes, good question. Building blob storage or a CDN from scratch isn\'t realistic for most companies. Pick the right existing services.', r: '☁️ Cloud services: allowed' },
+  { q: 'Which programming language should we use?', a: 'Any. That won\'t change the architecture.' },
+  { q: 'What colour is the play button?', a: 'That\'s for the product designers, not this interview.' },
+  { q: 'Which database vendor do you prefer?', a: 'Let\'s pick storage once we know the data. We can decide that later.' },
+  { q: 'How should comment threads be nested?', a: 'Comments aren\'t in scope today.' },
+  { q: 'Should we use microservices?', a: 'That\'s a design choice, and yours to make later. It isn\'t a requirement.' },
+];
+Q.onStage(2, () => {
+  const goods = ASK.filter(a => a.good);
+  let found = 0, mins = 0, busy = false;
+  function clock() {
+    const c = $('#clock2');
+    $('.fill', c).style.width = Math.min(100, mins / 10 * 100) + '%';
+    c.classList.toggle('over', mins > 10);
+    $('#clock2t').textContent = `${mins.toFixed(1)} / 10 min`;
+  }
+  function say(me, html) {
+    $('#ivme').textContent = me ? 'You: ' + me : '';
+    const b = $('#ivbub'); b.innerHTML = `<span class="who">Interviewer</span>${html}`;
+    b.style.animation = 'none'; void b.offsetWidth; b.style.animation = '';
+  }
+  function setup() {
+    found = 0; mins = 0; busy = false; clock();
+    ['#s2q1', '#s2q2'].forEach(s => $(s).innerHTML = '');
+    $('#nfr2').classList.remove('on'); $$('#nfr2 li').forEach(li => li.classList.remove('in'));
+    $('#ivav').textContent = '🧑🏽‍💼'; $('#ivav').classList.remove('frown');
+    say('', 'Design YouTube. Where would you like to start?');
+    $('#reqs2').innerHTML = goods.map((a, i) => `<div class="req" data-r="${i}">? requirement ${i + 1}</div>`).join('');
+    $('#qdeck2').innerHTML = shuffle(ASK.map((a, i) => ({ a, i }))).map(({ a, i }) => `<button class="opt" data-q="${i}">${a.q}</button>`).join('');
+    $$('#qdeck2 .opt').forEach(b => b.onclick = () => ask(b));
+  }
+  async function ask(b) {
+    if (b.disabled || found >= goods.length) return;
+    const a = ASK[+b.dataset.q]; b.disabled = true;
+    const av = $('#ivav');
+    if (a.good) {
+      mins += 0.5; clock();
+      b.classList.add('right'); Q.addXP(4, b); found++;
+      av.textContent = '🧑🏽‍💼'; av.classList.remove('frown');
+      say(a.q, a.a);
+      const slot = $(`#reqs2 .req[data-r="${goods.indexOf(a)}"]`); slot.classList.add('got'); slot.textContent = a.r;
+      if (found === goods.length) {
+        $$('#qdeck2 .opt').forEach(x => x.disabled = true);
+        await sleep(Q.reduced ? 0 : 500);
+        say('', `That's a solid list. You used <b>${mins.toFixed(1)} minutes</b>${mins <= 10 ? ', inside the budget' : ', a bit over the 10-minute budget'}. Sum it up for me.`);
+        assemble();
+      }
+    } else {
+      mins += 1; clock();
+      b.classList.add('waste'); Q.loseHeart(b);
+      av.textContent = '🤨'; av.classList.remove('frown'); void av.offsetWidth; av.classList.add('frown');
+      say(a.q, a.a + ' <span class="muted">(−1 game-minute)</span>');
+    }
+  }
+  async function assemble() {
+    if (busy) return; busy = true;
+    $('#nfr2').classList.add('on');
+    for (const li of $$('#nfr2 li')) { li.classList.add('in'); await sleep(Q.reduced ? 0 : 260); }
+    quizPair($('#s2q1'), {
+      q: 'Why does "can we use existing cloud services?" matter so much here?',
+      options: ['You rent blob storage and a CDN, and spend your time on the unique parts', 'Cloud services are always cheaper than running your own servers at any scale', 'Interviewers only accept designs that run on one of the big public clouds'],
+      correct: 0,
+      good: 'A "yes" means managed <b>blob storage</b> (a store for big binary files like videos) and a managed CDN are building blocks you can just use. Your 45 minutes go on what\'s unique: the upload flow, the transcoding pipeline, streaming.' + CITE(3, 'https://en.wikipedia.org/wiki/Binary_large_object'),
+      bad: 'Cloud isn\'t always cheaper (the CDN bill in stage 4 is huge), and no interviewer demands it. The point is time: a "yes" lets you treat blob storage and the CDN as building blocks and spend the interview on what\'s unique.',
+    }, $('#s2q2'), {
+      q: 'The interviewer capped videos at 1 GB. What does that change in the design?',
+      options: ['It bounds the upload time and transcoding work for each video', 'It means the CDN never has to cache any of the videos at all', 'It lets us skip encryption for the small and medium files'],
+      correct: 0,
+      good: 'A known maximum lets you size things: how long an upload can take, how to split it into chunks and retry, and how much transcoding one video can need. Unbounded files would make all of that open-ended.',
+      bad: 'Encryption was still required, and the CDN still caches videos. A cap matters because it bounds the work: upload time, chunk sizes and retries, and how much transcoding one video can need.',
+    }, () => { $('#s2replay').style.display = 'flex'; Q.clearStage(2); });
+  }
+  $('#s2replay .btn').onclick = () => { $('#s2replay').style.display = 'none'; setup(); };
+  setup();
+});
+
+/* ================= STAGE 3: napkin maths, storage ================= */
+Q.onStage(3, () => {
+  calcSheet($('#sheet3'), [
+    { k: 'up', lab: '(A) Uploads per day', sub: 'How many new videos arrive every day?', aria: 'Uploads per day', unit: 'videos / day', xp: 15,
+      parse: v => parseQty(v), ok: v => near(v, 5e5, .02),
+      typeHelp: 'Type a number, like <code>200000</code> or <code>200k</code>.',
+      good: '5,000,000 users × 10% = <b>500,000 uploads a day</b>.',
+      diag: v => near(v, 2.5e7) ? 'That\'s <b>views</b> (5M × 5 videos). Storage grows with <b>uploads</b>.'
+        : near(v, 5e6) ? 'That assumes every user uploads. Only <b>10%</b> do.'
+        : (near(v, 5e4) || near(v, 5e6)) ? 'Off by a factor of 10. Recount the zeros.' : null,
+      hints: ['uploads/day = DAU × share of users who upload', '= 5,000,000 × 10% (one video each)'] },
+    { k: 'st', lab: '(B) New storage per day', sub: 'How much new video lands in storage every day?', aria: 'New storage per day', units: ['GB', 'TB', 'PB'], unitDefault: 'TB', xp: 15,
+      parse: (v, u) => parseTB(v, u), ok: v => v >= 140 && v <= 160,
+      typeHelp: 'Type a number and pick a unit, like <code>42</code> + TB (or type <code>42 TB</code>).',
+      good: '500,000 × 300 MB = 150,000,000 MB = <b>150 TB a day</b>.',
+      diag: v => near(v, 7500) ? 'You multiplied by 5 videos <b>watched</b>. Watching doesn\'t add storage; only uploads do.'
+        : near(v, 1500) ? 'That counts every user as an uploader. Only <b>10%</b> upload.'
+        : (near(v, 150000) || near(v, .15)) ? 'Right digits, wrong unit. 1 TB = 1,000 GB = 1,000,000 MB.'
+        : (near(v, 15) || near(v, 1500)) ? 'Off by a factor of 10. Recount the zeros.' : null,
+      hints: ['storage/day = uploads/day × average video size', '= 500,000 × 300 MB = 150,000,000 MB', '1 TB = 1,000,000 MB (napkin maths uses powers of 10)'] },
+  ], { onAll: () => setTimeout(real, 500) });
+
+  const sv = $('#r3v'), sc = $('#r3c'), sy = $('#r3y');
+  function draw() {
+    const v = +sv.value, c = +sc.value, y = +sy.value;
+    $('#r3vv').textContent = v; $('#r3cv').textContent = c; $('#r3yv').textContent = y;
+    const bl = $('#blocks3'); bl.style.gridTemplateColumns = `repeat(${v}, 34px)`;
+    const want = v * c, have = bl.children.length;
+    if (have !== want || bl.dataset.v != v) {
+      bl.innerHTML = '';
+      for (let r = 0; r < c; r++) for (let k = 0; k < v; k++) {
+        const d = document.createElement('div');
+        d.className = 'blk' + (r === 0 && k === 0 ? ' orig' : r > 0 ? ' rep' : '');
+        d.innerHTML = '150<br>TB'; bl.appendChild(d);
+      }
+      bl.dataset.v = v;
+    }
+    const day = 150 * v * c;
+    $('#c3day').textContent = fmtTB(day);
+    $('#c3mult').textContent = `× ${v * c} of the book's number`;
+    $('#c3yrs').textContent = y === 1 ? '1 year' : y + ' years';
+    $('#c3tot').textContent = fmtTB(day * 365 * y);
+  }
+  [sv, sc, sy].forEach(s => s.addEventListener('input', draw));
+  draw();
+  let started = false;
+  async function real() {
+    if (started) return; started = true;
+    $('#real3').classList.add('on');
+    const { row } = await predict($('#pred3'), {
+      step: 'Predict, then watch',
+      title: 'You keep <b>5 versions</b> of every video, and store each version in <b>3 copies</b>. New storage per day becomes about…',
+      options: ['8× the book: about 1,200 TB', '15× the book: about 2,250 TB', '5× the book: about 750 TB'],
+      correct: 1,
+      act: async () => {
+        await tween(900, p => { sv.value = Math.round(1 + 4 * ease(p)); draw(); });
+        await tween(700, p => { sc.value = Math.round(1 + 2 * ease(p)); draw(); });
+        await sleep(Q.reduced ? 0 : 300);
+      },
+      explain: 'The factors <b>multiply</b>: 5 versions × 3 copies = 15 blocks of 150 TB, so <b>2,250 TB (2.25 PB) a day</b>, about 820 PB a year. Adding them (5 + 3 = 8) is the classic napkin slip. Now play with the sliders, including the years.',
+    });
+    [sv, sc, sy].forEach(s => s.disabled = false);
+    Q.quiz($('#s3quiz'), {
+      q: 'The book says 150 TB a day. Which of these does that number leave out?',
+      options: ['Transcoded versions and replica copies', 'The 10% of users who upload each day', 'The 300 MB average size of each video'],
+      correct: 0,
+      good: 'The book counts <b>originals only</b>: 10% of 5M users × 300 MB. Transcoded versions and replicas multiply it. Say so out loud in an interview; it shows you know the estimate is a floor.',
+      bad: 'The 10% uploaders and the 300 MB size are exactly what the book multiplies. What it leaves out is everything stored <i>on top</i> of the originals: transcoded versions and replicas.',
+      onDone: () => setTimeout(() => Q.clearStage(3), 900),
+    });
+  }
+});
+
+/* ================= STAGE 4: napkin maths, the CDN bill ================= */
+Q.onStage(4, () => {
+  const K = { price: $('#k4price'), vid: $('#k4vid'), share: $('#k4share'), dau: $('#k4dau') };
+  const goals = new Set();
+  let free = false;
+  // gauge (log scale, $1k … $10M per day)
+  const svg = $('#gauge4'), CX = 160, CY = 170, R = 130;
+  const fr = n => Math.min(1, Math.max(0, (Math.log10(n) - 3) / 4));
+  const P = (f, r = R) => { const a = Math.PI * (1 - f); return [CX + r * Math.cos(a), CY - r * Math.sin(a)]; };
+  const arc = (a, b) => { const [x0, y0] = P(a), [x1, y1] = P(b); return `M${x0.toFixed(1)} ${y0.toFixed(1)}A${R} ${R} 0 0 1 ${x1.toFixed(1)} ${y1.toFixed(1)}`; };
+  const [bx, by] = P(fr(150000), R + 14), [btx, bty] = P(fr(150000), R + 30);
+  svg.innerHTML = ['--g1', '--g2', '--g3', '--g4'].map((c, i) => `<path class="arcb" d="${arc(i / 4 + .004, (i + 1) / 4 - .004)}" style="stroke:var(${c})"/>`).join('') +
+    ['$1k', '$10k', '$100k', '$1M', '$10M'].map((t, i) => { const [x, y] = P(i / 4, R - 28); return `<text class="tk" x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}">${t}</text>`; }).join('') +
+    `<circle class="bookmk" cx="${bx.toFixed(1)}" cy="${by.toFixed(1)}" r="4.5"/><text class="booktx" x="${btx.toFixed(1)}" y="${(bty + 3).toFixed(1)}">book</text>` +
+    `<line class="needle" id="needle4" x1="${CX}" y1="${CY}" x2="${CX - R + 34}" y2="${CY}"/><circle class="hub" cx="${CX}" cy="${CY}" r="8"/>`;
+  const vals = () => ({ price: +K.price.value / 1000, vid: +K.vid.value, share: +K.share.value / 100, dau: +K.dau.value * 1e6 });
+  function draw() {
+    const v = vals(), bill = v.dau * v.vid * 0.3 * v.share * v.price;
+    $('#k4pricev').textContent = '$' + v.price.toFixed(3);
+    $('#k4vidv').textContent = v.vid; $('#k4sharev').textContent = Math.round(v.share * 100) + '%'; $('#k4dauv').textContent = (v.dau / 1e6) + 'M';
+    $('#needle4').style.transform = `rotate(${fr(bill) * 180}deg)`;
+    $('#b4day').textContent = usd(bill); $('#b4yr').textContent = usdShort(bill * 365);
+    const x = bill / 150000;
+    $('#b4vs').textContent = Math.abs(x - 1) < .005 ? '= the book\'s estimate' : x > 1 ? `${x.toFixed(x < 10 ? 1 : 0)}× the book's estimate` : `${Math.round(x * 100)}% of the book's estimate`;
+    $('#b4f').textContent = `${(v.dau / 1e6)}M × ${v.vid} × 0.3 GB × ${Math.round(v.share * 100)}% × $${v.price.toFixed(3)}`;
+    if (free && v.dau === 5e6 && Math.abs(v.price - .02) < 1e-9 && bill < 75000 && checkGoal('#s4goals', 'real', goals, 10)) {
+      $('#s4note').style.display = 'block';
+      setTimeout(quiz, 500);
+    }
+    return bill;
+  }
+  Object.values(K).forEach(s => s.addEventListener('input', draw));
+  $('#k4reset').onclick = () => { K.price.value = 20; K.vid.value = 5; K.share.value = 100; K.dau.value = 5; draw(); };
+  draw();
+
+  calcSheet($('#sheet4'), [
+    { k: 'cdn', lab: 'Daily CDN cost', sub: 'Every view streams one whole video from the CDN.', aria: 'Daily CDN cost in dollars', unit: '$ / day', xp: 10,
+      parse: v => parseQty(v), ok: v => v >= 140000 && v <= 160000,
+      typeHelp: 'Type a dollar amount, like <code>42000</code> or <code>$42k</code>.',
+      good: '5,000,000 × 5 videos = 25 million views × 0.3 GB = 7.5 million GB (7.5 PB!) × $0.02 = <b>$150,000 a day</b>, about $55 million a year.',
+      diag: v => near(v, 3000) ? 'You used <b>uploads</b> (10% of users). The CDN bill comes from <b>views</b>: every user watches 5 videos.'
+        : near(v, 30000) ? 'You left out the <b>5 videos</b> each user watches a day.'
+        : (near(v, 1.5e8) || near(v, 1.5e11)) ? 'Check the size unit: 300 MB = <b>0.3 GB</b>, and the price is per GB.'
+        : (near(v, 15000) || near(v, 1.5e6)) ? 'Off by a factor of 10. Recount the zeros.' : null,
+      hints: ['views/day = 5,000,000 users × 5 videos = 25,000,000', 'GB/day = 25,000,000 × 0.3 GB = 7,500,000 GB', '$/day = 7,500,000 GB × $0.02 per GB'] },
+  ], { onAll: () => setTimeout(explore, 500) });
+
+  let started = false, quizShown = false;
+  async function explore() {
+    if (started) return; started = true;
+    $('#real4').classList.add('on');
+    const { row } = await predict($('#pred4'), {
+      step: 'Predict, then watch',
+      title: 'The book used CloudFront\'s cheapest US price, $0.02 per GB. A small site pays the first-tier list price, <b>$0.085</b>. At that price the daily bill becomes about…',
+      options: ['2× the book: about $300,000', '4× the book: about $640,000', '10× the book: about $1.5 million'],
+      correct: 1,
+      act: async () => {
+        await tween(1100, p => { K.price.value = Math.round((20 + 65 * ease(p)) / 5) * 5; draw(); });
+        await sleep(Q.reduced ? 0 : 300);
+      },
+      explain: 'The bill is a straight line in the price: $0.085 ÷ $0.02 = 4.25, so <b>$637,500 a day</b>. At this design\'s volume (about 225 PB a month) nearly every byte would fall in the cheapest tier, so the book\'s $0.02 is fair. Now reset to book values and question the other assumptions.',
+    });
+    free = true;
+    Object.values(K).forEach(s => s.disabled = false); $('#k4reset').disabled = false;
+    draw();
+  }
+  function quiz() {
+    if (quizShown) return; quizShown = true;
+    quizPair($('#s4q1'), {
+      q: 'Which single line item dominates this design\'s running cost?',
+      options: ['Serving video bytes from the CDN', 'Running the API servers for uploads', 'The metadata database for titles'],
+      correct: 0,
+      good: 'CDN egress: about $150,000 a day even at the cheapest price. API servers and metadata are small next to 7.5 PB of video a day. That\'s why cost-saving gets its own section in the deep dive.',
+      bad: 'API servers and a metadata database handle small requests. The CDN ships 7.5 PB of video a day, about $150,000 even at the cheapest price. That\'s the bill that dominates.',
+    }, $('#s4q2'), {
+      q: 'Which assumption makes the book\'s $150,000 a day too pessimistic (too high)?',
+      options: ['Every view streams the whole 300 MB file', 'Only 10% of the users upload a video daily', 'All of the traffic is served from the US'],
+      correct: 0,
+      good: 'Real viewers stop early, skip ahead and often watch at lower quality (smaller files), so far fewer bytes go out than 300 MB a view. The US-only assumption pushes the other way: US prices are among the cheapest, and many users are international.',
+      bad: 'Uploads don\'t touch the CDN bill at all, and US-only actually makes it <i>cheaper</i> (US prices are among the lowest). The pessimistic one is assuming every view streams the full 300 MB. Real viewers stop early and often watch at lower quality.',
+    }, () => Q.clearStage(4));
+  }
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => {
+  const SCEN = [
+    { e: '🎬', t: '"Design YouTube."', d: 'The interviewer leans back and waits. The clock is running. Your first move?',
+      choices: [{ k: 'draw', label: 'Start drawing', sub: 'load balancers, servers…' }, { k: 'ask', label: 'Ask questions', sub: 'which features, what scale?' }, { k: 'list', label: 'List everything', sub: 'every YouTube feature' }],
+      a: 'ask', why: 'Step 1 comes first: pin down features, scale and constraints before any box goes on the whiteboard. Drawing first or listing every feature both skip the scoping that decides the design.' },
+    { e: '💾', t: '"How much new storage per day?"', d: '5M DAU, 5 videos watched each, 10% upload one video, 300 MB a video. Which formula?',
+      choices: [{ k: 'views', label: 'DAU × 5 × 300 MB', sub: 'every view' }, { k: 'ups', label: 'DAU × 10% × 300 MB', sub: 'every upload' }, { k: 'all', label: 'DAU × 300 MB', sub: 'every user' }],
+      a: 'ups', why: 'Only <b>uploads</b> create new storage: 500,000 × 300 MB = 150 TB a day. Views read what\'s already stored. Mixing the two is the most common estimation slip.' },
+    { e: '🏗️', t: '"Should we build our own blob storage?"', d: 'The interviewer already said existing cloud services are fine.',
+      choices: [{ k: 'build', label: 'Build it', sub: 'full control matters most' }, { k: 'cloud', label: 'Use managed storage', sub: 'S3, GCS, Azure Blob' }, { k: 'sql', label: 'Put it in SQL', sub: 'videos as table rows' }],
+      a: 'cloud', why: 'Use a managed blob store (Amazon S3, Google Cloud Storage, Azure Blob Storage). The trade-off: you give up some control, and in return you skip years of building and running a storage system. A SQL row is the wrong home for a 1 GB file.' },
+    { e: '📺', t: '"Do we support 4K and old phones?"', d: 'You asked earlier and heard: "most video resolutions and formats".',
+      choices: [{ k: 'one', label: 'Pick one format', sub: 'keep it simple' }, { k: 'trans', label: 'Transcode', sub: 'many versions per video' }, { k: 'orig', label: 'Send the original', sub: 'to every device' }],
+      a: 'trans', why: '"Most resolutions and formats" means every upload must be re-encoded into several versions, so a smart TV gets 4K and an old phone gets something small. That\'s transcoding, the heart of Quests <a href="1403-youtube-transcoding-and-dag.html">14.3</a> and <a href="1404-youtube-transcoding-architecture.html">14.4</a>.' },
+    { e: '🐛', t: 'Spot the bug', d: 'A candidate says: "CDN cost = 5M × 10% × 0.3 GB × $0.02 = $3,000 a day. Cheap!"',
+      choices: [{ k: 'ok', label: 'Correct', sub: 'ship it' }, { k: 'views', label: 'Wrong: uploads', sub: 'should count views' }, { k: 'tb', label: 'Wrong: unit', sub: 'price is per TB' }],
+      a: 'views', why: 'They multiplied by the 10% who <b>upload</b>. The CDN pays for every <b>view</b>: 5M × 5 videos × 0.3 GB × $0.02 = $150,000 a day, 50× more. CloudFront prices are per GB.' + CITE(2, 'https://aws.amazon.com/cloudfront/pricing/') },
+  ];
+  let round = 0;
+  function fight() {
+    $('#boss5again').style.display = 'none';
+    Q.boss($('#boss5'), {
+      name: '🐍 The Scope Creep',
+      xp: round++ ? 5 : 15, // a rematch still pays, but less, so losing on purpose never farms XP
+      scenarios: SCEN,
+      outro: 'Scope first, multiply the right things, rent what you can, and let the numbers point at the hard parts.',
+      onDone: wins => {
+        if (wins >= 4) { Q.clearStage(5); return; }
+        const s = $('#boss5 .scenario p'); if (s) s.insertAdjacentHTML('beforeend', ' <b>You need 4 of 5 to beat it.</b> Try again.');
+        $('#boss5again').style.display = 'flex';
+      },
+    });
+  }
+  $('#boss5again .btn').onclick = fight;
+  fight();
+});
+
+/* ================= STAGE 6: say it like a senior ================= */
+Q.onStage(6, () => Q.drill($('#drill6'), {
+  prompt: 'The interviewer: <i>"Design YouTube."</i> In about 60 seconds, scope it out loud: features, clients, scale, constraints, and your two headline numbers with what they imply.',
+  placeholder: 'Before I draw anything, let me pin down the scope…',
+  model: '"Before drawing, I\'d scope it. We\'ll design two flows: <b>uploading</b> a video and <b>watching</b> one. Comments, search and recommendations are out unless you want them. Clients are mobile apps, web browsers and smart TVs. Scale: 5 million daily users, about 30 minutes each a day, many outside the US. Videos are small to medium, capped at 1 GB, in most resolutions and formats. They must be encrypted, and since we can use existing cloud services, I\'ll rent blob storage and a CDN rather than build them. Two napkin numbers. Storage: 10% of users upload one 300 MB video a day, so 500,000 × 300 MB ≈ <b>150 TB of new originals a day</b>, before transcoded versions and replicas. Bandwidth: 25 million views × 0.3 GB × $0.02 per GB ≈ <b>$150,000 a day</b> on the CDN, about $55 million a year. So the CDN is the bill to attack, and I\'ll come back to cost-saving in the deep dive."',
+  checks: [
+    'I scoped it to upload + watch and named what\'s out',
+    'I named the clients (mobile, web, smart TV) and the scale (5M DAU, 30 min a day, international)',
+    'I named the constraints: 1 GB max, encryption, most formats, cloud services allowed',
+    'I derived ~150 TB a day from uploads (not views), and said it\'s originals only',
+    'I derived ~$150,000 a day for the CDN from views × 0.3 GB × $0.02',
+    'I said what the numbers imply: the CDN bill is the cost to optimise',
+  ],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

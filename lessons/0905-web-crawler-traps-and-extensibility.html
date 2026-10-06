@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Beware the Spider Traps</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: plug-in pipeline (s1), trap monitor (s2), sorting belt (s3), raw vs rendered (s4) */
+:root { --dup: #2f7fd8; --trap: #d4423f; --noise: #c27400; --keep: #1d9a52; --belt: #d9d3c6; --belt-2: #cbc4b4; --on-c: #ffffff; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --dup: #5aa9ff; --trap: #ff6d6a; --noise: #ffb547; --keep: #43d98a; --belt: #23263f; --belt-2: #2d3150; --on-c: #0e0f1d; }
+}
+:root[data-theme="dark"] { --dup: #5aa9ff; --trap: #ff6d6a; --noise: #ffb547; --keep: #43d98a; --belt: #23263f; --belt-2: #2d3150; --on-c: #0e0f1d; }
+
+.bignum { font-family: var(--mono); font-weight: 700; }
+.bignum.bad { color: var(--bad); }
+.bignum.good { color: var(--good); }
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.hidden { display: none !important; }
+
+/* ---------- stage 1: pipeline with sockets ---------- */
+.pipe-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 0 16px; padding: 14px; }
+.core { border: 2px solid var(--line); background: var(--panel); border-radius: 12px; padding: 8px 10px; font-weight: 700; font-size: 14px; line-height: 1.25; align-self: center; transition: border-color .3s, box-shadow .3s; }
+.core small { display: block; font-weight: 500; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.core.safe { border-color: var(--good); box-shadow: 0 0 0 3px var(--good-soft); }
+.arrow { grid-column: 1; text-align: center; color: var(--muted); font-size: 15px; line-height: 1; padding: 3px 0; }
+.arrow.loop { font-size: 12px; font-weight: 600; }
+.spacer { grid-column: 2; }
+.sock { position: relative; align-self: center; text-align: left; min-height: 48px; border: 2px dashed var(--muted); border-radius: 12px; background: transparent; padding: 6px 10px; font-size: 12.5px; color: var(--muted); line-height: 1.3; transition: border-color .2s, background .2s; }
+.sock::before { content: ""; position: absolute; left: -16px; top: 50%; width: 14px; border-top: 2px dashed var(--muted); }
+.sock b { color: var(--ink); font-size: 13px; }
+.sock.ready { border-color: var(--accent); background: var(--accent-soft); }
+.sock.jam { border-color: var(--bad); background: var(--bad-soft); animation: shake .4s; }
+.sock .plug { display: block; margin-top: 5px; border-radius: 8px; padding: 3px 8px; background: var(--teal-soft); color: var(--ink); font-weight: 700; font-size: 12.5px; border: 1px solid var(--teal); animation: rise .3s; }
+.sock[disabled] { cursor: default; }
+.tray { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+@media (max-width: 560px) { .tray { grid-template-columns: 1fr; } }
+.mod { text-align: left; border: 2px solid var(--line); background: var(--panel); border-radius: 12px; padding: 9px 12px; min-height: 48px; font-size: 14px; line-height: 1.3; transition: border-color .2s, transform .1s, opacity .3s; }
+.mod b { display: block; font-size: 15px; }
+.mod span { color: var(--muted); font-size: 13px; }
+.mod.sel { border-color: var(--accent); background: var(--accent-soft); transform: translateY(-2px); }
+.mod.placed { opacity: .45; border-style: dashed; }
+.mod .bonus { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--teal); margin-left: 6px; }
+.meter { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.toggles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+@media (max-width: 560px) { .toggles { grid-template-columns: 1fr; } }
+.toggles .opt { min-height: 44px; }
+.toggles .opt.on { border-color: var(--accent); background: var(--accent-soft); }
+.toggles .opt.on::before { content: "✓ "; color: var(--accent); font-weight: 700; }
+
+/* ---------- stage 2: trap monitor ---------- */
+.tr-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 14px 0; }
+.tr-head .host { font-family: var(--mono); font-weight: 700; font-size: 14px; word-break: break-all; }
+.tr-head .seg span { padding: 4px 10px; }
+.hostmon { display: grid; gap: 8px; padding: 12px 14px 6px; }
+.hb { display: grid; grid-template-columns: minmax(0, 150px) 1fr 64px; gap: 8px; align-items: center; font-size: 12.5px; }
+@media (max-width: 480px) { .hb { grid-template-columns: minmax(0, 96px) 1fr 54px; } }
+.hb .nm { font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hb .track { position: relative; height: 18px; border-radius: 6px; background: var(--bg-2); border: 1px solid var(--line); overflow: hidden; }
+.hb .fill { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--teal); border-radius: 5px 0 0 5px; }
+.hb.hot .fill { background: var(--bad); }
+.hb .line { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink); left: 60%; }
+.hb .val { font-family: var(--mono); text-align: right; white-space: nowrap; }
+.hm-note { font-size: 12px; color: var(--muted); padding: 0 14px 8px; }
+.ticker { margin: 0 14px 12px; background: var(--code-bg); color: var(--code-ink); border-radius: 12px; padding: 10px 12px; font: 12px/1.5 var(--mono); min-height: 118px; max-height: 118px; overflow: hidden; }
+.ticker div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ticker .len { color: #ffb36b; }
+.ticker .cut { color: #ff8a8a; }
+.ticker .ok { color: #6ee7a8; }
+.slider { padding: 4px 14px 10px; display: grid; gap: 4px; }
+.slider label { display: flex; justify-content: space-between; font-weight: 600; font-size: 14px; gap: 8px; flex-wrap: wrap; }
+.slider input { width: 100%; accent-color: var(--accent); height: 30px; }
+.slider input[disabled] { opacity: .4; }
+.review { margin-top: 14px; border: 2px solid var(--warn); border-radius: 16px; padding: 14px; background: var(--warn-soft); animation: rise .35s; }
+.review h3 { margin: 0 0 6px; font-size: 17px; }
+.review .samples { font: 12px/1.6 var(--mono); background: var(--panel); border-radius: 10px; padding: 8px 10px; margin: 8px 0 10px; word-break: break-all; }
+.review .opts .opt { background: var(--panel); }
+
+/* ---------- stage 3: sorting belt ---------- */
+.belt { position: relative; padding: 14px; background: repeating-linear-gradient(90deg, var(--belt) 0 22px, var(--belt-2) 22px 44px); background-size: 44px 100%; border-bottom: 1px solid var(--line); }
+.belt.run { animation: beltmove 1.2s linear infinite; }
+@keyframes beltmove { to { background-position: 44px 0; } }
+.queue { display: flex; gap: 6px; justify-content: flex-end; margin-bottom: 10px; min-height: 18px; }
+.queue i { width: 26px; height: 16px; border-radius: 4px; background: var(--panel); border: 1px solid var(--line); opacity: .8; }
+.pcard { max-width: 460px; margin: 0 auto; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; transition: transform .45s cubic-bezier(.3,.7,.2,1), opacity .45s; }
+.pcard.in { animation: slidein .45s cubic-bezier(.2,.8,.2,1); }
+@keyframes slidein { from { transform: translateX(60%); opacity: 0; } }
+.pcard.out { opacity: 0; }
+.pcard .url { font: 11.5px var(--mono); color: var(--muted); background: var(--bg-2); padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pcard .body { padding: 10px 12px 12px; }
+.pcard h4 { margin: 0 0 4px; font-size: 16px; }
+.pcard p { margin: 0; font-size: 14px; color: var(--muted); }
+.pcard .adbox { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 4px; background: var(--warn-soft); color: var(--noise); margin: 2px 2px 0 0; }
+.bins { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; padding: 12px 14px; background: var(--panel); }
+@media (max-width: 560px) { .bins { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.bin { border: 2px solid var(--c); border-radius: 12px; background: color-mix(in srgb, var(--c) 10%, var(--panel)); padding: 10px 6px; min-height: 64px; text-align: center; transition: transform .15s; }
+.bin b { display: block; font-size: 15px; }
+.bin span { display: block; font-size: 12px; color: var(--muted); }
+.bin .cnt { font-family: var(--mono); font-weight: 700; color: var(--c); font-size: 13px; }
+.bin:hover:not([disabled]) { transform: translateY(-2px); }
+.bin.hit { animation: blip .45s; }
+.bin.miss { animation: shake .4s; }
+@keyframes blip { 40% { transform: scale(1.08); } }
+.bin[data-k="dup"] { --c: var(--dup); }
+.bin[data-k="trap"] { --c: var(--trap); }
+.bin[data-k="noise"] { --c: var(--noise); }
+.bin[data-k="keep"] { --c: var(--keep); }
+
+/* ---------- stage 4: raw vs rendered ---------- */
+.split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 14px; }
+@media (max-width: 640px) { .split { grid-template-columns: 1fr; } }
+.pane { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); padding: 10px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.pane-h { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+pre.code { margin: 0; background: var(--code-bg); color: var(--code-ink); border-radius: 10px; padding: 10px; font: 12px/1.5 var(--mono); overflow-x: auto; min-height: 170px; }
+pre.code .hl { color: #ffb36b; }
+.render { position: relative; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); min-height: 170px; padding: 10px; font-size: 13px; }
+.render .empty { color: var(--muted); display: grid; place-items: center; min-height: 150px; text-align: center; }
+.spin { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--accent); animation: spin .8s linear infinite; margin: 0 auto 8px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.shop h5 { margin: 0 0 6px; font-size: 14px; }
+.prods { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.prod { border: 1px solid var(--line); border-radius: 8px; padding: 6px; background: var(--panel); font-size: 12px; text-align: center; animation: rise .35s backwards; }
+.prod .lnk { color: var(--accent); text-decoration: underline; font-family: var(--mono); font-size: 11px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prod.glow { outline: 2px solid var(--good); }
+.found { font-size: 13.5px; min-height: 22px; }
+.found b { font-family: var(--mono); }
+.pane .btn { padding: 8px 12px; font-size: 14px; min-height: 40px; }
+.cost { padding: 0 14px 14px; display: grid; gap: 6px; }
+.cost .hb { grid-template-columns: minmax(0, 130px) 1fr 80px; }
+.cost .hb .fill { transition: width .8s cubic-bezier(.2,.8,.2,1); }
+.wcards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+@media (max-width: 560px) { .wcards { grid-template-columns: 1fr; } }
+.wcards .opt { min-height: 48px; }
+.react { margin-top: 10px; font-size: 14.5px; min-height: 24px; }
+.react .who { font-weight: 700; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 9.5 · Design a Web Crawler</div>
+    <h1>Beware the Spider Traps</h1>
+    <p class="lede">Your spider runs. Now the web fights back: endless fake pages, copies of copies, and pages that are mostly junk. Plug new powers into the crawler without breaking it, dodge the traps, and close the interview with a strong wrap-up.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can show how a new module (a PNG downloader, a web monitor) plugs into the pipeline, name the three kinds of <b>problematic content</b> and how to handle each, explain why a spider trap needs a <b>URL length limit plus human review</b>, and list the wrap-up talking points.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Snap-on modules</h2><div class="sub">Extensibility · plug in, don't rewrite</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Almost every system grows. Today the crawler fetches HTML. Next quarter someone wants images, or PDFs, or alerts. The book's answer is <b>extensibility</b>: design the crawler so a new content type is a new <b>module</b> (a self-contained piece of code) that you plug in. The core loop stays as it is.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener">[1]</a></p>
+      <p>The book gives two examples. A <b>PNG Downloader</b> fetches PNG images. A <b>Web Monitor</b> watches the web for <i>copyright and trademark infringement</i> (someone using your content or your brand name without permission). Below is the pipeline from <a href="0902-web-crawler-components-and-workflow.html">Quest 9.2</a>, with empty <b>sockets</b> beside it. Tap a module, then tap the socket that gives it the input it needs.</p>
+
+      <div class="sim" id="pipe">
+        <div class="pipe-grid" id="pipeGrid"></div>
+        <div class="sim-bar">
+          <span>Holding: <b id="holding">nothing (tap a module)</b></span>
+          <span class="meter">Core code changed: <span class="bignum good" id="coreMeter">0 lines</span></span>
+        </div>
+        <div class="simlog" id="pipeLog"><div>The core pipeline is wired up and running. Four modules are waiting in the tray.</div></div>
+      </div>
+      <div class="tray" id="tray"></div>
+
+      <ul class="checklist" id="s1goals">
+        <li data-g="book"><span class="box">✓</span><span>Plug in the book's two modules: PNG Downloader and Web Monitor</span></li>
+        <li data-g="bonus"><span class="box">✓</span><span>Bonus: plug in the PDF Parser and the spam blocklist</span></li>
+        <li data-g="cr"><span class="box">✓</span><span>Handle the change request without touching the core</span></li>
+      </ul>
+
+      <div class="challenge boxed hidden" id="crBox">
+        <div class="step">Change request</div>
+        <h3>📨 "Search results should show video thumbnails." Which boxes do you have to touch?</h3>
+        <p class="small muted" style="margin:0">Tick every one you would change or add, then submit.</p>
+        <div class="toggles" id="crToggles"></div>
+        <div class="row" style="margin-top:10px"><button class="btn primary" id="crSubmit">Submit</button></div>
+        <div class="explain" id="crExplain"></div>
+      </div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Into the spider trap</h2><div class="sub">Infinite loops that look like pages</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>A <b>spider trap</b> is a site that keeps producing new pages, so a crawler that follows its links never gets out.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener">[1]</a><a class="cite" href="https://en.wikipedia.org/wiki/Spider_trap" target="_blank" rel="noopener">[2]</a> Every "page" is real enough to download, and every one links to yet another. The book's example is an endlessly deep folder path: <code>/foo/bar/</code> links to <code>/foo/bar/foo/bar/</code>, which links one level deeper, forever. Some traps are made on purpose, to catch bots. Others are accidents, like a calendar with a "next month" link that never runs out.</p>
+      <p>You run the <b>trap guard</b>. Three rounds. Watch the host monitor: each bar counts the pages found on one site today.</p>
+
+      <div class="sim" id="trapSim">
+        <div class="tr-head"><span class="host" id="trHost">spidertrapexample.com</span><span class="seg" id="trRound"><span class="on">Round 1</span><span>Round 2</span><span>Round 3</span></span></div>
+        <div class="hostmon" id="hostMon"></div>
+        <div class="hm-note">Black line = anomaly line: far more pages than a normal site has (toy numbers).</div>
+        <div class="ticker" id="ticker" aria-live="off"><div class="ok">ready: press Run crawl</div></div>
+        <div class="slider"><label for="lenR"><span>Max URL length: <span class="bignum" id="lenV">2,000</span> chars</span><span class="muted small">enforced by the URL Filter</span></label><input type="range" id="lenR" min="50" max="2000" step="10" value="2000" aria-label="Maximum URL length in characters"></div>
+        <div class="sim-bar">
+          <span class="row" style="gap:8px"><button class="btn primary" id="trRun" style="padding:8px 14px;font-size:14px">▶ Run crawl</button><button class="btn" id="trFlag" style="padding:8px 14px;font-size:14px" disabled>🚩 Flag for human review</button></span>
+          <span class="small">Junk fetches: <span class="bignum" id="trJunk">0</span> · Real pages lost: <span class="bignum" id="trLost">0</span></span>
+        </div>
+      </div>
+      <div class="challenge" id="trapBox"></div>
+
+      <ul class="checklist" id="s2goals">
+        <li data-g="len"><span class="box">✓</span><span>Round 1: stop the <code>/foo/bar</code> trap within 50 junk fetches, losing no real pages</span></li>
+        <li data-g="cal"><span class="box">✓</span><span>Round 2: catch the calendar trap and fix it with the right tool</span></li>
+        <li data-g="wiki"><span class="box">✓</span><span>Round 3: make the right call on a giant site</span></li>
+      </ul>
+      <div class="callout warn hidden" id="trapNote"><b>Why a human?</b> The book's point: traps are <i>easy to spot</i> (one site with an unusually large number of pages) but <i>hard to catch automatically</i>, because a huge real site looks the same from the outside. There's no one-size-fits-all fix. So a person checks the flagged site and either excludes it or writes a custom URL filter for it.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener">[1]</a> <span class="muted">Real crawlers add more automatic guards too: a cap on pages per host, a cap on link depth, and tidying URL parameters. They still keep humans for the edge cases.</span></div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Trash, twins and noise</h2><div class="sub">Three kinds of problematic content</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book sorts bad content into three kinds:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener">[1]</a></p>
+      <ul>
+        <li><b style="color:var(--dup)">Redundant content (duplicates).</b> About 29% of web pages are duplicates, nearly a third. A <b>hash</b> or <b>checksum</b> (a short fingerprint computed from the page's content) spots them: same fingerprint, same content. That's the <i>Content Seen?</i> box from Quest 9.2.</li>
+        <li><b style="color:var(--trap)">Spider traps.</b> Endless loops of generated pages, from the last stage.</li>
+        <li><b style="color:var(--noise)">Data noise.</b> Pages, or parts of pages, that add nothing to a search index: ads, code snippets, spam links. Skip them whenever you can.</li>
+      </ul>
+      <p>Pages roll down the belt. Tap the bin each one belongs in. Pages that are fine go in <b style="color:var(--keep)">Keep</b>. The first 3 are warm-up and cost no hearts. You need 10 of 12 right.</p>
+
+      <div class="sim" id="beltSim">
+        <div class="belt" id="belt">
+          <div class="queue" id="queue" aria-hidden="true"></div>
+          <div id="cardSlot"></div>
+        </div>
+        <div class="bins" id="bins">
+          <button class="bin" data-k="dup"><b>Duplicate</b><span>same content again</span><span class="cnt">0</span></button>
+          <button class="bin" data-k="trap"><b>Spider trap</b><span>endless pages</span><span class="cnt">0</span></button>
+          <button class="bin" data-k="noise"><b>Noise</b><span>ads, spam, junk</span><span class="cnt">0</span></button>
+          <button class="bin" data-k="keep"><b>Keep</b><span>worth indexing</span><span class="cnt">0</span></button>
+        </div>
+        <div class="sim-bar"><span>Page <b id="beltN">1</b> / 12</span><span>Correct: <span class="bignum" id="beltScore">0</span></span></div>
+        <div class="simlog" id="beltLog"><div>The belt is running. First page incoming.</div></div>
+      </div>
+      <div class="row hidden" id="beltRetryRow" style="margin-top:12px"><button class="btn" id="beltRetry">↻ Run the belt again</button></div>
+      <div class="callout tip hidden" id="beltNote"><b>Where each bin goes in the pipeline.</b> Duplicates are dropped at <i>Content Seen?</i> by comparing fingerprints. Traps are stopped at the <i>URL Filter</i> (length limits, custom rules). Noise and spam are cut by filters too. In the wrap-up the book suggests a dedicated <b>anti-spam component</b>, because storage and crawl time are limited and low-quality pages waste both.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener">[1]</a></div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>The page that builds itself</h2><div class="sub">Wrap-up · rendering JavaScript and other extras</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Many modern sites send the browser an almost empty page plus a script. The script builds the content, links included, after the page loads. Some pages also fetch more content in the background (that's <b>AJAX</b>: the page asks the server for data without reloading). A crawler that only downloads and parses the raw HTML never sees those links.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener">[1]</a></p>
+      <p>The fix in the book's wrap-up is <b>server-side rendering</b> (also called <i>dynamic rendering</i>): run the page's scripts first, then parse the result. Try both on the same shop page.</p>
+
+      <div class="sim" id="renderSim">
+        <div class="split">
+          <div class="pane">
+            <div class="pane-h">① Raw HTML · plain fetch</div>
+<pre class="code" id="rawCode">&lt;html&gt;
+ &lt;head&gt;&lt;title&gt;Shoe Shop&lt;/title&gt;&lt;/head&gt;
+ &lt;body&gt;
+  <span class="hl">&lt;div id="app"&gt;&lt;/div&gt;</span>
+  &lt;script src="/bundle.js"&gt;&lt;/script&gt;
+ &lt;/body&gt;
+&lt;/html&gt;</pre>
+            <button class="btn" id="exRaw">🔗 Extract links</button>
+            <div class="found" id="rawFound"></div>
+          </div>
+          <div class="pane">
+            <div class="pane-h">② Rendered page · scripts run</div>
+            <div class="render" id="rendered"><div class="empty">Not rendered yet.<br>Press "Run scripts".</div></div>
+            <div class="row" style="gap:8px"><button class="btn" id="runJs">▶ Run scripts</button><button class="btn" id="exDom" disabled>🔗 Extract links</button></div>
+            <div class="found" id="domFound"></div>
+          </div>
+        </div>
+        <div class="cost hidden" id="cost">
+          <div class="small"><b>Cost per page</b> <span class="muted">(illustrative; the real ratio varies a lot by page)</span></div>
+          <div class="hb"><span class="nm">Plain fetch</span><div class="track"><div class="fill" id="costA"></div></div><span class="val">~1 unit</span></div>
+          <div class="hb hot"><span class="nm">Fetch + render</span><div class="track"><div class="fill" id="costB"></div></div><span class="val">~10 units</span></div>
+        </div>
+      </div>
+      <ul class="checklist" id="s4goals">
+        <li data-g="raw"><span class="box">✓</span><span>Extract links from the raw HTML</span></li>
+        <li data-g="dom"><span class="box">✓</span><span>Run the scripts, then extract links again</span></li>
+        <li data-g="pick"><span class="box">✓</span><span>Pick 5 strong wrap-up points</span></li>
+      </ul>
+      <div class="callout warn hidden" id="renderNote"><b>Honest caveat.</b> Running a browser for every page costs far more CPU and time than a plain fetch, so real crawlers render selectively, often in a later second pass. Google, for example, queues pages for rendering after crawling them.<a class="cite" href="https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics" target="_blank" rel="noopener">[4]</a> Also, "dynamic rendering" today usually means something different: a <i>website</i> serving bots a pre-rendered copy. Google calls that a workaround it no longer recommends.<a class="cite" href="https://developers.google.com/search/docs/crawling-indexing/javascript/dynamic-rendering" target="_blank" rel="noopener">[3]</a> In the interview, say what you mean: "the crawler runs the page's JavaScript before parsing."</div>
+
+      <div class="challenge boxed" id="wrapBox">
+        <div class="step">The last 3 minutes</div>
+        <h3>The interviewer asks: "Anything you'd add with more time?" Pick 5 points worth raising.</h3>
+        <div class="wcards" id="wcards"></div>
+        <div class="react" id="react"></div>
+      </div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Boss: The Trap Hydra</h2><div class="sub">Duplicate, trap, noise, extension or rendering?</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Eight incidents from a crawler in production. For each one, pick the fix you'd reach for first.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">Traps, extensions and the wrap-up</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next up: the boss.</b> You now have every piece of the crawler: scope, pipeline, frontier, downloader, and today's traps and extras. <a href="0906-web-crawler-boss-design-it-live.html">Crawl the Web, Live</a> puts them together in a full 45-minute mock interview.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 9: Design a Web Crawler</a>: the end of Step 3 ("Extensibility" and "Detect and avoid problematic content") and all of Step 4, "Wrap up". Then read Google's short page on <a href="https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics" target="_blank" rel="noopener">how Googlebot processes JavaScript</a> (crawl, then render, then index) to see how a real crawler handles the "page that builds itself".
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <ul style="margin:0;padding-left:20px">
+        <li><b>URL length only stops traps whose URLs grow.</b> Calendars, session IDs and filter combinations like <code>?color=red&amp;size=9&amp;sort=price</code> make endless URLs of normal length. Real crawlers also cap pages per host and link depth, and normalise or strip parameters.</li>
+        <li><b>An exact hash only catches exact copies.</b> A printer-friendly page with a different header has a different hash. Real crawlers use near-duplicate fingerprints such as shingling or SimHash.<a class="cite" href="https://nlp.stanford.edu/IR-book/html/htmledition/near-duplicates-and-shingling-1.html" target="_blank" rel="noopener">[5]</a></li>
+        <li><b>"Noise" depends on the job.</b> Code snippets are noise for a general web index and exactly what a code-search engine wants. That's why scoping comes first.</li>
+        <li><b>Rendering is expensive,</b> so crawlers render selectively, and the book's "server-side rendering" means the crawler runs the scripts itself (see the caveat in stage 4).</li>
+      </ul>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"how would you decide which pages are worth rendering?"</i> or <i>"how does a crawler spot near-duplicates without comparing every pair of pages?"</i>
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 9 "Design a Web Crawler" (ByteByteGo).</li>
+        <li>Wikipedia, "Spider trap".</li>
+        <li>Google Search Central, "Dynamic rendering as a workaround".</li>
+        <li>Google Search Central, "Understand the JavaScript SEO basics".</li>
+        <li>Manning, Raghavan &amp; Schütze, <i>Introduction to Information Retrieval</i>, §19.6 "Near-duplicates and shingling".</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0905',
+  winTitle: 'No trap can hold you!',
+  badge: '🪤 Badge: Trap Dodger',
+  cheatsheet: '../reference/ch09-web-crawler-cheatsheet.html',
+});
+const { sleep, shuffle, esc } = Q;
+const fmt = n => n.toLocaleString('en-US');
+
+/* ================= shared helpers ================= */
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function checkGoal(listSel, g, set, xp) {
+  if (set.has(g)) return false;
+  set.add(g);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done');
+  if (xp) Q.addXP(xp, li);
+  return true;
+}
+function nextBtn(row, label, fn, primary = true) {
+  const b = document.createElement('button'); b.className = 'btn' + (primary ? ' primary' : ''); b.textContent = label; b.onclick = fn; row.appendChild(b); return b;
+}
+// One-shot choice inside `box`. Resolves with { ok, row }.
+function choose(box, { step, title, options, correct, explain, bad, xp = 10, costHeart = true }) {
+  box.innerHTML = `${step ? `<div class="step">${step}</div>` : ''}<h3>${title}</h3><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+  const opts = $('.opts', box);
+  return new Promise(resolve => {
+    shuffle(options.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = () => {
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        const ok = i === correct;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $(`.opt[data-i="${correct}"]`, opts).classList.add('right');
+        const ex = $('.explain', box); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+        ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Not quite.</b> ') + (ok ? explain : (bad || explain));
+        if (ok) Q.addXP(xp, b); else if (costHeart) Q.loseHeart(b);
+        resolve({ ok, row: $('.row', box) });
+      };
+      opts.appendChild(b);
+    });
+  });
+}
+// Chain several Q.quiz questions, one after another, then call done.
+function quizChain(mount, qs, done) {
+  let i = 0;
+  const next = () => {
+    if (i >= qs.length) { setTimeout(done, 900); return; }
+    const q = qs[i++];
+    Q.quiz(mount, { ...q, onDone: () => setTimeout(next, 500) });
+  };
+  next();
+}
+
+/* ================= STAGE 1: snap-on modules ================= */
+Q.onStage(1, () => {
+  const CORE = [
+    { id: 'seedu', t: 'Seed URLs', s: 'the starting addresses' },
+    { id: 'frontier', t: 'URL Frontier', s: 'URLs waiting to be downloaded' },
+    { id: 'dl', t: 'HTML Downloader', s: '+ DNS Resolver', sock: { id: 'fetch', t: 'Fetch lane', s: 'gets URLs from the frontier, downloads raw files' } },
+    { id: 'parse', t: 'Content Parser', s: 'parses and validates HTML', sock: { id: 'parse', t: 'Parse lane', s: 'gets each downloaded file before it is parsed' } },
+    { id: 'seen', t: 'Content Seen?', s: 'drops duplicate pages ↔ Content Storage' },
+    { id: 'ext', t: 'URL Extractor', s: 'pulls links out of pages', sock: { id: 'page', t: 'New-page lane', s: 'gets every new, unique page after Content Seen?' } },
+    { id: 'filter', t: 'URL Filter', s: 'drops unwanted URLs', sock: { id: 'rule', t: 'Rule slot', s: 'decides which URLs may enter the crawl' } },
+    { id: 'useen', t: 'URL Seen?', s: 'skips URLs already known ↔ URL Storage' },
+  ];
+  const MODS = [
+    { id: 'png', e: '🖼️', t: 'PNG Downloader', d: 'fetch the PNG images that new pages point to', a: 'page', book: true,
+      ok: 'The PNG addresses live inside pages, so this module reads each new page (the same input the URL Extractor gets) and fetches the images itself. The book draws it as a plug-in right beside the extractor.',
+      hint: 'Where do PNG addresses come from? They are inside pages. This module needs each new page, the same input the URL Extractor gets.' },
+    { id: 'mon', e: '🛡️', t: 'Web Monitor', d: 'scan pages for copyright and trademark misuse', a: 'page', book: true,
+      ok: 'It needs page content, and scanning the same text twice is waste. After Content Seen?, every page it gets is new.',
+      hint: 'It has to read page content, and scanning duplicates is wasted work. Which lane only carries new, unique pages?' },
+    { id: 'pdf', e: '📄', t: 'PDF Parser', d: 'turn downloaded PDFs into text and links', a: 'parse', book: false,
+      ok: 'The HTML parser can\'t read a PDF. A PDF needs its own parser right after download, before we can fingerprint it or pull out links.',
+      hint: 'A PDF isn\'t HTML. Something has to turn it into text before the duplicate check and link extraction can work on it.' },
+    { id: 'spam', e: '🚫', t: 'Spam-site blocklist', d: 'keep known spam domains out of the crawl', a: 'rule', book: false,
+      ok: 'It never reads pages. It\'s a rule about which URLs get in, and the URL Filter already drops URLs from blacklisted sites.',
+      hint: 'This one never reads a page. It\'s a rule about which URLs may enter. Which box already drops URLs from blacklisted sites?' },
+  ];
+  const goals = new Set();
+  let held = null, crShown = false, quizShown = false;
+  const placed = new Map(); // mod id -> socket id
+  const firstTry = new Set(MODS.map(m => m.id));
+
+  // build the pipeline grid
+  const grid = $('#pipeGrid');
+  grid.innerHTML = CORE.map((c, i) => {
+    const sock = c.sock ? `<button class="sock" data-sock="${c.sock.id}" aria-label="${c.sock.t} socket beside ${c.t}"><b>${c.sock.t}</b><br>${c.sock.s}</button>` : '<div class="spacer"></div>';
+    const arrow = i < CORE.length - 1 ? '<div class="arrow" aria-hidden="true">↓</div><div class="spacer"></div>' : '<div class="arrow loop" aria-hidden="true">↺ new URLs go back to the frontier</div><div class="spacer"></div>';
+    return `<div class="core" data-core="${c.id}">${c.t}<small>${c.s}</small></div>${sock}${arrow}`;
+  }).join('');
+  $('#tray').innerHTML = MODS.map(m => `<button class="mod" data-mod="${m.id}"><b>${m.e} ${m.t}${m.book ? '' : '<span class="bonus">bonus</span>'}</b><span>${m.d}</span></button>`).join('');
+
+  function setHeld(m) {
+    held = m;
+    $$('#tray .mod').forEach(b => b.classList.toggle('sel', !!m && b.dataset.mod === m.id));
+    $$('#pipeGrid .sock').forEach(s => s.classList.toggle('ready', !!m));
+    $('#holding').textContent = m ? `${m.e} ${m.t} → now tap a socket` : 'nothing (tap a module)';
+  }
+  $$('#tray .mod').forEach(b => b.onclick = () => {
+    const m = MODS.find(x => x.id === b.dataset.mod);
+    if (placed.has(m.id)) { Q.toast('already plugged in', b, 'practice'); return; }
+    setHeld(held && held.id === m.id ? null : m);
+  });
+  $$('#pipeGrid .sock').forEach(s => s.onclick = async () => {
+    if (!held) { Q.toast('pick a module first', s, 'practice'); return; }
+    const m = held;
+    if (s.dataset.sock !== m.a) {
+      firstTry.delete(m.id);
+      s.classList.remove('jam'); void s.offsetWidth; s.classList.add('jam');
+      setTimeout(() => s.classList.remove('jam'), 600);
+      logTo('pipeLog', `⚙️ Jam: ${m.t} doesn't fit the ${s.querySelector('b').textContent}. ${m.hint}`, 'w');
+      return;
+    }
+    placed.set(m.id, s.dataset.sock);
+    s.insertAdjacentHTML('beforeend', `<span class="plug">${m.e} ${m.t}</span>`);
+    $(`#tray .mod[data-mod="${m.id}"]`).classList.add('placed');
+    setHeld(null);
+    logTo('pipeLog', `🔌 ${m.t} plugged into the ${s.querySelector('b').textContent}. ${m.ok}`, 'g');
+    Q.addXP(firstTry.has(m.id) ? 5 : 2, s);
+    if (MODS.filter(x => x.book).every(x => placed.has(x.id))) checkGoal('#s1goals', 'book', goals, 0);
+    if (MODS.filter(x => !x.book).every(x => placed.has(x.id))) checkGoal('#s1goals', 'bonus', goals, 0);
+    if (placed.size === MODS.length) allPlaced();
+  });
+
+  async function allPlaced() {
+    $$('#pipeGrid .core').forEach((c, i) => setTimeout(() => c.classList.add('safe'), Q.reduced ? 0 : i * 90));
+    $('#coreMeter').textContent = '0 lines ✓';
+    $('#holding').textContent = '4 modules running';
+    logTo('pipeLog', '✅ Four new abilities, and every core box is untouched. That is extensibility.', 'g');
+    showCR();
+  }
+
+  function showCR() {
+    if (crShown) return; crShown = true;
+    const box = $('#crBox'); box.classList.remove('hidden');
+    const OPTS = [
+      { k: 'frontier', t: 'URL Frontier' }, { k: 'dl', t: 'HTML Downloader' }, { k: 'parse', t: 'Content Parser' },
+      { k: 'seen', t: 'Content Seen?' }, { k: 'ext', t: 'URL Extractor' }, { k: 'useen', t: 'URL Seen?' },
+      { k: 'new', t: '➕ New Thumbnail Downloader module' },
+    ];
+    $('#crToggles').innerHTML = OPTS.map(o => `<button class="opt" data-k="${o.k}" aria-pressed="false">${o.t}</button>`).join('');
+    $$('#crToggles .opt').forEach(b => b.onclick = () => { const on = !b.classList.contains('on'); b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
+    let tries = 0;
+    $('#crSubmit').onclick = () => {
+      const picked = $$('#crToggles .opt.on').map(b => b.dataset.k);
+      const ok = picked.length === 1 && picked[0] === 'new';
+      const ex = $('#crExplain');
+      tries++;
+      if (ok) {
+        ex.className = 'explain show good';
+        ex.innerHTML = '<b>Exactly.</b> Thumbnails are just another kind of file linked from pages. Write a Thumbnail Downloader and plug it into the new-page lane beside the PNG Downloader. The frontier, downloader, parser and both "seen?" checks don\'t change at all.';
+        $('#crSubmit').disabled = true; $$('#crToggles .opt').forEach(b => b.disabled = true);
+        if (checkGoal('#s1goals', 'cr', goals, 0)) Q.addXP(tries === 1 ? 15 : 5, $('#crSubmit'));
+        showQuiz();
+      } else {
+        ex.className = 'explain show bad';
+        const core = picked.filter(k => k !== 'new');
+        ex.innerHTML = core.length
+          ? `<b>Too much surgery.</b> You'd change ${core.length} core box${core.length > 1 ? 'es' : ''}. A new content type should be a new module only. The core loop already hands every new page to the plug-in lane. Untick the core boxes and try again.`
+          : '<b>Something has to change.</b> Nothing new means no thumbnails. What would you add?';
+        if (tries === 1) Q.loseHeart($('#crSubmit'));
+      }
+    };
+  }
+  function showQuiz() {
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => Q.quiz($('#s1quiz'), {
+      q: 'Which two plug-in modules does the book use to show extensibility?',
+      options: ['PNG Downloader and Web Monitor', 'DNS Resolver and URL Seen? check', 'Content Parser and URL Extractor'],
+      correct: 0,
+      good: 'A PNG Downloader to fetch images and a Web Monitor to catch copyright and trademark infringement. Both plug in without touching the core.',
+      bad: 'Those are core boxes from the basic pipeline, not plug-ins. The book\'s examples are a <b>PNG Downloader</b> and a <b>Web Monitor</b>.',
+      onDone: () => setTimeout(() => Q.clearStage(1), 900),
+    }), 400);
+  }
+});
+
+/* ================= STAGE 2: trap guard ================= */
+Q.onStage(2, () => {
+  const goals = new Set();
+  const lenR = $('#lenR'), lenV = $('#lenV'), ticker = $('#ticker'), box = $('#trapBox');
+  const ANOM = 3000, SCALE = 5000; // anomaly line and bar scale (pages per day, toy numbers)
+  let round = 1, busy = false, flagCb = null, quizShown = false;
+  const BASE = 'https://spidertrapexample.com';
+  // 40 real pages on the trap site, URL lengths from 40 to 112 chars
+  const WORDS = ['how', 'to', 'repot', 'a', 'fiddle', 'leaf', 'fig', 'without', 'killing', 'it', 'in', 'winter', 'light', 'and', 'low', 'humidity', 'for', 'small', 'apartments', 'guide'];
+  const REAL = Array.from({ length: 40 }, (_, i) => {
+    const target = 40 + Math.round(i * 72 / 39);
+    let u = `${BASE}/guides/${i}`, w = 0;
+    while (u.length < target) u += (w ? '-' : '/') + WORDS[w++ % WORDS.length];
+    return u.slice(0, target).replace(/-$/, 's');
+  });
+  const longestReal = Math.max(...REAL.map(u => u.length));
+  const trapUrl = k => BASE + '/foo/bar'.repeat(k) + '/';
+  const HOSTS = {
+    1: [{ n: 'news.example', v: 260 }, { n: 'shop.example', v: 410 }, { n: 'spidertrapexample.com', v: 0, me: 1 }],
+    2: [{ n: 'news.example', v: 260 }, { n: 'shop.example', v: 410 }, { n: 'events.example.org', v: 0, me: 1 }],
+    3: [{ n: 'news.example', v: 260 }, { n: 'shop.example', v: 410 }, { n: 'encyclopedia.example', v: 0, me: 1 }],
+  };
+  function drawHosts() {
+    $('#hostMon').innerHTML = HOSTS[round].map(h => `<div class="hb${h.me ? ' me' : ''}"><span class="nm" title="${h.n}">${h.n}</span><div class="track"><div class="fill"></div><div class="line" style="left:${ANOM / SCALE * 100}%"></div></div><span class="val">${fmt(h.v)}</span></div>`).join('');
+    setHost(HOSTS[round].find(h => h.me).v);
+    $('#trHost').textContent = HOSTS[round].find(h => h.me).n;
+    $$('#trRound span').forEach((s, i) => s.classList.toggle('on', i + 1 === round));
+    $$('#hostMon .hb').forEach((el, i) => { const v = HOSTS[round][i].v; $('.fill', el).style.width = Math.min(100, v / SCALE * 100) + '%'; });
+  }
+  function setHost(v) {
+    const i = HOSTS[round].findIndex(h => h.me), el = $$('#hostMon .hb')[i];
+    HOSTS[round][i].v = v;
+    if (!el) return;
+    $('.fill', el).style.width = Math.min(100, v / SCALE * 100) + '%';
+    $('.val', el).textContent = v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : fmt(v);
+    el.classList.toggle('hot', v >= ANOM);
+  }
+  function tick(html, cls) {
+    ticker.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`);
+    while (ticker.children.length > 6) ticker.firstChild.remove();
+  }
+  const shortUrl = u => u.length > 64 ? u.slice(0, 38) + '…' + u.slice(-20) : u;
+  const frameWait = n => Q.reduced ? Promise.resolve() : sleep(n);
+  lenR.oninput = () => { lenV.textContent = fmt(+lenR.value); };
+
+  /* --- round 1: /foo/bar/ recursion vs max URL length --- */
+  async function runRound1() {
+    const L = +lenR.value;
+    ticker.innerHTML = '';
+    let pages = 0, junk = 0;
+    const lost = REAL.filter(u => u.length > L).length;
+    $('#trLost').textContent = lost; $('#trLost').className = 'bignum ' + (lost ? 'bad' : 'good');
+    // real pages first (fast)
+    for (let i = 0; i < REAL.length; i++) {
+      const u = REAL[i];
+      if (u.length > L) tick(`✂ ${esc(shortUrl(u))} <span class="cut">(${u.length} > ${L}: real page dropped!)</span>`);
+      else pages++;
+      if (i % 8 === 0) { setHost(pages); await frameWait(30); }
+    }
+    setHost(pages);
+    tick('… found a link to /foo/bar/', 'len');
+    // the trap
+    for (let k = 1; ; k++) {
+      const u = trapUrl(k);
+      if (u.length > L) { tick(`✂ URL Filter: ${esc(shortUrl(u))} <span class="cut">${u.length} chars > ${L}. Trap cut.</span>`); break; }
+      junk++; pages++;
+      $('#trJunk').textContent = junk; $('#trJunk').className = 'bignum ' + (junk > 50 ? 'bad' : 'good');
+      if (k % (L > 800 ? 6 : 2) === 0 || u.length + 8 > L) { tick(`↓ ${esc(shortUrl(u))} <span class="len">${u.length} chars</span>`); setHost(pages); await frameWait(28); }
+    }
+    setHost(pages);
+    return { junk, lost };
+  }
+
+  /* --- round 2/3: same-length endless URLs; anomaly → review --- */
+  async function climb(urlOf, target, step) {
+    ticker.innerHTML = '';
+    let v = 0, i = 0;
+    while (v < target) {
+      v = Math.min(target, v + step); i++;
+      setHost(v);
+      const u = urlOf(i, v);
+      tick(`↓ ${esc(u)} <span class="len">${u.length} chars</span>`);
+      await frameWait(45);
+    }
+  }
+  const calUrl = (i, v) => { const m = 10 + Math.round(v); const y = 2026 + Math.floor(m / 12), mo = String(m % 12 + 1).padStart(2, '0'); return `https://events.example.org/cal?month=${y}-${mo}`; };
+  const WIKI = ['Alan_Turing', 'Tokyo', 'Photosynthesis', 'Jazz', 'Byzantine_Empire', 'Black_hole', 'Cat', 'Mount_Everest', 'Penicillin', 'Bach', 'Volcano', 'Silk_Road'];
+  const wikiUrl = i => `https://encyclopedia.example/wiki/${WIKI[i % WIKI.length]}`;
+
+  function enableFlag(cb) { flagCb = cb; $('#trFlag').disabled = false; }
+  $('#trFlag').onclick = () => { if (!flagCb) return; $('#trFlag').disabled = true; const cb = flagCb; flagCb = null; cb(); };
+
+  $('#trRun').onclick = async () => {
+    if (busy) return;
+    busy = true; $('#trRun').disabled = true; lenR.disabled = true;
+    if (round === 1) {
+      $('#trJunk').textContent = '0';
+      const { junk, lost } = await runRound1();
+      if (lost) tick(`⚠ limit ${lenR.value} is below the longest real URL here (${longestReal} chars)`, 'cut');
+      if (!lost && junk <= 50) {
+        tick(`✓ trap stopped after ${junk} junk fetches, no real pages lost`, 'ok');
+        if (checkGoal('#s2goals', 'len', goals, 15)) round1Done();
+      } else if (!lost) {
+        tick(`✓ the filter did cut it, but only after ${junk} junk fetches. Tighten the limit.`, 'len');
+      }
+    } else {
+      // rounds 2 and 3 are driven by the challenge box
+    }
+    busy = false; $('#trRun').disabled = round !== 1; lenR.disabled = round !== 1;
+  };
+
+  function round1Done() {
+    box.innerHTML = `<div class="callout tip" style="margin-top:0"><b>Round 1 cleared.</b> Each level of <code>/foo/bar</code> adds 8 characters, so the URL keeps growing until the filter cuts it. Your limit sits above the longest real URL on this site (${longestReal} chars) and below the point where the trap gets expensive. The book doesn't give a number; it just says a maximum URL length is one way to avoid traps like this.</div><div class="row"></div>`;
+    nextBtn($('.row', box), 'Round 2 →', startRound2);
+  }
+
+  async function startRound2() {
+    round = 2; drawHosts(); ticker.innerHTML = '<div class="ok">events.example.org: a club site with a calendar</div>';
+    $('#trRun').disabled = true; lenR.disabled = true; $('#trJunk').textContent = '0'; $('#trLost').textContent = '0';
+    const { row } = await choose(box, {
+      step: 'Round 2 · predict first',
+      title: `A club's calendar has a "next month" link on every month page, forever. URLs look like <code>/cal?month=2093-07</code>. Your max URL length is still ${fmt(+lenR.value)}. Will it stop this trap?`,
+      options: ['No: these URLs never get longer', 'Yes: every trap URL grows in time', 'Only if the limit is set very low'],
+      correct: 0, xp: 10,
+      explain: 'Each month\'s URL is about 45 characters, whether it\'s 2027 or 2400. Length never grows, so a length limit never fires. Watch.',
+    });
+    nextBtn(row, '▶ Crawl the calendar', async e => {
+      e.currentTarget.disabled = true;
+      await climb(calUrl, 3400, 85);
+      tick(`🚨 events.example.org: 3,400 pages today. A normal host here has a few hundred.`, 'cut');
+      box.innerHTML = '<p class="small">🚨 The host monitor crossed the anomaly line. The URL filter let every one of these through, because none is too long. Flag it for a human.</p>';
+      enableFlag(review2);
+    });
+  }
+
+  function reviewPanel(title, samples, options) {
+    box.innerHTML = `<div class="review"><h3>🧑‍💻 ${title}</h3><div class="samples">${samples.map(esc).join('<br>')}</div><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:10px"></div></div>`;
+    const opts = $('.opts', box);
+    options.forEach((o, i) => { const b = document.createElement('button'); b.className = 'opt'; b.textContent = o.t; b.dataset.i = i; opts.appendChild(b); });
+    return { opts, ex: $('.explain', box), row: $('.row', box) };
+  }
+
+  function review2() {
+    const OPT = [
+      { t: 'Add a custom filter: only allow /cal?month= within ±12 months', k: 'filter' },
+      { t: 'Exclude the whole site from the crawl', k: 'exclude' },
+      { t: 'Let it through: these are all valid pages', k: 'allow' },
+    ];
+    const { opts, ex, row } = reviewPanel('Human review: events.example.org', [
+      'https://events.example.org/cal?month=2026-11', 'https://events.example.org/cal?month=2093-07', 'https://events.example.org/cal?month=2311-02',
+      'https://events.example.org/news/summer-picnic-photos', 'https://events.example.org/members/join',
+    ], shuffle(OPT));
+    let lostHeart = false;
+    $$('.opt', opts).forEach(b => b.onclick = async () => {
+      const o = OPT.find(x => x.t === b.textContent);
+      if (o.k === 'filter') {
+        $$('.opt', opts).forEach(x => x.disabled = true); b.classList.add('right');
+        ex.className = 'explain show good';
+        ex.innerHTML = '<b>Sharp.</b> The site has real pages (news, sign-up), so you keep them and cut only the endless part. The book names both options: exclude the site, or apply a custom URL filter.';
+        setHost(0); ticker.innerHTML = '';
+        await climb(i => `https://events.example.org/cal?month=${2026 + Math.floor((9 + i) / 12)}-${String((9 + i) % 12 + 1).padStart(2, '0')}`, 25 + 38, 3);
+        tick('✓ custom filter on: 25 calendar months + 38 real pages, then nothing', 'ok');
+        if (checkGoal('#s2goals', 'cal', goals, 15)) nextBtn(row, 'Round 3 →', startRound3);
+      } else if (o.k === 'exclude') {
+        b.classList.add('wrong'); b.disabled = true;
+        ex.className = 'explain show bad';
+        ex.innerHTML = '<b>That works, but it\'s a blunt tool.</b> The book does allow excluding the site. Here, though, you\'d lose its 38 real pages (news, sign-up) too. Is there a sharper option?';
+      } else {
+        b.classList.add('wrong'); b.disabled = true;
+        ex.className = 'explain show bad';
+        ex.innerHTML = '<b>The counter would never stop.</b> Every "next month" page links to another one. Letting it through means crawling the year 9999 and beyond.';
+        if (!lostHeart) { lostHeart = true; Q.loseHeart(b); }
+      }
+    });
+  }
+
+  async function startRound3() {
+    round = 3; drawHosts(); ticker.innerHTML = '<div class="ok">encyclopedia.example: a big free encyclopedia</div>';
+    box.innerHTML = '<p class="small">Same alarm, different site. Crawl it and see what the monitor says.</p><div class="row"></div>';
+    nextBtn($('.row', box), '▶ Crawl the encyclopedia', async e => {
+      e.currentTarget.disabled = true;
+      await climb(wikiUrl, 4800, 160);
+      tick('🚨 encyclopedia.example: 4,800 pages so far today, and climbing', 'cut');
+      box.innerHTML = '<p class="small">🚨 Anomaly line crossed again. Flag it.</p>';
+      enableFlag(review3);
+    });
+  }
+
+  function review3() {
+    const OPT = [
+      { t: 'Let it through: millions of real, distinct articles', k: 'allow' },
+      { t: 'Exclude it: no real site has this many pages', k: 'exclude' },
+      { t: 'Add a filter that caps it at 3,000 pages a day', k: 'cap' },
+    ];
+    const { opts, ex, row } = reviewPanel('Human review: encyclopedia.example', [
+      'https://encyclopedia.example/wiki/Alan_Turing', 'https://encyclopedia.example/wiki/Photosynthesis', 'https://encyclopedia.example/wiki/Byzantine_Empire',
+      'https://encyclopedia.example/wiki/Black_hole', 'https://encyclopedia.example/wiki/Silk_Road',
+    ], shuffle(OPT));
+    $$('.opt', opts).forEach(b => b.onclick = () => {
+      $$('.opt', opts).forEach(x => x.disabled = true);
+      const o = OPT.find(x => x.t === b.textContent), ok = o.k === 'allow';
+      b.classList.add(ok ? 'right' : 'wrong');
+      if (!ok) $$('.opt', opts).find(x => x.textContent === OPT[0].t).classList.add('right');
+      ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+      ex.innerHTML = ok
+        ? '<b>Right call.</b> Different topics, short stable URLs, real content: this is a big site, not a trap. An automatic "too many pages → block" rule would have thrown away one of the most valuable sites on the web. That is why the book keeps a human in the loop.'
+        : '<b>Ouch, that\'s a real site.</b> Every sample is a distinct article. Big, legit sites trip the same alarm as traps. That\'s exactly why the book says automatic detection is hard and a person should check before blocking.';
+      if (ok) Q.addXP(15, b); else Q.loseHeart(b);
+      checkGoal('#s2goals', 'wiki', goals, 0);
+      $('#trapNote').classList.remove('hidden');
+      showQuiz();
+      nextBtn(row, '↻ Replay round 1', () => { round = 1; drawHosts(); ticker.innerHTML = '<div class="ok">ready: press Run crawl</div>'; $('#trRun').disabled = false; lenR.disabled = false; box.innerHTML = ''; }, false);
+    });
+  }
+
+  function showQuiz() {
+    if (quizShown) return; quizShown = true;
+    quizChain($('#s2quiz'), [
+      { q: 'What simple defence does the book give against infinitely deep folder traps?',
+        options: ['Set a maximum length for URLs', 'Download every page twice', 'Only crawl sites over HTTPS'], correct: 0,
+        good: 'A <b>maximum URL length</b>. Each level of the trap makes the URL longer, so a cap cuts it off. It doesn\'t help with traps whose URLs stay short, like the calendar.',
+        bad: 'The book\'s simple defence is a <b>maximum URL length</b>: each level of <code>/foo/bar</code> makes the URL longer, so a cap cuts the loop.' },
+      { q: 'Why not automatically block every site that suddenly has a huge number of pages?',
+        options: ['Big real sites have huge page counts too', 'Counting pages per site is too expensive', 'Blocked sites can never be crawled again'], correct: 0,
+        good: 'A large encyclopedia trips the same alarm as a trap. The book says traps are easy to spot but hard to catch automatically, so a person verifies before excluding the site or adding a custom filter.',
+        bad: 'The problem is false alarms: big, legit sites have huge page counts too. That\'s why the book has a human check flagged sites.' },
+    ], () => Q.clearStage(2));
+  }
+
+  drawHosts();
+});
+
+/* ================= STAGE 3: sorting belt ================= */
+Q.onStage(3, () => {
+  const LABEL = { dup: 'Duplicate', trap: 'Spider trap', noise: 'Noise', keep: 'Keep' };
+  const ITEMS = [
+    { u: 'mirror3.newswire.example/press/bridge-opens', h: 'City opens new river bridge', p: 'Word-for-word the same press release you already stored from 4 other mirror sites.', a: 'dup', why: 'Same text, five URLs. Its fingerprint matches one already in storage, so Content Seen? drops it.' },
+    { u: 'oddsite.example/a/b/a/b/a/b/a/b/a/b/a/b/a/b/a/b/', h: 'Index of /a/b/a/b/a/b/…', p: 'A folder listing that links to /a/b/ one level deeper, every time.', a: 'trap', why: 'An endlessly deep path. The URL grows each level, so a max URL length stops it.' },
+    { u: 'win-big-now.example/offer', h: 'Win a phone!!', p: '<span class="adbox">AD</span><span class="adbox">AD</span><span class="adbox">AD</span><span class="adbox">AD</span> one sentence of text, the rest is ad blocks.', a: 'noise', why: 'Mostly ads, little value. That\'s data noise: exclude it.' },
+    { u: 'best-cheap-shoes-cheap.example/', h: 'cheap shoes cheap shoes best cheap shoes', p: 'The same keywords 200 times and 400 links to sister sites that link back.', a: 'noise', why: 'A keyword-stuffed link farm is spam. Filter it out; an anti-spam component is built for this.' },
+    { u: 'citypaper.example/2026/10/council-bike-lanes', h: 'Council votes on new bike lanes', p: '900 words of original reporting, quotes and a map.', a: 'keep', why: 'Original, useful content. Exactly what the index is for.' },
+    { u: 'blog.example/archive?page=99999', h: 'Archive, page 99,999', p: '"No posts here." Below it: a "Next page →" link to page 100,000.', a: 'trap', why: 'The "next" link never stops, even past the last real page. An endless generated sequence is a trap.' },
+    { u: 'citypaper.example/2026/10/council-bike-lanes?print=1', h: 'Council votes on new bike lanes (print)', p: 'The printer-friendly copy of an article you already stored.', a: 'dup', why: 'Same article, different URL. A fingerprint catches it if the content matches exactly; real crawlers use near-duplicate checks for small differences.' },
+    { u: 'free-toolbar.example/download', h: 'Download our FREE toolbar!', p: 'A pop-up style page with one big button and nothing else.', a: 'noise', why: 'No content worth indexing. Noise.' },
+    { u: 'gearreview.example/trail-shoe-x2-review', h: 'Trail Shoe X2: 6-month review', p: 'Careful hands-on review with photos, pros and cons.', a: 'keep', why: 'Real, useful content. Keep.' },
+    { u: 'shop.example/shoes;sessionid=8f3a9c21e7', h: 'Shoes', p: 'Identical to the /shoes page you already stored, but with a session ID in the URL.', a: 'dup', why: 'A session ID makes a new URL for the same page. Content Seen? catches the matching fingerprint.' },
+    { u: 'blog.example/tags/red+cheap+sale+blue+new+…', h: 'Posts tagged red + cheap + sale + blue + …', p: 'A tag cloud that links to every possible combination of tags.', a: 'trap', why: 'Every combination is a "new" page, and there are endlessly many. A trap.' },
+    { u: 'kitchen.example/recipes/lemon-risotto', h: 'Lemon risotto in 30 minutes', p: 'A recipe with ingredients, steps and tips.', a: 'keep', why: 'Real content people search for. Keep.' },
+  ];
+  let order = [], idx = 0, score = 0, busy = false, run = 0, quizShown = false;
+  const counts = { dup: 0, trap: 0, noise: 0, keep: 0 };
+  const belt = $('#belt');
+
+  function start() {
+    run++;
+    order = shuffle(ITEMS.slice()); idx = 0; score = 0;
+    Object.keys(counts).forEach(k => counts[k] = 0);
+    $$('#bins .cnt').forEach(c => c.textContent = '0');
+    $('#beltScore').textContent = '0'; $('#beltScore').className = 'bignum';
+    $('#beltRetryRow').classList.add('hidden');
+    $$('#bins .bin').forEach(b => b.disabled = false);
+    if (run > 1) logTo('beltLog', `↻ Belt restarted (run ${run}). This run is practice for hearts.`);
+    show();
+  }
+  function show() {
+    const it = order[idx];
+    $('#beltN').textContent = idx + 1;
+    $('#queue').innerHTML = '<i></i>'.repeat(Math.min(5, order.length - idx - 1));
+    $('#cardSlot').innerHTML = `<div class="pcard${Q.reduced ? '' : ' in'}"><div class="url">${esc(it.u)}</div><div class="body"><h4>${esc(it.h)}</h4><p>${it.p}</p></div></div>`;
+    belt.classList.toggle('run', !Q.reduced);
+    busy = false;
+  }
+  $$('#bins .bin').forEach(b => b.onclick = async () => {
+    if (busy || idx >= order.length) return;
+    busy = true;
+    const it = order[idx], ok = b.dataset.k === it.a, warm = idx < 3;
+    belt.classList.remove('run');
+    b.classList.remove('hit', 'miss'); void b.offsetWidth; b.classList.add(ok ? 'hit' : 'miss');
+    counts[b.dataset.k]++; $('.cnt', b).textContent = counts[b.dataset.k];
+    const card = $('#cardSlot .pcard');
+    if (card && !Q.reduced) {
+      const br = b.getBoundingClientRect(), cr = card.getBoundingClientRect();
+      card.style.transform = `translate(${br.left + br.width / 2 - cr.left - cr.width / 2}px, ${br.top - cr.top}px) scale(.25)`;
+      card.classList.add('out');
+    }
+    if (ok) {
+      score++; $('#beltScore').textContent = score;
+      logTo('beltLog', `✓ ${LABEL[it.a]}: ${it.why}`, 'g');
+      Q.addXP(3, b);
+    } else {
+      logTo('beltLog', `✗ You said ${LABEL[b.dataset.k]}, it's ${LABEL[it.a]}. ${it.why}${warm && run === 1 ? ' (warm-up: no heart lost)' : ''}`, 'e');
+      if (!warm && run === 1) Q.loseHeart(b);
+    }
+    await sleep(Q.reduced ? 120 : 520);
+    idx++;
+    if (idx < order.length) show();
+    else finish();
+  });
+  function finish() {
+    $('#cardSlot').innerHTML = `<div class="pcard"><div class="body" style="text-align:center"><h4>${score} / 12 sorted correctly</h4><p>${score >= 10 ? 'Belt cleared.' : 'You need 10. Run it again: the order shuffles.'}</p></div></div>`;
+    $('#queue').innerHTML = '';
+    $$('#bins .bin').forEach(b => b.disabled = true);
+    $('#beltScore').className = 'bignum ' + (score >= 10 ? 'good' : 'bad');
+    $('#beltNote').classList.remove('hidden');
+    $('#beltRetryRow').classList.remove('hidden');
+    if (score >= 10 && !quizShown) {
+      quizShown = true;
+      setTimeout(() => Q.quiz($('#s3quiz'), {
+        q: 'Which tool does the book use to catch redundant (duplicate) content?',
+        options: ['Hashes or checksums of the page', 'A maximum length for each URL', 'A human who reviews each page'],
+        correct: 0,
+        good: 'Compute a short fingerprint (hash or checksum) of each page\'s content and compare fingerprints, not whole pages. Same fingerprint, same content.',
+        bad: 'URL length is for traps and human review is for flagged sites. For duplicates the book uses <b>hashes or checksums</b>: compare short fingerprints instead of whole pages.',
+        onDone: () => setTimeout(() => Q.clearStage(3), 900),
+      }), 500);
+    }
+  }
+  $('#beltRetry').onclick = start;
+  start();
+});
+
+/* ================= STAGE 4: rendering + wrap-up ================= */
+Q.onStage(4, () => {
+  const goals = new Set();
+  let rendered = false, rendering = false, strong = 0, quizShown = false;
+  const PRODS = ['trail-runner', 'city-sneaker', 'rain-boot', 'hiking-mid', 'court-classic', 'kids-velcro'];
+  $('#exRaw').onclick = () => {
+    $('#rawFound').innerHTML = 'Links found: <b class="bignum bad">0</b>. The body is one empty <code>&lt;div&gt;</code>. The products don\'t exist until the script runs.';
+    if (checkGoal('#s4goals', 'raw', goals, 5)) maybe();
+  };
+  $('#runJs').onclick = async () => {
+    if (rendering || rendered) return;
+    rendering = true; $('#runJs').disabled = true;
+    $('#rendered').innerHTML = '<div class="empty"><div><div class="spin"></div>Headless browser: downloading bundle.js, running it, waiting for AJAX calls…</div></div>';
+    $('#cost').classList.remove('hidden');
+    $('#costA').style.width = '9%';
+    await sleep(Q.reduced ? 100 : 1500);
+    $('#costB').style.width = '90%';
+    $('#rendered').innerHTML = `<div class="shop"><h5>👟 Shoe Shop · new season</h5><div class="prods">${PRODS.map((p, i) => `<div class="prod" style="animation-delay:${Q.reduced ? 0 : i * 70}ms">${p.replace('-', ' ')}<span class="lnk">/p/${p}</span></div>`).join('')}</div></div>`;
+    rendered = true; rendering = false; $('#exDom').disabled = false;
+    $('#runJs').textContent = '✓ Rendered';
+  };
+  $('#exDom').onclick = () => {
+    $$('#rendered .prod').forEach(p => p.classList.add('glow'));
+    $('#domFound').innerHTML = `Links found: <b class="bignum good">${PRODS.length}</b>. Same URL, but now the script has built the page.`;
+    $('#renderNote').classList.remove('hidden');
+    if (checkGoal('#s4goals', 'dom', goals, 5)) maybe();
+  };
+
+  const CARDS = [
+    { t: 'Render JavaScript before parsing pages', ok: true, r: 'Good. You just showed why: script-built sites hide their links from a plain fetch.' },
+    { t: 'Filter out spam and low-quality pages', ok: true, r: 'Yes. Storage and crawl time are limited, so an anti-spam component pays for itself.' },
+    { t: 'Replicate and shard the data layer', ok: true, r: 'Solid. Replication and sharding improve the availability, scalability and reliability of the storage.' },
+    { t: 'Keep crawl servers stateless to scale out', ok: true, r: 'Exactly. A big crawl needs hundreds or thousands of servers. Stateless servers are easy to add and replace.' },
+    { t: 'Cover availability, consistency, reliability', ok: true, r: 'Fair. These are the core concerns of any large system, worth naming in the last minutes.' },
+    { t: 'Add analytics to fine-tune the crawler', ok: true, r: 'Nice. Collecting and analysing crawl data is how you tune priorities, freshness and politeness.' },
+    { t: 'Rewrite the whole crawler in Rust for speed', ok: false, r: 'Hmm. The bottleneck is the network and the design, not the language. That spends your last minutes on the wrong thing.' },
+    { t: 'Store every crawled page on a blockchain', ok: false, r: 'That adds huge cost and latency for no requirement we have. It sounds like buzzword-chasing.' },
+  ];
+  $('#wcards').innerHTML = shuffle(CARDS.map((c, i) => ({ c, i }))).map(({ c, i }) => `<button class="opt" data-i="${i}">${c.t}</button>`).join('');
+  $$('#wcards .opt').forEach(b => b.onclick = () => {
+    if (strong >= 5) return;
+    const c = CARDS[+b.dataset.i];
+    b.disabled = true; b.classList.add(c.ok ? 'right' : 'wrong');
+    $('#react').innerHTML = `<span class="who">🧑‍💼 Interviewer:</span> ${c.r}`;
+    if (c.ok) {
+      strong++; Q.addXP(4, b);
+      if (strong >= 5) {
+        $$('#wcards .opt').forEach(x => x.disabled = true);
+        $('#react').innerHTML += ' <b>That\'s a strong close.</b>';
+        if (checkGoal('#s4goals', 'pick', goals, 0)) maybe();
+      }
+    } else Q.loseHeart(b);
+  });
+
+  function maybe() {
+    if (quizShown || goals.size < 3) return;
+    quizShown = true;
+    quizChain($('#s4quiz'), [
+      { q: 'Why can a crawler miss most of the links on a modern shop site?',
+        options: ['Scripts build the links after the page loads', 'Shop sites block every crawler with robots.txt', 'Links on shop pages are stored inside images'], correct: 0,
+        good: 'The raw HTML is nearly empty; JavaScript (and AJAX calls) build the links in the browser. Render first, then parse.',
+        bad: 'The links are built by JavaScript after the page loads, so the raw HTML doesn\'t contain them. Render the page first, then parse.' },
+      { q: 'What is the key to scaling the crawl out to thousands of servers?',
+        options: ['Keep the crawl servers stateless', 'Give each server a bigger hard disk', 'Run every server in one data center'], correct: 0,
+        good: 'The book\'s point: stateless servers can be added, removed and replaced freely, because no server holds data the others need.',
+        bad: 'The book says the key is keeping servers <b>stateless</b>, so you can add or replace them freely.' },
+    ], () => Q.clearStage(4));
+  }
+});
+
+/* ================= STAGE 5: boss ================= */
+Q.onStage(5, () => Q.boss($('#boss'), {
+  name: '🐉 Trap Hydra',
+  xp: 15,
+  choices: [
+    { k: 'dup', label: 'Dedupe', sub: 'hash / checksum' },
+    { k: 'trap', label: 'Trap guard', sub: 'URL length, review, filter' },
+    { k: 'noise', label: 'Filter noise', sub: 'anti-spam' },
+    { k: 'module', label: 'Plug in a module', sub: 'extensibility' },
+    { k: 'render', label: 'Render first', sub: 'run the JavaScript' },
+  ],
+  scenarios: [
+    { e: '📈', t: 'One small site, 40 million URLs', d: 'A hobby forum has produced 40 million new URLs this week. Last month it had 2,000 pages.', a: 'trap', why: 'An unusually large number of pages on one site is the classic trap signal. Flag it for review, then exclude it or add a custom URL filter.' },
+    { e: '⚛️', t: 'Zero products from a React shop', d: 'A popular shop built as a single-page app shows up in our index with no product links at all.', a: 'render', why: 'The raw HTML is an empty shell, and JavaScript builds the links. Run the scripts (render) before parsing.' },
+    { e: '⚖️', t: 'Legal wants trademark alerts', d: 'Legal asks to be alerted whenever our trademark shows up on a new site.', a: 'module', why: 'That\'s the book\'s Web Monitor: a new module reading new pages, with no change to the core loop.' },
+    { e: '🗑️', t: 'Storage full of ad pages', d: 'Storage is filling with pages that are 90% ads and keyword stuffing.', a: 'noise', why: 'Low-value content is data noise. Filter it, ideally with an anti-spam component, to save storage and crawl time.' },
+    { e: '📰', t: '300 copies of one story', d: 'The same syndicated article appears word for word on 300 news sites.', a: 'dup', why: 'Same content, different URLs: fingerprint each page and drop matches at Content Seen?.' },
+    { e: '🌀', t: 'URLs that keep growing', d: 'URLs like /x/y/x/y/x/y/x/y/… get longer with every page we fetch.', a: 'trap', why: 'A deep-path trap. A maximum URL length cuts it off; the book\'s simplest trap defence.' },
+    { e: '🖼️', t: 'Image search next quarter', d: 'Product is launching image search and needs the crawler to collect images.', a: 'module', why: 'A new content type is a plug-in, like the book\'s PNG Downloader. The core loop stays the same.' },
+    { e: '🕸️', t: 'A link farm', d: 'Thousands of auto-generated pages stuffed with keywords, all linking to each other.', a: 'noise', why: 'It\'s spam, so filter it as noise (anti-spam). It can also trip the trap alarm, since it\'s a huge self-linking site, and a reviewer may exclude it too.' },
+  ],
+  outro: 'Duplicates → fingerprints. Endless pages → trap guard. Junk → filter. New content → module. Script-built pages → render.',
+  onDone: () => Q.clearStage(5),
+}));
+
+/* ================= STAGE 6: interview drill ================= */
+Q.onStage(6, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"What problematic content will your crawler run into, how does it grow to new content types, and what would you add with more time?"</i>',
+  placeholder: 'Three kinds of bad content…',
+  model: '"There are three kinds of bad content. Duplicates, close to a third of pages, which we catch by hashing page content. Spider traps, like infinitely deep URLs or endless calendars. A maximum URL length handles the simple ones, but there\'s no universal rule, so we watch for sites with an abnormal number of pages and have a person exclude them or add a custom filter. And noise like ads, code snippets and spam, which we filter out, ideally with an anti-spam component. For extensibility, new content types are plug-in modules, like a PNG downloader or a web monitor for copyright, without touching the core loop. With more time: render JavaScript before parsing so we see dynamically generated links, replicate and shard the storage, keep crawl servers stateless so we can scale out to thousands, and add analytics."',
+  checks: [
+    'I named duplicates, spider traps and noise, with a fix for each',
+    'I said URL length helps, but traps need detection plus human review',
+    'I gave a plug-in module example',
+    'I listed at least three wrap-up points, including rendering',
+  ],
+  onDone: () => Q.clearStage(6),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>

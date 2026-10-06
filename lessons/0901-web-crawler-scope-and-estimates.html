@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Release the Spider</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: s1 sorting baskets + spider web, s2 crawl-loop graph sim, s3 question deck + sticky note,
+   s4 trait shields, s5 calculator + knobs */
+:root { --sticky: #fff3b0; --sticky-ink: #4d3d00; --sticky-line: #e9d77a; --bubble: #eef0ff; --silk: #b9b3c9; --mine: #b86a00; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --sticky: #3a3414; --sticky-ink: #ffe98a; --sticky-line: #5c5320; --bubble: #23264a; --silk: #5d5a7a; --mine: #ffb547; }
+}
+:root[data-theme="dark"] { --sticky: #3a3414; --sticky-ink: #ffe98a; --sticky-line: #5c5320; --bubble: #23264a; --silk: #5d5a7a; --mine: #ffb547; }
+
+.challenge.boxed { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; }
+.given { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 4px; }
+.given span { font-family: var(--mono); font-size: 12.5px; padding: 5px 9px; border-radius: 8px; background: var(--sticky); color: var(--sticky-ink); border: 1px solid var(--sticky-line); }
+.reveal { display: none; }
+.reveal.show { display: block; animation: rise .35s; }
+
+/* ---------- stage 1: spider web + sorting baskets ---------- */
+.webtrack svg { max-width: 520px; margin: 0 auto; }
+.webtrack .silk { stroke: var(--silk); stroke-width: 2; fill: none; }
+.webtrack .knot { fill: var(--silk); }
+.webtrack .knot.on { fill: var(--good); }
+.webtrack .spider { transition: transform .6s cubic-bezier(.3,1.4,.5,1); }
+.webtrack .spider .leg { stroke: var(--ink); stroke-width: 1.8; fill: none; stroke-linecap: round; }
+.webtrack .spider .bd { fill: var(--ink); }
+.webtrack .spider .eye { fill: var(--bg); }
+.webtrack .thread { stroke: var(--ink); stroke-width: 1; }
+.webtrack .goaltxt { fill: var(--muted); font: 700 11px var(--font); text-anchor: middle; }
+.dropcard { position: relative; margin: 14px auto 10px; max-width: 460px; border: 2px solid var(--accent); background: var(--panel); border-radius: 14px; padding: 14px 16px; font-weight: 600; text-align: center; box-shadow: var(--shadow); touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; transition: transform .35s cubic-bezier(.3,1.4,.5,1); }
+.dropcard small { display: block; font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+.dropcard.dragging { transition: none; cursor: grabbing; z-index: 5; box-shadow: 0 14px 30px rgba(0,0,0,.25); }
+.dropcard.bounce { animation: shake .4s; border-color: var(--bad); }
+.dropcard.gone { opacity: 0; transform: scale(.7); }
+.dropcard.empty { border-style: dashed; border-color: var(--line); color: var(--muted); cursor: default; }
+.baskets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+@media (max-width: 620px) { .baskets { grid-template-columns: repeat(2, 1fr); } }
+.basket { min-height: 92px; border: 2px dashed var(--line); background: var(--bg); border-radius: 14px; padding: 10px 8px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 2px; transition: border-color .2s, background .2s, transform .15s; }
+.basket:hover, .basket.over { border-color: var(--accent); background: var(--accent-soft); }
+.basket .ic { font-size: 22px; line-height: 1; }
+.basket b { font-size: 15px; }
+.basket span { font-size: 12px; color: var(--muted); line-height: 1.25; }
+.basket .cnt { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--good); min-height: 16px; }
+.basket.hit { animation: blip .45s; border-color: var(--good); border-style: solid; }
+@keyframes blip { 45% { transform: scale(1.06); } }
+.sorthint { min-height: 24px; text-align: center; font-size: 14px; font-weight: 600; margin: 8px 0 0; }
+.sorthint.bad { color: var(--bad); }
+.sorthint.good { color: var(--good); }
+
+/* ---------- stage 2: crawl loop graph ---------- */
+.gsvg svg { max-width: 560px; margin: 0 auto; }
+.gsvg .edge { fill: none; stroke: color-mix(in srgb, var(--muted) 55%, var(--line)); stroke-width: 2; transition: stroke .3s; }
+.gsvg .edge.hot { stroke: var(--xp); stroke-width: 3.2; }
+.gsvg .ah { fill: color-mix(in srgb, var(--muted) 55%, var(--line)); }
+.gsvg .ah.hot { fill: var(--xp); }
+.gsvg .node circle { fill: var(--panel); stroke: var(--muted); stroke-width: 2; transition: fill .3s, stroke .3s; }
+.gsvg .node text { fill: var(--ink); font: 700 14px var(--mono); text-anchor: middle; dominant-baseline: central; }
+.gsvg .node.q circle { fill: var(--accent-soft); stroke: var(--accent); }
+.gsvg .node.done circle { fill: var(--good-soft); stroke: var(--good); }
+.gsvg .node.hot circle { fill: var(--xp); stroke: var(--ink); }
+.gsvg .node.hot text { fill: #1c1a26; }
+.gsvg .node.twice circle { stroke: var(--bad); stroke-width: 3; }
+.loopbtns { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center; padding: 12px 10px 4px; }
+.loopbtns .btn { min-height: 44px; padding: 8px 12px; font-size: 14px; }
+.loopbtns .arr { color: var(--muted); font-weight: 700; }
+@media (max-width: 560px) { .loopbtns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; } .loopbtns .arr { display: none; } .loopbtns .btn { padding: 8px 4px; font-size: 13px; line-height: 1.2; } }
+.lists { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px 14px 12px; }
+@media (max-width: 520px) { .lists { grid-template-columns: 1fr; } }
+.list { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); padding: 8px 10px; min-width: 0; }
+.list h4 { margin: 0 0 6px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; gap: 6px; }
+.list h4 b { color: var(--ink); font-family: var(--mono); }
+.lchips { display: flex; flex-wrap: wrap; gap: 4px; min-height: 30px; }
+.lchip { font: 700 12.5px var(--mono); padding: 4px 8px; border-radius: 7px; border: 1px solid var(--accent); background: var(--accent-soft); color: var(--ink); }
+.lchip.dup { border-color: var(--bad); background: var(--bad-soft); }
+.lchip.ok { border-color: var(--good); background: var(--good-soft); }
+.lchip.new { animation: flyin .45s cubic-bezier(.3,1.4,.5,1); }
+.lchip.more { border-style: dashed; background: none; color: var(--muted); }
+@keyframes flyin { from { opacity: 0; transform: translateY(-14px) scale(.6); } }
+.counters { display: flex; gap: 8px 16px; flex-wrap: wrap; font-size: 14px; }
+.counters b { font-family: var(--mono); }
+.counters .waste b { color: var(--bad); }
+.endbanner { display: none; margin-top: 14px; border-radius: 14px; padding: 14px 16px; background: var(--bad-soft); font-size: 15px; }
+.endbanner.show { display: block; animation: rise .35s; }
+
+/* ---------- stage 3: question deck ---------- */
+.deckwrap { display: grid; grid-template-columns: 1fr 240px; gap: 14px; align-items: start; margin-top: 14px; }
+@media (max-width: 700px) { .deckwrap { grid-template-columns: 1fr; } }
+.deck { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+@media (max-width: 560px) { .deck { grid-template-columns: repeat(2, 1fr); } }
+.qcard { perspective: 800px; border: 0; padding: 0; background: none; text-align: left; display: grid; }
+.qcard-in { display: grid; min-height: 96px; transform-style: preserve-3d; transition: transform .6s cubic-bezier(.3,.7,.2,1); }
+.qcard .qface { grid-area: 1 / 1; backface-visibility: hidden; -webkit-backface-visibility: hidden; border-radius: 12px; padding: 10px 11px; border: 2px solid var(--line); background: var(--panel); font-size: 14px; font-weight: 600; line-height: 1.3; display: flex; flex-direction: column; gap: 4px; }
+.qcard .qface small { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.qcard:hover .qface.qfront { border-color: var(--accent); }
+.qcard .qface.qback { transform: rotateY(180deg); background: var(--good-soft); border-color: var(--good); }
+.qcard .qface.qback small { color: var(--good); }
+.qcard .qface.qback span { font-family: var(--mono); font-size: 12.5px; font-weight: 600; word-break: break-word; }
+.qcard.flipped .qcard-in { transform: rotateY(180deg); }
+.qcard.flipped { cursor: default; }
+.qcard.struck .qface.qfront { opacity: .5; border-style: dashed; }
+.qcard.struck .qface.qfront b { text-decoration: line-through; }
+.qcard.nope .qcard-in { animation: shake .4s; }
+.bubble { position: relative; margin-top: 12px; background: var(--bubble); border-radius: 14px; padding: 12px 14px; font-size: 15px; min-height: 48px; }
+.bubble::before { content: ""; position: absolute; left: 22px; top: -8px; border: 8px solid transparent; border-top: 0; border-bottom-color: var(--bubble); }
+.bubble.bad { background: var(--bad-soft); }
+.bubble.bad::before { border-bottom-color: var(--bad-soft); }
+.bubble .who { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); display: block; }
+.sticky { background: var(--sticky); color: var(--sticky-ink); border-radius: 4px 4px 14px 4px; padding: 14px 14px 12px; box-shadow: var(--shadow); transform: rotate(-1.2deg); }
+.sticky h3 { margin: 0 0 6px; font-size: 15px; letter-spacing: .04em; }
+.sticky ol { margin: 0; padding-left: 18px; font-size: 13.5px; font-family: var(--mono); }
+.sticky li { margin: 3px 0; border-bottom: 1px dashed var(--sticky-line); padding-bottom: 3px; animation: rise .35s; }
+.sticky .empty { font-size: 13px; opacity: .75; }
+.sticky .cnt { float: right; font-size: 12px; font-weight: 700; }
+
+/* ---------- stage 4: trait shields ---------- */
+.shields { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
+@media (max-width: 680px) { .shields { grid-template-columns: repeat(2, 1fr); } }
+.shield { border: 2px solid var(--line); background: var(--bg); border-radius: 18px 18px 40% 40% / 18px 18px 30% 30%; padding: 12px 8px 18px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 3px; min-height: 140px; transition: border-color .2s, box-shadow .4s, background .3s; }
+.shield:hover { border-color: var(--accent); }
+.shield .ic { font-size: 24px; line-height: 1; }
+.shield b { font-size: 15px; }
+.shield span { font-size: 12px; color: var(--muted); line-height: 1.25; }
+.shield .pips { display: flex; gap: 5px; margin-top: 4px; }
+.shield .pip { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--line); }
+.shield .pip.on { background: var(--good); border-color: var(--good); }
+.shield.full { border-color: var(--good); background: var(--good-soft); box-shadow: 0 0 0 4px color-mix(in srgb, var(--good) 25%, transparent), 0 0 24px color-mix(in srgb, var(--good) 40%, transparent); }
+.shield.ready { border-style: dashed; border-color: var(--accent); }
+.incidents { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+@media (max-width: 620px) { .incidents { grid-template-columns: 1fr; } }
+.inc { text-align: left; border: 2px solid var(--line); background: var(--panel); border-radius: 12px; padding: 10px 12px; font-size: 14.5px; font-weight: 500; min-height: 48px; display: flex; gap: 8px; align-items: flex-start; transition: border-color .2s, background .2s; }
+.inc::before { content: "🚨"; flex: none; }
+.inc:hover { border-color: var(--accent); }
+.inc[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.inc.nope { animation: shake .4s; border-color: var(--bad); }
+.inc.placed { display: none; }
+.trhint { min-height: 24px; font-size: 14px; font-weight: 600; margin-top: 10px; }
+.trhint.bad { color: var(--bad); }
+.trhint.good { color: var(--good); }
+
+/* ---------- stage 5: calculator + knobs ---------- */
+.calcs { display: grid; gap: 10px; margin-top: 12px; }
+.calc { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--bg); }
+.calc.ok { border-color: var(--good); background: var(--good-soft); }
+.calc .lbl { font-weight: 700; font-size: 15px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.calc .lbl span { font-weight: 500; color: var(--muted); font-size: 13px; }
+.calc .row { margin-top: 8px; gap: 8px; }
+.calc input { min-width: 0; flex: 1 1 100px; max-width: 170px; height: 42px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 0 10px; font: 600 16px var(--mono); }
+.calc select { height: 42px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 0 8px; font: 600 15px var(--mono); }
+.calc .btn { padding: 8px 12px; font-size: 14px; min-height: 42px; }
+.calc .hint { display: none; margin-top: 8px; font-size: 14px; color: var(--muted); }
+.calc .hint.show { display: block; animation: rise .3s; }
+.calc .msg { margin-top: 6px; font-size: 14px; font-weight: 600; }
+.calc .msg.good { color: var(--good); }
+.calc .msg.bad { color: var(--bad); }
+.knobs { display: none; margin-top: 16px; }
+.knobs.on { display: block; animation: rise .4s; }
+.knob { padding: 8px 14px 0; display: grid; gap: 2px; }
+.knob label { display: flex; justify-content: space-between; font-weight: 600; font-size: 14px; gap: 8px; }
+.knob label b { font-family: var(--mono); }
+.knob input { width: 100%; accent-color: var(--accent); height: 30px; }
+.outs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; padding: 12px 14px; }
+@media (max-width: 680px) { .outs { grid-template-columns: repeat(2, 1fr); } .outs .out:last-child { grid-column: span 2; } }
+.out { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; text-align: center; min-width: 0; }
+.out b { display: block; font: 700 18px var(--mono); line-height: 1.25; transition: color .3s; }
+.out span { font-size: 12px; color: var(--muted); }
+.out.hot b { color: var(--bad); }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Quest 9.1 · Design a Web Crawler</div>
+    <h1>Release the Spider</h1>
+    <p class="lede">Before a search box can find anything, a program has to go out and fetch the web, page by page. Today you meet that program, scope it like an interviewer wants, and size it on a napkin.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can explain what a crawler does in one breath, ask the six scoping questions, name the four traits (<b>scalable, robust, polite, extensible</b>), and work out <b>~400 pages/s</b>, <b>~800 peak</b>, <b>500 TB a month</b> and <b>30 PB over five years</b>.</p></div>
+  </section>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Why send a spider?</h2><div class="sub">Four jobs a crawler does</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>A <b>web crawler</b> (people also say <i>robot</i>, <i>bot</i> or <i>spider</i>) is a program that finds new and changed content on the web: pages, images, videos, PDF files. It starts from a handful of pages, reads the links on them, follows those links to more pages, and keeps going.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener">[1]</a><a class="cite" href="https://en.wikipedia.org/wiki/Web_crawler" target="_blank" rel="noopener">[2]</a></p>
+      <p>The book lists four reasons to run one. Each card below describes a real-world job. <b>Drag it into the right basket</b>, or just <b>tap a basket</b>. Every correct card moves the spider one knot along its thread.</p>
+      <div class="sim webtrack">
+        <svg id="webSvg" viewBox="0 0 392 84" role="img" aria-label="A spider walking along a silk thread toward its web, one knot per correct card"></svg>
+      </div>
+      <div class="dropcard" id="dropCard" aria-live="polite"></div>
+      <div class="baskets" id="baskets">
+        <button class="basket" data-k="idx" aria-label="Search engine indexing basket"><span class="ic">🔎</span><b>Indexing</b><span>build a search engine's index</span><span class="cnt"></span></button>
+        <button class="basket" data-k="arch" aria-label="Web archiving basket"><span class="ic">🏛️</span><b>Archiving</b><span>keep pages for the future</span><span class="cnt"></span></button>
+        <button class="basket" data-k="mine" aria-label="Web mining basket"><span class="ic">⛏️</span><b>Mining</b><span>pull knowledge out of pages</span><span class="cnt"></span></button>
+        <button class="basket" data-k="mon" aria-label="Web monitoring basket"><span class="ic">👁️</span><b>Monitoring</b><span>watch for misuse of your work</span><span class="cnt"></span></button>
+      </div>
+      <p class="sorthint" id="sortHint" aria-live="polite"></p>
+      <div class="callout tip reveal" id="usesNote"><b>The book's real examples.</b> <b>Indexing</b> is the most common use: Googlebot is the crawler behind Google Search. <b>Archiving</b>: national libraries such as the US Library of Congress, and the EU's web archive, save sites before they change or vanish. <b>Mining</b>: finance firms download shareholder-meeting transcripts and annual reports to learn about companies. <b>Monitoring</b>: Digimarc runs crawlers that hunt for pirated copies of works and reports on them.<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener">[1]</a><br><span class="muted small">How hard is it to build? That depends on scale. A class project crawler is an afternoon's work. A crawler for the whole web keeps a dedicated team busy.</span></div>
+      <div id="s1quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>The three-step loop</h2><div class="sub">Watch the frontier grow</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The web is a <b>graph</b>: each page is a <b>node</b> (a dot) and each link is an <b>edge</b> (an arrow from one page to another). Crawling means walking that graph, which is called <b>graph traversal</b>. The book's basic algorithm is a three-step loop:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener">[1]</a></p>
+      <ol>
+        <li><b>Download</b> the pages for a set of URLs.</li>
+        <li><b>Extract</b> the URLs (links) found inside those pages.</li>
+        <li><b>Add</b> the new URLs to the list still to be downloaded. Go back to step 1.</li>
+      </ol>
+      <p>The URLs you start with are called <b>seed URLs</b>. Here the only seed is page <b>A</b>. Drive the loop yourself with the three buttons. The glowing button is the next step.</p>
+      <div class="sim gsvg">
+        <svg id="gSvg" viewBox="0 0 400 250" role="img" aria-label="A small web of 12 pages, A to L, connected by links"></svg>
+        <div class="loopbtns" id="loopBtns">
+          <button class="btn" data-step="dl">① Download</button><span class="arr">→</span>
+          <button class="btn" data-step="ex">② Extract links</button><span class="arr">→</span>
+          <button class="btn" data-step="add">③ Add to list</button><span class="arr" aria-hidden="true">↺</span>
+        </div>
+        <div class="lists">
+          <div class="list"><h4>To download <b id="qCount">1</b></h4><div class="lchips" id="qChips"></div></div>
+          <div class="list"><h4>Downloaded <b id="dCount">0 / 12</b></h4><div class="lchips" id="dChips"></div></div>
+        </div>
+        <div class="sim-bar">
+          <span class="counters"><span>Round <b id="roundN">1</b></span><span>Downloads <b id="dlN">0</b></span><span class="waste">Wasted downloads <b id="wasteN">0</b></span></span>
+          <span class="row" style="gap:8px"><button class="btn" id="ffBtn" style="display:none;padding:6px 12px;font-size:14px">▶ Run the loop</button><button class="btn" id="gReset" style="padding:6px 12px;font-size:14px">↻ Reset</button></span>
+        </div>
+        <div class="simlog" id="gLog"><div>Seed list: [A]. Press ① Download.</div></div>
+      </div>
+      <div class="challenge boxed" id="gPredict" style="display:none"></div>
+      <div class="endbanner" id="gEnd"></div>
+      <div id="s2quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>Ask before you crawl</h2><div class="sub">Step 1 · scope the prompt</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The interviewer says only: <i>"Design a web crawler."</i> That sounds simple, but a crawler for a school project and one for a search engine are completely different machines. Step 1 of the interview framework is to ask until you know which one you're building.</p>
+      <p>Below are 10 questions. <b>Tap the 6 that pin down the design.</b> The interviewer answers each good one, and the answer goes on your requirements note.</p>
+      <p class="small muted">Careful: questions about tools or cosmetics are not requirements yet, and one of these questions is a trap. A bad pick costs a heart.</p>
+      <div class="deckwrap">
+        <div>
+          <div class="deck" id="deck"></div>
+          <div class="bubble" id="bubble" aria-live="polite"><span class="who">Interviewer</span>"Design a web crawler. Go."</div>
+        </div>
+        <aside class="sticky" aria-label="Requirements note"><h3>📌 Requirements <span class="cnt" id="stickyCnt">0 / 6</span></h3><ol id="sticky"></ol><div class="empty" id="stickyEmpty">Nothing yet. Ask something!</div></aside>
+      </div>
+      <div class="callout tip reveal" id="scopeNote"><b>What you now know.</b> Purpose, scale, content type, freshness, retention, duplicates. Each one changes the design. "HTML only" means no image or video pipeline yet. "New and edited pages" means we must come back to pages we have already seen. "Five years" decides the storage bill (stage 5). "Ignore duplicates" means we need a way to spot them (Quest 9.2). Even a one-line prompt hides choices like these. Pin them down before you draw a single box.</div>
+      <div id="s3quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Four traits of a good spider</h2><div class="sub">Scalable · robust · polite · extensible</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Besides the features the interviewer asked for, the book names four qualities a good crawler needs:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener">[1]</a></p>
+      <ul>
+        <li><b>Scalable</b>: the web has billions of pages, so one machine fetching one page at a time is hopeless. The work must run <b>in parallel</b> (many fetches at once, on many machines).</li>
+        <li><b>Robust</b>: real websites misbehave. Broken HTML, servers that never answer, machines that crash, links planted to cause harm: the crawler has to keep going through all of it.</li>
+        <li><b>Polite</b>: space out your visits to any one website. A crawler that floods a small site can knock it offline.</li>
+        <li><b>Extensible</b>: adding a new content type (say, images) should need small changes, not a rewrite.</li>
+      </ul>
+      <p>Below are 8 incident reports from a crawler team. <b>Tap an incident, then tap the trait it's about.</b> Each shield lights up when it holds its two incidents.</p>
+      <div class="shields" id="shields">
+        <button class="shield" data-k="scale" aria-label="Scalable shield"><span class="ic">📈</span><b>Scalable</b><span>more parallel work</span><span class="pips"><i class="pip"></i><i class="pip"></i></span></button>
+        <button class="shield" data-k="robust" aria-label="Robust shield"><span class="ic">🛡️</span><b>Robust</b><span>survive the bad web</span><span class="pips"><i class="pip"></i><i class="pip"></i></span></button>
+        <button class="shield" data-k="polite" aria-label="Polite shield"><span class="ic">🎩</span><b>Polite</b><span>be kind to hosts</span><span class="pips"><i class="pip"></i><i class="pip"></i></span></button>
+        <button class="shield" data-k="ext" aria-label="Extensible shield"><span class="ic">🧩</span><b>Extensible</b><span>plug in new stuff</span><span class="pips"><i class="pip"></i><i class="pip"></i></span></button>
+      </div>
+      <div class="trhint" id="trHint" aria-live="polite">Pick an incident first.</div>
+      <div class="incidents" id="incidents"></div>
+      <div class="callout reveal" id="traitNote"><b>Notice the odd one out.</b> Scalable, robust and extensible are about <i>our</i> system: can it grow, can it survive, can it change. Politeness is about <i>other people's</i> systems. The site you crawl never agreed to carry your load, and the web has a convention for this: a site lists what bots may fetch in a file called <code>robots.txt</code>.<a class="cite" href="https://www.rfc-editor.org/rfc/rfc9309.html" target="_blank" rel="noopener">[5]</a> <a href="0903-web-crawler-url-frontier.html">Quest 9.3</a> builds politeness into the queue design, and <a href="0904-web-crawler-downloader-and-robustness.html">9.4</a> reads <code>robots.txt</code>.</div>
+      <div id="s4quiz"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Napkin math</h2><div class="sub">Back-of-the-envelope, then twist the knobs</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>A <b>back-of-the-envelope estimate</b> is a rough calculation you do out loud in a minute or two. It tells you how big the system is, so you know which problems are real. <b>QPS</b> means queries per second; for a crawler, that's pages downloaded per second. The book works from these assumptions:<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener">[1]</a></p>
+      <div class="given"><span>📌 1 billion pages / month</span><span>📌 HTML only</span><span>📌 keep 5 years</span><span>avg page = 500 KB</span><span>peak = 2 × average</span></div>
+      <p>Work out the four numbers. Anything within about <b>±10%</b> counts, so round freely. Pick a unit (K = thousand, M = million; 1 TB = 1,000 GB, 1 PB = 1,000 TB) or type the full number. Hints are free.</p>
+      <div class="calcs" id="calcs"></div>
+      <div class="callout tip"><b>Interview tip.</b> A 30-day month is 30 × 24 × 3,600 ≈ <b>2.6 million seconds</b>. One billion ÷ 2.6 million is about 386, and the book rounds that to <b>400</b>. Rounding up is fine. Say each assumption out loud as you go: the interviewer grades the reasoning, not the decimals.</div>
+
+      <div class="knobs" id="knobs">
+        <p><b>All four correct.</b> Your boxes are now live formulas. Turn the knobs. <span class="muted small">(They use the exact 386 pages/s, so peak shows 772 rather than the rounded 800.)</span></p>
+        <div class="sim">
+          <div class="knob"><label for="kPages"><span>Pages per month</span><b id="kPagesV"></b></label><input type="range" id="kPages" min="0" max="6" step="1" value="3" aria-label="Pages per month"></div>
+          <div class="knob"><label for="kPeak"><span>Peak multiplier</span><b id="kPeakV"></b></label><input type="range" id="kPeak" min="1" max="5" step="0.5" value="2" aria-label="Peak multiplier"></div>
+          <div class="knob"><label for="kSize"><span>Average page size</span><b id="kSizeV"></b></label><input type="range" id="kSize" min="0" max="5" step="1" value="3" aria-label="Average page size"></div>
+          <div class="knob"><label for="kYears"><span>Years kept</span><b id="kYearsV"></b></label><input type="range" id="kYears" min="1" max="10" step="1" value="5" aria-label="Years kept"></div>
+          <div class="outs">
+            <div class="out"><b id="oAvg"></b><span>avg pages / s</span></div>
+            <div class="out"><b id="oPeak"></b><span>peak pages / s</span></div>
+            <div class="out"><b id="oMon"></b><span>storage / month</span></div>
+            <div class="out" id="oTotBox"><b id="oTot"></b><span>total storage</span></div>
+            <div class="out"><b id="oSrv"></b><span>fetchers at 50 pages/s (peak)</span></div>
+          </div>
+        </div>
+        <div class="challenge boxed" style="margin-top:12px">
+          <div class="step">Mini-challenge · bonus</div>
+          <h3>A real HTML page is often closer to 100 KB than 500 KB. Keep 1 billion pages and 5 years, and drag the page size to 100 KB. What happens to the 5-year total?</h3>
+          <div class="callout reveal" id="sizeNote"><b>💡 30 PB became 6 PB.</b> Storage is pages × size × months, so it moves in a straight line with each one: a fifth of the size gives a fifth of the storage. Page count and years work the same way. That's why you say the size assumption out loud: change it and the storage answer changes by the same factor.</div>
+        </div>
+        <div class="callout"><b>Side note: how many machines?</b> The book stops at QPS and storage, but a natural follow-up is "how many download servers?". If you <i>assume</i> one server fetches about 50 pages a second (a made-up round number, not from the book), peak needs 800 ÷ 50 = <b>16 servers</b>, before you add spares for failures. Watch the last tile change as you turn the knobs.</div>
+        <div class="callout warn"><b>Honest caveats.</b> "Peak = 2 × average" is a rule of thumb. A crawler sets its own pace, so its peak is mostly a choice; the harder problem is uneven load on <i>individual</i> sites (politeness again). And 500 KB is generous for HTML alone, which compresses well, so 30 PB is an upper bound before compression and duplicate removal.</div>
+        <div id="s5quiz"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Boss: The Scope Sphinx</h2><div class="sub">Which trait does each ask hit?</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The Sphinx throws seven new situations at you. For each, pick the trait it tests: <b>scalability</b>, <b>robustness</b>, <b>politeness</b> or <b>extensibility</b>.</p>
+      <div id="boss"></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 7 ================= -->
+  <section class="stage" data-stage="7" id="s7">
+    <div class="stage-h"><div class="num">7</div><div><h2>Say it like a senior</h2><div class="sub">Scope in 45 seconds</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div class="callout tip" style="margin-top:18px"><b>Next quest teaser.</b> The naive loop in stage 2 re-downloaded pages and would never stop. Quest 9.2, <a href="0902-web-crawler-components-and-workflow.html">Assemble the Spider</a>, builds the real thing: eleven boxes, including two "have we seen this?" checks that fix exactly that.</div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Alex Xu, <a href="https://bytebytego.com/courses/system-design-interview/design-a-web-crawler" target="_blank" rel="noopener"><i>System Design Interview</i>, Ch. 9: Design a Web Crawler</a>. Read the chapter intro and all of Step 1: the basic algorithm, the requirements dialogue, the four characteristics and the estimation. Then skim the opening of Olston and Najork's <a href="http://infolab.stanford.edu/~olston/publications/crawling_survey.pdf" target="_blank" rel="noopener">"Web Crawling" survey</a>, which the book cites; its first chapter explains why "just follow links" gets hard at scale.
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note (for later)</h4>
+      <ul style="margin:0;padding-left:20px">
+        <li><b>386, not 400.</b> 1 billion ÷ 2.59 million seconds is about 386 pages/s. The book rounds up to 400, and interviewers expect that.</li>
+        <li><b>Peak is a choice.</b> A user-facing service can't control its traffic spikes; a crawler can. "2 × average" is a rule of thumb. The real risk is too many requests to one host, not total load.</li>
+        <li><b>500 KB is generous.</b> Many HTML documents are tens of KB and compress well, so 30 PB is an upper bound before compression and de-duplication.</li>
+        <li><b>Real crawls are bigger.</b> One billion pages a month is an interview-sized target, not Google's. The open <a href="https://commoncrawl.org/" target="_blank" rel="noopener">Common Crawl</a> project alone publishes a few billion pages per crawl, and you can download and inspect them.<a class="cite" href="https://commoncrawl.org/" target="_blank" rel="noopener">[4]</a></li>
+      </ul>
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"why HTML only, when images are on the web too?"</i> or <i>"how would the estimate change if we had to re-crawl every page weekly?"</i> Follow-up questions are part of the quest.
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 9 "Design a Web Crawler" (ByteByteGo).</li>
+        <li>"Web crawler", Wikipedia.</li>
+        <li>C. Olston and M. Najork, "Web Crawling", Foundations and Trends in Information Retrieval, 2010.</li>
+        <li>Common Crawl, an open repository of web crawl data.</li>
+        <li>RFC 9309, "Robots Exclusion Protocol", IETF, 2022.</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '0901',
+  winTitle: 'Scoped, sized and ready to crawl!',
+  badge: '🕷️ Badge: Spider Wrangler',
+  cheatsheet: '../reference/ch09-web-crawler-cheatsheet.html',
+});
+const { sleep, shuffle, esc } = Q;
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ================= shared helpers ================= */
+function S(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function logTo(id, html, cls) { const l = $('#' + id); l.insertAdjacentHTML('beforeend', `<div class="${cls || ''}">${html}</div>`); l.scrollTop = l.scrollHeight; }
+function quizChain(mount, qs, done) {
+  let i = 0;
+  const next = () => {
+    if (i >= qs.length) { done && done(); return; }
+    const q = qs[i++];
+    Q.quiz(mount, { ...q, tag: q.tag || `Check ${i} of ${qs.length}`, onDone: () => setTimeout(next, 650) });
+  };
+  next();
+}
+function shake(el, cls = 'nope') { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+function nfmt(n) {
+  if (n < 10000) return Math.round(n).toLocaleString('en-US');
+  const u = [[1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'K']].find(([v]) => n >= v);
+  const x = n / u[0];
+  return (x >= 100 ? Math.round(x) : x >= 10 ? x.toFixed(1) : x.toFixed(2)).toString().replace(/\.0+$|(\.\d*?)0+$/, '$1') + u[1];
+}
+function bfmt(b) {
+  const u = [[1e15, 'PB'], [1e12, 'TB'], [1e9, 'GB'], [1e6, 'MB'], [1e3, 'KB']].find(([v]) => b >= v);
+  if (!u) return Math.round(b) + ' B';
+  const x = b / u[0];
+  return (x >= 100 ? Math.round(x) : x >= 10 ? x.toFixed(1) : x.toFixed(2)).toString().replace(/\.0+$|(\.\d*?)0+$/, '$1') + ' ' + u[1];
+}
+
+/* ================= STAGE 1: sort the jobs ================= */
+Q.onStage(1, () => {
+  const NAMES = { idx: 'Indexing', arch: 'Archiving', mine: 'Mining', mon: 'Monitoring' };
+  const CARDS = shuffle([
+    { t: 'A search engine refreshes what it knows about new blog posts.', a: 'idx', hint: 'Who uses the result? People typing into a search box.' },
+    { t: 'A national library keeps a copy of government sites before an election.', a: 'arch', hint: 'The point is to keep the pages for later, even after they change.' },
+    { t: 'A hedge fund collects every listed company’s annual report.', a: 'mine', hint: 'They want facts and numbers pulled out of the pages to analyse.' },
+    { t: 'A record label searches the web for leaked copies of an album.', a: 'mon', hint: 'They are watching for someone breaking their copyright.' },
+    { t: 'A price-comparison site gathers product prices from shops every day.', a: 'mine', hint: 'They extract data (prices) from pages and analyse it.' },
+    { t: 'A brand checks for fake online shops that use its logo.', a: 'mon', hint: 'Misuse of a trademark: that’s a watch job.' },
+    { t: 'Crawl the web so that search results include yesterday’s news.', a: 'idx', hint: 'Fresh search results come from a fresh index.' },
+    { t: 'Preserve a closed game studio’s website before it goes offline.', a: 'arch', hint: 'Saving a site for the future is preservation.' },
+  ]);
+  const card = $('#dropCard'), hint = $('#sortHint');
+  let i = 0, placed = 0, busy = false, quizShown = false;
+  const missed = new Set(), counts = { idx: 0, arch: 0, mine: 0, mon: 0 };
+
+  // spider web graphic
+  const svg = $('#webSvg');
+  const KX = Array.from({ length: 9 }, (_, k) => 18 + k * 34);
+  S('path', { class: 'silk', d: `M8 26 L${KX[8] + 6} 26` }, svg);
+  const web = S('g', { transform: 'translate(352 34)' }, svg);
+  for (let a = 0; a < 8; a++) { const r = a * Math.PI / 4; S('line', { class: 'silk', x1: 0, y1: 0, x2: (26 * Math.cos(r)).toFixed(1), y2: (26 * Math.sin(r)).toFixed(1) }, web); }
+  [9, 17, 25].forEach(r => S('polygon', { class: 'silk', points: Array.from({ length: 8 }, (_, a) => `${(r * Math.cos(a * Math.PI / 4)).toFixed(1)},${(r * Math.sin(a * Math.PI / 4)).toFixed(1)}`).join(' ') }, web));
+  S('text', { class: 'goaltxt', x: 352, y: 76 }, svg).textContent = 'the web';
+  const knots = KX.map(x => S('circle', { class: 'knot', cx: x, cy: 26, r: 3.5 }, svg));
+  const spider = S('g', { class: 'spider' }, svg);
+  S('line', { class: 'thread', x1: 0, y1: -14, x2: 0, y2: 0 }, spider);
+  const legs = S('g', {}, spider);
+  [[-1, 1], [1, 1]].forEach(([sx]) => [[-6, -12, -10], [-2, -14, -2], [2, -14, 5], [6, -11, 12]].forEach(([y0, x1, y1]) =>
+    S('polyline', { class: 'leg', points: `0,${8 + y0 * .4} ${sx * -x1 * .9},${8 + y1 * .55} ${sx * -x1 * 1.15},${8 + y1 * .55 + 7}` }, legs)));
+  S('ellipse', { class: 'bd', cx: 0, cy: 12, rx: 7, ry: 8 }, spider);
+  S('circle', { class: 'bd', cx: 0, cy: 2.5, r: 4.5 }, spider);
+  S('circle', { class: 'eye', cx: -1.6, cy: 2, r: 1.1 }, spider);
+  S('circle', { class: 'eye', cx: 1.6, cy: 2, r: 1.1 }, spider);
+  function moveSpider() {
+    spider.style.transform = `translate(${KX[placed]}px, 32px)`;
+    knots.forEach((k, n) => k.classList.toggle('on', n <= placed));
+  }
+  spider.setAttribute('transform', '');
+  moveSpider();
+
+  function showCard() {
+    if (i >= CARDS.length) {
+      card.className = 'dropcard empty'; card.innerHTML = '<small>All sorted</small>The spider reached the web. 🕸️';
+      return;
+    }
+    card.className = 'dropcard'; card.style.transform = '';
+    card.innerHTML = `<small>Card ${i + 1} of ${CARDS.length} · drag or tap a basket</small>${esc(CARDS[i].t)}`;
+  }
+  async function drop(k, basketEl) {
+    if (busy || i >= CARDS.length) return;
+    const c = CARDS[i];
+    if (k === c.a) {
+      busy = true;
+      counts[k]++; placed++;
+      const cnt = $(`.basket[data-k="${k}"] .cnt`); cnt.textContent = '✓'.repeat(counts[k]);
+      shake(basketEl, 'hit');
+      hint.className = 'sorthint good'; hint.textContent = `✓ ${NAMES[k]}.`;
+      Q.addXP(3, basketEl);
+      moveSpider();
+      card.classList.add('gone');
+      await sleep(Q.reduced ? 30 : 320);
+      i++; showCard(); busy = false;
+      if (placed === CARDS.length) finish();
+    } else {
+      card.style.transform = '';
+      shake(card, 'bounce');
+      hint.className = 'sorthint bad'; hint.textContent = `Not ${NAMES[k]}. Hint: ${c.hint}`;
+      if (!missed.has(i)) { missed.add(i); Q.loseHeart(basketEl); } else Q.toast('try again', basketEl, 'practice');
+    }
+  }
+  $$('#baskets .basket').forEach(b => b.onclick = () => drop(b.dataset.k, b));
+
+  // pointer drag for the card
+  let drag = null;
+  card.addEventListener('pointerdown', e => {
+    if (busy || i >= CARDS.length) return;
+    drag = { x: e.clientX, y: e.clientY, moved: false, over: null };
+    card.setPointerCapture(e.pointerId);
+  });
+  card.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (!drag.moved && Math.hypot(dx, dy) < 6) return;
+    drag.moved = true; card.classList.add('dragging');
+    card.style.transform = `translate(${dx}px, ${dy}px) rotate(${Math.max(-6, Math.min(6, dx / 20))}deg)`;
+    card.style.pointerEvents = 'none';
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    card.style.pointerEvents = '';
+    const over = el && el.closest && el.closest('.basket');
+    if (drag.over && drag.over !== over) drag.over.classList.remove('over');
+    if (over) over.classList.add('over');
+    drag.over = over;
+  });
+  const endDrag = () => {
+    if (!drag) return;
+    const d = drag; drag = null;
+    card.classList.remove('dragging');
+    if (d.over) { d.over.classList.remove('over'); drop(d.over.dataset.k, d.over); }
+    else { card.style.transform = ''; if (d.moved) { hint.className = 'sorthint'; hint.textContent = 'Drop it on a basket, or just tap one.'; } }
+  };
+  card.addEventListener('pointerup', endDrag);
+  card.addEventListener('pointercancel', endDrag);
+
+  function finish() {
+    $('#usesNote').classList.add('show');
+    hint.className = 'sorthint good'; hint.textContent = 'All eight sorted. The spider made it.';
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => Q.quiz($('#s1quiz'), {
+      q: 'The crawler in this chapter is built for which of the four jobs?',
+      options: ['Search engine indexing', 'Archiving for a library', 'Monitoring for piracy'],
+      correct: 0,
+      good: 'The interviewer sets the purpose as <b>search engine indexing</b>, the most common use. Every later choice (HTML only, fresh pages, skip duplicates) follows from that.',
+      bad: 'The chapter designs for <b>search engine indexing</b>, the most common use. You’ll confirm it as the very first scoping question in stage 3.',
+      onDone: () => setTimeout(() => Q.clearStage(1), 900),
+    }), 500);
+  }
+  showCard();
+});
+
+/* ================= STAGE 2: the three-step loop ================= */
+Q.onStage(2, () => {
+  const POS = { A: [30, 125], B: [110, 70], C: [110, 180], D: [195, 125], E: [195, 35], F: [195, 215], G: [280, 125], H: [280, 35], I: [280, 215], J: [365, 125], K: [365, 35], L: [365, 215] };
+  const OUT = { A: ['B', 'C'], B: ['D', 'E'], C: ['D', 'F'], D: ['A', 'G'], E: ['H', 'B'], F: ['I'], G: ['J'], H: ['K'], I: ['L'], J: [], K: [], L: [] };
+  const PAGES = Object.keys(POS), R = 15;
+  const svg = $('#gSvg');
+  const defs = S('defs', {}, svg);
+  [['ah', 'ah'], ['ahHot', 'ah hot']].forEach(([id, cls]) => {
+    const m = S('marker', { id: 'g' + id, viewBox: '0 0 10 10', refX: 8, refY: 5, markerWidth: 6, markerHeight: 6, orient: 'auto-start-reverse' }, defs);
+    S('path', { class: cls, d: 'M0 0 L10 5 L0 10 z' }, m);
+  });
+  const edgesG = S('g', {}, svg), nodesG = S('g', {}, svg);
+  const toward = (a, c, d) => { const dx = c[0] - a[0], dy = c[1] - a[1], l = Math.hypot(dx, dy) || 1; return [a[0] + dx / l * d, a[1] + dy / l * d]; };
+  const EDGE = {};
+  PAGES.forEach(p => OUT[p].forEach(q => {
+    const a = POS[p], b = POS[q], curved = OUT[q].includes(p);
+    const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2, dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy);
+    const off = curved ? 16 : 0, c = [mx - dy / l * off, my + dx / l * off];
+    const s = toward(a, c, R + 1), e = toward(b, c, R + 3);
+    EDGE[p + q] = S('path', { class: 'edge', d: `M${s[0].toFixed(1)} ${s[1].toFixed(1)} Q${c[0].toFixed(1)} ${c[1].toFixed(1)} ${e[0].toFixed(1)} ${e[1].toFixed(1)}`, 'marker-end': 'url(#gah)' }, edgesG);
+  }));
+  const NODE = {};
+  PAGES.forEach(p => {
+    const g = S('g', { class: 'node' }, nodesG);
+    S('circle', { cx: POS[p][0], cy: POS[p][1], r: R }, g);
+    S('text', { x: POS[p][0], y: POS[p][1] }, g).textContent = p;
+    NODE[p] = g;
+  });
+
+  const btns = Object.fromEntries($$('#loopBtns .btn').map(b => [b.dataset.step, b]));
+  let st, running = false, quizShown = false;
+  const earned = new Set();
+  function fresh() {
+    st = { queue: ['A'], done: new Set(), dl: 0, waste: 0, phase: 'dl', cur: null, links: [], round: 1, newChips: 0, predicted: null, resolved: false, finished: false, twice: new Set() };
+  }
+  function render() {
+    PAGES.forEach(p => {
+      const g = NODE[p];
+      g.classList.toggle('done', st.done.has(p));
+      g.classList.toggle('q', !st.done.has(p) && st.queue.includes(p));
+      g.classList.toggle('hot', st.cur === p && st.phase !== 'dl');
+      g.classList.toggle('twice', st.twice.has(p));
+    });
+    const hotEdges = st.phase === 'add' ? st.links.map(q => st.cur + q) : [];
+    Object.entries(EDGE).forEach(([k, e]) => { const h = hotEdges.includes(k); e.classList.toggle('hot', h); e.setAttribute('marker-end', h ? 'url(#gahHot)' : 'url(#gah)'); });
+    // to-download chips: red if already downloaded or a repeat of an earlier chip in the list
+    const MAX = 22, seen = new Set();
+    const qs = st.queue.slice(0, MAX).map((p, n) => {
+      const dup = st.done.has(p) || seen.has(p); seen.add(p);
+      const isNew = n >= st.queue.length - st.newChips;
+      return `<span class="lchip${dup ? ' dup' : ''}${isNew ? ' new' : ''}" title="${dup ? 'a repeat' : 'not yet downloaded'}">${p}</span>`;
+    }).join('') + (st.queue.length > MAX ? `<span class="lchip more">+${st.queue.length - MAX} more</span>` : '');
+    $('#qChips').innerHTML = qs || '<span class="small muted">empty</span>';
+    $('#dChips').innerHTML = PAGES.filter(p => st.done.has(p)).map(p => `<span class="lchip ok">${p}</span>`).join('') || '<span class="small muted">nothing yet</span>';
+    $('#qCount').textContent = st.queue.length;
+    $('#dCount').textContent = `${st.done.size} / 12`;
+    $('#roundN').textContent = st.round; $('#dlN').textContent = st.dl; $('#wasteN').textContent = st.waste;
+    const waiting = st.round === 2 && st.phase === 'dl' && st.predicted === null;
+    Object.entries(btns).forEach(([k, b]) => {
+      const on = k === st.phase && !st.finished && !running && !waiting;
+      b.disabled = !on; b.classList.toggle('primary', on);
+    });
+    $('#ffBtn').style.display = st.resolved && !st.finished ? '' : 'none';
+    $('#ffBtn').disabled = running;
+  }
+  function step() {
+    st.newChips = 0;
+    if (st.phase === 'dl') {
+      const p = st.queue.shift();
+      if (!p) { st.finished = true; return; }
+      st.cur = p; st.dl++;
+      if (st.done.has(p)) { st.waste++; st.twice.add(p); logTo('gLog', `① download ${p}… <b>already downloaded</b>. Wasted.`, 'e'); }
+      else { st.done.add(p); logTo('gLog', `① download ${p} (new page, ${st.done.size}/12)`); }
+      st.phase = 'ex';
+      if (st.done.size === PAGES.length) { st.phase = 'dl'; st.finished = true; finishSim(); }
+    } else if (st.phase === 'ex') {
+      st.links = OUT[st.cur];
+      logTo('gLog', st.links.length ? `② ${st.cur} links to ${st.links.join(', ')}` : `② ${st.cur} has no links`);
+      st.phase = 'add';
+    } else {
+      st.queue.push(...st.links); st.newChips = st.links.length;
+      logTo('gLog', st.links.length ? `③ add ${st.links.join(', ')} → list is now ${st.queue.length} long` : '③ nothing to add');
+      st.phase = 'dl'; st.round++; st.links = [];
+      afterRound();
+    }
+  }
+  function afterRound() {
+    if (st.round === 2) {
+      if (!earned.has('r1')) { earned.add('r1'); Q.addXP(10, btns.add); }
+      showPredict();
+    }
+    if (st.round === 4 && st.predicted !== null && !st.resolved) resolvePredict();
+  }
+  function showPredict() {
+    const box = $('#gPredict');
+    box.style.display = 'block';
+    box.innerHTML = `<div class="step">Predict first</div><h3>Next, the loop downloads <b>B</b> and then <b>C</b>, adding every link it finds. After those two rounds, how many times will <b>D</b> be in the to-download list?</h3><div class="opts"></div><div class="explain"></div>`;
+    const opts = $('.opts', box);
+    ['0 times', '1 time', '2 times'].forEach((o, n) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = n;
+      b.onclick = () => {
+        $$('.opt', opts).forEach(x => x.disabled = true); b.classList.add('picked');
+        st.predicted = n;
+        const ex = $('.explain', box); ex.className = 'explain show'; ex.style.background = 'var(--accent-soft)';
+        ex.innerHTML = 'Locked in. Now press the buttons for rounds 2 and 3 and watch the list.';
+        render();
+      };
+      opts.appendChild(b);
+    });
+  }
+  function resolvePredict() {
+    st.resolved = true;
+    const box = $('#gPredict'), ok = st.predicted === 2;
+    const n = st.queue.filter(p => p === 'D').length;
+    $$('.opt', box).forEach(b => { if (+b.dataset.i === 2) b.classList.add('right'); else if (b.classList.contains('picked')) b.classList.add('wrong'); });
+    const ex = $('.explain', box); ex.style.background = ''; ex.className = 'explain show ' + (ok ? 'good' : 'bad');
+    ex.innerHTML = (ok ? '<b>Called it.</b> ' : '<b>Surprise!</b> No heart lost, this one is for building intuition. ') +
+      `D is in the list <b>${n} times</b>: B links to D and C links to D, and the naive loop adds every link it finds. When D is downloaded it links back to A, so <b>A comes back too</b>. Press <b>▶ Run the loop</b> to watch where this goes.`;
+    if (ok && !earned.has('pred')) { earned.add('pred'); Q.addXP(15, box); }
+  }
+  async function finishSim() {
+    if (!earned.has('explore')) { earned.add('explore'); Q.addXP(10, $('#gEnd')); }
+    const end = $('#gEnd');
+    end.innerHTML = `<b>All 12 pages found, but look at the cost.</b> ${st.dl} downloads for 12 pages: <b>${st.waste} were wasted</b> on pages we already had, and the list still holds <b>${st.queue.length} URLs</b>, every one of them a repeat. Because of cycles like A → B → D → A, the naive loop <b>never stops</b> on its own. Quest 9.2 adds the fix: check "have I seen this URL?" before adding it.`;
+    end.classList.add('show');
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => quizChain($('#s2quiz'), [
+      { q: 'Starting from the seed URLs, in what order does the basic loop run?', xp: 15,
+        options: ['Download pages → extract links → add new URLs', 'Extract links → download pages → add new URLs', 'Download pages → add new URLs → extract links'], correct: 0,
+        good: 'You need a page before you can read its links, and you need the links before you can add them. Then the loop starts again with the new URLs.',
+        bad: 'You can’t extract links from a page you haven’t downloaded, and you can’t add links you haven’t extracted. So: <b>download → extract → add</b>, then repeat.' },
+      { q: 'What is a seed URL?', xp: 15,
+        options: ['A starting URL the crawl begins from', 'A URL found inside a downloaded page', 'A URL that was downloaded twice by mistake'], correct: 0,
+        good: 'Seeds are the starting set. Everything else is discovered by following links out from them. Choosing good seeds is part of the design (Quest 9.2).',
+        bad: 'Seeds are the <b>starting set</b> the crawl begins from, like page A here. URLs found inside pages are discovered later by following links.' },
+    ], () => setTimeout(() => Q.clearStage(2), 700)), 600);
+  }
+  Object.entries(btns).forEach(([k, b]) => b.onclick = () => { if (k !== st.phase || running || st.finished) return; step(); render(); });
+  $('#ffBtn').onclick = async () => {
+    if (running || st.finished) return;
+    running = true; render();
+    while (!st.finished) { step(); render(); await sleep(Q.reduced ? 0 : 90); }
+    running = false; render();
+  };
+  $('#gReset').onclick = () => {
+    if (running) return;
+    fresh(); $('#gLog').innerHTML = '<div>Seed list: [A]. Press ① Download.</div>';
+    $('#gPredict').style.display = 'none'; $('#gPredict').innerHTML = ''; $('#gEnd').classList.remove('show');
+    render();
+  };
+  fresh(); render();
+});
+
+/* ================= STAGE 3: question deck ================= */
+Q.onStage(3, () => {
+  const CARDS = [
+    { q: 'What is the crawler for?', good: true, a: 'search engine indexing', say: 'Search engine indexing. We crawl so a search engine can index the pages.', note: 'purpose: search indexing' },
+    { q: 'How many pages per month?', good: true, a: '1 billion / month', say: 'About 1 billion pages a month.', note: '1B pages / month' },
+    { q: 'HTML only, or images and PDFs too?', good: true, a: 'HTML only', say: 'HTML only, for now.', note: 'content: HTML only' },
+    { q: 'Do we pick up new and edited pages?', good: true, a: 'yes, both', say: 'Yes. Newly added pages and edited pages should both be picked up.', note: 'pick up new + edited pages' },
+    { q: 'Do we store the pages, and for how long?', good: true, a: 'yes, up to 5 years', say: 'Yes. Keep the crawled HTML for up to five years.', note: 'store HTML ≤ 5 years' },
+    { q: 'What about pages with duplicate content?', good: true, a: 'ignore them', say: 'If a page’s content is a duplicate of one we have, ignore it.', note: 'skip duplicate content' },
+    { q: 'Should I write it in Python or Go?', good: false, why: 'A language choice, not a requirement. Nothing in the design depends on it yet.' },
+    { q: 'Should I use Elasticsearch?', good: false, why: 'A tool choice. Indexing is the purpose, but the crawler’s job is to fetch pages; pick tools after you know the scale.' },
+    { q: 'What does the bot’s logo look like?', good: false, why: 'Branding, not system design. It changes nothing in the architecture.' },
+    { q: 'Can we skip robots.txt to go faster?', good: false, why: 'Trap! Politeness is a requirement, not a knob you negotiate away. A good crawler respects the rules sites publish for bots.' },
+  ];
+  const deck = $('#deck'), bubble = $('#bubble'), sticky = $('#sticky');
+  let found = 0, quizShown = false;
+  const struck = new Set(), flipped = new Set();
+  deck.innerHTML = shuffle(CARDS.map((c, i) => ({ c, i }))).map(({ c, i }) => `
+    <button class="qcard" data-i="${i}" aria-label="Ask: ${esc(c.q)}"><span class="qcard-in">
+      <span class="qface qfront"><small>Ask</small><b>${esc(c.q)}</b></span>
+      <span class="qface qback" aria-hidden="true"><small>✓ Answer</small><span>${c.good ? esc(c.a) : ''}</span></span>
+    </span></button>`).join('');
+  $$('.qcard', deck).forEach(b => b.onclick = () => {
+    const i = +b.dataset.i, c = CARDS[i];
+    if (c.good) {
+      if (flipped.has(i)) { bubble.className = 'bubble'; bubble.innerHTML = `<span class="who">Interviewer</span>${c.say}`; return; }
+      flipped.add(i); found++;
+      b.classList.add('flipped'); b.setAttribute('aria-label', `${c.q} Answer: ${c.a}`);
+      $('.qface.qback', b).removeAttribute('aria-hidden');
+      bubble.className = 'bubble'; bubble.innerHTML = `<span class="who">Interviewer</span>${c.say}`;
+      $('#stickyEmpty').style.display = 'none';
+      sticky.insertAdjacentHTML('beforeend', `<li>${esc(c.note)}</li>`);
+      $('#stickyCnt').textContent = `${found} / 6`;
+      Q.addXP(4, b);
+      if (found === 6) finishDeck();
+    } else {
+      shake(b);
+      bubble.className = 'bubble bad'; bubble.innerHTML = `<span class="who">Hold on</span>${c.why}`;
+      if (!struck.has(i)) { struck.add(i); b.classList.add('struck'); Q.loseHeart(b); }
+    }
+  });
+  function finishDeck() {
+    $('#scopeNote').classList.add('show');
+    bubble.className = 'bubble'; bubble.innerHTML = '<span class="who">Interviewer</span>"Good. You know what we’re building. What else should a good crawler be?"';
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => quizChain($('#s3quiz'), [
+      { q: 'We fetch a page whose content we already stored under a different URL. What do we do with it?', xp: 15,
+        options: ['Ignore it and don’t store it again', 'Store it again under the new URL', 'Replace the copy we stored first'], correct: 0,
+        good: 'The interviewer said to ignore pages with duplicate content. Storing copies wastes disk and makes the index worse. Spotting duplicates is a Quest 9.2 job.',
+        bad: 'The requirement was to <b>ignore</b> duplicate content. Storing it again wastes storage, and the copy adds nothing to the search index.' },
+      { q: 'How long do we keep the crawled HTML?', xp: 15,
+        options: ['Up to five years', 'Up to one month', 'Up to ten years'], correct: 0,
+        good: 'Up to five years. That one answer turns 500 TB a month into 30 PB of storage, as you’ll see in stage 5.',
+        bad: 'The interviewer said <b>up to five years</b>. Retention multiplies straight into storage, so it’s worth asking every time.' },
+    ], () => setTimeout(() => Q.clearStage(3), 700)), 500);
+  }
+});
+
+/* ================= STAGE 4: four traits ================= */
+Q.onStage(4, () => {
+  const NAMES = { scale: 'Scalable', robust: 'Robust', polite: 'Polite', ext: 'Extensible' };
+  const INC = shuffle([
+    { t: 'A site’s HTML has 3,000 unclosed tags, and the parser crashes the whole worker.', a: 'robust', hint: 'Bad HTML is one of the web’s traps. Surviving it is about…' },
+    { t: 'A small bakery’s site goes down because we hit it 50 times a second.', a: 'polite', hint: 'This hurt somebody else’s server, not ours.' },
+    { t: 'Product wants PDFs crawled next quarter, and we’d have to rewrite the downloader.', a: 'ext', hint: 'Adding a new content type should be a small change.' },
+    { t: 'One machine fetches 50 pages a second, and we need 400.', a: 'scale', hint: 'The fix is more machines working in parallel.' },
+    { t: 'One link leads to a calendar that generates endless “next month” pages.', a: 'robust', hint: 'An endless page generator is a trap the crawler must survive.' },
+    { t: 'A site owner emails to complain that our bot is hammering their server.', a: 'polite', hint: 'Too many requests to one site in a short time.' },
+    { t: 'We add a new crawl server and must spread the work across one more machine.', a: 'scale', hint: 'Growing by adding machines is about…' },
+    { t: 'Legal wants a copyright-monitoring module bolted on next to indexing.', a: 'ext', hint: 'Plugging in a new module without a rewrite.' },
+  ]);
+  const list = $('#incidents'), hint = $('#trHint');
+  let sel = -1, placed = 0, quizShown = false;
+  const missed = new Set(), counts = { scale: 0, robust: 0, polite: 0, ext: 0 };
+  list.innerHTML = INC.map((c, i) => `<button class="inc" data-i="${i}" aria-pressed="false">${esc(c.t)}</button>`).join('');
+  $$('.inc', list).forEach(b => b.onclick = () => {
+    sel = +b.dataset.i;
+    $$('.inc', list).forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+    $$('#shields .shield').forEach(s => s.classList.toggle('ready', !s.classList.contains('full')));
+    hint.className = 'trhint'; hint.textContent = 'Now tap the trait it’s about.';
+  });
+  $$('#shields .shield').forEach(s => s.onclick = () => {
+    if (sel < 0) { hint.className = 'trhint'; hint.textContent = 'Pick an incident first, then tap a shield.'; Q.toast('pick an incident', s, 'practice'); return; }
+    const c = INC[sel], k = s.dataset.k, el = $(`.inc[data-i="${sel}"]`, list);
+    if (k === c.a) {
+      counts[k]++; placed++;
+      $$('.pip', s).forEach((p, n) => p.classList.toggle('on', n < counts[k]));
+      if (counts[k] >= 2) s.classList.add('full');
+      el.classList.add('placed'); el.setAttribute('aria-pressed', 'false');
+      hint.className = 'trhint good'; hint.textContent = `✓ ${NAMES[k]}.`;
+      Q.addXP(3, s);
+      sel = -1; $$('#shields .shield').forEach(x => x.classList.remove('ready'));
+      if (placed === INC.length) finish();
+    } else {
+      shake(el);
+      hint.className = 'trhint bad'; hint.textContent = `Not ${NAMES[k]}. Hint: ${c.hint}`;
+      if (!missed.has(sel)) { missed.add(sel); Q.loseHeart(s); } else Q.toast('try again', s, 'practice');
+    }
+  });
+  function finish() {
+    $('#traitNote').classList.add('show');
+    hint.className = 'trhint good'; hint.textContent = 'All four shields are glowing.';
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => Q.quiz($('#s4quiz'), {
+      q: 'Which trait is about the websites we crawl, rather than about our own system?',
+      options: ['Politeness', 'Scalability', 'Robustness', 'Extensibility'],
+      correct: 0,
+      good: 'Politeness protects other people’s servers. The other three are about our crawler growing, surviving and changing.',
+      bad: 'It’s <b>politeness</b>: don’t flood any one site with requests. Scalability, robustness and extensibility are about our own crawler.',
+      onDone: () => setTimeout(() => Q.clearStage(4), 900),
+    }), 500);
+  }
+});
+
+/* ================= STAGE 5: napkin math ================= */
+Q.onStage(5, () => {
+  const CNT = [['', 1], ['K', 1e3], ['M', 1e6]];
+  const STO = [['GB', 1e9], ['TB', 1e12], ['PB', 1e15]];
+  const BOXES = [
+    { k: 'avg', t: 'Average pages per second', s: '1 billion pages a month', lo: 350, hi: 440, target: 400, units: CNT, def: '',
+      hint: '1,000,000,000 ÷ 30 days ÷ 24 hours ÷ 3,600 seconds. A month is about 2.6 million seconds.',
+      ok: '10<sup>9</sup> ÷ 2,592,000 s ≈ 386, so call it <b>~400 pages/s</b>.' },
+    { k: 'peak', t: 'Peak pages per second', s: 'peak = 2 × average', lo: 700, hi: 880, target: 800, units: CNT, def: '',
+      hint: 'Double the average.',
+      ok: '2 × 400 = <b>800 pages/s</b>.' },
+    { k: 'mon', t: 'New storage per month', s: 'average page = 500 KB', lo: 450e12, hi: 550e12, target: 500e12, units: STO, def: 'TB',
+      hint: '1 billion × 500 KB = 10<sup>9</sup> × 5 × 10<sup>5</sup> bytes = 5 × 10<sup>14</sup> bytes. 10<sup>12</sup> bytes is 1 TB.',
+      ok: '1 billion × 500 KB = <b>500 TB a month</b>.' },
+    { k: 'tot', t: 'Storage for 5 years', s: 'everything kept 5 years', lo: 27e15, hi: 33e15, target: 30e15, units: STO, def: 'PB',
+      hint: '500 TB × 12 months × 5 years. 1,000 TB is 1 PB.',
+      ok: '500 TB × 60 months = 30,000 TB = <b>30 PB</b>.' },
+  ];
+  const done = new Set(), missed = new Set();
+  let quizShown = false, sizeDone = false;
+  $('#calcs').innerHTML = BOXES.map(b => `
+    <div class="calc" data-k="${b.k}">
+      <div class="lbl">${b.t} <span>${b.s}</span></div>
+      <div class="row">
+        <input type="text" inputmode="decimal" autocomplete="off" aria-label="${b.t}" placeholder="?">
+        <select aria-label="${b.t} unit">${b.units.map(([u]) => `<option value="${u}"${u === b.def ? ' selected' : ''}>${u || '×1'}</option>`).join('')}</select>
+        <button class="btn primary q-check">Check</button>
+        <button class="btn q-hint">Hint</button>
+      </div>
+      <div class="hint">${b.hint}</div>
+      <div class="msg" aria-live="polite"></div>
+    </div>`).join('');
+  BOXES.forEach(b => {
+    const el = $(`.calc[data-k="${b.k}"]`), inp = $('input', el), sel = $('select', el), msg = $('.msg', el), chk = $('.q-check', el);
+    $('.q-hint', el).onclick = () => $('.hint', el).classList.add('show');
+    chk.onclick = () => {
+      if (done.has(b.k)) return;
+      const raw = inp.value.replace(/[,\s_]/g, '');
+      const v = parseFloat(raw);
+      if (!raw || !isFinite(v)) { msg.className = 'msg bad'; msg.textContent = 'Type a number first.'; return; }
+      const mult = (b.units.find(([u]) => u === sel.value) || [0, 1])[1];
+      const val = v * mult;
+      if (val >= b.lo && val <= b.hi) {
+        done.add(b.k); el.classList.add('ok'); inp.readOnly = true; sel.disabled = true; chk.disabled = true;
+        msg.className = 'msg good'; msg.innerHTML = '✓ ' + b.ok;
+        Q.addXP(10, chk);
+        if (done.size === BOXES.length) allDone();
+      } else {
+        const ratio = val / b.target, off = Math.round(Math.log10(ratio));
+        let tip = ratio > 1 ? 'Too high.' : 'Too low.';
+        if (Math.abs(off) >= 1) tip += ` You're off by about ×${Math.pow(10, Math.abs(off)).toLocaleString('en-US')}. Check the unit or a zero.`;
+        else tip += ' Close, but outside the range.';
+        msg.className = 'msg bad'; msg.textContent = tip;
+        if (!missed.has(b.k)) { missed.add(b.k); Q.loseHeart(chk); } else Q.toast('try again', el, 'practice');
+      }
+    };
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); chk.click(); } });
+  });
+
+  const PAGES = [1e8, 2e8, 5e8, 1e9, 2e9, 5e9, 1e10];
+  const SIZES = [50e3, 100e3, 200e3, 500e3, 1e6, 2e6];
+  const MONTH_S = 30 * 24 * 3600;
+  function live() {
+    const p = PAGES[+$('#kPages').value], m = +$('#kPeak').value, sz = SIZES[+$('#kSize').value], y = +$('#kYears').value;
+    $('#kPagesV').textContent = nfmt(p) + ' / mo'; $('#kPeakV').textContent = m + '×'; $('#kSizeV').textContent = bfmt(sz); $('#kYearsV').textContent = y + (y === 1 ? ' yr' : ' yrs');
+    const avg = p / MONTH_S, peak = avg * m, mon = p * sz, tot = mon * 12 * y;
+    $('#oAvg').textContent = nfmt(avg); $('#oPeak').textContent = nfmt(peak); $('#oMon').textContent = bfmt(mon); $('#oTot').textContent = bfmt(tot);
+    $('#oSrv').textContent = Math.ceil(peak / 50).toLocaleString('en-US');
+    $('#oTotBox').classList.toggle('hot', tot >= 50e15);
+    if (!sizeDone && sz === 100e3 && p === 1e9 && y === 5) {
+      sizeDone = true; $('#sizeNote').classList.add('show'); Q.addXP(10, $('#oTotBox'));
+    }
+  }
+  ['kPages', 'kPeak', 'kSize', 'kYears'].forEach(id => $('#' + id).addEventListener('input', live));
+  function allDone() {
+    $('#knobs').classList.add('on');
+    live();
+    if (quizShown) return; quizShown = true;
+    setTimeout(() => quizChain($('#s5quiz'), [
+      { q: 'The interviewer raises the target to 10 billion pages a month. Roughly what is the average QPS now?', xp: 15,
+        options: ['About 400 pages a second', 'About 4,000 pages a second', 'About 40,000 pages a second'], correct: 1,
+        good: 'Ten times the pages, ten times the rate: 10<sup>10</sup> ÷ 2.6 million s ≈ 3,860, so about <b>4,000 pages/s</b> (8,000 at peak). Try it on the knobs.',
+        bad: 'QPS scales in a straight line with pages per month. 10× the pages is 10× the rate: 400 × 10 ≈ <b>4,000 pages/s</b>.' },
+      { q: 'Which assumptions decide the 5-year storage total?', xp: 15,
+        options: ['Pages per month × page size × years kept', 'Peak multiplier × average pages per second', 'Number of seed URLs × links found per page'], correct: 0,
+        good: 'Storage = pages × size × months kept. The peak multiplier only changes how fast you fetch, not how much you keep. Seeds and links change where you crawl, not how much.',
+        bad: 'Storage = <b>pages × average size × months kept</b>. The peak multiplier changes the fetch rate, not the bytes stored. Turn the peak knob and watch: storage doesn’t move.' },
+    ], () => setTimeout(() => Q.clearStage(5), 700)), 600);
+  }
+});
+
+/* ================= STAGE 6: boss ================= */
+Q.onStage(6, () => Q.boss($('#boss'), {
+  name: '🦁 The Scope Sphinx',
+  xp: 15,
+  choices: [
+    { k: 'scale', label: 'Scalability', sub: 'more parallel work' },
+    { k: 'robust', label: 'Robustness', sub: 'survive the bad web' },
+    { k: 'polite', label: 'Politeness', sub: 'be kind to hosts' },
+    { k: 'ext', label: 'Extensibility', sub: 'plug in new stuff' },
+  ],
+  scenarios: [
+    { e: '📈', t: 'Double the target', d: 'The interviewer says: “Actually, make it 2 billion pages a month.”', a: 'scale', why: 'Twice the pages means about 800 pages/s on average and 1,600 at peak. You handle that by adding more downloaders working in parallel: scalability.' },
+    { e: '🐌', t: 'The 30-second stall', d: 'One site accepts the connection, then waits 30 seconds before every response.', a: 'robust', why: 'An unresponsive server is one of the web’s traps. A robust crawler gives up after a time limit and moves on, instead of tying up a worker (Quest 9.4).' },
+    { e: '🎓', t: 'Mistaken for an attack', d: 'A university IT team writes in: our bot’s traffic looks like a denial-of-service attack.', a: 'polite', why: 'Too many requests to one host in a short time. Politeness means spacing out requests to each site, whatever our total speed is.' },
+    { e: '🖼️', t: 'Image search is coming', d: 'Product now wants images crawled for a new image search.', a: 'ext', why: 'A new content type. An extensible crawler adds an image module next to the HTML path, without a rewrite (Quest 9.5).' },
+    { e: '💥', t: 'A machine dies mid-crawl', d: 'One downloader machine crashes halfway through its batch of URLs.', a: 'robust', why: 'Crashes happen. A robust crawler saves its progress so another machine can pick up the lost work instead of the whole crawl failing (Quest 9.4).' },
+    { e: '📚', t: 'The Wikipedia burst', d: 'Nearly every link on a Wikipedia page points to another Wikipedia page, so the crawler would fetch thousands of them back to back.', a: 'polite', why: 'Following links naively sends a burst of requests to one host. Politeness means spreading those fetches out over time (front and back queues, Quest 9.3).' },
+    { e: '⛰️', t: 'Sized for the average', d: 'Traffic peaks at twice the average, but the fleet was sized to handle only the average.', a: 'scale', why: 'Capacity has to cover peak, not average: 800 pages/s, not 400. Add parallel capacity, or choose to smooth the crawl so the peak never happens.' },
+  ],
+  outro: 'Growth → scalability. Bad pages, dead servers, crashes → robustness. One host overloaded → politeness. New content or modules → extensibility.',
+  onDone: () => Q.clearStage(6),
+}));
+
+/* ================= STAGE 7: interview drill ================= */
+Q.onStage(7, () => Q.drill($('#drill'), {
+  prompt: 'The interviewer: <i>"Design a web crawler. Give me your scoping and your estimates."</i>',
+  placeholder: 'First I’d ask what it’s for…',
+  model: '"I’d confirm the purpose first, say search engine indexing, and then the scale: about a billion pages a month, HTML only. We pick up new and edited pages, keep the HTML for up to five years, and skip duplicate content. The core loop is: download the pages, extract their links, add the new links to the list, repeat, starting from seed URLs. I’d want it scalable, robust to bad pages and dead servers, polite to the sites we crawl, and extensible to new content types. A billion a month is about 400 pages a second, call it 800 at peak. At 500 KB a page that’s 500 TB a month, and 30 PB over five years."',
+  checks: ['I asked about purpose, scale, content type, freshness, retention and duplicates', 'I named the four traits: scalable, robust, polite, extensible', 'I said ~400 pages/s average and ~800 at peak', 'I said 500 TB a month and 30 PB over 5 years'],
+  onDone: () => Q.clearStage(7),
+}));
+
+Q.start();
+})();
+</script>
+</body>
+</html>
