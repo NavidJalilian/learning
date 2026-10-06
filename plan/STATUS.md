@@ -2,7 +2,7 @@
 
 Every chapter of *System Design Interview* Vol. 1 as a world of quests. Ticked = done. Regenerate: `python3 plan/tools/status.py`.
 
-**75 of 83 quests built** · 54 live on the map · 21 built, awaiting world review · 5 being built (draft on disk, not verified) · 3 not started.
+**76 of 83 quests built** · 54 live on the map · 22 built, awaiting world review · 6 being built (draft on disk, not verified) · 1 not started.
 
 Legend: `[x]` done · `[ ]` not done. A world is **done** when every quest is built, the world review has run, its cheat sheet
 exists, and its quests are `ready: true` on the map.
@@ -127,15 +127,15 @@ exists, and its quests are `ready: true` on the map.
 - [x] `1303` 13.3 · [The Weekly Harvest](../lessons/1303-data-gathering-service.html) — built · needs world review
 - [x] `1304` 13.4 · [Faster Than a Keystroke](../lessons/1304-query-service.html) — built · needs world review
 - [ ] `1305` 13.5 · [Split the Alphabet](../lessons/1305-scaling-autocomplete.html) — being built (unverified draft)
-- [ ] `1306` BOSS · [Autocomplete Live](../lessons/1306-boss-autocomplete-live.html) — being built (unverified draft)
+- [x] `1306` BOSS · [Autocomplete Live](../lessons/1306-boss-autocomplete-live.html) — built · needs world review
 - [ ] World review + cheat sheet
 
 ## ⬜ World 14 · Design YouTube — *The Stream Machine*
 
 - [x] `1401` 14.1 · [Size Up the Tube](../lessons/1401-youtube-scope-and-estimate.html) — built · needs world review
 - [ ] `1402` 14.2 · [Upload Lane, Watch Lane](../lessons/1402-youtube-upload-and-stream-flows.html) — being built (unverified draft)
-- [ ] `1403` 14.3 · [The Format Forge](../lessons/1403-youtube-transcoding-and-dag.html) — not started
-- [ ] `1404` 14.4 · [The Transcoding Factory](../lessons/1404-youtube-transcoding-architecture.html) — not started
+- [ ] `1403` 14.3 · [The Format Forge](../lessons/1403-youtube-transcoding-and-dag.html) — being built (unverified draft)
+- [ ] `1404` 14.4 · [The Transcoding Factory](../lessons/1404-youtube-transcoding-architecture.html) — being built (unverified draft)
 - [ ] `1405` 14.5 · [Faster, Safer, Cheaper](../lessons/1405-youtube-optimizations-and-errors.html) — not started
 - [ ] `1406` BOSS · [Design YouTube Live](../lessons/1406-youtube-boss-design-it-live.html) — being built (unverified draft)
 - [ ] World review + cheat sheet
