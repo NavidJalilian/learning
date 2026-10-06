@@ -2,7 +2,7 @@
 
 Every chapter of *System Design Interview* Vol. 1 as a world of quests. Ticked = done. Regenerate: `python3 plan/tools/status.py`.
 
-**83 of 83 quests built** · 66 live on the map · 17 built, awaiting world review · 0 being built (draft on disk, not verified) · 0 not started.
+**83 of 83 quests built** · 72 live on the map · 11 built, awaiting world review · 0 being built (draft on disk, not verified) · 0 not started.
 
 Legend: `[x]` done · `[ ]` not done. A world is **done** when every quest is built, the world review has run, its cheat sheet
 exists, and its quests are `ready: true` on the map.
@@ -120,15 +120,15 @@ exists, and its quests are `ready: true` on the map.
 - [x] `1206` BOSS · [Design It Live: Chat](../lessons/1206-chat-boss-design-it-live.html) — live
 - [x] World review + cheat sheet — [ch12-chat-cheatsheet.html](../reference/ch12-chat-cheatsheet.html)
 
-## ⬜ World 13 · Design a Search Autocomplete System — *Typeahead Tower*
+## ✅ World 13 · Design a Search Autocomplete System — *Typeahead Tower*
 
-- [x] `1301` 13.1 · [Every Keystroke Counts](../lessons/1301-autocomplete-scope-and-estimation.html) — built · needs world review
-- [x] `1302` 13.2 · [Grow the Trie](../lessons/1302-trie-top-k.html) — built · needs world review
-- [x] `1303` 13.3 · [The Weekly Harvest](../lessons/1303-data-gathering-service.html) — built · needs world review
-- [x] `1304` 13.4 · [Faster Than a Keystroke](../lessons/1304-query-service.html) — built · needs world review
-- [x] `1305` 13.5 · [Split the Alphabet](../lessons/1305-scaling-autocomplete.html) — built · needs world review
-- [x] `1306` BOSS · [Autocomplete Live](../lessons/1306-boss-autocomplete-live.html) — built · needs world review
-- [ ] World review + cheat sheet
+- [x] `1301` 13.1 · [Every Keystroke Counts](../lessons/1301-autocomplete-scope-and-estimation.html) — live
+- [x] `1302` 13.2 · [Grow the Trie](../lessons/1302-trie-top-k.html) — live
+- [x] `1303` 13.3 · [The Weekly Harvest](../lessons/1303-data-gathering-service.html) — live
+- [x] `1304` 13.4 · [Faster Than a Keystroke](../lessons/1304-query-service.html) — live
+- [x] `1305` 13.5 · [Split the Alphabet](../lessons/1305-scaling-autocomplete.html) — live
+- [x] `1306` BOSS · [Autocomplete Live](../lessons/1306-boss-autocomplete-live.html) — live
+- [x] World review + cheat sheet — [ch13-autocomplete-cheatsheet.html](../reference/ch13-autocomplete-cheatsheet.html)
 
 ## ⬜ World 14 · Design YouTube — *The Stream Machine*
 
