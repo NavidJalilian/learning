@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Design YouTube Live</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="quest.css">
+<style>
+/* lesson-specific: interview clock + signal meter, chat, requirement board, estimates, upload-flow whiteboard,
+   mechanism map, deep-dive ordering, wrap-up fill-ins, scorecard */
+:root { --wire: #b9b3c9; --pkt: #ff7a1a; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --wire: #4a4e74; --pkt: #ff9a4a; } }
+:root[data-theme="dark"] { --wire: #4a4e74; --pkt: #ff9a4a; }
+
+.stage, .victory { scroll-margin-top: 150px; }
+@media (max-width: 560px) { .stage-b { padding: 18px 14px 22px; } .stage-h { padding: 16px 14px; } }
+
+/* sticky interview clock + signal meter */
+.ivbar { position: sticky; top: var(--hudH, 66px); z-index: 15; margin-top: 22px; display: flex; align-items: center; gap: 12px; padding: 8px 14px; background: color-mix(in srgb, var(--panel) 90%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); font-size: 13px; }
+.ivbar .clk { font-family: var(--mono); font-weight: 700; font-size: 16px; white-space: nowrap; transition: color .3s; }
+.ivbar .clk small { color: var(--muted); font-weight: 400; font-size: 12px; }
+.ivbar.over .clk { color: var(--warn); }
+.ivbar .trk { flex: 1; min-width: 40px; height: 8px; border-radius: 99px; background: var(--bg-2); position: relative; overflow: hidden; border: 1px solid var(--line); }
+.ivbar .fill { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, var(--teal), var(--accent)); transition: width .6s cubic-bezier(.2,.8,.2,1); border-radius: 99px; }
+.ivbar.over .fill { background: linear-gradient(90deg, var(--warn), var(--bad)); }
+.ivbar .stp { font-weight: 700; white-space: nowrap; color: var(--accent); }
+.ivbar .stp small { color: var(--muted); font-weight: 600; }
+.ivbar .sig { font-weight: 700; white-space: nowrap; color: var(--teal); font-family: var(--mono); }
+.ivbar .sig.bump { animation: pop2 .5s; }
+@keyframes pop2 { 40% { transform: scale(1.3); } }
+@media (max-width: 560px) { .ivbar { gap: 8px; padding: 7px 10px; } .ivbar .stp small { display: none; } }
+@media (max-width: 400px) { .ivbar .clk small { display: none; } }
+
+/* chat with the interviewer */
+.chat { display: flex; flex-direction: column; gap: 10px; margin: 14px 0; max-height: 340px; overflow-y: auto; padding: 6px 2px; }
+.chat:empty { display: none; }
+.msg { display: flex; gap: 8px; align-items: flex-end; max-width: 90%; animation: rise .3s; }
+.msg .av { font-size: 20px; width: 34px; height: 34px; border-radius: 50%; background: var(--accent-soft); display: grid; place-items: center; flex: none; }
+.msg .bub { padding: 9px 13px; border-radius: 16px; font-size: 15px; line-height: 1.45; }
+.msg.iv .bub { background: var(--bg-2); border-bottom-left-radius: 4px; }
+.msg.me { align-self: flex-end; }
+.msg.me .bub { background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+.msg.me .bub code { background: rgba(255,255,255,.18); color: #fff; }
+.msg .who { display: block; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin-bottom: 2px; }
+.typing i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); margin: 0 2px; animation: blink 1s infinite; }
+.typing i:nth-child(2) { animation-delay: .15s; } .typing i:nth-child(3) { animation-delay: .3s; }
+@keyframes blink { 50% { opacity: .2; } }
+
+/* framework strip */
+.fw { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 14px 0 6px; }
+@media (max-width: 640px) { .fw { grid-template-columns: repeat(2, 1fr); } }
+.fw div { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--bg); }
+.fw b { display: block; font-size: 14px; }
+.fw span { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.fw i { font-style: normal; font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: .08em; text-transform: uppercase; }
+
+/* step 1: question deck + requirement board + estimates */
+.qdeck { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+@media (max-width: 560px) { .qdeck { grid-template-columns: 1fr; } }
+.qdeck .opt { font-size: 14.5px; padding: 10px 12px; min-height: 44px; }
+.qdeck .opt.waste { border-color: var(--bad); background: var(--bad-soft); opacity: .75; }
+.reqs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin: 12px 0 4px; }
+.req { border: 1.5px dashed var(--line); border-radius: 10px; padding: 7px 10px; font-size: 13px; color: var(--muted); min-height: 36px; display: flex; align-items: center; gap: 6px; transition: background .3s, border-color .3s; }
+.req.got { border-style: solid; border-color: var(--good); background: var(--good-soft); color: var(--ink); font-weight: 600; animation: rise .35s; }
+.req.nf.got { border-color: var(--teal); background: var(--teal-soft); }
+.lbl { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-top: 16px; }
+.assume { margin: 10px 0 0; padding: 12px 14px; border-radius: 12px; background: var(--bg-2); font-size: 14.5px; }
+.assume ul { margin: 4px 0 0; padding-left: 18px; }
+.est { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+@media (max-width: 640px) { .est { grid-template-columns: 1fr; } }
+.est label { display: block; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--bg); font-size: 14px; font-weight: 600; }
+.est label small { display: block; color: var(--muted); font-weight: 500; font-size: 12px; margin-bottom: 6px; }
+.est .inrow { display: flex; align-items: center; gap: 8px; }
+.est input { flex: 1; min-width: 0; min-height: 44px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--panel); color: var(--ink); padding: 8px 10px; font: 600 16px var(--mono); }
+.est .unit { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+.est .hint { display: none; font-size: 12.5px; font-weight: 500; color: var(--muted); margin-top: 6px; }
+.est label.no .hint { display: block; }
+.est label.ok { border-color: var(--good); background: var(--good-soft); }
+.est label.no { border-color: var(--bad); background: var(--bad-soft); }
+
+/* step 2: upload-flow whiteboard */
+.sim svg.arch { max-width: 520px; margin: 0 auto; }
+.arch .nd { opacity: 0; transition: opacity .45s; }
+.arch .nd.on { opacity: 1; }
+.arch .nd rect { fill: var(--panel); stroke: var(--muted); stroke-width: 1.8; }
+.arch .nd.user rect { fill: var(--accent-soft); stroke: var(--accent); }
+.arch .nd.store rect { fill: var(--teal-soft); stroke: var(--teal); }
+.arch .nd.q rect { fill: var(--warn-soft); stroke: var(--warn); }
+.arch .nd.flash rect { stroke: var(--accent); stroke-width: 3; }
+.arch .nd text { fill: var(--ink); font: 700 13px var(--font); text-anchor: middle; }
+.arch .nd text.s { fill: var(--muted); font: 500 10.5px var(--font); }
+.arch .wire { fill: none; stroke: var(--wire); stroke-width: 2; stroke-dasharray: 4 4; opacity: 0; transition: opacity .4s; }
+.arch .wire.on { opacity: 1; }
+.arch .hop { opacity: 0; transition: opacity .4s; }
+.arch .hop.on { opacity: 1; }
+.arch .hop .ln { fill: none; stroke: var(--wire); stroke-width: 2.6; transition: stroke .3s; }
+.arch .hop .hit { fill: none; stroke: transparent; stroke-width: 22; }
+.arch.walking .hop { cursor: pointer; }
+.arch.walking .hop:hover .ln, .arch.walking .hop:focus .ln { stroke: var(--accent); }
+.arch .hop:focus { outline: none; }
+.arch .hop.lit .ln { stroke: var(--accent); stroke-width: 3.2; }
+.arch .hop.nope .ln { stroke: var(--bad); }
+.arch .bdg { opacity: 0; transition: opacity .3s; pointer-events: none; }
+.arch .hop.lit .bdg { opacity: 1; }
+.arch .bdg rect { fill: var(--accent); }
+.arch .bdg text { fill: #fff; font: 700 10.5px var(--mono); text-anchor: middle; }
+.arch .ahm { fill: var(--wire); }
+.arch .aha { fill: var(--accent); }
+.arch .pkt { fill: var(--pkt); stroke: var(--panel); stroke-width: 2; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.legend span::before { content: ""; display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; border: 2px solid var(--muted); }
+.legend .ls::before { background: var(--teal-soft); border-color: var(--teal); }
+.legend .lq::before { background: var(--warn-soft); border-color: var(--warn); }
+.legend .lp::before { background: var(--pkt); border-color: var(--pkt); border-radius: 50%; }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+@media (max-width: 640px) { .tiles { grid-template-columns: 1fr 1fr; } }
+.tiles .opt { text-align: center; font-weight: 600; font-size: 14px; padding: 10px 6px; min-height: 44px; }
+.tiles .opt small { display: block; font-weight: 500; font-size: 12px; color: var(--muted); }
+.opt.nope { animation: shake .4s; }
+.hops { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+@media (max-width: 560px) { .hops { grid-template-columns: 1fr; } }
+.hops .opt { font-size: 14px; padding: 9px 12px; min-height: 44px; display: flex; align-items: center; gap: 8px; }
+.hops .opt .no { font-family: var(--mono); font-size: 12px; font-weight: 700; min-width: 46px; text-align: center; padding: 2px 6px; border-radius: 6px; background: var(--bg-2); color: var(--muted); }
+.hops .opt.right .no { background: var(--accent); color: #fff; }
+
+/* step 3: mechanism map */
+.goalcard { border-radius: 18px; padding: 18px; background: linear-gradient(160deg, var(--accent-soft), var(--teal-soft)); text-align: center; animation: rise .35s; }
+.goalcard .k { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.goalcard h3 { margin: 6px 0 0; font-size: 22px; }
+.goalcard p { margin: 4px 0 0; font-size: 14px; color: var(--muted); }
+.palette { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
+@media (max-width: 760px) { .palette { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 560px) { .palette { grid-template-columns: 1fr 1fr; } }
+.palette .opt { text-align: center; font-weight: 600; font-size: 13.5px; padding: 10px 6px; position: relative; min-height: 48px; }
+.palette .opt .ct { position: absolute; top: -8px; right: 4px; min-width: 20px; height: 20px; border-radius: 99px; background: var(--good); color: #fff; font-size: 11px; font-weight: 700; display: none; place-items: center; padding: 0 5px; }
+.palette .opt .ct.on { display: grid; }
+.tmap { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 14px; }
+.tmap th { text-align: left; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); padding: 6px 8px; border-bottom: 2px solid var(--line); }
+.tmap td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.tmap tr { animation: rise .35s; }
+.tmap td:first-child { font-weight: 600; width: 36%; }
+.tmap tr.miss td:first-child::after { content: " (retry)"; color: var(--warn); font-weight: 500; font-size: 12px; }
+.ddpick { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+@media (max-width: 560px) { .ddpick { grid-template-columns: 1fr; } }
+.ddpick .opt { text-align: center; padding: 14px 10px; }
+.ddpick .opt b { display: block; font-size: 17px; }
+.ddpick .opt span { font-size: 13px; color: var(--muted); }
+.ddlist { list-style: none; counter-reset: dd; padding: 0; margin: 12px 0 0; display: grid; gap: 6px; }
+.ddlist li { counter-increment: dd; position: relative; padding: 9px 12px 9px 44px; border-radius: 12px; background: var(--good-soft); font-size: 14.5px; animation: rise .3s; }
+.ddlist li::before { content: counter(dd); position: absolute; left: 10px; top: 8px; width: 24px; height: 24px; border-radius: 8px; background: var(--good); color: #fff; font-weight: 700; font-size: 13px; display: grid; place-items: center; }
+.ddbank { display: grid; gap: 8px; margin-top: 10px; }
+.ddbank .opt { font-size: 14.5px; min-height: 44px; }
+
+/* step 3b: curveballs */
+.scenario .iv-q { font-style: italic; color: var(--ink); }
+.cb .opts { margin-top: 14px; }
+
+/* step 4: wrap-up */
+.wrapcards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+@media (max-width: 560px) { .wrapcards { grid-template-columns: 1fr; } }
+.wrapcards .opt { font-size: 14.5px; min-height: 44px; }
+.wrapcards .opt.picked { background: var(--accent-soft); }
+.wrapcards .opt.picked.right { background: var(--good-soft); }
+.wrapcards .opt.picked.wrong, .wrapcards .opt.wrong { background: var(--bad-soft); }
+.wrapcards .opt .verdict { display: block; font-size: 13px; margin-top: 4px; color: var(--muted); }
+.closes { display: grid; gap: 10px; margin-top: 14px; }
+.close { border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; background: var(--bg); font-size: 15px; line-height: 1.9; animation: rise .35s; }
+.close .ct { display: block; font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); line-height: 1.4; margin-bottom: 4px; }
+.close.ok { border-color: var(--good); background: var(--good-soft); }
+.blank { display: inline-flex; flex-wrap: wrap; gap: 4px; vertical-align: middle; margin: 2px 0; }
+.blank button { border: 1.5px dashed var(--muted); background: var(--panel); border-radius: 9px; padding: 6px 10px; min-height: 40px; font-size: 14px; font-weight: 600; color: var(--muted); }
+.blank button.on { border-style: solid; border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
+.blank.bad button.on { border-color: var(--bad); background: var(--bad-soft); animation: shake .4s; }
+.blank.good button.on { border-color: var(--good); background: var(--good-soft); }
+.blank button[disabled] { cursor: default; }
+
+/* scorecard */
+.scorecard { margin-top: 18px; border: 1px solid var(--line); border-radius: 18px; padding: 18px; background: var(--bg); }
+.scorecard h3 { margin: 0 0 2px; font-size: 19px; }
+.sc-row { display: grid; grid-template-columns: 150px 1fr auto; gap: 12px; align-items: center; margin-top: 12px; font-size: 14.5px; }
+@media (max-width: 560px) { .sc-row { grid-template-columns: 1fr auto; } .sc-row .sc-bar { grid-column: 1 / -1; grid-row: 2; } }
+.sc-bar { height: 12px; background: var(--bg-2); border-radius: 99px; overflow: hidden; border: 1px solid var(--line); }
+.sc-bar div { height: 100%; width: 0; border-radius: 99px; background: linear-gradient(90deg, var(--teal), var(--accent)); transition: width .9s cubic-bezier(.2,.8,.2,1); }
+.verd { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 99px; white-space: nowrap; background: var(--bg-2); color: var(--muted); }
+.verd.v3 { background: var(--good-soft); color: var(--good); }
+.verd.v2 { background: var(--teal-soft); color: var(--teal); }
+.verd.v1 { background: var(--warn-soft); color: var(--warn); }
+.verd.v0 { background: var(--bad-soft); color: var(--bad); }
+.sc-overall { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.sc-overall b { font-size: 22px; }
+.sc-time { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 12px; }
+.sc-time td, .sc-time th { padding: 5px 6px; border-bottom: 1px solid var(--line); text-align: left; }
+.sc-time th { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.sc-time .ok { color: var(--good); font-weight: 700; } .sc-time .ov { color: var(--warn); font-weight: 700; }
+</style>
+</head>
+<body>
+
+<header class="hud" id="hud"></header>
+
+<main>
+  <section class="hero">
+    <div class="kicker">Boss · Design YouTube</div>
+    <h1>Design YouTube Live</h1>
+    <p class="lede">A full mock interview against the clock. One prompt, one interviewer, and everything from Quests 14.1 to 14.5. This time nobody tells you which topic comes next.</p>
+    <div class="goal"><div class="ico">🎯</div><p><b>Your win today:</b> you can run the whole "Design YouTube" interview in about 45 minutes: scope and estimate, draw the upload and streaming flows, go deep on transcoding and optimisations, handle failure curveballs, and close with scaling, live streaming and takedowns.</p></div>
+  </section>
+
+  <div class="ivbar" id="ivbar" aria-live="polite">
+    <span class="clk">🕐 <b id="ivClock">00:00</b> <small>/ 45:00</small></span>
+    <div class="trk"><div class="fill" id="ivFill"></div></div>
+    <span class="stp" id="ivStep">Step 1 <small>· scope</small></span>
+    <span class="sig" id="ivSig" title="Signal: evidence the interviewer has written down in your favour">📶 0</span>
+  </div>
+
+  <!-- ================= STAGE 1 ================= -->
+  <section class="stage" data-stage="1" id="s1">
+    <div class="stage-h"><div class="num">1</div><div><h2>Scope it</h2><div class="sub">Step 1 · understand the problem (3–10 min)</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Every interview in the book follows the same four steps<a class="cite" href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener">[2]</a>. The bar above is a <b>game clock</b>: every move costs game-minutes. Good moves also earn <b>signal</b> (📶), the evidence an interviewer writes down before deciding "hire" or "no hire".</p>
+      <div class="fw">
+        <div><i>Step 1</i><b>Scope the problem</b><span>3–10 min</span></div>
+        <div><i>Step 2</i><b>High-level design</b><span>10–15 min</span></div>
+        <div><i>Step 3</i><b>Deep dive</b><span>10–25 min</span></div>
+        <div><i>Step 4</i><b>Wrap up</b><span>3–5 min</span></div>
+      </div>
+      <div class="chat" id="chat1"></div>
+      <div id="s1open"></div>
+      <div id="deckWrap" style="display:none">
+        <div class="lbl">Requirements board</div>
+        <div class="reqs" id="reqs"></div>
+        <div class="reqs" id="nfreqs" style="display:none"></div>
+        <div class="lbl">Your questions: pick the ones that change the design (time-wasters burn 3 minutes)</div>
+        <div class="qdeck" id="qdeck"></div>
+      </div>
+      <div id="s1est"></div>
+      <div id="s1so"></div>
+      <div class="callout warn" id="s1caveat" style="display:none"><b>Honest caveats.</b> The minute ranges are the book's suggestions for a session of about 45 minutes; the game clock is our framing, and real loops vary. 5 million daily users is tiny next to real YouTube: it's an interview number that keeps the maths on a napkin. The 150 TB counts original uploads only (no transcoded copies, no replicas). And $0.02/GB is CloudFront's cheapest US tier, which only applies at huge volume<a class="cite" href="https://aws.amazon.com/cloudfront/pricing/" target="_blank" rel="noopener">[6]</a>. It also assumes every view streams the whole 300 MB file.</div>
+      <div class="row" id="s1replay" style="display:none;margin-top:14px"><button class="btn">↻ Replay the scoping</button></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 2 ================= -->
+  <section class="stage" data-stage="2" id="s2">
+    <div class="stage-h"><div class="num">2</div><div><h2>Sketch it</h2><div class="sub">Step 2 · high-level design and buy-in (10–15 min)</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Time to draw. The book's top level has three parts: <b>clients</b> (phone, browser, smart TV), a <b>CDN</b> that streams video, and <b>API servers</b> that handle everything else<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-youtube" target="_blank" rel="noopener">[1]</a>. Now zoom into the upload path. Tap the components in the order you'd draw them. A box whose input isn't on the board yet costs a minute; a box that doesn't belong costs a heart.</p>
+      <div class="chat" id="chat2"></div>
+      <div class="sim">
+        <svg class="arch" id="arch" viewBox="0 0 384 452" role="img" aria-label="Whiteboard: the video upload design"></svg>
+        <div class="sim-bar"><span class="legend"><span class="ls">blob storage</span><span class="lq">queue</span><span class="lp">video</span></span><span class="mono small" id="archStatus">0 / 10 components</span></div>
+      </div>
+      <div class="tiles" id="tiles"></div>
+      <div id="walkWrap" style="display:none">
+        <div class="challenge"><div class="step">Walk me through an upload</div><h3>Tap the hops in the order the bytes and events travel</h3>
+          <p class="small muted">Tap an arrow on the board or a button below. One step happens as a parallel pair: say both halves back to back.</p></div>
+        <div class="hops" id="hops"></div>
+      </div>
+      <div id="s2q1"></div>
+      <div id="s2q2"></div>
+      <div class="row" id="s2replay" style="display:none;margin-top:14px"><button class="btn">↻ Wipe the whiteboard and redraw</button></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 3 ================= -->
+  <section class="stage" data-stage="3" id="s3">
+    <div class="stage-h"><div class="num">3</div><div><h2>The mechanism map</h2><div class="sub">Step 3 · every requirement needs a mechanism</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>A strong deep dive ties every requirement to the mechanism that delivers it. Rebuild the chapter's answer key: for each goal, tap the technique that achieves it. Some techniques serve more than one goal, and two of them don't belong in this design at all.</p>
+      <div class="chat" id="chat3"></div>
+      <div id="mapGame"></div>
+      <table class="tmap" id="tmap" style="display:none"><thead><tr><th>Goal</th><th>Mechanism</th></tr></thead><tbody></tbody></table>
+      <div id="ddWrap"></div>
+      <div class="callout warn" id="s3caveat" style="display:none"><b>Honest caveats.</b> Real uploaders usually split files by <i>bytes</i> (for example S3 multipart upload) and leave GOP-aware splitting to the server; the book's client-side GOP split is possible but less common. The book's DAG model comes from Facebook's streaming video engine, SVE<a class="cite" href="https://www.cs.princeton.edu/~wlloyd/papers/sve-sosp17.pdf" target="_blank" rel="noopener">[3]</a>. Its three-queue resource manager is an illustration: real systems often use a general job scheduler or a cloud batch service instead.</div>
+      <div class="row" id="s3replay" style="display:none;margin-top:14px"><button class="btn">↻ Shuffle and rebuild the map</button></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 4 ================= -->
+  <section class="stage" data-stage="4" id="s4">
+    <div class="stage-h"><div class="num">4</div><div><h2>Boss: the curveball barrage</h2><div class="sub">Step 3 · "what happens when…?"</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>Now the interviewer stops nodding and starts poking holes. Nine curveballs, mixed from every quest in the chapter. A right answer takes 1.5 minutes. A wrong one costs a heart and an extra minute of backtracking. Handle at least <b>7 of 9</b> to win the round.</p>
+      <div class="cb" id="barrage"></div>
+      <div class="callout warn" id="s4caveat" style="display:none"><b>Honest caveats.</b> Retrying a task on a new worker is only safe if tasks are <i>idempotent</i>: running them twice gives the same result. Promoting a database replica can lose the last few writes if replication was asynchronous. Message queues usually deliver at least once, so the completion handler may see the same event twice and must handle that safely. Pre-signed URLs are an S3 feature<a class="cite" href="https://docs.aws.amazon.com/AmazonS3/latest/userguide/PresignedUrlUploadObject.html" target="_blank" rel="noopener">[4]</a>; Azure calls them Shared Access Signatures.</div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 5 ================= -->
+  <section class="stage" data-stage="5" id="s5">
+    <div class="stage-h"><div class="num">5</div><div><h2>Wrap it up</h2><div class="sub">Step 4 · the last 3–5 minutes</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <p>The book's rule: the interview isn't over when the diagram is done. In the last few minutes, show you can see past it. The YouTube chapter suggests four extra topics<a class="cite" href="https://bytebytego.com/courses/system-design-interview/design-youtube" target="_blank" rel="noopener">[1]</a>.</p>
+      <div class="chat" id="chat5"></div>
+      <p class="small muted" id="wrapHint">Pick exactly <b>3</b> closing moves and lock them in. Then finish each sentence.</p>
+      <div class="wrapcards" id="wrapcards"></div>
+      <div class="row" style="margin-top:12px"><button class="btn primary" id="lockClose" disabled>Lock in my moves (0 / 3)</button></div>
+      <div class="closes" id="closes"></div>
+      <div class="row" style="margin-top:12px"><button class="btn primary" id="deliver" style="display:none" disabled>🎤 Deliver my close</button></div>
+      <div class="callout warn" id="s5caveat" style="display:none"><b>Honest caveats.</b> Real live streaming takes video in over ingest protocols such as RTMP or SRT and plays it with low-latency versions of HLS or DASH. The book only sketches how live differs. At YouTube's scale, takedowns also rely on automated fingerprint matching (Content ID<a class="cite" href="https://support.google.com/youtube/answer/2797370" target="_blank" rel="noopener">[7]</a>), not only checks at upload and user flags.</div>
+      <div class="row" id="s5replay" style="display:none;margin-top:14px"><button class="btn">↻ Try a different close</button></div>
+    </div>
+  </section>
+
+  <!-- ================= STAGE 6 ================= -->
+  <section class="stage" data-stage="6" id="s6">
+    <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">The 60-second version + your scorecard</div></div><span class="pill"></span></div>
+    <div class="stage-b">
+      <div id="drill"></div>
+      <div id="scorecard"></div>
+      <div class="row" id="s6replay" style="display:none;margin-top:14px"><button class="btn">↻ Write it again</button></div>
+    </div>
+  </section>
+
+  <section class="victory" id="victory"></section>
+
+  <div class="foot">
+    <div class="card2">
+      <h4>📖 Read next (primary source)</h4>
+      Re-read all of <a href="https://bytebytego.com/courses/system-design-interview/design-youtube" target="_blank" rel="noopener">Ch. 14: Design YouTube</a> in one sitting, then <a href="https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews" target="_blank" rel="noopener">Ch. 3: A Framework for System Design Interviews</a> for the dos and don'ts. For the real systems behind the chapter, skim the <a href="https://www.cs.princeton.edu/~wlloyd/papers/sve-sosp17.pdf" target="_blank" rel="noopener">SVE paper</a> (Facebook's video pipeline, source of the DAG model) and <a href="https://openconnect.netflix.com/" target="_blank" rel="noopener">Netflix Open Connect</a> (a CDN placed inside ISPs).
+    </div>
+    <div class="card2">
+      <h4>🎓 Level-up note</h4>
+      The book covers upload and watch only. Real YouTube also has recommendations, search, comments, view counting and monetisation, and some interviewers will push into one of them. Name the scope out loud ("I'll treat search as out of scope unless you want it"). Then say it out loud once: set a 45-minute timer, draw the upload flow on paper, and answer every curveball from stage 4 without looking. Where you stall is what to review.
+    </div>
+    <div class="card2">
+      <h4>💬 Stuck on anything?</h4>
+      Ask your teacher (me, in chat). For example: <i>"play the interviewer and grill me on the transcoding pipeline"</i> or <i>"how would this design change for live streaming only?"</i>
+    </div>
+    <div class="card2 small muted">
+      <h4>Sources</h4>
+      <ol>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 14 "Design YouTube" (ByteByteGo).</li>
+        <li>Alex Xu, <i>System Design Interview</i> Vol. 1, Ch. 3 "A Framework for System Design Interviews" (ByteByteGo).</li>
+        <li>Huang et al., "SVE: Distributed Video Processing at Facebook Scale", SOSP 2017.</li>
+        <li>AWS docs, "Uploading objects with presigned URLs".</li>
+        <li>Netflix Open Connect (Netflix's own CDN, placed inside ISPs).</li>
+        <li>Amazon CloudFront pricing (the book's $0.02/GB figure).</li>
+        <li>YouTube Help, "How Content ID works".</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<script src="quest-engine.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const Q = Quest.init({
+  id: '1406',
+  winTitle: 'That\'s a wrap: offer incoming',
+  badge: '🎬 Badge: Showrunner',
+  cheatsheet: '../reference/ch14-youtube-cheatsheet.html',
+});
+const { sleep, shuffle } = Q;
+const CITE = (n, url) => `<a class="cite" href="${url}" target="_blank" rel="noopener">[${n}]</a>`;
+const BOOK = 'https://bytebytego.com/courses/system-design-interview/design-youtube';
+const FRAME = 'https://bytebytego.com/courses/system-design-interview/a-framework-for-system-design-interviews';
+const SVE = 'https://www.cs.princeton.edu/~wlloyd/papers/sve-sosp17.pdf';
+const PRESIGN = 'https://docs.aws.amazon.com/AmazonS3/latest/userguide/PresignedUrlUploadObject.html';
+const OPENC = 'https://openconnect.netflix.com/';
+const CFPRICE = 'https://aws.amazon.com/cloudfront/pricing/';
+
+/* ================= interview record: clock + signals =================
+   Stored separately from the engine's progress, under its own key.
+   Each stage keeps { min, sig: { req|hld|dd|comm: [got, max] } }. A stage's record is wiped the first time
+   you act in it after a (re)setup, so replays overwrite rather than pile up.
+   Finished runs are appended to a small log so replays can be compared. */
+const IKEY = 'sdq:v1:1406-interview';
+const LKEY = 'sdq:v1:1406-interview-log';
+const PAR = { 1: 7, 2: 10.25, 3: 9, 4: 13.5, 5: 3 };          // perfect-play minutes per stage
+const STEPS = [                                              // book step budgets (minutes)
+  { name: 'Step 1 · Scope', stages: [1], lo: 3, hi: 10 },
+  { name: 'Step 2 · High-level design', stages: [2], lo: 10, hi: 15 },
+  { name: 'Step 3 · Deep dive', stages: [3, 4], lo: 10, hi: 25 },
+  { name: 'Step 4 · Wrap up', stages: [5], lo: 3, hi: 5 },
+];
+function iload(k = IKEY) { try { const v = JSON.parse(localStorage.getItem(k) || 'null'); return v || (k === LKEY ? [] : {}); } catch (_) { return k === LKEY ? [] : {}; } }
+function isave(d, k = IKEY) { try { localStorage.setItem(k, JSON.stringify(d)); } catch (_) {} }
+if (!Q.review && ![1, 2, 3, 4, 5, 6].some(n => Q.isCleared(n))) { try { localStorage.removeItem(IKEY); } catch (_) {} }
+const begun = new Set();
+function tick(n, min, cat, got, max) {
+  const d = iload();
+  if (!begun.has(n) || !d[n]) { begun.add(n); d[n] = { min: 0, sig: {} }; }
+  d[n].min += min;
+  if (cat) { const s = d[n].sig[cat] || [0, 0]; s[0] += got; s[1] += max; d[n].sig[cat] = s; }
+  isave(d); renderBar();
+  if (got > 0) { const el = $('#ivSig'); el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
+}
+const stageMin = (d, n) => d[n] ? d[n].min : (Q.isCleared(n) ? PAR[n] : 0);
+const fmt = m => { const s = Math.round(m * 60); return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; };
+function signalTotal(d) { let t = 0; Object.values(d).forEach(st => Object.values((st && st.sig) || {}).forEach(([g]) => { t += g; })); return Math.round(t * 10) / 10; }
+function renderBar() {
+  const d = iload();
+  const total = [1, 2, 3, 4, 5].reduce((s, n) => s + stageMin(d, n), 0);
+  let cur = 1; while (cur <= 6 && Q.isCleared(cur)) cur++;
+  const st = STEPS.find(s => s.stages.includes(cur));
+  const spent = st ? st.stages.reduce((s, n) => s + stageMin(d, n), 0) : 0;
+  $('#ivClock').textContent = fmt(total);
+  $('#ivFill').style.width = Math.min(100, total / 45 * 100) + '%';
+  $('#ivbar').classList.toggle('over', !!(total > 45 || (st && spent > st.hi)));
+  const [a, b] = st ? st.name.split(' · ') : [cur === 6 ? 'Debrief' : 'Done', 'interview over'];
+  $('#ivStep').innerHTML = `${a} <small>· ${b.toLowerCase()}${st ? ` · ${fmt(spent)} of ${st.lo}–${st.hi}m` : ''}</small>`;
+  $('#ivSig').textContent = '📶 ' + signalTotal(d);
+}
+function setHudH() { const h = $('#hud'); if (h) document.documentElement.style.setProperty('--hudH', h.offsetHeight + 'px'); }
+addEventListener('resize', setHudH);
+const done = n => { Q.clearStage(n); renderBar(); };
+const practice = n => Q.review || Q.isCleared(n);
+
+/* ================= chat helper ================= */
+function Chat(el) {
+  let queue = Promise.resolve(), first = true;
+  const add = (who, html) => {
+    const m = document.createElement('div'); m.className = 'msg ' + who;
+    m.innerHTML = who === 'iv' ? `<span class="av" aria-hidden="true">👩🏾‍💼</span><div class="bub">${html}</div>` : `<div class="bub">${html}</div>`;
+    el.appendChild(m); el.scrollTop = el.scrollHeight; return m;
+  };
+  return {
+    iv(html) {
+      queue = queue.then(async () => {
+        const m = add('iv', '<span class="typing" aria-label="typing"><i></i><i></i><i></i></span>');
+        await sleep(Q.reduced ? 0 : 380);
+        $('.bub', m).innerHTML = (first ? '<span class="who">Priya · interviewer</span>' : '') + html; first = false;
+        el.scrollTop = el.scrollHeight;
+      });
+      return queue;
+    },
+    me(html) { queue = queue.then(() => { add('me', html); }); return queue; },
+    clear() { el.innerHTML = ''; first = true; queue = Promise.resolve(); },
+  };
+}
+function nudge(b) { b.classList.remove('nope'); void b.offsetWidth; b.classList.add('nope'); }
+
+/* ================= STAGE 1: scope it ================= */
+const ASK = [
+  { q: 'Which features matter most?', a: 'Two: uploading a video and watching a video.', r: '🎬 Upload + watch', good: true },
+  { q: 'Which clients do we support?', a: 'Mobile apps, web browsers and smart TVs.', r: '📱 Mobile · web · TV', good: true },
+  { q: 'How many daily active users?', a: '5 million.', r: '👥 5M DAU', good: true },
+  { q: 'How long does a user watch per day?', a: 'About 30 minutes on average.', r: '⏱️ 30 min / day', good: true },
+  { q: 'Do we have international users?', a: 'Yes, a large share of our users are outside the US.', r: '🌍 International', good: true },
+  { q: 'Which video resolutions do we accept?', a: 'Most of them. Accept most resolutions and video formats.', r: '🖥️ Most resolutions', good: true },
+  { q: 'Is encryption required?', a: 'Yes.', r: '🔐 Encryption', good: true },
+  { q: 'Is there a maximum file size?', a: 'We care about small and medium videos. The limit is 1 GB.', r: '📦 Max 1 GB', good: true },
+  { q: 'Can we use existing cloud services?', a: 'Yes. Building blob storage or a CDN from scratch is unrealistic here. Pick the right existing services.', r: '☁️ Managed cloud OK', good: true },
+  { q: 'Which programming language should I use?', a: 'Whatever you like. That won\'t change the architecture.', good: false },
+  { q: 'What colour should the play button be?', a: '…Let\'s stay on the system, please.', good: false },
+  { q: 'Which exact database vendor do we use?', a: 'Too early. Tell me what the data looks like first.', good: false },
+  { q: 'How should comments be threaded?', a: 'Comments are out of scope today. Upload and watch only.', good: false },
+  { q: 'Should we build microservices or a monolith?', a: 'That\'s an org question, not a scoping one. Let\'s move on.', good: false },
+];
+const NFR = ['⚡ Fast uploads', '🌊 Smooth streaming', '🎚️ Change video quality', '💸 Low infra cost', '🛡️ Available, scalable, reliable', '📺 Mobile, web, smart TV'];
+const chat1 = Chat($('#chat1'));
+let found = 0;
+function setup1() {
+  begun.delete(1);
+  chat1.clear(); found = 0;
+  ['#s1open', '#s1est', '#s1so'].forEach(s => $(s).innerHTML = '');
+  $('#deckWrap').style.display = 'none'; $('#nfreqs').style.display = 'none';
+  $('#s1caveat').style.display = 'none';
+  $('#reqs').innerHTML = ASK.filter(a => a.good).map((a, i) => `<div class="req" data-r="${i}">? requirement ${i + 1}</div>`).join('');
+  chat1.iv('Hi, thanks for coming in. Today\'s prompt: <b>design YouTube.</b> You have 45 minutes. Where would you like to start?').then(() => {
+    Q.quiz($('#s1open'), {
+      tag: 'Your first move', xp: 10,
+      q: 'The clock is running. What do you do first?',
+      options: ['Ask questions to pin down features and scale', 'Draw the CDN and the transcoding servers now', 'List every YouTube feature you can remember'],
+      correct: 0,
+      good: '"Design YouTube" is far too big for 45 minutes. The book\'s first rule: don\'t jump into a solution before you clarify the requirements.' + CITE(2, FRAME),
+      bad: 'YouTube has hundreds of features; you can design maybe two well in 45 minutes. The book\'s first rule: don\'t jump into a solution before you clarify the requirements. Ask first.' + CITE(2, FRAME),
+      onDone: ok => {
+        tick(1, 0.5, 'comm', ok ? 1 : 0, 1);
+        chat1.me('Before I draw anything, can I ask a few questions to pin down the scope?');
+        chat1.iv('Please do.').then(showDeck);
+      },
+    });
+  });
+}
+function showDeck() {
+  $('#deckWrap').style.display = 'block';
+  const goods = ASK.filter(a => a.good);
+  $('#qdeck').innerHTML = shuffle(ASK.map((a, i) => ({ a, i }))).map(({ a, i }) => `<button class="opt" data-q="${i}">${a.q}</button>`).join('');
+  $$('#qdeck .opt').forEach(b => b.onclick = async () => {
+    if (b.disabled || found >= goods.length) return;
+    const a = ASK[+b.dataset.q]; b.disabled = true;
+    chat1.me(a.q);
+    if (a.good) {
+      b.classList.add('right'); Q.addXP(5, b); tick(1, 0.5, 'req', 1, 1); found++;
+      const slot = $(`#reqs .req[data-r="${goods.indexOf(a)}"]`); slot.classList.add('got'); slot.innerHTML = a.r;
+      chat1.iv(a.a);
+      if (found === goods.length) {
+        $$('#qdeck .opt').forEach(x => x.disabled = true);
+        await chat1.iv('Good list. From that, here\'s what the system must do well:');
+        const nf = $('#nfreqs'); nf.style.display = 'grid';
+        nf.innerHTML = NFR.map(t => `<div class="req nf got">${t}</div>`).join('');
+        await chat1.iv('Now size it for me. Here are my assumptions.');
+        showEstimates();
+      }
+    } else {
+      b.classList.add('waste'); Q.toast(practice(1) ? '✗ practice' : '−3 min', b, practice(1) ? 'practice' : 'minus'); tick(1, 3, 'req', 0, 1);
+      chat1.iv(a.a + ' <span class="muted">(−3 min)</span>');
+    }
+  });
+}
+function num(str) {
+  let s = String(str || '').trim().toLowerCase().replace(/[$,\s]/g, '').replace(/(tb|usd|\/day|perday)$/, '');
+  let mul = 1;
+  if (/k$/.test(s)) { mul = 1e3; s = s.slice(0, -1); } else if (/m$/.test(s)) { mul = 1e6; s = s.slice(0, -1); }
+  const v = parseFloat(s);
+  return isNaN(v) ? NaN : v * mul;
+}
+function showEstimates() {
+  let fails = 0;
+  const paid = { st: false, cdn: false };
+  $('#s1est').innerHTML = `<div class="challenge"><div class="step">Back-of-the-envelope</div><h3>Two numbers, ±10%</h3>
+    <div class="assume"><b>Priya's assumptions</b><ul>
+      <li>5 million daily active users. Each watches 5 videos a day.</li>
+      <li>10% of users upload 1 video a day. The average video is 300 MB.</li>
+      <li>The CDN charges $0.02 per GB served (Amazon CloudFront's figure in the book).</li></ul></div>
+    <div class="est">
+      <label id="eSt"><small>New storage per day</small><span class="inrow"><input type="text" inputmode="decimal" id="inSt" autocomplete="off" aria-label="New storage per day in terabytes"><span class="unit">TB / day</span></span><span class="hint">Only uploads add storage: 5M × 10% × 300 MB. 1 TB = 1,000,000 MB.</span></label>
+      <label id="eCdn"><small>CDN cost per day</small><span class="inrow"><span class="unit">$</span><input type="text" inputmode="decimal" id="inCdn" autocomplete="off" aria-label="CDN cost per day in dollars"><span class="unit">/ day</span></span><span class="hint">Views drive bandwidth: 5M × 5 videos × 0.3 GB × $0.02. "150k" works too.</span></label>
+    </div>
+    <div class="row" style="margin-top:12px"><button class="btn primary" id="estGo">Check my numbers</button></div>
+    <div class="explain" id="estEx"></div></div>`;
+  $('#estGo').onclick = e => {
+    const btn = e.currentTarget;
+    const st = num($('#inSt').value), cdn = num($('#inCdn').value);
+    const okS = st >= 135 && st <= 165, okC = cdn >= 135000 && cdn <= 165000;
+    [['#eSt', okS], ['#eCdn', okC]].forEach(([id, ok]) => { $(id).classList.toggle('ok', ok); $(id).classList.toggle('no', !ok); });
+    if (okS && !paid.st) { paid.st = true; Q.addXP(15, $('#eSt')); tick(1, 1, 'req', 1, 1); $('#inSt').readOnly = true; }
+    if (okC && !paid.cdn) { paid.cdn = true; Q.addXP(15, $('#eCdn')); tick(1, 1, 'req', 1, 1); $('#inCdn').readOnly = true; }
+    if (!(okS && okC)) {
+      if (!fails) Q.loseHeart(btn); else Q.toast('try again', btn, 'practice');
+      fails++; tick(1, 1, 'req', 0, 1);
+      chat1.iv('Check the red one again. The hint under it shows the method.');
+      return;
+    }
+    btn.disabled = true;
+    const ex = $('#estEx'); ex.className = 'explain show good';
+    ex.innerHTML = '<b>Those are the book\'s numbers.</b> 5M × 10% = 500,000 uploads a day × 300 MB = <b>150 TB of new storage a day</b>. Views, not uploads, drive the CDN: 5M × 5 × 0.3 GB = 7.5 million GB a day × $0.02 = <b>$150,000 a day</b>, about $55 million a year.' + CITE(1, BOOK);
+    chat1.me('About 150 TB of new storage a day, and roughly $150,000 a day for the CDN.');
+    chat1.iv('Okay. So what do those two numbers tell you?').then(soWhat);
+  };
+}
+function soWhat() {
+  Q.quiz($('#s1so'), {
+    tag: 'Use the numbers', xp: 15,
+    q: '"So what do those numbers tell you about the design?"',
+    options: ['Serving video from the CDN is the cost to optimise', 'Storage is cheap, so keep every copy in every region', 'The API servers will dominate the bill, so cut calls'],
+    correct: 0,
+    good: 'The CDN bill dominates. That\'s why the deep dive later spends a whole section on cost: only popular videos on the CDN, the rest elsewhere. Numbers exist to steer the design.' + CITE(1, BOOK),
+    bad: 'The big number is <b>$150,000 a day for the CDN</b>. Serving bytes dominates the cost, which is why the book later spends a whole section on cutting it.' + CITE(1, BOOK),
+    onDone: ok => {
+      tick(1, 0.5, 'comm', ok ? 1 : 0, 1);
+      chat1.iv(ok ? 'Exactly. Let\'s design.' : 'Remember that one. Let\'s design.');
+      $('#s1caveat').style.display = 'block'; $('#s1replay').style.display = 'flex';
+      setTimeout(() => done(1), 900);
+    },
+  });
+}
+$('#s1replay .btn').onclick = () => { $('#s1replay').style.display = 'none'; setup1(); };
+Q.onStage(1, setup1);
+
+/* ================= STAGE 2: sketch it ================= */
+const NS = 'http://www.w3.org/2000/svg';
+const NODES = {
+  user: { x: 60, y: 60, l: ['👤 Client', 'phone · web · TV'], c: 'user' },
+  lb: { x: 186, y: 60, l: ['Load', 'balancer'] },
+  api: { x: 324, y: 60, l: ['API', 'servers'] },
+  cache: { x: 324, y: 150, l: ['Metadata', 'cache'] },
+  db: { x: 324, y: 240, l: ['Metadata', 'DB'] },
+  orig: { x: 60, y: 150, l: ['Original', 'storage'], c: 'store' },
+  tx: { x: 60, y: 240, l: ['Transcoding', 'servers'] },
+  txs: { x: 60, y: 330, l: ['Transcoded', 'storage'], c: 'store' },
+  cdn: { x: 60, y: 420, l: ['CDN', 'edge servers'], c: 'store' },
+  ch: { x: 186, y: 240, l: ['Completion', 'handler'] },
+  cq: { x: 186, y: 330, l: ['Completion', 'queue'], c: 'q' },
+};
+const WIRES = [['user', 'lb', 'M110 60 L132 60'], ['lb', 'api', 'M236 60 L270 60'], ['api', 'cache', 'M324 83 L324 123'], ['cache', 'db', 'M324 173 L324 213']];
+const HOPS = [
+  { k: '1', a: 'user', b: 'orig', d: 'M60 83 L60 125', bx: 60, by: 104, t: 'Client → Original storage', say: '<b>1.</b> The client uploads the video file to original storage.' },
+  { k: '2', a: 'orig', b: 'tx', d: 'M60 173 L60 215', bx: 60, by: 194, t: 'Original storage → Transcoding servers', say: '<b>2.</b> Transcoding servers fetch it from original storage and start transcoding.' },
+  { k: '3a', a: 'tx', b: 'txs', d: 'M60 263 L60 305', bx: 60, by: 284, t: 'Transcoding servers → Transcoded storage', say: '<b>3a.</b> The finished versions go to transcoded storage…' },
+  { k: '3a.1', a: 'txs', b: 'cdn', d: 'M60 353 L60 395', bx: 60, by: 374, t: 'Transcoded storage → CDN', say: '<b>3a.1.</b> …and are distributed to the CDN.' },
+  { k: '3b', a: 'tx', b: 'cq', d: 'M110 258 L152 304', bx: 128, by: 286, t: 'Transcoding servers → Completion queue', say: '<b>3b.</b> A "transcoding finished" event goes into the completion queue.' },
+  { k: '3b.1', a: 'cq', b: 'ch', d: 'M186 307 L186 265', bx: 186, by: 286, t: 'Completion queue → Completion handler', say: '<b>3b.1.</b> The completion handler\'s workers pull the event…' },
+  { k: '3b.1.a', a: 'ch', b: 'db', d: 'M236 240 L270 240', bx: 255, by: 278, t: 'Completion handler → Metadata DB', say: '<b>3b.1.a.</b> …update the metadata DB…' },
+  { k: '3b.1.b', a: 'ch', b: 'cache', d: 'M230 217 L280 176', bx: 255, by: 198, t: 'Completion handler → Metadata cache', say: '<b>3b.1.b.</b> …and the metadata cache.' },
+  { k: '4', a: 'api', b: 'user', d: 'M324 37 C324 4, 60 4, 60 35', bx: 192, by: 14, t: 'API servers → Client', say: '<b>4.</b> API servers tell the client the video is uploaded and ready to stream.' },
+];
+const NEED = { '1': [], '2': ['1'], '3a': ['2'], '3b': ['2'], '3a.1': ['3a'], '3b.1': ['3b'], '3b.1.a': ['3b.1'], '3b.1.b': ['3b.1'], '4': ['3a.1', '3b.1.a', '3b.1.b'] };
+const TILES = [
+  { k: 'lb', t: '⚖️ Load balancer', s: 'spreads API calls' },
+  { k: 'api', t: '🖥️ API servers', s: 'everything but streaming', need: 'lb', why: 'API servers behind what? Put the load balancer in front of them first.' },
+  { k: 'db', t: '🗃️ Metadata DB', s: 'title, URL, size, owner', need: 'api', why: 'Who writes to it? Draw the API servers first.' },
+  { k: 'cache', t: '⚡ Metadata cache', s: 'hot metadata in memory', need: 'db', why: 'A cache in front of what? Draw the metadata DB first.' },
+  { k: 'orig', t: '📥 Original storage', s: 'blob store for raw uploads' },
+  { k: 'tx', t: '⚙️ Transcoding servers', s: 'one video → many formats', need: 'orig', why: 'Transcode what, from where? The raw upload has to land somewhere first.' },
+  { k: 'txs', t: '📦 Transcoded storage', s: 'blob store for the outputs', need: 'tx', why: 'Nothing produces transcoded files yet. Draw the transcoding servers first.' },
+  { k: 'cdn', t: '🌐 CDN', s: 'streams from the nearest edge', need: 'txs', why: 'The CDN gets its copies from transcoded storage. Draw that first.' },
+  { k: 'cq', t: '📬 Completion queue', s: '"transcode done" events', need: 'tx', why: 'Completion of what? Nothing finishes transcoding yet.' },
+  { k: 'ch', t: '👷 Completion handler', s: 'workers that update metadata', need: 'cq', why: 'The handler reads from the completion queue. Draw the queue first.' },
+  { k: 'gql', t: '🧩 GraphQL gateway', s: 'one endpoint for all', bad: 'Nothing in our scope needs it. Every extra box costs time and invites questions you didn\'t need.' },
+  { k: 'chain', t: '⛓️ Blockchain ledger', s: 'records video ownership', bad: 'No requirement asks for it. The metadata DB already records who uploaded what.' },
+  { k: 'search', t: '🔎 Search cluster', s: 'full-text video search', bad: 'We agreed on upload and watch only. Search is out of scope unless I bring it in.' },
+];
+const SAY = {
+  lb: 'A <b>load balancer</b> spreads requests evenly across the API servers.',
+  api: '<b>API servers</b> handle every request except streaming: upload URLs, metadata updates, sign-up, feeds.',
+  db: 'The <b>metadata DB</b> holds each video\'s title, URL, size, resolution, format and owner. It\'s sharded and replicated for speed and availability.',
+  cache: 'The <b>metadata cache</b> keeps hot video metadata and user objects in memory, so reads are fast.',
+  orig: '<b>Original storage</b> is blob storage (a store for big binary files, like S3) that holds the raw uploads.',
+  tx: '<b>Transcoding servers</b> convert each video into many formats, resolutions and bitrates. (Transcoding is also called encoding.)',
+  txs: '<b>Transcoded storage</b> is blob storage for the finished versions.',
+  cdn: 'The <b>CDN</b> (content delivery network) caches the videos and streams them from the edge server closest to each viewer.',
+  cq: 'The <b>completion queue</b> is a message queue that holds "transcoding finished" events.',
+  ch: 'The <b>completion handler</b> is a set of workers that pull those events and update the metadata DB and cache.',
+};
+const chat2 = Chat($('#chat2'));
+let placed = new Set(), s2mode = 'build', walked = new Set(), walkMiss = 0, pairOpen = null;
+function archSVG() {
+  const box = (k, n) => `<g class="nd${n.c ? ' ' + n.c : ''}${k === 'user' ? ' on' : ''}" id="nd-${k}"><rect x="${n.x - 50}" y="${n.y - 23}" width="100" height="46" rx="10"/><text x="${n.x}" y="${n.y - 3}">${n.l[0]}</text><text class="s" x="${n.x}" y="${n.y + 13}">${n.l[1]}</text></g>`;
+  return `<defs>
+      <marker id="ahm" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="ahm"/></marker>
+      <marker id="aha" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="aha"/></marker></defs>
+    ${WIRES.map(([a, b, d]) => `<path class="wire" data-a="${a}" data-b="${b}" d="${d}" marker-end="url(#ahm)"/>`).join('')}
+    ${HOPS.map(h => `<g class="hop" data-k="${h.k}" aria-label="Arrow ${h.t}"><path class="hit" d="${h.d}"/><path class="ln" d="${h.d}" marker-end="url(#ahm)"/><g class="bdg"><rect x="${h.bx - (h.k.length * 3.4 + 7)}" y="${h.by - 9}" width="${h.k.length * 6.8 + 14}" height="18" rx="9"/><text x="${h.bx}" y="${h.by + 4}">${h.k}</text></g></g>`).join('')}
+    ${Object.entries(NODES).map(([k, n]) => box(k, n)).join('')}
+    <g id="pkts"></g>`;
+}
+function refreshWires() {
+  const has = k => k === 'user' || placed.has(k);
+  $$('#arch .wire').forEach(w => w.classList.toggle('on', has(w.dataset.a) && has(w.dataset.b)));
+  $$('#arch .hop').forEach(g => { const h = HOPS.find(x => x.k === g.dataset.k); g.classList.toggle('on', has(h.a) && has(h.b)); });
+}
+function tween(dur, fn) {
+  return new Promise(res => {
+    if (Q.reduced || dur <= 0) { fn(1); return res(); }
+    const t0 = performance.now();
+    const f = now => { const p = Math.min(1, (now - t0) / dur); fn(p); p < 1 ? requestAnimationFrame(f) : res(); };
+    requestAnimationFrame(f);
+  });
+}
+function packetAlong(path, dur = 520) {
+  if (Q.reduced) return Promise.resolve();
+  const c = document.createElementNS(NS, 'circle'); c.setAttribute('r', 6); c.setAttribute('class', 'pkt');
+  $('#pkts').appendChild(c);
+  const len = path.getTotalLength();
+  return tween(dur, p => { const pt = path.getPointAtLength(len * p); c.setAttribute('cx', pt.x); c.setAttribute('cy', pt.y); }).then(() => c.remove());
+}
+function setup2() {
+  begun.delete(2);
+  chat2.clear(); placed = new Set(); s2mode = 'build'; walked = new Set(); walkMiss = 0; pairOpen = null;
+  ['#s2q1', '#s2q2'].forEach(s => $(s).innerHTML = '');
+  $('#walkWrap').style.display = 'none'; $('#hops').innerHTML = '';
+  const svg = $('#arch'); svg.innerHTML = archSVG(); svg.classList.remove('walking');
+  $('#archStatus').textContent = '0 / 10 components';
+  chat2.iv('Nice scope. Now sketch the upload side for me, like you would on a whiteboard. The client is already up there.');
+  $('#tiles').style.display = '';
+  $('#tiles').innerHTML = shuffle(TILES).map(t => `<button class="opt" data-k="${t.k}">${t.t}<small>${t.s}</small></button>`).join('');
+  $$('#tiles .opt').forEach(b => b.onclick = () => onTile(b));
+  $$('#arch .hop').forEach(g => {
+    g.onclick = () => onHop(g.dataset.k, g);
+    g.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onHop(g.dataset.k, g); } };
+  });
+}
+async function onTile(b) {
+  if (s2mode !== 'build' || b.disabled) return;
+  const t = TILES.find(x => x.k === b.dataset.k);
+  if (t.bad) {
+    b.disabled = true; b.classList.add('wrong'); Q.loseHeart(b); tick(2, 2, 'hld', 0, 1);
+    chat2.me(`Let's add a ${t.t.replace(/^\S+\s/, '').toLowerCase()}.`); chat2.iv(t.bad + ' <span class="muted">(−2 min)</span>');
+    return;
+  }
+  if (t.need && !placed.has(t.need)) {
+    nudge(b); tick(2, 1, 'hld', 0, 0.5);
+    chat2.iv(t.why + ' <span class="muted">(−1 min)</span>');
+    return;
+  }
+  placed.add(t.k); b.disabled = true; b.classList.add('right'); Q.addXP(5, b); tick(2, 0.6, 'hld', 1, 1);
+  $('#archStatus').textContent = `${placed.size} / 10 components`;
+  const nd = $('#nd-' + t.k); nd.classList.add('on', 'flash'); setTimeout(() => nd.classList.remove('flash'), 900);
+  refreshWires();
+  chat2.me(`Adding the ${t.t.replace(/^\S+\s/, '')}.`); chat2.iv(SAY[t.k]);
+  if (placed.size === 10) {
+    s2mode = 'walk';
+    $$('#tiles .opt').forEach(x => x.disabled = true);
+    await chat2.iv('That\'s the book\'s upload design.' + CITE(1, BOOK) + ' Now <b>walk me through an upload</b>: what happens, in order, from the moment I hit Upload?');
+    startWalk();
+  }
+}
+function startWalk() {
+  $('#arch').classList.add('walking');
+  $$('#arch .hop').forEach(g => { g.setAttribute('tabindex', '0'); g.setAttribute('role', 'button'); });
+  $('#walkWrap').style.display = 'block';
+  $('#hops').innerHTML = shuffle(HOPS).map(h => `<button class="opt" data-k="${h.k}"><span class="no">?</span><span>${h.t}</span></button>`).join('');
+  $$('#hops .opt').forEach(b => b.onclick = () => onHop(b.dataset.k, b));
+}
+function walkWrong(el, btn, msg) {
+  if (btn) nudge(btn);
+  const g = $(`#arch .hop[data-k="${el}"]`); if (g) { g.classList.add('nope'); setTimeout(() => g.classList.remove('nope'), 600); }
+  if (!walkMiss) Q.loseHeart(btn || $('#hops')); else Q.toast('−30 s', btn || $('#hops'), practice(2) ? 'practice' : 'minus');
+  walkMiss++; tick(2, 0.5, 'hld', 0, 0.5);
+  chat2.iv(msg + ' <span class="muted">(−30 s)</span>');
+}
+async function onHop(k, el) {
+  if (s2mode !== 'walk' || walked.has(k)) return;
+  const btn = $(`#hops .opt[data-k="${k}"]`);
+  if (pairOpen && k !== pairOpen) return walkWrong(k, btn, 'Hold on. At step 3, two things happen <b>at the same time</b> once transcoding finishes. What\'s the other one?');
+  const missing = NEED[k].filter(x => !walked.has(x));
+  if (missing.length) {
+    const hint = k === '4' ? 'Not yet. The client should only hear "ready" once the files are on the CDN <i>and</i> the metadata is updated.'
+      : !walked.has('1') ? 'Start from the beginning: where do the bytes go first?' : 'That happens later. What has to happen right before it?';
+    return walkWrong(k, btn, hint);
+  }
+  walked.add(k);
+  const h = HOPS.find(x => x.k === k), g = $(`#arch .hop[data-k="${k}"]`);
+  g.classList.add('lit'); $('.ln', g).setAttribute('marker-end', 'url(#aha)');
+  g.removeAttribute('tabindex'); g.setAttribute('aria-label', `Step ${k}: ${h.t}`);
+  btn.disabled = true; btn.classList.add('right'); $('.no', btn).textContent = k;
+  Q.addXP(3, btn); tick(2, 0.25, 'hld', 1, 1);
+  if (k === '3a' || k === '3b') pairOpen = pairOpen ? null : (k === '3a' ? '3b' : '3a');
+  packetAlong($('.ln', g));
+  chat2.me(h.t.replace(' → ', ' to ') + '.');
+  await chat2.iv(h.say + (k === '3b' && walked.has('3a') || k === '3a' && walked.has('3b') ? ' Both at once: good, that\'s the parallel pair.' : ''));
+  if (walked.size === HOPS.length) {
+    s2mode = 'q';
+    $('#arch').classList.remove('walking');
+    Q.addXP(walkMiss ? 5 : 15, btn);
+    await chat2.iv(walkMiss ? 'Got there in the end. Two quick follow-ups.' : 'Clean walkthrough, in the right order. Two quick follow-ups.');
+    quiz2a();
+  }
+}
+function quiz2a() {
+  Q.quiz($('#s2q1'), {
+    tag: 'Follow-up · flow b', xp: 15,
+    q: '"While the 1 GB file is still uploading, the user types a title and description. Where does that go?"',
+    options: ['In parallel: API servers update the metadata cache and DB', 'It waits for transcoding, then rides the completion queue', 'It is packed into the video file and sent to original storage'],
+    correct: 0,
+    good: 'That\'s the book\'s <b>flow b</b>: while the file uploads, the client sends a metadata request (file name, size, format…) and the API servers update the metadata cache and DB. It doesn\'t wait for the video.' + CITE(1, BOOK),
+    bad: 'The book runs a separate <b>flow b</b> in parallel: while the file uploads, the client sends the metadata to the API servers, which update the metadata cache and DB. It doesn\'t wait for the video.' + CITE(1, BOOK),
+    onDone: ok => { tick(2, 1, 'hld', ok ? 1 : 0, 1); setTimeout(quiz2b, 600); },
+  });
+}
+function quiz2b() {
+  Q.quiz($('#s2q2'), {
+    tag: 'Follow-up · streaming', xp: 15,
+    q: '"Your friend in Brazil presses Play. Where do the bytes come from, and how?"',
+    options: ['The nearest CDN edge, over a protocol like HLS or DASH', 'The API servers, reading transcoded storage per request', 'Original storage, transcoding on the fly for each viewer'],
+    correct: 0,
+    good: 'Videos stream straight from the <b>CDN edge closest to the viewer</b>, so latency is low. Streaming means the player gets small pieces and plays them as they arrive, using a protocol such as MPEG-DASH or Apple HLS (HTTP Live Streaming).' + CITE(1, BOOK),
+    bad: 'API servers never stream video. The bytes come from the <b>CDN edge closest to the viewer</b>, in small pieces, using a streaming protocol such as MPEG-DASH or Apple HLS.' + CITE(1, BOOK),
+    onDone: ok => {
+      tick(2, 1, 'hld', ok ? 1 : 0, 1);
+      s2mode = 'done';
+      $('#s2replay').style.display = 'flex';
+      setTimeout(() => done(2), 900);
+    },
+  });
+}
+$('#s2replay .btn').onclick = () => { $('#s2replay').style.display = 'none'; setup2(); };
+Q.onStage(2, setup2);
+
+/* ================= STAGE 3: mechanism map ================= */
+const TECH = {
+  gop: 'GOP-aligned chunks', near: 'Upload centers near users', cdn: 'CDN edges + HLS / DASH', abr: 'Many resolutions & bitrates',
+  codec: 'Several codecs & containers', dag: 'DAG of tasks, per creator', sched: 'DAG scheduler + resource manager', mq: 'Message queues between modules',
+  psu: 'Pre-signed upload URLs', drm: 'DRM · AES · watermark', tail: 'Long-tail CDN strategy', ha: 'Retries · replicas · stateless APIs',
+  tpc: 'Two-phase commit', chu: 'Consistent hashing of users',
+};
+const DECOY = {
+  tpc: 'Two-phase commit locks every participant until all agree. Nothing in this design needs a distributed transaction.',
+  chu: 'Spreading users over a hash ring doesn\'t make videos upload, stream or encode any faster.',
+};
+const GOALS = [
+  { g: 'Fast uploads', p: 'big files, flaky mobile networks', a: ['gop', 'near'], full: 'Upload GOP-aligned chunks in parallel, resumable after a failure; upload centers near users (the CDN can act as one)',
+    why: 'A GOP (group of pictures) is a short run of frames that plays on its own. Splitting by GOP lets chunks upload in parallel and resume after a drop; an upload center nearby cuts round trips.' },
+  { g: 'Smooth streaming', p: 'no spinners, low delay', a: ['cdn', 'abr'], full: 'Stream from the nearest CDN edge with HLS or DASH; several bitrates so the player can step down',
+    why: 'The nearest edge server keeps latency low, and a streaming protocol sends small pieces that play as they arrive. Several bitrates let the player switch down on a bad network.' },
+  { g: 'Change video quality', p: '360p on a train, 4K at home', a: ['abr'], full: 'Transcode into many resolutions and bitrates; the player picks one per segment',
+    why: 'Bitrate is how many bits per second the video uses. Store several versions, and the player (or the user) can switch between them.' },
+  { g: 'Plays on every device', p: 'old phones, browsers, smart TVs', a: ['codec'], full: 'Encode with several codecs (H.264, VP9, HEVC) in common containers (.mp4, .mov…)',
+    why: 'A container is the "box" (.mp4, .mov); a codec is the compression method inside (H.264, VP9, HEVC). Devices only play some combinations, so you produce several.' },
+  { g: 'Flexible processing', p: 'watermark for one creator, not another', a: ['dag'], full: 'A DAG (directed acyclic graph) of tasks, set by per-creator config, as in Facebook\'s SVE',
+    why: 'A DAG is a set of tasks with "must finish before" arrows and no loops. Each creator\'s config decides which tasks run (thumbnail, watermark, encodings), so needs differ without code changes.' + CITE(3, SVE) },
+  { g: 'Transcoding throughput', p: 'thousands of uploads an hour', a: ['sched', 'gop', 'mq'], full: 'GOP chunks + DAG scheduler + resource manager + task workers, with message queues between modules',
+    why: 'Chunks encode in parallel; the scheduler splits the DAG into stages; the resource manager hands each task to the best free worker; queues stop modules waiting on each other.' },
+  { g: 'Only owners can upload', p: 'the right user, the right place', a: ['psu'], full: 'Pre-signed upload URLs from the API servers (Azure: Shared Access Signatures)',
+    why: 'The client asks the API servers for a URL that grants permission to upload one object, then uploads straight to storage with it.' + CITE(4, PRESIGN) },
+  { g: 'Protect copyrighted videos', p: 'stop easy piracy', a: ['drm'], full: 'DRM (FairPlay, Widevine, PlayReady), AES encryption with an authorisation policy, or a visual watermark',
+    why: 'DRM (digital rights management) systems control playback; AES encryption decrypts only for authorised users; a watermark overlays identifying info.' },
+  { g: 'Keep the CDN bill down', p: 'that $150,000 a day', a: ['tail'], full: 'Popular videos from the CDN, the rest from storage video servers; fewer encodings for the tail; regional distribution; own CDN with ISPs',
+    why: 'Views follow a long tail: a few videos get most of the plays. Serve the head from the CDN, the tail from cheaper video servers, and only push regional hits to that region.' + CITE(5, OPENC) },
+  { g: 'High availability', p: 'parts fail every day', a: ['ha'], full: 'Retry failed tasks, replicate the DB and cache, keep API servers stateless',
+    why: 'The book\'s error playbook: retry recoverable errors, fail over to replicas, and route around a dead API server because it holds no state.' },
+];
+const DEEP = {
+  tx: { t: '⚙️ Transcoding architecture', s: 'preprocessor → workers', pts: [
+    'The preprocessor splits the video into GOP chunks and builds the DAG from config',
+    'The DAG scheduler splits the DAG into stages and queues their tasks',
+    'The resource manager pairs the top-priority task with the best free worker',
+    'Task workers encode, make thumbnails and watermark, then a merger joins them',
+    'Temporary storage keeps GOPs and metadata for retries, then is freed',
+  ] },
+  cost: { t: '💸 Cost optimisation', s: 'tame the CDN bill', pts: [
+    'Start from the number: the CDN at about $150,000 a day dominates cost',
+    'Point out the long tail: a few videos get most of the views',
+    'Serve popular videos from the CDN and the rest from storage video servers',
+    'Trim the tail: fewer encodings, short videos on demand, regional pushes only',
+    'At huge scale, build your own CDN with ISPs, after studying view history',
+  ] },
+};
+const chat3 = Chat($('#chat3'));
+function setup3() {
+  begun.delete(3);
+  chat3.clear();
+  $('#tmap').style.display = 'none'; $('#tmap tbody').innerHTML = ''; $('#ddWrap').innerHTML = '';
+  $('#s3caveat').style.display = 'none';
+  chat3.iv('Your board has a lot of promises on it. Convince me each one is actually delivered, goal by goal.');
+  const order = shuffle(GOALS), counts = {};
+  let gi = 0, missed = false;
+  const game = $('#mapGame');
+  game.innerHTML = `<div class="goalcard" id="goalcard"></div>
+    <div class="palette" id="palette">${shuffle(Object.keys(TECH)).map(k => `<button class="opt" data-t="${k}">${TECH[k]}<span class="ct"></span></button>`).join('')}</div>
+    <div class="explain" id="mapEx"></div>`;
+  function show() {
+    const G = order[gi]; missed = false;
+    $('#goalcard').innerHTML = `<div class="k">Goal ${gi + 1} of ${order.length}</div><h3>${G.g}</h3><p>${G.p}</p>`;
+    $$('#palette .opt').forEach(b => { b.disabled = false; b.classList.remove('right', 'wrong'); });
+  }
+  function finish() {
+    $('#goalcard').innerHTML = `<div class="k">Map rebuilt</div><h3>10 of 10 goals covered</h3><p>That's the chapter's answer key, in one table.</p>`;
+    $$('#palette .opt').forEach(b => { b.disabled = true; b.classList.remove('right', 'wrong'); });
+    chat3.iv('Good. Every promise has a mechanism. Now pick <b>one</b> area and go deep. Your call.').then(deepDive);
+  }
+  $$('#palette .opt').forEach(b => b.onclick = () => {
+    if (gi >= order.length || b.disabled) return;
+    const G = order[gi], t = b.dataset.t, ok = G.a.includes(t);
+    const ex = $('#mapEx');
+    if (!ok) {
+      b.disabled = true; b.classList.add('wrong'); nudge(b);
+      if (!missed) { Q.loseHeart(b); tick(3, 0.5, 'dd', 0, 1); } else Q.toast('try again', b, 'practice');
+      missed = true;
+      ex.className = 'explain show bad';
+      ex.innerHTML = DECOY[t] ? `<b>${TECH[t]}?</b> ${DECOY[t]}` : `<b>${TECH[t]}</b> is real, but it serves a different goal. Which mechanism delivers <i>${G.g.toLowerCase()}</i>?`;
+      return;
+    }
+    $$('#palette .opt').forEach(x => x.disabled = true);
+    b.classList.add('right');
+    counts[t] = (counts[t] || 0) + 1;
+    const ct = $('.ct', b); ct.textContent = '×' + counts[t]; ct.classList.add('on');
+    $('#tmap').style.display = 'table';
+    $('#tmap tbody').insertAdjacentHTML('beforeend', `<tr class="${missed ? 'miss' : ''}"><td>${G.g}</td><td>${G.full}</td></tr>`);
+    ex.className = 'explain show good'; ex.innerHTML = `<b>${G.g} → ${TECH[t]}.</b> ${G.why}`;
+    if (!missed) Q.addXP(6, b);
+    tick(3, 0.75, 'dd', missed ? 0 : 1, missed ? 0 : 1);
+    gi++;
+    setTimeout(() => { if (gi < order.length) show(); else finish(); }, Q.reduced ? 500 : 1300);
+  });
+  show();
+}
+function deepDive() {
+  const w = $('#ddWrap');
+  w.innerHTML = `<div class="challenge"><div class="step">Deep dive</div><h3>Choose your area</h3></div>
+    <div class="ddpick">${Object.entries(DEEP).map(([k, d]) => `<button class="opt" data-d="${k}"><b>${d.t}</b><span>${d.s}</span></button>`).join('')}</div><div id="ddGame"></div>`;
+  $$('.ddpick .opt', w).forEach(b => b.onclick = () => {
+    $$('.ddpick .opt', w).forEach(x => { x.disabled = true; x.classList.toggle('picked', x === b); });
+    runDeep(b.dataset.d);
+  });
+}
+function runDeep(key) {
+  const D = DEEP[key];
+  let next = 0, slips = 0;
+  chat3.me(key === 'tx' ? 'Let me go deep on the transcoding architecture.' : 'Let me go deep on cost, since the CDN bill dominates.');
+  chat3.iv('Go ahead. Five talking points, in the order you\'d say them.');
+  const g = $('#ddGame');
+  g.innerHTML = `<p class="small muted" style="margin-top:12px">Tap the talking points in a logical order. A point out of order costs 30 seconds of backtracking.</p>
+    <ol class="ddlist" id="ddList"></ol><div class="ddbank" id="ddBank">${shuffle(D.pts.map((p, i) => ({ p, i }))).map(({ p, i }) => `<button class="opt" data-i="${i}">${p}</button>`).join('')}</div><div class="explain" id="ddEx"></div>`;
+  $$('#ddBank .opt').forEach(b => b.onclick = () => {
+    if (b.disabled) return;
+    const i = +b.dataset.i;
+    if (i !== next) {
+      nudge(b); slips++; tick(3, 0.5, 'dd', 0, 0.25);
+      Q.toast(practice(3) ? '✗ practice' : '−30 s', b, practice(3) ? 'practice' : 'minus');
+      chat3.iv(next === 0 ? 'Start at the beginning. What comes first?' : 'Hmm, you skipped something. What has to come before that?');
+      return;
+    }
+    b.remove(); next++;
+    $('#ddList').insertAdjacentHTML('beforeend', `<li>${D.pts[i]}</li>`);
+    tick(3, 0.3, 'dd', 1, 1);
+    if (next === D.pts.length) {
+      Q.addXP(Math.max(10, 25 - slips * 5), $('#ddList'));
+      const ex = $('#ddEx'); ex.className = 'explain show good';
+      ex.innerHTML = key === 'tx'
+        ? '<b>That\'s the book\'s pipeline, left to right:</b> preprocessor → DAG scheduler → resource manager (task queue, worker queue, running queue) → task workers → encoded video, with temporary storage alongside. Saving GOPs and metadata is what makes a failed chunk cheap to retry.' + CITE(1, BOOK)
+        : '<b>That\'s the book\'s cost story.</b> All of it depends on popularity, access patterns and video size, so the book says to study historical viewing before optimising. Netflix\'s Open Connect is the "own CDN inside ISPs" example.' + CITE(5, OPENC);
+      chat3.iv(slips ? 'Good content, slightly winding order. Let\'s stress-test it.' : 'Clear and well ordered. Now let\'s stress-test it.');
+      $('#s3caveat').style.display = 'block'; $('#s3replay').style.display = 'flex';
+      setTimeout(() => done(3), 900);
+    }
+  });
+}
+$('#s3replay .btn').onclick = () => { $('#s3replay').style.display = 'none'; setup3(); };
+Q.onStage(3, setup3);
+
+/* ================= STAGE 4: curveball barrage =================
+   Q.boss uses one shared choice set; curveballs need their own options, so this is a small boss runner
+   built from the same CSS (boss-top, bosshp, scenario, opts). Option 0 is always the right one; options are shuffled. */
+const CURVE = [
+  { e: '💀', t: 'A worker dies mid-chunk', d: '"A transcoding worker crashes halfway through chunk 37 of a 400-chunk video. Now what?"',
+    o: ['Re-queue the task; a new worker retries it from temp storage', 'Restart the whole video\'s transcode from the original upload', 'Mark the video as failed and ask the creator to upload again'],
+    why: '<b>Retry on a new worker.</b> The book\'s playbook: if a task worker is down, retry the task on a new worker. The preprocessor saved the GOP chunks and metadata in temporary storage, so only chunk 37 is redone.' + CITE(1, BOOK) },
+  { e: '🗃️', t: 'The metadata DB primary dies', d: '"The primary (master) database for video metadata just went down."',
+    o: ['Promote a replica to primary; serve reads from other replicas', 'Serve metadata only from the cache until the primary is fixed', 'Pause every upload and metadata write until the box reboots'],
+    why: '<b>Promote a replica.</b> The book: if the master is down, promote one of the replicas (slaves) to be the new master. If a replica is down, read from another one and bring up a replacement.' + CITE(1, BOOK) },
+  { e: '📬', t: 'The completion handler is down', d: '"The completion handler is down for 10 minutes. What happens to the videos that finish transcoding meanwhile?"',
+    o: ['Events wait in the completion queue; videos show "processing"', 'The transcoded files are lost and those videos must be redone', 'Transcoding servers switch to writing the metadata DB directly'],
+    why: '<b>The queue absorbs it.</b> Completion events sit in the completion queue. The files are already in transcoded storage and on the CDN, but the metadata isn\'t updated yet, so those videos look "processing" until the handler is back and drains the queue. Nothing is lost.' + CITE(1, BOOK) },
+  { e: '📶', t: 'Upload drops at 90%', d: '"A creator on a phone loses signal when a 1 GB upload is 90% done."',
+    o: ['Resume and resend only the chunks that never arrived', 'Restart the whole 1 GB upload once the network is back', 'Ask the server to publish the 90% of the file that arrived'],
+    why: '<b>Resumable chunked upload.</b> The video was split into small chunks (by GOP in the book) that upload in parallel. After a failure, only the missing chunks are resent, not the whole file.' + CITE(1, BOOK) },
+  { e: '🔥', t: 'Viral in one country', d: '"A video explodes in Brazil. Nobody else is watching it. How do you serve it?"',
+    o: ['Serve it from CDN edges in that region, close to the viewers', 'Add API servers, since they will be streaming the extra views', 'Re-transcode it into extra resolutions for every region'],
+    why: '<b>Regional distribution.</b> Popular videos go on the CDN, near the viewers. The book notes some videos are popular only in some regions, so there\'s no need to push them everywhere.' + CITE(1, BOOK) },
+  { e: '💸', t: 'The CDN bill doubled', d: '"Finance says the CDN bill doubled this quarter. What do you change?"',
+    o: ['Long tail: only popular videos on the CDN, the rest elsewhere', 'Move every video onto the CDN to qualify for a bulk discount', 'Cut every video down to 360p so that all the files get smaller'],
+    why: '<b>Long-tail strategy.</b> A few videos get most views. Serve those from the CDN and the rest from high-capacity storage video servers; keep fewer encodings for the tail and encode short videos on demand.' + CITE(1, BOOK) },
+  { e: '🔑', t: 'A reused upload URL', d: '"Someone finds yesterday\'s upload URL and tries to upload a file with it today."',
+    o: ['Rejected: the pre-signed URL expired, so storage refuses it', 'Accepted: anyone who holds the URL can upload with it forever', 'Accepted, but the API servers quietly move it to a quarantine'],
+    why: '<b>Pre-signed URLs expire.</b> The API servers issue a URL that grants permission to upload one object for a limited time. Storage checks the signature and expiry, so a stale or altered URL fails.' + CITE(4, PRESIGN) },
+  { e: '🧟', t: 'A corrupt file', d: '"Inspection finds the uploaded file is malformed. It can\'t be decoded."',
+    o: ['Non-recoverable: stop its tasks and return an error code', 'Recoverable: keep retrying the transcode until it succeeds', 'Skip inspection and publish it with a "low quality" label'],
+    why: '<b>Non-recoverable error.</b> The book splits errors in two. Recoverable ones (a segment that fails to transcode) get retried a few times. Non-recoverable ones (a malformed video format) stop the tasks for that video and return a proper error code to the client.' + CITE(1, BOOK) },
+  { e: '🖥️', t: 'An API server crashes', d: '"One of the API servers just died. What do users notice?"',
+    o: ['Nothing much: it\'s stateless, so the load balancer reroutes', 'Their sessions are lost until that exact server is repaired', 'Everything waits for a cold standby to boot in ten minutes'],
+    why: '<b>Stateless API servers.</b> They keep no user state, so the load balancer simply sends requests to a different API server.' + CITE(1, BOOK) },
+];
+function setup4() {
+  begun.delete(4);
+  $('#s4caveat').style.display = 'none';
+  const mount = $('#barrage');
+  let bi = 0, wins = 0;
+  mount.innerHTML = `<div class="boss-top"><b>🎯 Curveball barrage</b><div class="bosshp"><div></div></div><span class="mono small q-count"></span></div><div class="q-arena"></div>`;
+  const hp = $('.bosshp div', mount), count = $('.q-count', mount), arena = $('.q-arena', mount);
+  const order = shuffle(CURVE);
+  function show() {
+    const s = order[bi];
+    count.textContent = `${bi + 1} / ${order.length}`;
+    hp.style.width = (100 - (bi / order.length) * 100) + '%';
+    arena.innerHTML = `<div class="scenario"><div class="emoji">${s.e}</div><h3>${s.t}</h3><p class="iv-q">👩🏾‍💼 ${s.d}</p></div><div class="opts"></div><div class="explain"></div><div class="row" style="margin-top:12px"></div>`;
+    const opts = $('.opts', arena);
+    shuffle(s.o.map((o, i) => ({ o, i }))).forEach(({ o, i }) => {
+      const b = document.createElement('button'); b.className = 'opt'; b.textContent = o; b.dataset.i = i;
+      b.onclick = () => {
+        $$('.opt', opts).forEach(x => x.disabled = true);
+        const ok = i === 0;
+        b.classList.add(ok ? 'right' : 'wrong');
+        if (!ok) $('.opt[data-i="0"]', opts).classList.add('right');
+        const ex = $('.explain', arena); ex.className = 'explain show ' + (ok ? 'good' : 'bad'); ex.innerHTML = s.why;
+        if (ok) { wins++; Q.addXP(12, b); tick(4, 1.5, 'dd', 1, 1); } else { Q.loseHeart(b); tick(4, 2.5, 'dd', 0, 1); }
+        hp.style.width = (100 - ((bi + 1) / order.length) * 100) + '%';
+        const nx = document.createElement('button'); nx.className = 'btn primary';
+        nx.textContent = bi < order.length - 1 ? 'Next curveball →' : '⚔️ Final blow';
+        nx.onclick = () => {
+          bi++;
+          if (bi < order.length) return show();
+          const won = wins >= 7;
+          arena.innerHTML = `<div class="scenario"><div class="emoji">${won ? '💥' : '🤔'}</div><h3>${won ? 'Barrage survived' : 'Not convinced yet'}</h3><p>${wins} of ${order.length} curveballs handled. ${won ? 'Priya writes "strong on failure modes" in her notes.' : 'You need 7 to win this round. Re-read the explanations, then face it again.'}</p></div><div class="row" style="margin-top:12px;justify-content:center"><button class="btn${won ? '' : ' primary'}" id="replay4">↻ Face the barrage again</button></div>`;
+          $('#replay4').onclick = setup4;
+          $('#s4caveat').style.display = 'block';
+          if (won) { Q.burst(); done(4); }
+        };
+        $('.row', arena).appendChild(nx);
+      };
+      opts.appendChild(b);
+    });
+  }
+  show();
+}
+Q.onStage(4, setup4);
+
+/* ================= STAGE 5: wrap up ================= */
+// A close line is a list of strings and blanks; a blank is [options, correctIndex].
+const CLOSE = [
+  { t: 'Scale the API tier', good: true, line: ['API servers are ', [['stateless', 'stateful'], 0], ', so we scale them ', [['horizontally', 'vertically only'], 0], ' behind the load balancer.'],
+    r: 'Right. No state on the box means you just add more of them.' },
+  { t: 'Scale the metadata database', good: true, line: ['Use ', [['replication', 'more indexes'], 0], ' for read load and failover, and ', [['sharding', 'a bigger single box'], 0], ' once the data outgrows one machine.'],
+    r: 'Good: the book\'s two levers for the database are replication and sharding.' },
+  { t: 'How live streaming would differ', good: true, line: ['Live reuses upload, encoding and streaming, but needs ', [['lower', 'higher'], 0], ' latency and ', [['less', 'more'], 0], ' parallelism, since small chunks are already processed in real time. Errors must be handled faster too.'],
+    r: 'Nice. That\'s exactly how the book contrasts live with on-demand video. It may also need a different streaming protocol.' },
+  { t: 'Handle video takedowns', good: true, line: ['Videos that break copyright or the law get removed. Some are caught ', [['during upload', 'by the CDN edge'], 0], ', others through ', [['user flagging', 'random audits'], 0], '.'],
+    r: 'Yes. Content that violates copyright, or is pornographic or illegal, has to come down. The book names both paths.' },
+  { t: 'Recap the bottlenecks', good: true, line: ['Our biggest running cost is ', [['CDN bandwidth', 'the metadata DB'], 0], ', and our heaviest compute is ', [['transcoding', 'the load balancer'], 0], '.'],
+    r: 'Good self-critique. You know where the money and the CPU go.' },
+  { t: 'Rewrite the API servers in Rust', good: false, r: 'Language choice won\'t change this architecture, and it eats your last minutes.' },
+  { t: 'Add a blockchain for video ownership', good: false, r: 'No requirement needs it. The metadata DB already records the uploader.' },
+  { t: 'Redesign the logo and play button', good: false, r: 'That\'s a product design question, not a system design one.' },
+];
+const chat5 = Chat($('#chat5'));
+let s5phase = 'pick', s5miss = 0, s5fails = 0;
+function setup5() {
+  begun.delete(5);
+  chat5.clear(); s5phase = 'pick'; s5miss = 0; s5fails = 0;
+  $('#closes').innerHTML = ''; $('#deliver').style.display = 'none'; $('#deliver').disabled = true;
+  $('#lockClose').style.display = ''; $('#wrapHint').style.display = '';
+  $('#s5caveat').style.display = 'none';
+  chat5.iv('We have about four minutes left. Anything you want to add before we wrap up?');
+  const wc = $('#wrapcards');
+  wc.innerHTML = shuffle(CLOSE.map((c, i) => ({ c, i }))).map(({ c, i }) => `<button class="opt" data-w="${i}" aria-pressed="false">${c.t}</button>`).join('');
+  $$('.opt', wc).forEach(b => b.onclick = () => {
+    if (s5phase !== 'pick' || b.disabled) return;
+    const on = !b.classList.contains('picked');
+    if (on && $$('.opt.picked', wc).length >= 3) { nudge(b); return; }
+    b.classList.toggle('picked', on); b.setAttribute('aria-pressed', on);
+    updLock();
+  });
+  updLock();
+}
+function updLock() {
+  const k = $$('#wrapcards .opt.picked').length;
+  $('#lockClose').disabled = k !== 3; $('#lockClose').textContent = `Lock in my moves (${k} / 3)`;
+}
+$('#lockClose').onclick = async e => {
+  const btn = e.currentTarget; if (btn.disabled || s5phase !== 'pick') return;
+  s5phase = 'busy'; btn.disabled = true;
+  const picks = $$('#wrapcards .opt.picked');
+  const bad = picks.filter(b => !CLOSE[+b.dataset.w].good);
+  for (const b of bad) {
+    const c = CLOSE[+b.dataset.w];
+    b.classList.remove('picked'); b.classList.add('wrong'); b.disabled = true; b.setAttribute('aria-pressed', 'false');
+    b.insertAdjacentHTML('beforeend', '<span class="verdict">✗ weak close</span>');
+    Q.loseHeart(b); tick(5, 1, 'comm', 0, 1);
+    chat5.me(c.t + '?');
+    await chat5.iv(c.r + ' <span class="muted">(−1 min)</span>');
+  }
+  if (bad.length) {
+    await chat5.iv(`Swap ${bad.length === 1 ? 'that one' : 'those'} for something stronger.`);
+    s5phase = 'pick'; updLock(); return;
+  }
+  // three strong moves: lock them and build the fill-in sentences
+  picks.forEach(b => { b.classList.add('right'); Q.addXP(10, b); tick(5, 0.5, 'comm', 1, 1); });
+  $$('#wrapcards .opt').forEach(b => b.disabled = true);
+  btn.style.display = 'none';
+  $('#wrapHint').innerHTML = 'Now finish each sentence: tap the right word in every gap.';
+  await chat5.iv('Good choices. Say them properly, though.');
+  buildCloses(picks.map(b => +b.dataset.w));
+};
+function buildCloses(idx) {
+  const box = $('#closes');
+  box.innerHTML = idx.map(i => {
+    const c = CLOSE[i]; let bn = 0;
+    const html = c.line.map(part => {
+      if (typeof part === 'string') return part;
+      const [opts, right] = part, id = bn++;
+      return `<span class="blank" data-b="${id}" data-right="${right}" role="group" aria-label="fill the gap">${shuffle(opts.map((o, k) => ({ o, k }))).map(({ o, k }) => `<button data-k="${k}" aria-pressed="false">${o}</button>`).join('')}</span>`;
+    }).join('');
+    return `<div class="close" data-w="${i}"><span class="ct">${c.t}</span>${html}</div>`;
+  }).join('');
+  $$('.blank button', box).forEach(b => b.onclick = () => {
+    if (s5phase !== 'fill') return;
+    const bl = b.parentElement; bl.classList.remove('bad');
+    $$('button', bl).forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); });
+    $('#deliver').disabled = $$('.blank', box).some(x => !$('button.on', x));
+  });
+  $('#deliver').style.display = ''; $('#deliver').disabled = true;
+  s5phase = 'fill';
+}
+$('#deliver').onclick = async e => {
+  const btn = e.currentTarget; if (btn.disabled || s5phase !== 'fill') return;
+  const blanks = $$('#closes .blank');
+  const wrong = blanks.filter(bl => $('button.on', bl).dataset.k !== bl.dataset.right);
+  if (wrong.length) {
+    wrong.forEach(bl => bl.classList.add('bad'));
+    if (!s5fails) Q.loseHeart(btn); else Q.toast('try again', btn, 'practice');
+    s5fails++; tick(5, 0.5, 'comm', 0, 1);
+    btn.disabled = true;
+    chat5.iv(`Hmm, ${wrong.length === 1 ? 'one detail sounds' : wrong.length + ' details sound'} off. Fix the red gap${wrong.length === 1 ? '' : 's'} and try again.`);
+    return;
+  }
+  s5phase = 'done'; btn.disabled = true;
+  $$('#closes .blank').forEach(bl => { bl.classList.add('good'); $$('button', bl).forEach(x => x.disabled = true); });
+  for (const el of $$('#closes .close')) {
+    const c = CLOSE[+el.dataset.w];
+    el.classList.add('ok');
+    chat5.me(c.line.map(p => typeof p === 'string' ? p : `<b>${p[0][p[1]]}</b>`).join(''));
+    Q.addXP(10, el); tick(5, 0.5, 'comm', 1, 1);
+    await chat5.iv(c.r);
+  }
+  await chat5.iv('That\'s a strong finish. Thanks, I have what I need. 🤝');
+  btn.style.display = 'none'; $('#wrapHint').style.display = 'none';
+  $('#s5caveat').style.display = 'block'; $('#s5replay').style.display = 'flex';
+  setTimeout(() => done(5), 700);
+};
+$('#s5replay .btn').onclick = () => { $('#s5replay').style.display = 'none'; setup5(); };
+Q.onStage(5, setup5);
+
+/* ================= STAGE 6: drill + scorecard ================= */
+const CATS = [
+  { k: 'req', n: 'Requirements', from: 'Step 1 questions + estimates' },
+  { k: 'hld', n: 'High-level design', from: 'whiteboard, walkthrough, follow-ups' },
+  { k: 'dd', n: 'Deep dive', from: 'mechanism map + curveballs' },
+  { k: 'comm', n: 'Communication', from: 'first move, timing, close, final pitch' },
+];
+const VERD = [[.85, 'Strong hire', 3], [.7, 'Hire', 2], [.5, 'Lean hire', 1], [0, 'No hire (yet)', 0]];
+const verdict = r => VERD.find(v => r >= v[0]);
+function computeScore() {
+  const d = iload(), sums = {};
+  Object.keys(d).forEach(n => Object.entries((d[n] && d[n].sig) || {}).forEach(([k, [g, m]]) => { const s = sums[k] || [0, 0]; s[0] += g; s[1] += m; sums[k] = s; }));
+  // timing discipline counts toward communication: one point per step inside the book's budget
+  const steps = STEPS.map(s => {
+    const played = s.stages.every(n => d[n]);
+    const m = s.stages.reduce((t, n) => t + stageMin(d, n), 0);
+    return { ...s, m, played, ok: m <= s.hi };
+  });
+  const playedSteps = steps.filter(s => s.played);
+  if (playedSteps.length) { const s = sums.comm || [0, 0]; s[0] += playedSteps.filter(x => x.ok).length; s[1] += playedSteps.length; sums.comm = s; }
+  const total = [1, 2, 3, 4, 5].reduce((t, n) => t + stageMin(d, n), 0);
+  const rated = CATS.map(c => sums[c.k]).filter(s => s && s[1]);
+  const avg = rated.length ? rated.reduce((t, s) => t + Math.max(0, s[0]) / s[1], 0) / rated.length : 0;
+  return { d, sums, steps, total, rated, avg, signal: signalTotal(d) };
+}
+function renderScore() {
+  const { sums, steps, total, rated, avg, signal } = computeScore();
+  const rows = CATS.map(c => {
+    const s = sums[c.k];
+    if (!s || !s[1]) return `<div class="sc-row"><span><b>${c.n}</b><br><span class="small muted">${c.from}</span></span><div class="sc-bar"><div></div></div><span class="verd">not played</span></div>`;
+    const r = Math.max(0, Math.min(1, s[0] / s[1])), v = verdict(r);
+    return `<div class="sc-row"><span><b>${c.n}</b><br><span class="small muted">${c.from}</span></span><div class="sc-bar"><div data-w="${Math.round(r * 100)}"></div></div><span class="verd v${v[2]}">${Math.round(r * 100)}% · ${v[1]}</span></div>`;
+  });
+  const ov = verdict(avg);
+  const log = iload(LKEY);
+  $('#scorecard').innerHTML = `<div class="scorecard"><div class="kicker">Interviewer's scorecard</div><h3>Your signals from this run</h3>
+    <p class="small muted" style="margin:0">Computed from your choices in every stage. Replaying a stage overwrites its part. 📶 ${signal} signal collected.</p>
+    ${rows.join('')}
+    <table class="sc-time"><thead><tr><th>Step</th><th>Your time</th><th>Book's range</th></tr></thead><tbody>
+    ${steps.map(s => `<tr><td>${s.name}</td><td>${s.played || s.stages.some(n => Q.isCleared(n)) ? fmt(s.m) : '—'}</td><td>${s.lo}–${s.hi} min ${s.played ? (s.ok ? '<span class="ok">✓</span>' : '<span class="ov">over</span>') : ''}</td></tr>`).join('')}
+    </tbody></table>
+    <div class="sc-overall"><span>Total ${fmt(total)} of 45:00 ${total <= 45 ? '<span style="color:var(--good);font-weight:700">✓ on time</span>' : '<span style="color:var(--warn);font-weight:700">over time</span>'}</span><span>Overall&nbsp; <b>${rated.length ? ov[1] : '—'}</b></span></div>
+    ${log.length ? `<table class="sc-time"><thead><tr><th>Earlier runs</th><th>Time</th><th>Verdict</th></tr></thead><tbody>${log.slice(-5).reverse().map(r => `<tr><td>${new Date(r.at).toLocaleDateString()}</td><td>${fmt(r.min)}</td><td>${r.v} · 📶 ${r.sig}</td></tr>`).join('')}</tbody></table>` : ''}
+    </div>`;
+  requestAnimationFrame(() => setTimeout(() => $$('#scorecard .sc-bar div[data-w]').forEach(b => b.style.width = b.dataset.w + '%'), 60));
+}
+function logRun() {
+  const { total, rated, avg, signal } = computeScore();
+  if (!rated.length) return;
+  const log = iload(LKEY);
+  log.push({ at: new Date().toISOString(), min: Math.round(total * 100) / 100, v: verdict(avg)[1], sig: signal });
+  isave(log.slice(-10), LKEY);
+}
+function setup6() {
+  begun.delete(6);
+  renderScore();
+  Q.drill($('#drill'), {
+    prompt: 'Priya, at the door: <i>"Last thing. Give me the whole design, end to end, in about a minute."</i>',
+    placeholder: 'First I scoped it: upload and watch, 5 million daily users…',
+    minWords: 50,
+    model: '"I scoped it to upload and watch, on phones, web and smart TVs, for 5 million daily users, with videos up to 1 GB, encryption, and managed cloud services allowed. That\'s about 150 TB of new storage a day and roughly $150,000 a day of CDN, so the CDN is the cost to beat. The CDN streams video from the nearest edge over HLS or DASH; API servers behind a load balancer do everything else. On upload, the file lands in original storage, transcoding servers turn it into many resolutions, bitrates and codecs, the outputs go to transcoded storage and the CDN, and in parallel a completion event goes through a queue to a handler that updates the metadata DB and cache. Metadata itself is updated in parallel while the file uploads. Transcoding is a DAG of tasks: a preprocessor splits the video into GOP chunks, a scheduler stages the DAG, a resource manager hands tasks to workers, and temporary storage makes retries cheap. Uploads are chunked and resumable, through pre-signed URLs; DRM, AES or watermarks protect videos; only popular videos sit on the CDN. Recoverable errors are retried, non-recoverable ones return an error, replicas take over, and stateless API servers just get rerouted. To close, I\'d scale the API tier horizontally, replicate and shard the database, and cover live streaming and takedowns."',
+    checks: [
+      'I scoped it (upload + watch, clients, 5M DAU, 1 GB) and gave both numbers',
+      'I split it: the CDN streams, API servers do the rest',
+      'I walked the upload flow, including the completion queue and parallel metadata update',
+      'I explained transcoding: DAG, GOP chunks, scheduler/resource manager, many bitrates',
+      'I covered safety and cost: pre-signed URLs, DRM/AES/watermark, long-tail CDN plan',
+      'I covered errors and a wrap-up (scaling, live streaming, takedowns)',
+    ],
+    onDone: n => {
+      tick(6, 0, 'comm', n, 6);
+      logRun();
+      renderScore();
+      $('#scorecard').scrollIntoView({ behavior: Q.reduced ? 'auto' : 'smooth', block: 'center' });
+      $('#s6replay').style.display = 'flex';
+      setTimeout(() => done(6), 1200);
+    },
+  });
+}
+$('#s6replay .btn').onclick = () => { $('#s6replay').style.display = 'none'; setup6(); };
+Q.onStage(6, setup6);
+
+Q.start();
+setHudH(); renderBar();
+})();
+</script>
+</body>
+</html>

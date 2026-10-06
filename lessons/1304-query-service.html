@@ -34,7 +34,8 @@ h3.mini-h { font-size: 16px; margin: 22px 0 6px; }
 .sdrop:empty::before { content: attr(data-empty); display: block; padding: 6px 18px; color: var(--muted); font-size: 14px; }
 .sdrop li { padding: 6px 18px; font-size: 15px; display: flex; gap: 10px; align-items: center; min-height: 32px; }
 .sdrop li::before { content: "🔍"; font-size: 12px; opacity: .5; }
-.sdrop li span { color: var(--muted); }
+.sdrop li .qt { color: var(--ink); }
+.sdrop li .qt i { font-style: normal; color: var(--muted); }
 .sdrop li.harm::before { content: "⚠️"; opacity: 1; }
 .redact { display: inline-block; height: 12px; width: 120px; max-width: 45%; border-radius: 4px; background: repeating-linear-gradient(90deg, var(--redact) 0 9px, transparent 9px 11px); }
 .cat { font: 700 11px var(--mono); padding: 2px 8px; border-radius: 99px; background: var(--bad); color: #fff; font-style: normal; letter-spacing: .03em; }
@@ -76,7 +77,7 @@ h3.mini-h { font-size: 16px; margin: 22px 0 6px; }
 .pline .sp { flex: 1; }
 .strip { padding: 10px 14px; border-top: 1px solid var(--line); background: var(--panel); display: grid; gap: 6px; }
 .strip:empty { display: none; }
-.srow { display: grid; grid-template-columns: 74px 1fr 64px; gap: 8px; align-items: center; font: 600 12.5px var(--mono); }
+.srow { display: grid; grid-template-columns: auto 1fr auto; white-space: nowrap; gap: 8px; align-items: center; font: 600 12.5px var(--mono); }
 .srow .tr { height: 14px; border-radius: 4px; background: var(--bg-2); overflow: hidden; }
 .srow .tr div { height: 100%; border-radius: 4px; transition: width .6s cubic-bezier(.2,.8,.2,1); }
 .srow .v { text-align: right; }
@@ -322,7 +323,7 @@ h3.mini-h { font-size: 16px; margin: 22px 0 6px; }
         </div>
         <div class="tabwrap">
           <p class="small muted" style="margin:8px 8px 4px">One week of searches starting with <code>tw</code>: the book's example counts, scaled up ×10,000. <i>twine knots</i> is a made-up rare query.</p>
-          <table class="stab" id="tab3"><thead><tr><th>query</th><th>true count</th><th>estimate</th></tr></thead><tbody></tbody></table>
+          <table class="stab" id="tab3"><thead><tr><th>query</th><th>true count</th><th>estimate<br>(logged × N)</th></tr></thead><tbody></tbody></table>
         </div>
         <div class="verdict3" id="ver3" aria-live="polite"></div>
         <div class="sim-bar"><button class="btn" id="re3" disabled>🎲 Resample</button><span class="small muted">A new random sample, same N.</span></div>
@@ -465,7 +466,7 @@ function logTo(el, html, cls) { el.insertAdjacentHTML('beforeend', `<div class="
 function checkGoal(listSel, g, set, xp) {
   if (set.has(g)) return false;
   set.add(g);
-  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); Q.addXP(xp || 5, li);
+  const li = $(`${listSel} [data-g="${g}"]`); li.classList.add('done'); const n = xp ?? 5; if (n > 0) Q.addXP(n, li);
   return true;
 }
 // Predict-then-watch: the learner picks, act(i) plays the sim, then we grade.
@@ -516,7 +517,7 @@ const POP = {
   'weather': 40, 'wikipedia': 27, 'walmart': 22, 'world cup': 13,
 };
 const top5 = p => p ? Object.entries(POP).filter(([q]) => q.startsWith(p)).sort((a, b) => b[1] - a[1]).slice(0, 5).map(e => e[0]) : [];
-const liFor = (prefix, q) => `<li><b>${esc(q.slice(0, prefix.length))}</b><span>${esc(q.slice(prefix.length))}</span></li>`;
+const liFor = (prefix, q) => `<li><span class="qt"><b>${esc(q.slice(0, prefix.length))}</b><i>${esc(q.slice(prefix.length))}</i></span></li>`;
 
 /* ================= STAGE 1: follow one keystroke ================= */
 Q.onStage(1, () => {
@@ -527,7 +528,7 @@ Q.onStage(1, () => {
     lb: { x: 130, y: 16, t: 'Load balancer', s: 'spreads traffic' },
     api: { x: 254, y: 16, t: 'API server', s: 'builds the top 5' },
     cache: { x: 254, y: 168, t: 'Trie Cache', s: 'in memory' },
-    db: { x: 130, y: 168, t: 'Trie DB', s: 'permanent storage' },
+    db: { x: 130, y: 168, t: 'Trie DB', s: 'on disk' },
   };
   const NAME = { br: 'Browser', lb: 'LB', api: 'API', cache: 'Cache', db: 'DB' };
   const C = k => [NODES[k].x + W / 2, NODES[k].y + H / 2];
@@ -838,7 +839,7 @@ Q.onStage(3, () => {
     $('#tab3 tbody').innerHTML = byEst.map(x => {
       const rare = x.q === RARE, top = est5.includes(x.q);
       const err = rare ? (x.est === 0 ? '<span class="err">vanished</span>' : x.est === x.c ? '' : `<span class="err">${x.est > x.c ? '+' : ''}${fmt((x.est - x.c) / x.c * 100)}%</span>`) : '';
-      return `<tr class="${top ? 'top' : ''}${rare ? ' rare' : ''}"><td>${esc(x.q)}</td><td>${fmt(x.c)}</td><td>${fmt(x.est)}${err ? ' ' + err : ''}<small>${N === 1 ? 'every search logged' : `${fmt(x.k)} logged × ${fmt(N)}`}</small></td></tr>`;
+      return `<tr class="${top ? 'top' : ''}${rare ? ' rare' : ''}"><td>${esc(x.q)}</td><td>${fmt(x.c)}</td><td>${fmt(x.est)}${err ? ' ' + err : ''}<small>${N === 1 ? 'all logged' : `${fmt(x.k)} × ${fmt(N)}`}</small></td></tr>`;
     }).join('');
     const v = $('#ver3'), rare = rows.find(x => x.q === RARE);
     const same = est5.join() === TRUE5.join(), sameSet = est5.slice().sort().join() === TRUE5.slice().sort().join();
@@ -997,7 +998,7 @@ Q.onStage(4, () => {
     if (!played.has(plan)) { played.add(plan); Q.addXP(5, b); }
     $$('.whatif [data-plan]').forEach(x => x.disabled = false);
     playing = false;
-    if (played.size === 3 && checkGoal('#s4goals', 'plans', goals, 0)) maybeNext();
+    if (played.size === 3 && checkGoal('#s4goals', 'plans', goals, 5)) maybeNext();
   });
 
   let picked = false;
