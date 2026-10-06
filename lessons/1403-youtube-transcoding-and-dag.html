@@ -307,8 +307,8 @@ pre.manifest .c { color: #8b93c9; }
       <div id="runWrap" style="display:none">
         <h3 style="margin:22px 0 4px">Run it</h3>
         <p class="small">Task times: split 1 s, inspection 2 s, each of the 5 encodings 8 s, thumbnail 1 s, watermark 2 s, audio encoding 3 s, assemble 1 s. One worker doing them one after another needs <b id="seqT">50</b> seconds.</p>
-        <div class="challenge boxed" id="runBox"></div>
         <div class="sim gantt" id="ganttSim" style="display:none"><svg id="ganttSvg" viewBox="0 0 400 300" role="img" aria-label="Timeline: one worker versus the DAG with parallel workers"></svg></div>
+        <div class="challenge boxed" id="runBox"></div>
       </div>
       <div id="s4quiz"></div>
     </div>
@@ -972,7 +972,7 @@ Q.onStage(4, () => {
       return;
     }
     locked = true; render();
-    fb.innerHTML = `<div class="explain show good"><b>Valid DAG.</b> Every task waits only for what it truly needs, and there are no loops. ${edges.has('wm>enc') ? 'You burned the watermark in before encoding, which is how most real pipelines do it.' : 'Watermark runs in parallel with the encodings, as in the book\'s figure.'} Notice the three branches under Inspection have no arrows between them: they can run at the same time.${BOOK}</div>`;
+    fb.innerHTML = `<div class="explain show good"><b>Valid DAG.</b> Every task waits only for what it truly needs, and there are no loops. ${edges.has('wm>enc') ? 'You burned the watermark in before encoding, which is how most real pipelines do it.' : 'Watermark runs in parallel with the encodings, as in the book\'s figure.'} ${edges.has('wm>enc') ? 'Thumbnail and the audio branch have no arrows to the encodings, so they run at the same time.' : 'Notice the three branches under Inspection have no arrows between them: they can run at the same time.'}${BOOK}</div>`;
     $('#dagMsg').innerHTML = '✓ Locked in. Now run it.';
     $('#dagCheck').disabled = true; $('#dagClear').disabled = true;
     Q.addXP(25, btn);
@@ -1027,10 +1027,10 @@ Q.onStage(4, () => {
   }
   async function gantt() {
     const g = $('#ganttSvg'); g.innerHTML = '';
-    const LX = 86, RX = 390, TM = Math.max(plan.seq, 50);
+    const LX = 92, RX = 384, TM = Math.max(plan.seq, 50);
     const gx = t => LX + t / TM * (RX - LX);
     const lanes = [];
-    plan.order.forEach(k => { if (k === 'enc') ENC.forEach(r => lanes.push({ k, lab: 'Encode ' + r })); else lanes.push({ k, lab: NAME(k) }); });
+    plan.order.forEach(k => { if (k === 'enc') ENC.forEach(r => lanes.push({ k, lab: 'Encode ' + r })); else lanes.push({ k, lab: k === 'aenc' ? 'Audio enc.' : NAME(k) }); });
     // sequential lane
     S('text', { class: 'gh', x: 4, y: 14 }, g).textContent = 'One worker, one task at a time';
     S('rect', { class: 'gtrack', x: LX, y: 22, width: RX - LX, height: 18, rx: 3 }, g);
@@ -1050,15 +1050,15 @@ Q.onStage(4, () => {
       parBars.push({ r, s: plan.es[L.k], d: N[L.k].dur });
     });
     const by = top + lanes.length * 17 + 4;
-    for (let s = 0; s <= TM; s += 10) { S('text', { class: 'tk', x: gx(s), y: by + 10 }, g).textContent = s + (s === TM - TM % 10 ? ' s' : ''); }
+    for (let s = 0; s <= TM; s += 10) { S('text', { class: 'tk', x: gx(s), y: by + 10, 'text-anchor': s + 10 > TM ? 'end' : 'middle' }, g).textContent = s + (s + 10 > TM ? ' s' : ''); }
     g.setAttribute('viewBox', `0 0 400 ${by + 18}`);
     const sweep = S('line', { class: 'sweep', x1: LX, x2: LX, y1: 18, y2: by }, g);
-    const pDone = S('text', { class: 'gdone p', x: gx(plan.par) + 4, y: top - 10 }, g);
+    const pDone = S('text', { class: 'gdone p', x: gx(plan.par) + 6, y: top + (lanes.length - 1) * 17 + 7, 'dominant-baseline': 'central' }, g);
     const sDone = S('text', { class: 'gdone s', x: RX, y: 14, 'text-anchor': 'end' }, g);
     const setT = now => {
       sweep.setAttribute('x1', gx(now)); sweep.setAttribute('x2', gx(now));
       [...seqBars, ...parBars].forEach(b => b.r.setAttribute('width', Math.max(0, gx(Math.min(now, b.s + b.d)) - gx(b.s))));
-      if (now >= plan.par) pDone.textContent = `✓ ${plan.par} s`;
+      if (now >= plan.par) pDone.textContent = `✓ DAG done: ${plan.par} s`;
       if (now >= plan.seq) sDone.textContent = `✓ ${plan.seq} s`;
     };
     if (Q.reduced) { setT(plan.seq); return; }
