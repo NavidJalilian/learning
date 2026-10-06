@@ -310,8 +310,14 @@
       v.classList.add('show');
       if (scroll) setTimeout(() => v.scrollIntoView({ behavior: REDUCED ? 'auto' : 'smooth', block: 'center' }), 400);
     }
-    function startFresh() {
-      if (!confirm('Start this quest over? Your best score is kept.')) return;
+    // Two taps instead of confirm(): dialogs are blocked in some viewers (e.g. embedded artifact frames).
+    function startFresh(e) {
+      const b = e && e.currentTarget;
+      if (b && b.dataset.armed !== '1') {
+        const label = b.textContent; b.dataset.armed = '1'; b.textContent = 'Tap again to start over (best score kept)';
+        setTimeout(() => { if (b.isConnected) { b.dataset.armed = ''; b.textContent = label; } }, 4000);
+        return;
+      }
       d = load(); d.runs[id] = { cleared: [], xp: 0, hearts: 3 }; save(d);
       location.hash = ''; location.reload();
     }
