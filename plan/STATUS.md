@@ -2,7 +2,7 @@
 
 Every chapter of *System Design Interview* Vol. 1 as a world of quests. Ticked = done. Regenerate: `python3 plan/tools/status.py`.
 
-**81 of 83 quests built** · 66 live on the map · 15 built, awaiting world review · 2 being built (draft on disk, not verified) · 0 not started.
+**82 of 83 quests built** · 66 live on the map · 16 built, awaiting world review · 1 being built (draft on disk, not verified) · 0 not started.
 
 Legend: `[x]` done · `[ ]` not done. A world is **done** when every quest is built, the world review has run, its cheat sheet
 exists, and its quests are `ready: true` on the map.
@@ -137,7 +137,7 @@ exists, and its quests are `ready: true` on the map.
 - [x] `1403` 14.3 · [The Format Forge](../lessons/1403-youtube-transcoding-and-dag.html) — built · needs world review
 - [x] `1404` 14.4 · [The Transcoding Factory](../lessons/1404-youtube-transcoding-architecture.html) — built · needs world review
 - [ ] `1405` 14.5 · [Faster, Safer, Cheaper](../lessons/1405-youtube-optimizations-and-errors.html) — being built (unverified draft)
-- [ ] `1406` BOSS · [Design YouTube Live](../lessons/1406-youtube-boss-design-it-live.html) — being built (unverified draft)
+- [x] `1406` BOSS · [Design YouTube Live](../lessons/1406-youtube-boss-design-it-live.html) — built · needs world review
 - [ ] World review + cheat sheet
 
 ## ✅ World 15 · Design Google Drive — *The Cloud Locker*

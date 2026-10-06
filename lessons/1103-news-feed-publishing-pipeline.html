@@ -372,7 +372,7 @@
       <ul style="margin:0;padding-left:20px">
         <li><b>Whose user_id?</b> The list is already keyed by the viewer, so the <code>user_id</code> in each entry is best read as the post's <b>author</b>. That's what you need to hydrate the feed later. Real systems often keep a capped Redis list (<code>LPUSH</code> + <code>LTRIM</code>) or a sorted set scored by time.<a class="cite" href="https://redis.io/docs/latest/develop/data-types/lists/" target="_blank" rel="noopener">[3]</a></li>
         <li><b>"Graph DB" is a role, not a product.</b> Facebook's social graph doesn't live in a classic graph database. It's TAO: a graph-shaped caching layer on top of sharded MySQL.<a class="cite" href="https://www.usenix.org/conference/atc13/technical-sessions/presentation/bronson" target="_blank" rel="noopener">[2]</a> In the book, "graph DB" means "a store that's good at friend edges".</li>
-        <li><b>Fanout-time filters go stale.</b> Unfriending, audience changes and deletions after fanout aren't reflected in entries already written. So reads re-check (Quest 11.4's hydration step).</li>
+        <li><b>Fanout-time filters go stale.</b> Unfriending, audience changes and deletions after fanout aren't reflected in entries already written. So reads re-check (<a href="1104-news-feed-retrieval-and-caches.html">Quest 11.4</a>'s hydration step).</li>
         <li><b>At-least-once means duplicates.</b> A queue normally re-delivers a job that wasn't acknowledged, so a retried job can write the same entry twice. Make feed writes <i>idempotent</i> (safe to repeat), for example a set keyed by post_id.<a class="cite" href="https://kafka.apache.org/intro" target="_blank" rel="noopener">[4]</a></li>
         <li><b>Our numbers are illustrative.</b> The 300 friends, worker rates, 16-byte entries and the scroll-depth curve are our assumptions, not the book's.</li>
       </ul>
@@ -747,7 +747,7 @@ Q.onStage(3, () => {
     { k: 'cy', n: 'Cy', id: 'u4', tag: '🔇 Has muted Ana', warn: true, get: false, why: 'Muted Ana. Still friends, but the filter drops Cy.' },
     { k: 'dee', n: 'Dee', id: 'u5', tag: '💼 In Ana\'s "Work" list', warn: true, get: false, why: 'The audience is "Friends except Work", so Dee is left out.' },
     { k: 'eli', n: 'Eli', id: 'u9', tag: 'Friend', get: true, why: 'Normal friend, inside the audience.' },
-    { k: 'fay', n: 'Fay', id: 'u11', tag: '😴 Inactive 60 days', warn: true, get: true, why: 'Inactive isn\'t a privacy setting. Pure push still writes it: wasted work (Quest 11.2).' },
+    { k: 'fay', n: 'Fay', id: 'u11', tag: '😴 Inactive 60 days', warn: true, get: true, why: 'Inactive isn\'t a privacy setting. Pure push still writes it: wasted work (<a href="1102-news-feed-fanout-push-vs-pull.html">Quest 11.2</a>).' },
     { k: 'gus', n: 'Gus', id: 'u12', tag: 'Friend', get: true, why: 'Normal friend, inside the audience.' },
   ];
   const box = $('#friends'), btn = $('#fanBtn');
@@ -824,7 +824,7 @@ Q.onStage(3, () => {
           q: 'Where is the simplest place to make sure Gus never sees it?',
           options: ['Re-check permissions when his feed is read', 'Run the fanout again for every older post', 'Rebuild every user\'s feed cache each night'],
           correct: 0,
-          good: 'When Gus\'s feed is read, the news feed service turns IDs into full posts and can drop anything he\'s no longer allowed to see. That\'s Quest 11.4\'s hydration step.',
+          good: 'When Gus\'s feed is read, the news feed service turns IDs into full posts and can drop anything he\'s no longer allowed to see. That\'s the hydration step in <a href="1104-news-feed-retrieval-and-caches.html">Quest 11.4</a>.',
           bad: 'Re-check at read time. The news feed service hydrates IDs into posts anyway, so it can drop what Gus may no longer see. Re-running or rebuilding is far more work.',
         },
         {
@@ -1246,7 +1246,7 @@ Q.onStage(6, () => Q.boss($('#boss'), {
 Q.onStage(7, () => Q.drill($('#drill'), {
   prompt: 'The interviewer: <i>"Walk me through what happens after Ana hits Post."</i>',
   placeholder: 'The request reaches the web servers, which…',
-  model: '"The load balancer sends the request to a web server, which checks Ana\'s auth token and applies a rate limit, so spam never reaches the expensive part. The web servers then call the post service, which saves the post in the post DB and cache, and the fanout service. The fanout service gets Ana\'s friend IDs from the graph DB, loads their info from the user cache, and drops anyone who muted her or isn\'t in the post\'s audience. It puts the post ID and the filtered friend list on a message queue, so Ana gets a fast reply. Fanout workers take jobs off the queue and add a &lt;post_id, author_id&gt; entry to each friend\'s list in the news feed cache. Workers ack only after writing, so a crash means a retry. We store IDs only and cap each list at a few hundred entries, because almost nobody scrolls further, and fall back to the DB if they do. Very popular accounts skip this fanout, and their posts are pulled at read time."',
+  model: '"The load balancer sends the request to a web server, which checks Ana\'s auth token and applies a rate limit, so spam never reaches the expensive part. The web servers then hand the post to three services side by side: the post service saves it in the post DB and cache, the notification service pings friends, and the fanout service gets Ana\'s friend IDs from the graph DB, loads their info from the user cache, and drops anyone who muted her or isn\'t in the post\'s audience. It puts the post ID and the filtered friend list on a message queue, so Ana gets a fast reply. Fanout workers take jobs off the queue and add a &lt;post_id, author_id&gt; entry to each friend\'s list in the news feed cache. Workers ack only after writing, so a crash means a retry. We store IDs only and cap each list at a few hundred entries, because almost nobody scrolls further, and fall back to the DB if they do. Very popular accounts skip this fanout, and their posts are pulled at read time."',
   checks: ['Auth and rate limiting at the web servers', 'Graph DB for the friend list', 'Filtering by settings (mute, audience)', 'Message queue + workers, and why', 'Only IDs in the feed cache', 'A cap per list, with a DB fallback on a miss'],
   onDone: () => Q.clearStage(7),
 }));

@@ -200,6 +200,7 @@
       <div class="hint" id="stepHint"></div>
       <div class="challenge boxed" id="cdnBox" style="display:none"></div>
       <div class="callout tip"><b>What is the news feed cache, physically?</b> A fast in-memory store keyed by user. One common way to hold it is a Redis <i>sorted set</i> per user: each member is a post ID and its score is the post's time, so "newest 20" is one cheap range read.<a class="cite" href="https://redis.io/docs/latest/develop/data-types/sorted-sets/" target="_blank" rel="noopener">[5]</a> The book only says it's a cache of IDs; Redis is our example.</div>
+      <div class="callout"><b>Where the hybrid shows up.</b> In <a href="1102-news-feed-fanout-push-vs-pull.html">Quest 11.2</a> you chose <b>hybrid</b> fanout: push for most accounts, pull for the few with huge followings. So at step 4 the news feed service does one extra thing. Besides reading Bo's precomputed list, it fetches the newest posts of the big accounts he follows and merges them in, newest first, before hydrating. The book's retrieval figure doesn't draw this merge, but the hybrid needs it.</div>
       <div id="s1quiz"></div>
     </div>
   </section>
@@ -308,7 +309,7 @@
     <div class="stage-h"><div class="num">6</div><div><h2>Say it like a senior</h2><div class="sub">From GET to glass</div></div><span class="pill"></span></div>
     <div class="stage-b">
       <div id="drill"></div>
-      <div class="callout tip" style="margin-top:18px"><b>Next up: the world boss.</b> You now have every piece of the news feed: scope and APIs (11.1), push vs pull (11.2), the fanout pipeline (11.3) and the read path (this quest). <a href="1105-news-feed-boss-design-it-live.html">Design It Live: News Feed</a> puts them together in a full mock interview.</div>
+      <div class="callout tip" style="margin-top:18px"><b>Next up: the world boss.</b> You now have every piece of the news feed: scope and APIs (<a href="1101-news-feed-scope-and-flows.html">11.1</a>), push vs pull (<a href="1102-news-feed-fanout-push-vs-pull.html">11.2</a>), the fanout pipeline (<a href="1103-news-feed-publishing-pipeline.html">11.3</a>) and the read path (this quest). <a href="1105-news-feed-boss-design-it-live.html">Design It Live: News Feed</a> puts them together in a full mock interview.</div>
     </div>
   </section>
 
@@ -783,7 +784,7 @@ Q.onStage(2, () => {
       options: ['Fill bare post IDs with full user and post objects', 'Copy the whole feed into every follower’s cache', 'Compress the feed JSON before it goes to the phone'],
       correct: 0, xp: 15,
       good: 'The feed cache stores only IDs. Hydration looks up the full objects (author name and avatar, text, media URLs) so the phone has something to draw.',
-      bad: 'Copying into followers’ caches is fanout (Quest 11.3), and compression is a transport detail. Hydration means turning IDs into full user and post objects.',
+      bad: 'Copying into followers’ caches is fanout (<a href="1103-news-feed-publishing-pipeline.html">Quest 11.3</a>), and compression is a transport detail. Hydration means turning IDs into full user and post objects.',
       onDone: () => setTimeout(() => Q.quiz(mount, {
         tag: 'Check 2',
         q: 'Why does keeping only IDs in feeds make deleting a post easy?',
@@ -990,7 +991,7 @@ Q.onStage(6, () => Q.drill($('#drill'), {
   prompt: 'The interviewer: <i>"Walk me through what happens when Bo opens the app and his feed loads."</i>',
   placeholder: 'The phone calls GET /v1/me/feed…',
   minWords: 25,
-  model: '"The phone calls <code>GET /v1/me/feed</code>. The load balancer sends it to a web server, which calls the news feed service. That service reads Bo\'s precomputed list of post IDs and author IDs from the news feed cache. Then it hydrates them: one multi-get for the authors from the user cache and one for the posts from the post cache, falling back to the databases on a miss, and dropping anything deleted or no longer visible to Bo. It adds per-user details, like whether Bo liked each post, and the like counts, then returns JSON. Images and videos aren\'t in the JSON. It carries CDN URLs, and the phone downloads the media from the nearest edge. Behind all this the cache is split into five layers (news feed, content with a hot tier, social graph, actions and counters) so each one can scale on its own."',
+  model: '"The phone calls <code>GET /v1/me/feed</code>. The load balancer sends it to a web server, which calls the news feed service. That service reads Bo\'s precomputed list of post IDs and author IDs from the news feed cache, and, because fanout is hybrid, merges in the latest posts of the few huge accounts he follows. Then it hydrates them: one multi-get for the authors from the user cache and one for the posts from the post cache, falling back to the databases on a miss, and dropping anything deleted or no longer visible to Bo. It adds per-user details, like whether Bo liked each post, and the like counts, then returns JSON. Images and videos aren\'t in the JSON. It carries CDN URLs, and the phone downloads the media from the nearest edge. Behind all this the cache is split into five layers (news feed, content with a hot tier, social graph, actions and counters) so each one can scale on its own."',
   checks: [
     'I said the service reads post IDs from the news feed cache',
     'I explained hydration: user and post caches, with DB fallback',
