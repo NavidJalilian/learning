@@ -2,7 +2,7 @@
 
 Every chapter of *System Design Interview* Vol. 1 as a world of quests. Ticked = done. Regenerate: `python3 plan/tools/status.py`.
 
-**73 of 83 quests built** · 54 live on the map · 19 built, awaiting world review · 7 being built (draft on disk, not verified) · 3 not started.
+**74 of 83 quests built** · 54 live on the map · 20 built, awaiting world review · 6 being built (draft on disk, not verified) · 3 not started.
 
 Legend: `[x]` done · `[ ]` not done. A world is **done** when every quest is built, the world review has run, its cheat sheet
 exists, and its quests are `ready: true` on the map.
@@ -124,7 +124,7 @@ exists, and its quests are `ready: true` on the map.
 
 - [x] `1301` 13.1 · [Every Keystroke Counts](../lessons/1301-autocomplete-scope-and-estimation.html) — built · needs world review
 - [ ] `1302` 13.2 · [Grow the Trie](../lessons/1302-trie-top-k.html) — being built (unverified draft)
-- [ ] `1303` 13.3 · [The Weekly Harvest](../lessons/1303-data-gathering-service.html) — being built (unverified draft)
+- [x] `1303` 13.3 · [The Weekly Harvest](../lessons/1303-data-gathering-service.html) — built · needs world review
 - [x] `1304` 13.4 · [Faster Than a Keystroke](../lessons/1304-query-service.html) — built · needs world review
 - [ ] `1305` 13.5 · [Split the Alphabet](../lessons/1305-scaling-autocomplete.html) — being built (unverified draft)
 - [ ] `1306` BOSS · [Autocomplete Live](../lessons/1306-boss-autocomplete-live.html) — being built (unverified draft)
