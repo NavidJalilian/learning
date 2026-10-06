@@ -30,7 +30,7 @@
     { w: 6, t: 'Design a Key-Value Store', name: 'The Key-Value Vault', slug: 'design-a-key-value-store', cheatsheet: 'kv-store-cap-cheatsheet.html' },
     { w: 7, t: 'Design a Unique ID Generator', name: 'The ID Mint', slug: 'design-a-unique-id-generator-in-distributed-systems', cheatsheet: 'ch07-unique-id-cheatsheet.html' },
     { w: 8, t: 'Design a URL Shortener', name: 'Shrink Ray Bay', slug: 'design-a-url-shortener', cheatsheet: 'ch08-url-shortener-cheatsheet.html' },
-    { w: 9, t: 'Design a Web Crawler', name: 'Spider Web Wilds', slug: 'design-a-web-crawler' },
+    { w: 9, t: 'Design a Web Crawler', name: 'Spider Web Wilds', slug: 'design-a-web-crawler', cheatsheet: 'ch09-web-crawler-cheatsheet.html' },
     { w: 10, t: 'Design a Notification System', name: 'Ping Station', slug: 'design-a-notification-system', cheatsheet: 'ch10-notification-cheatsheet.html' },
     { w: 11, t: 'Design a News Feed System', name: 'Feedstream Falls', slug: 'design-a-news-feed-system' },
     { w: 12, t: 'Design a Chat System', name: 'Chatterbox Citadel', slug: 'design-a-chat-system', cheatsheet: 'ch12-chat-cheatsheet.html' },
@@ -82,12 +82,12 @@
     { id: '0803', w: 8, n: '8.3', t: 'Count in Base 62', d: 'Turn a unique ID into a short code with base 62, and weigh it against hashing', file: '0803-url-shortener-base62.html', ready: true },
     { id: '0804', w: 8, n: '8.4', t: 'Shorten & Bounce', d: 'Walk the shortening and redirecting flows, add a cache, and scale it out', file: '0804-url-shortener-flows-and-scale.html', ready: true },
     { id: '0805', w: 8, n: 'BOSS', t: 'Shrink the Internet, Live', d: 'Full mock interview: design a URL shortener in 45 minutes', file: '0805-url-shortener-boss-design-it-live.html', boss: true, ready: true },
-    { id: '0901', w: 9, n: '9.1', t: 'Release the Spider', d: 'What a crawler is for, the three-step loop, scoping questions, the four traits of a good crawler, and the napkin math', file: '0901-web-crawler-scope-and-estimates.html', ready: false },
-    { id: '0902', w: 9, n: '9.2', t: 'Assemble the Spider', d: 'The eleven boxes of the high-level design, the two \'seen?\' checks, and the step-by-step crawl workflow', file: '0902-web-crawler-components-and-workflow.html', ready: false },
-    { id: '0903', w: 9, n: '9.3', t: 'Taming the Frontier', d: 'Why BFS beats DFS but still isn\'t enough, and how front queues (priority) and back queues (politeness) fix it, plus freshness and storage', file: '0903-web-crawler-url-frontier.html', ready: false },
-    { id: '0904', w: 9, n: '9.4', t: 'Fast Fangs, Thick Skin', d: 'robots.txt, four speed-ups for the downloader (distribute, cache DNS, go local, time out), and four ways to survive failures', file: '0904-web-crawler-downloader-and-robustness.html', ready: false },
-    { id: '0905', w: 9, n: '9.5', t: 'Beware the Spider Traps', d: 'Plug-in modules for new content, dodging duplicates, spider traps and noise, and the wrap-up extras like rendering JavaScript', file: '0905-web-crawler-traps-and-extensibility.html', ready: false },
-    { id: '0906', w: 9, n: 'BOSS', t: 'Crawl the Web, Live', d: 'Full mock interview: design a web crawler in 45 minutes', file: '0906-web-crawler-boss-design-it-live.html', boss: true, ready: false },
+    { id: '0901', w: 9, n: '9.1', t: 'Release the Spider', d: 'What a crawler is for, the three-step loop, scoping questions, the four traits of a good crawler, and the napkin math', file: '0901-web-crawler-scope-and-estimates.html', ready: true },
+    { id: '0902', w: 9, n: '9.2', t: 'Assemble the Spider', d: 'The eleven boxes of the high-level design, the two \'seen?\' checks, and the step-by-step crawl workflow', file: '0902-web-crawler-components-and-workflow.html', ready: true },
+    { id: '0903', w: 9, n: '9.3', t: 'Taming the Frontier', d: 'Why BFS beats DFS but still isn\'t enough, and how front queues (priority) and back queues (politeness) fix it, plus freshness and storage', file: '0903-web-crawler-url-frontier.html', ready: true },
+    { id: '0904', w: 9, n: '9.4', t: 'Fast Fangs, Thick Skin', d: 'robots.txt, four speed-ups for the downloader (distribute, cache DNS, go local, time out), and four ways to survive failures', file: '0904-web-crawler-downloader-and-robustness.html', ready: true },
+    { id: '0905', w: 9, n: '9.5', t: 'Beware the Spider Traps', d: 'Plug-in modules for new content, dodging duplicates, spider traps and noise, and the wrap-up extras like rendering JavaScript', file: '0905-web-crawler-traps-and-extensibility.html', ready: true },
+    { id: '0906', w: 9, n: 'BOSS', t: 'Crawl the Web, Live', d: 'Full mock interview: design a web crawler in 45 minutes', file: '0906-web-crawler-boss-design-it-live.html', boss: true, ready: true },
     { id: '1001', w: 10, n: '10.1', t: 'Three Roads to the Lock Screen', d: 'Push (APNs/FCM), SMS and email: who delivers what, and the contact info you need', file: '1001-notification-channels.html', ready: true },
     { id: '1002', w: 10, n: '10.2', t: 'Shatter the Single Server', d: 'From one notification box to servers, per-channel queues and workers', file: '1002-notification-high-level-design.html', ready: true },
     { id: '1003', w: 10, n: '10.3', t: 'Never Lose a Ping', d: 'Notification log, at-least-once, dedupe, retries and watching the queue', file: '1003-notification-reliability.html', ready: true },
@@ -388,7 +388,9 @@
           const ex = $('.explain', arena); ex.className = 'explain show ' + (ok ? 'good' : 'bad');
           const lab = (cs.find(c => c.k === s.a) || {}).label || s.a;
           ex.innerHTML = `<b>${lab}.</b> ${s.why}`;
-          if (ok) { addXP(xp, b); wins++; } else loseHeart(b);
+          // a rematch on the same mount only pays for scenarios it hadn't already paid for
+          const paid = (mount.dataset.bossPaid || '').split(',');
+          if (ok) { wins++; if (!paid.includes(String(bi))) { addXP(xp, b); mount.dataset.bossPaid = paid.concat(bi).filter(Boolean).join(','); } else toast('✓ already paid', b, 'practice'); } else loseHeart(b);
           hp.style.width = (100 - ((bi + 1) / scenarios.length) * 100) + '%';
           const nx = document.createElement('button'); nx.className = 'btn primary';
           nx.textContent = bi < scenarios.length - 1 ? 'Next →' : '⚔️ Final blow';

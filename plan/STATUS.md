@@ -2,7 +2,7 @@
 
 Every chapter of *System Design Interview* Vol. 1 as a world of quests. Ticked = done. Regenerate: `python3 plan/tools/status.py`.
 
-**79 of 83 quests built** · 54 live on the map · 25 built, awaiting world review · 4 being built (draft on disk, not verified) · 0 not started.
+**81 of 83 quests built** · 60 live on the map · 21 built, awaiting world review · 2 being built (draft on disk, not verified) · 0 not started.
 
 Legend: `[x]` done · `[ ]` not done. A world is **done** when every quest is built, the world review has run, its cheat sheet
 exists, and its quests are `ready: true` on the map.
@@ -82,15 +82,15 @@ exists, and its quests are `ready: true` on the map.
 - [x] `0805` BOSS · [Shrink the Internet, Live](../lessons/0805-url-shortener-boss-design-it-live.html) — live
 - [x] World review + cheat sheet — [ch08-url-shortener-cheatsheet.html](../reference/ch08-url-shortener-cheatsheet.html)
 
-## ⬜ World 9 · Design a Web Crawler — *Spider Web Wilds*
+## ✅ World 9 · Design a Web Crawler — *Spider Web Wilds*
 
-- [x] `0901` 9.1 · [Release the Spider](../lessons/0901-web-crawler-scope-and-estimates.html) — built · needs world review
-- [x] `0902` 9.2 · [Assemble the Spider](../lessons/0902-web-crawler-components-and-workflow.html) — built · needs world review
-- [x] `0903` 9.3 · [Taming the Frontier](../lessons/0903-web-crawler-url-frontier.html) — built · needs world review
-- [x] `0904` 9.4 · [Fast Fangs, Thick Skin](../lessons/0904-web-crawler-downloader-and-robustness.html) — built · needs world review
-- [x] `0905` 9.5 · [Beware the Spider Traps](../lessons/0905-web-crawler-traps-and-extensibility.html) — built · needs world review
-- [x] `0906` BOSS · [Crawl the Web, Live](../lessons/0906-web-crawler-boss-design-it-live.html) — built · needs world review
-- [ ] World review + cheat sheet
+- [x] `0901` 9.1 · [Release the Spider](../lessons/0901-web-crawler-scope-and-estimates.html) — live
+- [x] `0902` 9.2 · [Assemble the Spider](../lessons/0902-web-crawler-components-and-workflow.html) — live
+- [x] `0903` 9.3 · [Taming the Frontier](../lessons/0903-web-crawler-url-frontier.html) — live
+- [x] `0904` 9.4 · [Fast Fangs, Thick Skin](../lessons/0904-web-crawler-downloader-and-robustness.html) — live
+- [x] `0905` 9.5 · [Beware the Spider Traps](../lessons/0905-web-crawler-traps-and-extensibility.html) — live
+- [x] `0906` BOSS · [Crawl the Web, Live](../lessons/0906-web-crawler-boss-design-it-live.html) — live
+- [x] World review + cheat sheet — [ch09-web-crawler-cheatsheet.html](../reference/ch09-web-crawler-cheatsheet.html)
 
 ## ✅ World 10 · Design a Notification System — *Ping Station*
 
@@ -134,8 +134,8 @@ exists, and its quests are `ready: true` on the map.
 
 - [x] `1401` 14.1 · [Size Up the Tube](../lessons/1401-youtube-scope-and-estimate.html) — built · needs world review
 - [x] `1402` 14.2 · [Upload Lane, Watch Lane](../lessons/1402-youtube-upload-and-stream-flows.html) — built · needs world review
-- [ ] `1403` 14.3 · [The Format Forge](../lessons/1403-youtube-transcoding-and-dag.html) — being built (unverified draft)
-- [ ] `1404` 14.4 · [The Transcoding Factory](../lessons/1404-youtube-transcoding-architecture.html) — being built (unverified draft)
+- [x] `1403` 14.3 · [The Format Forge](../lessons/1403-youtube-transcoding-and-dag.html) — built · needs world review
+- [x] `1404` 14.4 · [The Transcoding Factory](../lessons/1404-youtube-transcoding-architecture.html) — built · needs world review
 - [ ] `1405` 14.5 · [Faster, Safer, Cheaper](../lessons/1405-youtube-optimizations-and-errors.html) — being built (unverified draft)
 - [ ] `1406` BOSS · [Design YouTube Live](../lessons/1406-youtube-boss-design-it-live.html) — being built (unverified draft)
 - [ ] World review + cheat sheet

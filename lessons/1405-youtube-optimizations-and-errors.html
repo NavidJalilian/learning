@@ -482,9 +482,8 @@ function predict(box, { step, title, options, correct, act, explain, xp = 10 }) 
 function quizPair(mount, n, list) {
   let i = 0;
   const go = () => {
-    if (i >= list.length) { setTimeout(() => Q.clearStage(n), 900); return; }
-    const cfg = list[i++];
-    Q.quiz(mount, Object.assign({ xp: 15, tag: `Check ${i} of ${list.length}` }, cfg, { onDone: () => setTimeout(go, 700) }));
+    const cfg = list[i++], last = i === list.length;
+    Q.quiz(mount, Object.assign({ xp: 15, tag: `Check ${i} of ${list.length}` }, cfg, { onDone: () => last ? setTimeout(() => Q.clearStage(n), 900) : setTimeout(go, 600) }));
   };
   go();
 }
@@ -687,7 +686,7 @@ Q.onStage(1, () => {
 
 /* ================= STAGE 2: queues between modules ================= */
 Q.onStage(2, () => {
-  const D = [3, 2, 4, 3, 2, 5, 3, 2, 4, 3], E = [6, 4, 7, 5, 8, 4, 6, 5, 7, 6], U = [2, 1, 2, 2, 3, 1, 2, 2, 2, 1];
+  const D = [2, 1, 2, 2, 1, 3, 2, 1, 2, 2], E = [6, 4, 7, 5, 8, 4, 6, 5, 7, 6], U = [2, 1, 2, 2, 3, 1, 2, 2, 2, 1];
   const job = n => ({ d: n === 20 ? D.concat(D) : D, e: n === 20 ? E.concat(E) : E, u: n === 20 ? U.concat(U) : U });
   const st = { mode: 'noq', w: 1, load: 10 };
   const goals = new Set(), burstSeen = new Set();
@@ -729,7 +728,7 @@ Q.onStage(2, () => {
   const sched = () => st.mode === 'noq' ? schedNoQ(job(st.load)) : schedQ(job(st.load), st.w);
   const svg = $('#tl');
   function drawTL(sc, prog) {
-    const tMax = st.load === 20 ? 120 : 62, L = 70, PW = 342, RH = 24, G = 6, top = 6;
+    const tMax = schedNoQ(job(st.load)).total, L = 70, PW = 342, RH = 24, G = 6, top = 6;
     const H = top + sc.rows.length * (RH + G) + 22;
     svg.setAttribute('viewBox', `0 0 420 ${H}`);
     svg.innerHTML = '';
@@ -769,7 +768,7 @@ Q.onStage(2, () => {
   async function run() {
     if (busy) return null;
     busy = true; $('#pRun').disabled = true;
-    const sc = sched(), tMax = st.load === 20 ? 120 : 62, end = sc.total / tMax;
+    const sc = sched(), tMax = schedNoQ(job(st.load)).total, end = sc.total / tMax;
     if (Q.reduced) drawTL(sc, 1);
     else await new Promise(res => { const t0 = performance.now(), dur = 2400; const tick = now => { const p = Math.max(0, Math.min(1, (now - t0) / dur)); drawTL(sc, p * end); p < 1 ? requestAnimationFrame(tick) : res(); }; requestAnimationFrame(tick); });
     drawTL(sc, 1);
@@ -796,14 +795,14 @@ Q.onStage(2, () => {
     $('#pWhint').style.display = st.mode === 'q' ? 'none' : '';
   }
   function askPredict() {
-    const q = schedQ(job(10), 2).total;
+    const q = schedQ(job(10), 2).total, base = schedNoQ(job(10)).total;
     predict($('#pPredict'), {
       step: 'Predict, then watch',
-      title: `Now put queues between the modules and run <b>2 encoders</b> at once. The no-queue run took 62 min. What's the new total?`,
-      options: ['About 62 min, no change', `About ${q} min`, 'About 20 min'],
+      title: `Now put queues between the modules and run <b>2 encoders</b> at once. The no-queue run took ${base} min. What's the new total?`,
+      options: [`About ${base} min, no change`, `About ${q} min`, 'About 15 min'],
       correct: 1,
       act: async () => { st.mode = 'q'; st.w = 2; setSeg($('#pMode'), 'q'); setSeg($('#pW'), 2); await run(); },
-      explain: `${q} min. The download module never waits now, so it finishes early, and the two encoders work through the queue side by side. It isn't 31 (half of 62) because download and upload still take time, and the encoders sometimes sit idle waiting for the next download. Now try the <b>burst</b>, with queues and without.`,
+      explain: `${q} min. The download module never waits now, so it finishes early, and the two encoders work through the queue side by side. It's not quite half of ${base}: downloads and uploads still take time, and the last videos still have to be encoded one after another. Now try the <b>burst</b>, with queues and without.`,
       xp: 15,
     }).then(() => { predicted = true; checkGoal('#s2goals', 'q', goals); enable(); });
   }
