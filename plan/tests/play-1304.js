@@ -10,129 +10,159 @@ const URL = 'file:///home/user/learning/lessons/1304-query-service.html';
   page.on('console', m => { if (m.type() === 'error' && !/fonts\.g|net::ERR/.test(m.text())) errs.push('console: ' + m.text()); });
   page.on('dialog', d => d.accept());
   await page.goto(URL);
-  await page.waitForTimeout(400);
-  const hud = async () => page.evaluate(() => ({ xp: document.querySelector('.q-xp').textContent, hearts: document.querySelectorAll('.heart:not(.lost)').length, cleared: [...document.querySelectorAll('.stage.cleared')].map(s => s.dataset.stage) }));
-  const clickOpt = async (scope, text) => { await page.locator(`${scope} .opt`, { hasText: text }).first().click(); };
-  const tapBox = async k => page.locator(`#p1svg .pbox[data-k="${k}"]`).click();
-  const waitIdle = async () => page.waitForFunction(() => !document.querySelector('#p1send').disabled || document.querySelector('#p1pred').textContent.includes('tap the boxes'), null, { timeout: 15000 });
+  const hearts = () => page.$$eval('.hud .heart:not(.lost)', a => a.length);
+  const xp = () => page.evaluate(() => (JSON.parse(localStorage.getItem('sdq:v1') || '{}').runs || {})['1304']?.xp ?? null);
+  const cleared = n => page.$eval('#s' + n, e => e.classList.contains('cleared'));
+  const waitCleared = n => page.waitForFunction(k => document.querySelector('#s' + k).classList.contains('cleared'), n, { timeout: 30000 });
+  const goal = (st, g) => page.$eval(`#s${st}goals [data-g="${g}"]`, e => e.classList.contains('done'));
+  const ok = (c, m) => { if (!c) { console.log('FAIL:', m); process.exitCode = 1; } else console.log('ok  ', m); };
+  const setRange = (sel, v) => page.$eval(sel, (e, v) => { e.value = v; e.dispatchEvent(new Event('input', { bubbles: true })); }, v);
+  const tapPath = async ks => { for (const k of ks) await page.click(`#rp1 .nd[data-k="${k}"]`); };
+  const runWait = async () => { const n = await page.$$eval('#strip1 .srow', a => a.length); await page.click('#run1'); await page.waitForFunction(k => document.querySelectorAll('#strip1 .srow').length > k || document.querySelectorAll('#strip1 .srow').length === 4, n, { timeout: 15000 }); await page.waitForFunction(() => !document.querySelector('#run1').disabled); };
 
-  /* ---- stage 4 first (order-independence) ---- */
-  await page.locator('#f4rules .tog[data-r="hateful"]').click();
-  console.log('s4 rule goal after hateful on "how to":', await page.evaluate(() => document.querySelector('#s4goals [data-g="rule"]').classList.contains('done')));
-  await page.locator('#f4rules .tog[data-r="violent"]').click();
-  console.log('s4 drop count:', await page.textContent('#f4cnt'));
-  for (const r of ['explicit', 'dangerous']) await page.locator(`#f4rules .tog[data-r="${r}"]`).click();
-  await page.locator('#f4pfx .tog[data-p="best"]').click();
-  console.log('s4 best:', await page.textContent('#f4cnt'));
-  for (const w of ['filter', 'purge', 'both']) {
-    await page.locator(`#w4btns .btn[data-w="${w}"]`).click();
-    await page.waitForFunction(w => document.querySelector(`#w4btns .btn[data-w="${w}"]`).classList.contains('done'), w, { timeout: 8000 });
-    console.log(' what-if', w, '→', await page.textContent('#w4msg'));
-  }
-  await page.locator('#s4 .stage-b').screenshot({ path: SP + '1304-s4.png' });
-  await page.waitForSelector('#s4quiz .opt', { timeout: 5000 });
-  await clickOpt('#s4quiz', 'The filter hides it now');
-  await page.waitForSelector('#s4.cleared', { timeout: 5000 });
-  console.log('after s4', await hud());
+  /* ---------- stage 1 ---------- */
+  await page.click('#run1');
+  ok((await page.textContent('#log1')).includes('Predict first'), 'run without prediction nudges');
+  await tapPath(['lb', 'api', 'cache']);
+  // keyboard on an svg node
+  await page.focus('#rp1 .nd[data-k="db"]'); await page.keyboard.press('Enter');
+  ok((await page.textContent('#pline1')).includes('DB'), 'keyboard Enter adds a node');
+  await page.click('#undo1');
+  await runWait();
+  ok(await goal(1, 'hit'), 'warm cache run = hit');
+  ok(await hearts() === 3, 'correct hit prediction keeps hearts');
+  ok((await page.$$eval('#drop1 li', a => a.map(x => x.textContent)))[0] === 'twitter', 'dropdown shows twitter first');
+  await page.click('#restart1');
+  ok((await page.textContent('#cbox1')).includes('nothing'), 'restart empties cache');
+  // wrong prediction for the miss: stop at DB
+  await tapPath(['lb', 'api', 'cache', 'db']);
+  await runWait();
+  ok(await goal(1, 'miss'), 'miss after restart');
+  ok(await hearts() === 2, 'wrong miss prediction costs a heart');
+  ok((await page.textContent('#cbox1')).includes('tw'), 'cache replenished with tw');
+  await page.locator('#s1 .sim').screenshot({ path: SP + '1304-s1-375-dark.png' });
+  await tapPath(['lb', 'api', 'cache']);
+  await runWait();
+  ok(await goal(1, 'again'), 'same prefix again = hit');
+  const strip = await page.$$eval('#strip1 .srow', a => a.map(x => x.textContent));
+  ok(strip.length === 3 && strip[1].includes('miss') && strip[2].includes('hit'), 'latency strip: ' + strip.join(' | '));
+  await page.waitForSelector('#s1quiz .opt');
+  await page.click('#s1quiz .opt:has-text("Only when the Trie Cache misses")');
+  await waitCleared(1);
+  ok(true, 'stage 1 cleared; xp=' + await xp());
 
-  /* ---- stage 1 ---- */
-  // run 1: warm → correct prediction
-  for (const k of ['lb', 'api', 'ca']) await tapBox(k);
-  console.log('pred row:', await page.textContent('#p1pred'));
-  await page.click('#p1send');
-  await page.waitForFunction(() => document.querySelector('#s1goals [data-g="r1"]').classList.contains('done'), null, { timeout: 15000 });
-  console.log('run1 ms:', await page.textContent('#p1ms'), '| step:', await page.textContent('#p1step'), '| send disabled before restart?', await page.evaluate(() => { return document.querySelector('#p1send').disabled; }));
-  // run 2: restart, predict miss path
-  await page.click('#p1restart');
-  for (const k of ['lb', 'api', 'ca', 'db', 'ca']) await tapBox(k);
-  await page.click('#p1send');
-  await page.waitForFunction(() => document.querySelector('#s1goals [data-g="r2"]').classList.contains('done'), null, { timeout: 15000 });
-  console.log('run2 ms:', await page.textContent('#p1ms'));
-  await page.locator('#s1 .sim').screenshot({ path: SP + '1304-s1.png' });
-  // run 3: deliberately WRONG prediction (predict a miss) to check heart loss
-  for (const k of ['lb', 'api', 'ca', 'db']) await tapBox(k);
-  await page.click('#p1send');
-  await page.waitForFunction(() => document.querySelector('#s1goals [data-g="r3"]').classList.contains('done'), null, { timeout: 15000 });
-  console.log('run3 ms:', await page.textContent('#p1ms'), '| lat:', await page.textContent('#p1lat'));
-  await page.waitForSelector('#s1quiz .opt', { timeout: 5000 });
-  await clickOpt('#s1quiz', 'Only when the Trie Cache misses');
-  await page.waitForSelector('#s1.cleared', { timeout: 5000 });
-  console.log('after s1', await hud());
+  /* ---------- reload mid-quest ---------- */
+  await page.reload();
+  await page.waitForSelector('.banner.resume');
+  ok(await cleared(1) && await hearts() === 2, 'resume after reload keeps stage 1 + hearts');
 
-  /* ---- reload mid-quest: resume ---- */
-  await page.reload(); await page.waitForTimeout(500);
-  const resume = await page.evaluate(() => ({ banner: !!document.querySelector('.banner.resume'), s1: document.querySelector('#s1').classList.contains('cleared'), s4: document.querySelector('#s4').classList.contains('cleared'), text: (document.querySelector('.banner') || {}).textContent }));
-  console.log('resume:', JSON.stringify(resume), await hud());
-
-  /* ---- stage 2 ---- */
-  const inp = page.locator('#b2in');
-  await inp.click();
-  await page.keyboard.type('dinner', { delay: 30 });
-  console.log('after first pass: server =', await page.textContent('#b2srv'));
+  /* ---------- stage 2 ---------- */
+  await page.click('#mkGo');
+  ok(await goal(2, 'ajax'), 'ajax demo goal');
+  await page.click('#q2');
+  await page.keyboard.type('dinner', { delay: 40 });
+  ok(await page.textContent('#srv2') === '6', '6 server requests on first pass');
+  ok(await goal(2, 'first'), 'first-pass goal');
   for (let i = 0; i < 3; i++) await page.keyboard.press('Backspace');
-  await page.keyboard.type('ner', { delay: 30 });
-  console.log('after second pass: server =', await page.textContent('#b2srv'), 'hits =', await page.textContent('#b2hit'));
-  await page.click('#b2ff');
-  await inp.click();
-  await page.keyboard.press('Backspace');
-  await page.keyboard.type('r');
-  console.log('after ff: server =', await page.textContent('#b2srv'));
-  await page.click('#b2seg button[data-v="public"]');
-  console.log('public msg:', (await page.textContent('#b2pmsg')).slice(0, 60));
-  await page.click('#b2seg button[data-v="private"]');
-  await page.click('#b2key');
-  await page.waitForTimeout(1400);
-  console.log('s2 goals:', await page.evaluate(() => [...document.querySelectorAll('#s2goals li.done')].map(l => l.dataset.g).join(',')));
-  await page.locator('#s2 .sim').screenshot({ path: SP + '1304-s2.png' });
-  await page.waitForSelector('#s2quiz .opt', { timeout: 5000 });
-  await clickOpt('#s2quiz', 'Reuse this answer for up to one hour');
-  await page.waitForFunction(() => document.querySelectorAll('#s2quiz .quiz').length === 2, null, { timeout: 5000 });
-  await page.locator('#s2quiz .quiz').nth(1).locator('.opt', { hasText: 'Only the user’s own browser' }).click();
-  await page.waitForFunction(() => document.querySelectorAll('#s2quiz .quiz').length === 3, null, { timeout: 5000 });
-  await page.locator('#s2quiz .quiz').nth(2).locator('.opt', { hasText: '0, every prefix' }).click();
-  await page.waitForSelector('#s2.cleared', { timeout: 5000 });
-  console.log('after s2', await hud());
+  ok(await page.inputValue('#q2') === 'din', 'backspaced to din');
+  await page.keyboard.type('ner', { delay: 40 });
+  ok(await page.textContent('#srv2') === '6', 'still 6 after retype');
+  ok(await goal(2, 'second'), 'retype goal');
+  await page.click('#ff2');
+  await page.click('#q2'); await page.keyboard.press('Backspace');
+  ok(await page.textContent('#srv2') === '7', 'after fast-forward, a keystroke goes to the network');
+  ok(await goal(2, 'expire'), 'expire goal');
+  await page.click('#pub2');
+  ok((await page.textContent('#hdr2')).includes('public'), 'header shows public');
+  await page.locator('#s2 .px').screenshot({ path: SP + '1304-s2-375-dark.png' });
+  await page.click('#pvt2');
+  ok(await goal(2, 'proxy'), 'proxy goal');
+  await page.waitForSelector('#s2quiz .opt');
+  await page.click('#s2quiz .opt:has-text("Reuse this answer for up to 1 hour")');
+  await page.waitForSelector('#s2quiz .quiz:nth-child(2) .opt');
+  await page.click('#s2quiz .quiz:nth-child(2) .opt:has-text("Only the user")');
+  await page.waitForSelector('#s2quiz .quiz:nth-child(3) .opt');
+  await page.click('#s2quiz .quiz:nth-child(3) .opt:text-is("0")');
+  await waitCleared(2);
+  ok(true, 'stage 2 cleared; xp=' + await xp());
+  await page.locator('#s2 .dev').screenshot({ path: SP + '1304-s2.png' });
 
-  /* ---- stage 3 ---- */
-  for (const v of ['1', '2', '3']) {
-    await page.locator('#n3').fill(v);
-    await page.waitForTimeout(100);
-    console.log(' N=', await page.textContent('#n3v'), await page.textContent('#n3rows'), await page.textContent('#n3gb'), '|', await page.textContent('#n3verdict'));
+  /* ---------- stage 4 (out of order on purpose) ---------- */
+  await page.click('#s4 .chipbar .btn[data-p="w"]');
+  ok(await page.$$eval('#drop4 li.harm', a => a.length) === 2, 'w shows 2 harmful placeholders');
+  await page.click('#rules4 .rule[data-c="violent"]');
+  await page.click('#rules4 .rule[data-c="explicit"]');
+  ok(await page.$$eval('#drop4 li.harm', a => a.length) === 0, 'w clean after rules');
+  ok((await page.textContent('#drop4')).includes('showing 3 of 5'), 'shows 3 of 5 note');
+  await page.click('#s4 .chipbar .btn[data-p="din"]');
+  ok(await page.$$eval('#drop4 li.harm', a => a.length) === 2, 'din still has 2 harmful');
+  await page.click('#rules4 .rule[data-c="dangerous"]');
+  await page.click('#rules4 .rule[data-c="hateful"]');
+  ok(await goal(4, 'clean'), 'clean goal');
+  for (const p of ['filter', 'purge', 'both']) {
+    await page.click(`.whatif [data-plan="${p}"]`);
+    await page.waitForFunction(() => document.querySelector('#wv4').textContent.length > 10 && !document.querySelector('.whatif [data-plan]').disabled, null, { timeout: 8000 });
   }
-  await page.click('#n3re');
-  console.log(' log:', await page.evaluate(() => [...document.querySelectorAll('#n3log div')].slice(-2).map(d => d.textContent).join(' || ')));
-  await page.locator('#s3 .sim').screenshot({ path: SP + '1304-s3.png' });
-  await page.fill('#c3in', '1,000,000');
-  await page.click('#c3go');
-  console.log('wrong calc hearts:', (await hud()).hearts);
-  await page.fill('#c3in', '10 million');
-  await page.click('#c3go');
-  await page.waitForSelector('#s3quiz .opt', { timeout: 5000 });
-  await clickOpt('#s3quiz', 'Accurate counts for rare');
-  await page.waitForSelector('#s3.cleared', { timeout: 5000 });
-  console.log('after s3', await hud());
+  ok(await goal(4, 'plans'), 'plans goal');
+  await page.locator('#s4 .whatif').screenshot({ path: SP + '1304-s4.png' });
+  await page.waitForSelector('#pick4 .opt');
+  await page.click('#pick4 .opt:has-text("Both: filter now")');
+  await page.waitForSelector('#s4quiz .opt');
+  await page.click('#s4quiz .opt:has-text("The filter acts now")');
+  await waitCleared(4);
+  ok(true, 'stage 4 cleared; xp=' + await xp());
+  await page.locator('#s4 .fl').screenshot({ path: SP + '1304-s4-fl.png' });
 
-  /* ---- stage 5: boss ---- */
-  const ans = ['Browser cache', 'Filter + purge', 'Warm the cache', 'Sample the logs', 'Keep it private'];
-  for (let i = 0; i < ans.length; i++) {
-    await page.locator('#boss .choice .opt', { hasText: ans[i] }).click();
-    await page.locator('#boss .row .btn.primary').click();
+  /* ---------- stage 3 ---------- */
+  ok(await page.$eval('#n3', e => e.disabled), 'slider waits for prediction');
+  await page.click('#pred3 .opt:has-text("Top 5 holds")');
+  await page.waitForSelector('#pred3 .explain.show');
+  ok(await page.$eval('#pred3 .explain', e => e.classList.contains('good')), 'prediction right');
+  console.log('   N=100 verdict:', await page.textContent('#ver3'));
+  await setRange('#n3', 3);
+  ok(await goal(3, 'big'), 'N=1000 goal');
+  ok(await page.textContent('#rows3') === '100,000', 'N=1000 → 100,000 rows/day');
+  console.log('   N=1000 verdict:', await page.textContent('#ver3'));
+  await page.click('#re3'); await page.click('#re3');
+  ok(await goal(3, 'dice'), 'resample goal');
+  await page.locator('#s3 .smp').screenshot({ path: SP + '1304-s3.png' });
+  await page.fill('#calc3 input', '100,000,000'); await page.click('#calc3 .btn.primary');
+  ok((await page.textContent('#calc3 .fb')).includes('every search'), 'diagnosis for N=1 answer');
+  const h = await hearts();
+  await page.fill('#calc3 input', '10M'); await page.click('#calc3 .btn.primary');
+  ok(await goal(3, 'calc'), 'calc goal');
+  await waitCleared(3);
+  ok(true, 'stage 3 cleared; xp=' + await xp() + ' hearts=' + h);
+
+  /* ---------- stage 5 ---------- */
+  for (const a of ['warm', 'cache', 'sample', 'both', 'priv']) {
+    await page.click(`#boss .choice .opt[data-c="${a}"]`);
+    ok(await page.$eval('#boss .explain', e => e.classList.contains('good')), 'boss answer ' + a);
+    await page.click('#boss .row .btn.primary');
   }
-  await page.waitForSelector('#s5.cleared', { timeout: 5000 });
-  console.log('after s5', await hud());
+  await waitCleared(5);
+  ok(true, 'stage 5 cleared');
 
-  /* ---- stage 6: drill ---- */
-  await page.fill('#drill textarea', 'AJAX request to the load balancer then an API server which reads the Trie Cache and on a miss reads the Trie DB and writes back. Browser cache private max-age 3600. Sample one in N logs. Filter layer in front of cache plus async delete from DB.');
+  /* ---------- stage 6 ---------- */
+  await page.fill('#drill textarea', 'AJAX request to the load balancer, API servers read Trie Cache, miss goes to Trie DB and replenishes. Cache-Control private max-age 3600, sample 1 in N, filter layer plus async delete.');
   await page.click('#drill .q-reveal');
-  const boxes = page.locator('#drill .selfgrade input');
-  for (let i = 0; i < await boxes.count(); i++) await boxes.nth(i).check();
+  for (const cb of await page.$$('#drill .selfgrade input')) await cb.check();
   await page.click('#drill .q-finish');
-  await page.waitForSelector('#victory.show', { timeout: 6000 });
-  console.log('VICTORY', await page.textContent('#victory h2'), await hud());
-  await page.waitForTimeout(800);
-  await page.screenshot({ path: SP + '1304-375-dark.png', fullPage: false });
-  const ov = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
-  console.log('overflowX', ov);
-  console.log('errors:', errs.length ? errs : 'none');
+  await page.waitForSelector('#victory.show');
+  ok(true, 'victory card shown');
+  const store = await page.evaluate(() => JSON.parse(localStorage.getItem('sdq:v1')));
+  console.log('   saved lesson:', JSON.stringify(store.lessons['1304']));
+  ok(!store.runs['1304'], 'run cleared after finish');
+  const of = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+  ok(of <= 1, 'no horizontal overflow at 375 (' + of + ')');
+  await page.screenshot({ path: SP + '1304-375-dark.png', fullPage: true });
+  ok(errs.length === 0, 'no page errors ' + JSON.stringify(errs));
+
+  /* desktop light shots */
+  const c2 = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: 'light' });
+  const p2 = await c2.newPage();
+  await p2.goto(URL);
+  await p2.locator('#s1 .sim').screenshot({ path: SP + '1304-s1-1280-light.png' });
+  await p2.locator('#s2 .ajx').screenshot({ path: SP + '1304-s2-1280-light.png' });
   await browser.close();
-})().catch(e => { console.error('FAILED', e); process.exit(1); });
+})();

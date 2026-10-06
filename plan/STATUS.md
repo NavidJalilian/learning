@@ -2,7 +2,7 @@
 
 Every chapter of *System Design Interview* Vol. 1 as a world of quests. Ticked = done. Regenerate: `python3 plan/tools/status.py`.
 
-**83 of 83 quests built** · 77 live on the map · 6 built, awaiting world review · 0 being built (draft on disk, not verified) · 0 not started.
+**83 of 83 quests built** · 83 live on the map · 0 built, awaiting world review · 0 being built (draft on disk, not verified) · 0 not started.
 
 Legend: `[x]` done · `[ ]` not done. A world is **done** when every quest is built, the world review has run, its cheat sheet
 exists, and its quests are `ready: true` on the map.
@@ -130,15 +130,15 @@ exists, and its quests are `ready: true` on the map.
 - [x] `1306` BOSS · [Autocomplete Live](../lessons/1306-boss-autocomplete-live.html) — live
 - [x] World review + cheat sheet — [ch13-autocomplete-cheatsheet.html](../reference/ch13-autocomplete-cheatsheet.html)
 
-## ⬜ World 14 · Design YouTube — *The Stream Machine*
+## ✅ World 14 · Design YouTube — *The Stream Machine*
 
-- [x] `1401` 14.1 · [Size Up the Tube](../lessons/1401-youtube-scope-and-estimate.html) — built · needs world review
-- [x] `1402` 14.2 · [Upload Lane, Watch Lane](../lessons/1402-youtube-upload-and-stream-flows.html) — built · needs world review
-- [x] `1403` 14.3 · [The Format Forge](../lessons/1403-youtube-transcoding-and-dag.html) — built · needs world review
-- [x] `1404` 14.4 · [The Transcoding Factory](../lessons/1404-youtube-transcoding-architecture.html) — built · needs world review
-- [x] `1405` 14.5 · [Faster, Safer, Cheaper](../lessons/1405-youtube-optimizations-and-errors.html) — built · needs world review
-- [x] `1406` BOSS · [Design YouTube Live](../lessons/1406-youtube-boss-design-it-live.html) — built · needs world review
-- [ ] World review + cheat sheet
+- [x] `1401` 14.1 · [Size Up the Tube](../lessons/1401-youtube-scope-and-estimate.html) — live
+- [x] `1402` 14.2 · [Upload Lane, Watch Lane](../lessons/1402-youtube-upload-and-stream-flows.html) — live
+- [x] `1403` 14.3 · [The Format Forge](../lessons/1403-youtube-transcoding-and-dag.html) — live
+- [x] `1404` 14.4 · [The Transcoding Factory](../lessons/1404-youtube-transcoding-architecture.html) — live
+- [x] `1405` 14.5 · [Faster, Safer, Cheaper](../lessons/1405-youtube-optimizations-and-errors.html) — live
+- [x] `1406` BOSS · [Design YouTube Live](../lessons/1406-youtube-boss-design-it-live.html) — live
+- [x] World review + cheat sheet — [ch14-youtube-cheatsheet.html](../reference/ch14-youtube-cheatsheet.html)
 
 ## ✅ World 15 · Design Google Drive — *The Cloud Locker*
 

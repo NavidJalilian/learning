@@ -10,11 +10,16 @@
 - Global style pref: plain language, define jargon inline, honest caveats.
 
 ## Open threads
-- **Whole-book build (2026-10-05):** every remaining chapter (1–5, 7–15) was planned by a subagent fleet and ~half built.
-  Plan, briefs, per-quest assignments, tools and playthrough tests live in `plan/` — see `plan/README.md` and
-  `plan/STATUS.md`. Live on the map: Worlds 2, 3, 4, 6, 7, 8, 15. Built but not yet world-reviewed: 10, 12, 13.1.
-  Not started: Worlds 1, 5, 9, 11, 13.2+, 14 (partial drafts were discarded). Checklist: `plan/STATUS.md`. Quest ids are chapter×100+k; `Quest.WORLDS` drives the map.
-- The fleet stopped because the user asked (not a failure). Resume from `plan/STATUS.md`.
+- **Whole book built (2026-10-06):** all 15 chapters are playable worlds — 83 quests, 15 cheat sheets. A subagent fleet
+  planned each chapter, built each quest (smoke test + scripted Playwright playthrough each), then a per-world reviewer
+  fixed cross-quest consistency/links and wrote the cheat sheet. Everything (briefs, plans, per-quest assignments, tools,
+  playthrough tests) lives in `plan/`; `plan/STATUS.md` is the checklist (all ticked). Quest ids = chapter×100+k
+  (World 6 keeps 0001–0008); `Quest.WORLDS` drives the map. Learner has played none of the new worlds yet.
+- Engine changes from the build: WORLDS + world field, rank ladder to 23k XP ("Legend"), singular resume banner, and
+  retried `drill()` / boss `boss()` rounds on the same mount no longer pay XP twice.
+- Honest caveats added beyond the book are labelled in each lesson's callouts/Level-up note; the book wasn't fetchable
+  (proxy), so book details come from the agents' knowledge, paraphrased. Spot-check a chapter against the book when
+  the user pastes it.
 - **World 6 complete (2026-10-06):** lessons 0001–0008 built (0002–0008 by a fleet of 7 subagents on the shared engine; brief kept in the session scratchpad). User had cleared 0001 (1★) before the rebuild — review mode picks that up.
 - Chapter cheat sheet `reference/kv-store-cap-cheatsheet.html` now covers 6.1–6.7 + the boss (one section per quest).
 - Honest caveats taught in-lesson (revisit if the user asks): book's CP blocks the majority side (0001→paid off in 0004); W+R>N breaks under sloppy quorum (0004, 0006); "quorum consensus" ≠ Raft/Paxos (0004); async replication really means W acks then background (0003); real preference lists > N (0003); Cassandra uses last-write-wins not vector clocks (0005, 0008); commit log is fsynced periodically by default (0007); Cassandra reads merge all candidate SSTables, not first-hit (0007); Dynamo's Table 1 has a gossip row the book drops (0008).
@@ -22,4 +27,4 @@
 - Engine wishlist from the fleet (not done): shared `Q.order()` tap-in-order widget, `Q.predict()`/rounds helper, HUD-height CSS variable, quiz word-count lint.
 - No learning records yet — completing quests ≠ evidence of understanding. Write one when the user explains a concept back or nails a drill in chat.
 - MISSION.md is a draft — confirm with the user.
-- Next: Chapter 7 (unique ID generator) when the user pastes it, or Ch. 1–5 if they want to go back to the start of the book.
+- Next: user plays through; write learning records when they explain a concept back. Possible polish: the engine wishlist above.
