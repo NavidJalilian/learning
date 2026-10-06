@@ -2,7 +2,7 @@
 
 Every chapter of *System Design Interview* Vol. 1 as a world of quests. Ticked = done. Regenerate: `python3 plan/tools/status.py`.
 
-**83 of 83 quests built** · 72 live on the map · 11 built, awaiting world review · 0 being built (draft on disk, not verified) · 0 not started.
+**83 of 83 quests built** · 77 live on the map · 6 built, awaiting world review · 0 being built (draft on disk, not verified) · 0 not started.
 
 Legend: `[x]` done · `[ ]` not done. A world is **done** when every quest is built, the world review has run, its cheat sheet
 exists, and its quests are `ready: true` on the map.
@@ -101,14 +101,14 @@ exists, and its quests are `ready: true` on the map.
 - [x] `1005` BOSS · [Ping the Planet — Live](../lessons/1005-notification-boss-design-it-live.html) — live
 - [x] World review + cheat sheet — [ch10-notification-cheatsheet.html](../reference/ch10-notification-cheatsheet.html)
 
-## ⬜ World 11 · Design a News Feed System — *Feedstream Falls*
+## ✅ World 11 · Design a News Feed System — *Feedstream Falls*
 
-- [x] `1101` 11.1 · [Two Rivers](../lessons/1101-news-feed-scope-and-flows.html) — built · needs world review
-- [x] `1102` 11.2 · [Push, Pull, or Both](../lessons/1102-news-feed-fanout-push-vs-pull.html) — built · needs world review
-- [x] `1103` 11.3 · [The Fanout Factory](../lessons/1103-news-feed-publishing-pipeline.html) — built · needs world review
-- [x] `1104` 11.4 · [Hydrate the Feed](../lessons/1104-news-feed-retrieval-and-caches.html) — built · needs world review
-- [x] `1105` BOSS · [Design It Live: News Feed](../lessons/1105-news-feed-boss-design-it-live.html) — built · needs world review
-- [ ] World review + cheat sheet
+- [x] `1101` 11.1 · [Two Rivers](../lessons/1101-news-feed-scope-and-flows.html) — live
+- [x] `1102` 11.2 · [Push, Pull, or Both](../lessons/1102-news-feed-fanout-push-vs-pull.html) — live
+- [x] `1103` 11.3 · [The Fanout Factory](../lessons/1103-news-feed-publishing-pipeline.html) — live
+- [x] `1104` 11.4 · [Hydrate the Feed](../lessons/1104-news-feed-retrieval-and-caches.html) — live
+- [x] `1105` BOSS · [Design It Live: News Feed](../lessons/1105-news-feed-boss-design-it-live.html) — live
+- [x] World review + cheat sheet — [ch11-news-feed-cheatsheet.html](../reference/ch11-news-feed-cheatsheet.html)
 
 ## ✅ World 12 · Design a Chat System — *Chatterbox Citadel*
 
