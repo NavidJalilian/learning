@@ -2,7 +2,7 @@
 
 Every chapter of *System Design Interview* Vol. 1 as a world of quests. Ticked = done. Regenerate: `python3 plan/tools/status.py`.
 
-**72 of 83 quests built** · 54 live on the map · 18 built, awaiting world review · 8 being built (draft on disk, not verified) · 3 not started.
+**73 of 83 quests built** · 54 live on the map · 19 built, awaiting world review · 7 being built (draft on disk, not verified) · 3 not started.
 
 Legend: `[x]` done · `[ ]` not done. A world is **done** when every quest is built, the world review has run, its cheat sheet
 exists, and its quests are `ready: true` on the map.
@@ -132,7 +132,7 @@ exists, and its quests are `ready: true` on the map.
 
 ## ⬜ World 14 · Design YouTube — *The Stream Machine*
 
-- [ ] `1401` 14.1 · [Size Up the Tube](../lessons/1401-youtube-scope-and-estimate.html) — being built (unverified draft)
+- [x] `1401` 14.1 · [Size Up the Tube](../lessons/1401-youtube-scope-and-estimate.html) — built · needs world review
 - [ ] `1402` 14.2 · [Upload Lane, Watch Lane](../lessons/1402-youtube-upload-and-stream-flows.html) — being built (unverified draft)
 - [ ] `1403` 14.3 · [The Format Forge](../lessons/1403-youtube-transcoding-and-dag.html) — not started
 - [ ] `1404` 14.4 · [The Transcoding Factory](../lessons/1404-youtube-transcoding-architecture.html) — not started
