@@ -942,6 +942,7 @@ const CURVE = [
     o: ['Nothing much: it\'s stateless, so the load balancer reroutes', 'Their sessions are lost until that exact server is repaired', 'Everything waits for a cold standby to boot in ten minutes'],
     why: '<b>Stateless API servers.</b> They keep no user state, so the load balancer simply sends requests to a different API server.' + CITE(1, BOOK) },
 ];
+const s4paid = new Set();   // XP for each curveball is paid once, so retrying a lost barrage can't farm XP
 function setup4() {
   begun.delete(4);
   $('#s4caveat').style.display = 'none';
@@ -964,7 +965,7 @@ function setup4() {
         b.classList.add(ok ? 'right' : 'wrong');
         if (!ok) $('.opt[data-i="0"]', opts).classList.add('right');
         const ex = $('.explain', arena); ex.className = 'explain show ' + (ok ? 'good' : 'bad'); ex.innerHTML = s.why;
-        if (ok) { wins++; Q.addXP(12, b); tick(4, 1.5, 'dd', 1, 1); } else { Q.loseHeart(b); tick(4, 2.5, 'dd', 0, 1); }
+        if (ok) { wins++; if (s4paid.has(s.t)) Q.toast('✓', b, 'practice'); else { s4paid.add(s.t); Q.addXP(12, b); } tick(4, 1.5, 'dd', 1, 1); } else { Q.loseHeart(b); tick(4, 2.5, 'dd', 0, 1); }
         hp.style.width = (100 - ((bi + 1) / order.length) * 100) + '%';
         const nx = document.createElement('button'); nx.className = 'btn primary';
         nx.textContent = bi < order.length - 1 ? 'Next curveball →' : '⚔️ Final blow';
@@ -1134,7 +1135,8 @@ function renderScore() {
     const r = Math.max(0, Math.min(1, s[0] / s[1])), v = verdict(r);
     return `<div class="sc-row"><span><b>${c.n}</b><br><span class="small muted">${c.from}</span></span><div class="sc-bar"><div data-w="${Math.round(r * 100)}"></div></div><span class="verd v${v[2]}">${Math.round(r * 100)}% · ${v[1]}</span></div>`;
   });
-  const ov = verdict(avg);
+  // running far over the clock caps the overall verdict: a great answer you never finished is not a strong hire
+  const ov = total > 50 && avg >= .7 ? VERD[1] : verdict(avg);
   const log = iload(LKEY);
   $('#scorecard').innerHTML = `<div class="scorecard"><div class="kicker">Interviewer's scorecard</div><h3>Your signals from this run</h3>
     <p class="small muted" style="margin:0">Computed from your choices in every stage. Replaying a stage overwrites its part. 📶 ${signal} signal collected.</p>
@@ -1151,7 +1153,7 @@ function logRun() {
   const { total, rated, avg, signal } = computeScore();
   if (!rated.length) return;
   const log = iload(LKEY);
-  log.push({ at: new Date().toISOString(), min: Math.round(total * 100) / 100, v: verdict(avg)[1], sig: signal });
+  log.push({ at: new Date().toISOString(), min: Math.round(total * 100) / 100, v: (total > 50 && avg >= .7 ? VERD[1] : verdict(avg))[1], sig: signal });
   isave(log.slice(-10), LKEY);
 }
 function setup6() {
